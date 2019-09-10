@@ -5,8 +5,7 @@ lazy val catsTestkitScalaTestVersion = "1.0.0-M1"
 inThisBuild(Seq(
   homepage := Some(url("https://github.com/gemini-hlsw/gsp-graphql")),
   addCompilerPlugin("org.typelevel" %% "kind-projector" % kindProjectorVersion),
-  scalaVersion := "2.13.0",
-  crossScalaVersions := Seq(scalaVersion.value),
+  scalaVersion := "2.13.0"
 ) ++ gspPublishSettings)
 
 lazy val core = project
