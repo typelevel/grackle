@@ -1,4 +1,4 @@
-lazy val catsVersion                 = "2.0.0-RC1"
+lazy val catsVersion                 = "2.0.0"
 lazy val kindProjectorVersion        = "0.10.3"
 lazy val catsTestkitScalaTestVersion = "1.0.0-M1"
 
