@@ -19,7 +19,7 @@ object StarWarsData {
 
   case class Human private (id: String, name: Option[String], appearsIn: List[Episode.Value], homePlanet: Option[String])
     (friends0: => List[Character]) extends Character {
-    def friends = friends0
+    lazy val friends = friends0
   }
   object Human {
     def apply(id: String, name: Option[String], appearsIn: List[Episode.Value], friends: => List[Character], homePlanet: Option[String]) =
@@ -28,7 +28,7 @@ object StarWarsData {
 
   case class Droid private (id: String, name: Option[String], appearsIn: List[Episode.Value], primaryFunction: Option[String])
     (friends0: => List[Character]) extends Character {
-    def friends = friends0
+    lazy val friends = friends0
   }
   object Droid {
     def apply(id: String, name: Option[String], appearsIn: List[Episode.Value], friends: => List[Character], primaryFunction: Option[String]) =
