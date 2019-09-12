@@ -5,7 +5,7 @@ package edu.gemini
 package grackle
 package starwars
 
-object TestData {
+object StarWarsData {
   object Episode extends Enumeration {
     val NEWHOPE, EMPIRE, JEDI = Value
   }
