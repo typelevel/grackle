@@ -1,6 +1,7 @@
+lazy val attoVersion                 = "0.7.0"
 lazy val catsVersion                 = "2.0.0"
-lazy val kindProjectorVersion        = "0.10.3"
 lazy val catsTestkitScalaTestVersion = "1.0.0-M1"
+lazy val kindProjectorVersion        = "0.10.3"
 
 inThisBuild(Seq(
   homepage := Some(url("https://github.com/gemini-hlsw/gsp-graphql")),
@@ -14,6 +15,7 @@ lazy val core = project
   .settings(
     name := "gsp-graphql",
     libraryDependencies ++= Seq(
+      "org.tpolecat"               %% "atto-core"              % attoVersion,
       "org.typelevel"              %% "cats-core"              % catsVersion,
       "org.typelevel"              %% "cats-testkit"           % catsVersion % "test",
       "org.typelevel"              %% "cats-testkit-scalatest" % catsTestkitScalaTestVersion % "test",
