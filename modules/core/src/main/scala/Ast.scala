@@ -5,6 +5,8 @@ package edu.gemini.grackle
 
 object Ast {
 
+  type Document = List[Either[OperationDefinition, FragmentDefinition]]
+
   sealed trait OperationType
   object OperationType {
     case object Query        extends OperationType

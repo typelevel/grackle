@@ -8,23 +8,15 @@ package starwars
 import cats.tests.CatsSuite
 import io.circe.literal.JsonStringContext
 
-import Query._, Binding._
-
 final class StarsWarsSpec extends CatsSuite {
   test("simple query") {
-    /*
     val query = """
       query {
-        character(id: 1000) {
+        character(id: "1000") {
           name
         }
       }
     """
-    */
-
-    val compiledQuery =
-      Select("character", List(StringBinding("id", "1000"))) /
-        Select("name", Nil)
 
     val expected = json"""
       {
@@ -36,15 +28,16 @@ final class StarsWarsSpec extends CatsSuite {
       }
     """
 
+    val compiledQuery = Compiler.compileText(query).get
     val res = StarWarsQueryInterpreter.run(compiledQuery)
+
     assert(res == expected)
   }
 
   test("simple nested query") {
-    /*
     val query = """
       query {
-        character(id: 1000) {
+        character(id: "1000") {
           name
           friends {
             name
@@ -52,14 +45,6 @@ final class StarsWarsSpec extends CatsSuite {
         }
       }
     """
-    */
-
-    val compiledQuery =
-      Select("character", List(StringBinding("id", "1000"))) / (
-        Select("name", Nil) ~
-        (Select("friends", Nil) /
-          Select("name", Nil))
-      )
 
     val expected = json"""
       {
@@ -85,7 +70,9 @@ final class StarsWarsSpec extends CatsSuite {
       }
     """
 
+    val compiledQuery = Compiler.compileText(query).get
     val res = StarWarsQueryInterpreter.run(compiledQuery)
+
     assert(res == expected)
   }
 }

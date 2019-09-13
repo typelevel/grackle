@@ -12,7 +12,7 @@ object Parser {
 
   def keyword(s: String) = string(s).token
 
-  lazy val Document =
+  lazy val Document: Parser[Ast.Document] =
     many(whitespace) ~> many(Definition)
 
   lazy val Definition =
