@@ -6,6 +6,8 @@ package grackle
 package starwars
 
 import cats.Id
+import io.circe.Json
+
 import Query._, Binding._
 
 object StarWarsData {
