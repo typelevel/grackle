@@ -6,7 +6,7 @@ package grackle
 package starwars
 
 import cats.Id
-import io.circe.Json
+import io.circe.{ Json, JsonObject}
 
 import Query._, Binding._
 
@@ -97,28 +97,22 @@ object StarWarsData {
       primaryFunction = Some("Astromech"))
 }
 
-object StarWarsQueryInterpreter extends QueryInterpreter[Id, AnyRef] {
+object StarWarsQueryInterpreter extends QueryInterpreter[Id, Json] {
   import StarWarsData._
 
-  def run(q: Query): AnyRef = run(q, root)
+  def run(q: Query): Json = Json.obj("data" -> Json.fromJsonObject(run(q, root, JsonObject.empty)))
 
-  def run[T](q: Query, elem: T): AnyRef = (q, elem) match {
-    case (Nest(parent, child), elem) =>
-      run(child, run(parent, elem))
-
-    case (Group(siblings), elem) =>
-      siblings.map(q => run(q, elem))
-
-    case (q: Query, elems: List[t]) =>
-      elems.map(elem => run(q, elem))
-
-    case (Select("character", List(StringBinding("id", id))), Root(characters)) =>
-      characters.find(_.id == id).get
+  def run[T](q: Query, elem: T, acc: JsonObject): JsonObject = (q, elem) match {
+    case (Nest(Select("character", List(StringBinding("id", id))), q), Root(characters)) =>
+      acc.add("character", characters.find(_.id == id).map(character => Json.fromJsonObject(run(q, character, JsonObject.empty))).getOrElse(Json.Null))
 
     case (Select("name", Nil), character: Character) =>
-      character.name
+      acc.add("name", character.name.map(Json.fromString).getOrElse(Json.Null))
 
-    case (Select("friends", Nil), character: Character) =>
-      character.friends
+    case (Nest(Select("friends", Nil), q), character: Character) =>
+      acc.add("friends", Json.fromValues(character.friends.map(friend => Json.fromJsonObject(run(q, friend, JsonObject.empty)))))
+
+    case (Group(siblings), elem) =>
+      siblings.foldLeft(acc)((acc, q) => run(q, elem, acc))
   }
 }

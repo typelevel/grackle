@@ -6,46 +6,86 @@ package grackle
 package starwars
 
 import cats.tests.CatsSuite
+import io.circe.literal.JsonStringContext
+
 import Query._, Binding._
 
 final class StarsWarsSpec extends CatsSuite {
-  val text0 = """
-    query {
-      character(id: 1000) {
-        name
-      }
-    }
-  """
-
-  val query0 =
-    Select("character", List(StringBinding("id", "1000"))) /
-      Select("name", Nil)
-
-  test("query0") {
-    val res = StarWarsQueryInterpreter.run(query0)
-    assert(res == Some("Luke Skywalker"))
-  }
-
-  val text1 = """
-    query {
-      character(id: 1000) {
-        name
-        friends {
+  test("simple query") {
+    /*
+    val query = """
+      query {
+        character(id: 1000) {
           name
         }
       }
-    }
-  """
+    """
+    */
 
-  val query1 =
-    Select("character", List(StringBinding("id", "1000"))) / (
-      Select("name", Nil) ~
-      (Select("friends", Nil) /
-        Select("name", Nil))
-    )
+    val compiledQuery =
+      Select("character", List(StringBinding("id", "1000"))) /
+        Select("name", Nil)
 
-  test("query1") {
-    val res = StarWarsQueryInterpreter.run(query1)
-    assert(res == List(Some("Luke Skywalker"), List(Some("Han Solo"), Some("Leia Organa"), Some("C-3PO"), Some("R2-D2"))))
+    val expected = json"""
+      {
+        "data" : {
+          "character" : {
+            "name" : "Luke Skywalker"
+          }
+        }
+      }
+    """
+
+    val res = StarWarsQueryInterpreter.run(compiledQuery)
+    assert(res == expected)
+  }
+
+  test("simple nested query") {
+    /*
+    val query = """
+      query {
+        character(id: 1000) {
+          name
+          friends {
+            name
+          }
+        }
+      }
+    """
+    */
+
+    val compiledQuery =
+      Select("character", List(StringBinding("id", "1000"))) / (
+        Select("name", Nil) ~
+        (Select("friends", Nil) /
+          Select("name", Nil))
+      )
+
+    val expected = json"""
+      {
+        "data" : {
+          "character" : {
+            "name" : "Luke Skywalker",
+            "friends" : [
+              {
+                "name" : "Han Solo"
+              },
+              {
+                "name" : "Leia Organa"
+              },
+              {
+                "name" : "C-3PO"
+              },
+              {
+                "name" : "R2-D2"
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = StarWarsQueryInterpreter.run(compiledQuery)
+    assert(res == expected)
   }
 }
