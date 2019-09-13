@@ -5,6 +5,9 @@ package edu.gemini
 package grackle
 package starwars
 
+import cats.Id
+import Query._, Binding._
+
 object StarWarsData {
   object Episode extends Enumeration {
     val NEWHOPE, EMPIRE, JEDI = Value
@@ -35,9 +38,11 @@ object StarWarsData {
       new Droid(id, name, appearsIn, primaryFunction)(friends)
   }
 
-  val characters = List[Character](
+  case class Root(characters: List[Character])
+
+  val root = Root(List(
     LukeSkywalker, DarthVader, HanSolo, LeiaOrgana, WilhuffTarkin, C3PO, R2D2
-  )
+  ))
 
   lazy val LukeSkywalker: Character =
     Human(
@@ -88,4 +93,30 @@ object StarWarsData {
       friends = List(LukeSkywalker, HanSolo, LeiaOrgana),
       appearsIn = List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI),
       primaryFunction = Some("Astromech"))
+}
+
+object StarWarsQueryInterpreter extends QueryInterpreter[Id, AnyRef] {
+  import StarWarsData._
+
+  def run(q: Query): AnyRef = run(q, root)
+
+  def run[T](q: Query, elem: T): AnyRef = (q, elem) match {
+    case (Nest(parent, child), elem) =>
+      run(child, run(parent, elem))
+
+    case (Group(siblings), elem) =>
+      siblings.map(q => run(q, elem))
+
+    case (q: Query, elems: List[t]) =>
+      elems.map(elem => run(q, elem))
+
+    case (Select("character", List(StringBinding("id", id))), Root(characters)) =>
+      characters.find(_.id == id).get
+
+    case (Select("name", Nil), character: Character) =>
+      character.name
+
+    case (Select("friends", Nil), character: Character) =>
+      character.friends
+  }
 }
