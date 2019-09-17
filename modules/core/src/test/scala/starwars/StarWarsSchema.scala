@@ -26,7 +26,6 @@ object StarWarsSchema {
       fields = List(
         Field("hero", None, List(EpisodeArg), NonNullType(CharacterType), false, None),
         Field("character", None, List(IdArg), CharacterType, false, None),
-        Field("human", None, List(IdArg), CharacterType, false, None),
         Field("human", None, List(IdArg), CharacterType, false, None)
       ),
       interfaces = Nil
