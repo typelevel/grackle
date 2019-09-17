@@ -27,6 +27,26 @@ object Schema {
   ) extends NullableType
 
   object ScalarType {
+    val IntType = ScalarType(
+      name = "Int",
+      description =
+        Some(
+          """|The Int scalar type represents a signed 32‐bit numeric non‐fractional value.
+             |Response formats that support a 32‐bit integer or a number type should use that
+             |type to represent this scalar.
+          """.stripMargin.trim
+        )
+    )
+    val FloatType = ScalarType(
+      name = "Float",
+      description =
+        Some(
+          """|The Float scalar type represents signed double‐precision fractional values as
+             |specified by IEEE 754. Response formats that support an appropriate
+             |double‐precision number type should use that type to represent this scalar.
+          """.stripMargin.trim
+        )
+    )
     val StringType = ScalarType(
       name = "String",
       description =
@@ -34,6 +54,16 @@ object Schema {
           """|The String scalar type represents textual data, represented as UTF‐8 character
              |sequences. The String type is most often used by GraphQL to represent free‐form
              |human‐readable text.
+          """.stripMargin.trim
+        )
+    )
+    val BooleanType = ScalarType(
+      name = "Boolean",
+      description =
+        Some(
+          """|The Boolean scalar type represents true or false. Response formats should use a
+             |built‐in boolean type if supported; otherwise, they should use their
+             |representation of the integers 1 and 0.
           """.stripMargin.trim
         )
     )
