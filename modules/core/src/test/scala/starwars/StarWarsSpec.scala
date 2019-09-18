@@ -8,7 +8,7 @@ package starwars
 import cats.tests.CatsSuite
 import io.circe.literal.JsonStringContext
 
-final class StarsWarsSpec extends CatsSuite {
+final class StarWarsSpec extends CatsSuite {
   test("simple query") {
     val query = """
       query {
