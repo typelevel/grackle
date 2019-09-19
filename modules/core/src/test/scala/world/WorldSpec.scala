@@ -26,7 +26,33 @@ final class WorldSpec extends CatsSuite {
     "password"
   )
 
-  test("simple query") {
+  test("simple restricted query") {
+    val query = """
+      query {
+        country(code: "AFG") {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data": {
+          "country": {
+            "name": "Afghanistan"
+          }
+        }
+      }
+    """
+
+    val compiledQuery = Compiler.compileText(query).get
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("simple restricted nested query") {
     val query = """
       query {
         cities(namePattern: "Ame%") {

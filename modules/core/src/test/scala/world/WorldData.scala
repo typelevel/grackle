@@ -205,6 +205,12 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
         children <- cities.traverse { city => run(q, root, city, JsonObject.empty) }
       } yield acc.add("cities", Json.fromValues(children.map(Json.fromJsonObject)))
 
+    case (Nest(Select("country", List(StringBinding("code", code))), q), _: Root[F]) =>
+      for {
+        country <- root.countryRepo.fetchByCode(code)
+        child   <- country.traverse { city => run(q, root, city, JsonObject.empty) }
+      } yield acc.add("country", child.map(Json.fromJsonObject).getOrElse(Json.Null))
+
     case (Nest(Select("cities", List(StringBinding("namePattern", namePattern))), q), _: Root[F]) =>
       for {
         cities   <- root.cityRepo.fetchAll(Some(namePattern))
@@ -216,8 +222,8 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
 
     case (Nest(Select("country", Nil), q), city: City) =>
       for {
-        country  <- root.countryRepo.fetchByCode(city.countryCode)
-        child <- country.traverse { country => run(q, root, country, JsonObject.empty) }
+        country <- root.countryRepo.fetchByCode(city.countryCode)
+        child   <- country.traverse { country => run(q, root, country, JsonObject.empty) }
       } yield acc.add("country", child.map(Json.fromJsonObject).getOrElse(Json.Null))
 
     case (Nest(Select("languages", Nil), q), country: Country) =>
