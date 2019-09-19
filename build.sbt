@@ -3,6 +3,7 @@ val catsVersion                 = "2.0.0"
 val catsEffectVersion           = "2.0.0"
 val catsTestkitScalaTestVersion = "1.0.0-M1"
 val circeVersion                = "0.12.1"
+val circeOpticsVersion          = "0.12.0"
 val doobieVersion               = "0.8.2"
 val jawnVersion                 = "0.14.2"
 val kindProjectorVersion        = "0.10.3"
@@ -26,6 +27,7 @@ lazy val core = project
       "org.typelevel"     %% "cats-effect"            % catsEffectVersion,
       "io.circe"          %% "circe-core"             % circeVersion,
       "io.circe"          %% "circe-literal"          % circeVersion,
+      "io.circe"          %% "circe-optics"           % circeOpticsVersion,
       "org.typelevel"     %% "jawn-parser"            % jawnVersion,
 
       "io.chrisdavenport" %% "log4cats-slf4j"         % log4catsVersion % "test",

@@ -12,6 +12,7 @@ import cats.tests.CatsSuite
 import doobie._
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import io.circe.literal.JsonStringContext
+import io.circe.optics.JsonPath.root
 
 final class WorldSpec extends CatsSuite {
   implicit def contextShift: ContextShift[IO] =
@@ -25,6 +26,26 @@ final class WorldSpec extends CatsSuite {
     "user",
     "password"
   )
+
+  test("simple query") {
+    val query = """
+      query {
+        countries {
+          name
+        }
+      }
+    """
+
+    val expected = 239
+
+    val compiledQuery = Compiler.compileText(query).get
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    //println(res)
+
+    val resSize = root.data.countries.arr.getOption(res).map(_.size)
+
+    assert(resSize == Some(expected))
+  }
 
   test("simple restricted query") {
     val query = """
