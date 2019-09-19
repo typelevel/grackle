@@ -93,35 +93,15 @@ final class WorldSpec extends CatsSuite {
         "data": {
           "cities": [
             {
-              "name": "Amersfoort",
-              "country": {
-                "name": "Netherlands",
-                "languages": [
-                  {
-                    "language": "Dutch"
-                  },
-                  {
-                    "language": "Fries"
-                  },
-                  {
-                    "language": "Arabic"
-                  },
-                  {
-                    "language": "Turkish"
-                  }
-                ]
-              }
-            },
-            {
               "name": "Americana",
               "country": {
                 "name": "Brazil",
                 "languages": [
                   {
-                    "language": "Portuguese"
+                    "language": "German"
                   },
                   {
-                    "language": "German"
+                    "language": "Indian Languages"
                   },
                   {
                     "language": "Italian"
@@ -130,7 +110,27 @@ final class WorldSpec extends CatsSuite {
                     "language": "Japanese"
                   },
                   {
-                    "language": "Indian Languages"
+                    "language": "Portuguese"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Amersfoort",
+              "country": {
+                "name": "Netherlands",
+                "languages": [
+                  {
+                    "language": "Arabic"
+                  },
+                  {
+                    "language": "Dutch"
+                  },
+                  {
+                    "language": "Fries"
+                  },
+                  {
+                    "language": "Turkish"
                   }
                 ]
               }
