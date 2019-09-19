@@ -99,4 +99,66 @@ final class WorldSpec extends CatsSuite {
 
     assert(res == expected)
   }
+
+  test("deeply nested query") {
+    val query = """
+      query {
+        cities(namePattern: "Tirana") {
+          name
+          country {
+            name
+            cities {
+              name
+              country {
+                name
+                cities {
+                  name
+                  country {
+                    name
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data": {
+          "cities": [
+            {
+              "name": "Tirana",
+              "country": {
+                "name": "Albania",
+                "cities": [
+                  {
+                    "name": "Tirana",
+                    "country": {
+                      "name": "Albania",
+                      "cities": [
+                        {
+                          "name": "Tirana",
+                          "country": {
+                            "name": "Albania"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    """
+
+    val compiledQuery = Compiler.compileText(query).get
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
 }

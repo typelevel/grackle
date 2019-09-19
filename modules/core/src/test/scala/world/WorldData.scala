@@ -199,6 +199,12 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
     case (Select("code2", Nil), country: Country) =>
       acc.add("code", Json.fromString(country.code2)).pure[F]
 
+    case (Nest(Select("cities", Nil), q), country: Country) =>
+      for {
+        cities   <- root.cityRepo.fetchByCountryCode(country.code)
+        children <- cities.traverse { city => run(q, root, city, JsonObject.empty) }
+      } yield acc.add("cities", Json.fromValues(children.map(Json.fromJsonObject)))
+
     case (Nest(Select("cities", List(StringBinding("namePattern", namePattern))), q), _: Root[F]) =>
       for {
         cities   <- root.cityRepo.fetchAll(Some(namePattern))
