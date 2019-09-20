@@ -11,6 +11,7 @@ import cats.implicits._
 import doobie.Transactor
 import io.chrisdavenport.log4cats.Logger
 import io.circe.{ Json, JsonObject}
+import io.circe.literal.JsonStringContext
 
 object WorldData {
   final case class Country(
@@ -223,27 +224,25 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
     } yield Json.obj("data" -> Json.fromJsonObject(res))
   }
 
-  object JoinPattern {
-    def apply(rows: List[CityCountryLanguage]): List[Json] = {
-      rows.groupBy(_.cityName).toList.sortBy(_._1).map { case (cityName, rows) =>
-        Json.fromJsonObject(
-          JsonObject.empty.
-            add("name", Json.fromString(cityName)).
-            add("country",
-              Json.fromJsonObject(
-                JsonObject.empty.
-                  add("name", Json.fromString(rows.head.countryName)).
-                  add("languages",
-                    Json.fromValues(
-                      rows.groupBy(_.language).toList.sortBy(_._1).map { case (language, _) =>
-                        Json.fromJsonObject(JsonObject.empty.add("language", Json.fromString(language)))
-                      }
-                    )
-                  )
-              )
-            )
-        )
-      }.toList
+  object CityCountryLanguageJoin {
+    def add(parent: JsonObject, rows: List[CityCountryLanguage]): JsonObject = {
+      val cities =
+        rows.groupBy(_.cityName).toList.sortBy(_._1).map { case (cityName, rows) =>
+          val countryName = rows.head.countryName
+          val languages = rows.map(_.language).distinct.sorted.map(language => json"""{ "language": $language }""")
+
+          json"""
+            {
+              "name": $cityName,
+              "country": {
+                "name": $countryName,
+                "languages": $languages
+              }
+            }
+          """
+        }
+
+      parent.add("cities", Json.fromValues(cities))
     }
 
     def unapply(q: Query): Option[Option[String]] =
@@ -281,11 +280,10 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
 
     // Optimized queries
 
-    case (JoinPattern(pat), _: Root[F]) =>
+    case (CityCountryLanguageJoin(pat), _: Root[F]) =>
       for {
-        rows     <- root.cityCountryLanguageRepo.fetchAll(pat)
-        children = JoinPattern(rows)
-      } yield acc.add("cities", Json.fromValues(children))
+        rows <- root.cityCountryLanguageRepo.fetchAll(pat)
+      } yield CityCountryLanguageJoin.add(acc, rows)
 
     // Root queries
 
