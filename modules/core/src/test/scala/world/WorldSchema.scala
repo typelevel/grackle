@@ -8,14 +8,6 @@ package world
 object WorldSchema {
   import Schema._, ScalarType._
 
-  lazy val schema =
-    Schema(
-      queryType = QueryType,
-      mutationType = None,
-      subscriptionType = None,
-      directives = Nil
-    )
-
   val NamePatternArg = InputValue("namePattern", None, StringType, Some("%"))
   val CodeArg = InputValue("code", None, StringType, None)
 
@@ -24,27 +16,27 @@ object WorldSchema {
       name = "Query",
       description = None,
       fields = List(
-        Field("cities", None, List(NamePatternArg), ListType(CityType), false, None),
-        Field("country", None, List(CodeArg), CountryType, false, None),
-        Field("countries", None, Nil, ListType(CountryType), false, None)
+        Field("cities", None, List(NamePatternArg), ListType(TypeRef("City")), false, None),
+        Field("country", None, List(CodeArg), TypeRef("Country"), false, None),
+        Field("countries", None, Nil, ListType(TypeRef("Country")), false, None)
       ),
       interfaces = Nil
     )
 
-  lazy val CityType: ObjectType =
+  val CityType: ObjectType =
     ObjectType(
       name = "City",
       description = None,
       fields = List(
         Field("name", None, Nil, NonNullType(StringType), false, None),
-        Field("country", None, Nil, NonNullType(CountryType), false, None),
+        Field("country", None, Nil, NonNullType(TypeRef("Country")), false, None),
         Field("district", None, Nil, NonNullType(StringType), false, None),
         Field("population", None, Nil, NonNullType(IntType), false, None)
       ),
       interfaces = Nil
     )
 
-  lazy val LanguageType: ObjectType =
+  val LanguageType: ObjectType =
     ObjectType(
       name = "Language",
       description = None,
@@ -56,7 +48,7 @@ object WorldSchema {
       interfaces = Nil
     )
 
-  lazy val CountryType: ObjectType =
+  val CountryType: ObjectType =
     ObjectType(
       name = "Country",
       description = None,
@@ -76,8 +68,17 @@ object WorldSchema {
         Field("capitalId", None, Nil, IntType, false, None),
         Field("code2", None, Nil, NonNullType(StringType), false, None),
         Field("cities", None, Nil, NonNullType(ListType(CityType)), false, None),
-        Field("languages", None, Nil, NonNullType(ListType(LanguageType)), false, None)
+        Field("languages", None, Nil, NonNullType(ListType(TypeRef("Language"))), false, None)
       ),
       interfaces = Nil
+    )
+
+  val schema =
+    Schema(
+      types = List(QueryType, CityType, LanguageType, CountryType),
+      queryType = TypeRef("Query"),
+      mutationType = None,
+      subscriptionType = None,
+      directives = Nil
     )
 }

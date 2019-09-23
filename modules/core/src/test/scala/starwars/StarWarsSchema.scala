@@ -8,15 +8,7 @@ package starwars
 object StarWarsSchema {
   import Schema._, ScalarType._
 
-  lazy val schema =
-    Schema(
-      queryType = QueryType,
-      mutationType = None,
-      subscriptionType = None,
-      directives = Nil
-    )
-
-  val EpisodeArg = InputValue("episode", None, EpisodeType, None)
+  val EpisodeArg = InputValue("episode", None, TypeRef("Episode"), None)
   val IdArg = InputValue("id", None, NonNullType(StringType), None)
 
   val QueryType: ObjectType =
@@ -24,9 +16,9 @@ object StarWarsSchema {
       name = "Query",
       description = None,
       fields = List(
-        Field("hero", None, List(EpisodeArg), NonNullType(CharacterType), false, None),
-        Field("character", None, List(IdArg), CharacterType, false, None),
-        Field("human", None, List(IdArg), CharacterType, false, None)
+        Field("hero", None, List(EpisodeArg), NonNullType(TypeRef("Character")), false, None),
+        Field("character", None, List(IdArg), TypeRef("Character"), false, None),
+        Field("human", None, List(IdArg), TypeRef("Character"), false, None)
       ),
       interfaces = Nil
     )
@@ -42,43 +34,52 @@ object StarWarsSchema {
       )
     )
 
-  lazy val CharacterType: InterfaceType = 
+  val CharacterType: InterfaceType =
     InterfaceType(
       name = "Character",
       description = None,
       fields = List(
         Field("id", None, Nil, NonNullType(StringType), false, None),
         Field("name", None, Nil, StringType, false, None),
-        Field("friends", None, Nil, ListType(CharacterType), false, None),
-        Field("appearsIn", None, Nil, ListType(EpisodeType), false, None)
+        Field("friends", None, Nil, ListType(TypeRef("Character")), false, None),
+        Field("appearsIn", None, Nil, ListType(TypeRef("Episode")), false, None)
       )
     )
 
-  lazy val HumanType: ObjectType = 
+  val HumanType: ObjectType =
     ObjectType(
       name = "Human",
       description = None,
       fields = List(
         Field("id", None, Nil, NonNullType(StringType), false, None),
         Field("name", None, Nil, StringType, false, None),
-        Field("friends", None, Nil, ListType(CharacterType), false, None),
-        Field("appearsIn", None, Nil, ListType(EpisodeType), false, None),
+        Field("friends", None, Nil, ListType(TypeRef("Character")), false, None),
+        Field("appearsIn", None, Nil, ListType(TypeRef("Episode")), false, None),
         Field("homePlanet", None, Nil, StringType, false, None)
       ),
-      interfaces = List(CharacterType)
+      interfaces = List(TypeRef("Character"))
     )
 
-  lazy val DroidType: ObjectType = 
+  val DroidType: ObjectType =
     ObjectType(
       name = "Droid",
       description = None,
       fields = List(
         Field("id", None, Nil, NonNullType(StringType), false, None),
         Field("name", None, Nil, StringType, false, None),
-        Field("friends", None, Nil, ListType(CharacterType), false, None),
-        Field("appearsIn", None, Nil, ListType(EpisodeType), false, None),
+        Field("friends", None, Nil, ListType(TypeRef("Character")), false, None),
+        Field("appearsIn", None, Nil, ListType(TypeRef("Episode")), false, None),
         Field("primaryFunction", None, Nil, StringType, false, None)
       ),
-      interfaces = List(CharacterType)
+      interfaces = List(TypeRef("Character"))
+    )
+
+  val schema =
+    Schema(
+      types = List(QueryType, EpisodeType, CharacterType, HumanType, DroidType),
+      queryType = TypeRef("Query"),
+      mutationType = None,
+      subscriptionType = None,
+      directives = Nil
     )
 }

@@ -197,7 +197,9 @@ object WorldData {
     cityRepo: CityRepo[F],
     languageRepo: LanguageRepo[F],
     cityCountryLanguageRepo: CityCountryLanguageRepo[F]
-  )
+  ) {
+    def schema = WorldSchema.schema
+  }
 
   def fromTransactor[F[_]: Logger](xa: Transactor[F])(implicit ev: Bracket[F, Throwable]): Root[F] =
     Root(
@@ -211,6 +213,7 @@ object WorldData {
 trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
   import WorldData._
 
+  import Schema._
   import Query._, Binding._
 
   implicit val logger: Logger[F]
@@ -220,8 +223,107 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
   def run(q: Query): F[Json] = {
     val root = WorldData.fromTransactor(xa)
     for {
-      res <- run(q, root, root, JsonObject.empty)
+      res <- run(q, root, root.schema.queryType, root, JsonObject.empty)
     } yield Json.obj("data" -> Json.fromJsonObject(res))
+  }
+
+  def schemaOfField(schema: Schema, tpe: Type, fieldName: String): Option[Type] = tpe match {
+    case NonNullType(tpe) => schemaOfField(schema, tpe, fieldName)
+    case ListType(tpe) => schemaOfField(schema, tpe, fieldName)
+    case TypeRef(tpnme) => schema.types.find(_.name == tpnme).flatMap(tpe => schemaOfField(schema, tpe, fieldName))
+    case ObjectType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe)
+    case _ => None
+  }
+
+  def run[T](q: Query, root: Root[F], schema: Type, elem: T, acc: JsonObject): F[JsonObject] = {
+    println(s"schema: $schema")
+
+    def checkField(fieldName: String): Unit =
+      assert(schemaOfField(root.schema, schema, fieldName).isDefined)
+
+    def field(fieldName: String): Type =
+      schemaOfField(root.schema, schema, fieldName).get
+
+    (q, elem) match {
+
+      // Optimized queries
+
+      case (CityCountryLanguageJoin(pat), _: Root[F]) =>
+        for {
+          rows <- root.cityCountryLanguageRepo.fetchAll(pat)
+        } yield CityCountryLanguageJoin.add(acc, rows)
+
+      // Root queries
+
+      case (Nest(Select("countries", Nil), q), _: Root[F]) =>
+        checkField("countries")
+        for {
+          countries <- root.countryRepo.fetchAll
+          children  <- countries.sortBy(_.name).traverse { country => run(q, root, field("countries"), country, JsonObject.empty) }
+        } yield acc.add("countries", Json.fromValues(children.map(Json.fromJsonObject)))
+
+      case (Nest(Select("country", List(StringBinding("code", code))), q), _: Root[F]) =>
+        checkField("country")
+        for {
+          country <- root.countryRepo.fetchByCode(code)
+          child   <- country.traverse { city => run(q, root, field("country"), city, JsonObject.empty) }
+        } yield acc.add("country", child.map(Json.fromJsonObject).getOrElse(Json.Null))
+
+      case (Nest(Select("cities", List(StringBinding("namePattern", namePattern))), q), _: Root[F]) =>
+        checkField("cities")
+        for {
+          cities   <- root.cityRepo.fetchAll(Some(namePattern))
+          children <- cities.sortBy(_.name).traverse { city => run(q, root, field("cities"), city, JsonObject.empty) }
+        } yield acc.add("cities", Json.fromValues(children.map(Json.fromJsonObject)))
+
+      // Country queries
+
+      case (Select("name", Nil), country: Country) =>
+        checkField("name")
+        acc.add("name", Json.fromString(country.name)).pure[F]
+
+      case (Select("code2", Nil), country: Country) =>
+        checkField("code2")
+        acc.add("code2", Json.fromString(country.code2)).pure[F]
+
+      case (Nest(Select("cities", Nil), q), country: Country) =>
+        checkField("cities")
+        for {
+          cities   <- root.cityRepo.fetchByCountryCode(country.code)
+          children <- cities.sortBy(_.name).traverse { city => run(q, root, field("cities"), city, JsonObject.empty) }
+        } yield acc.add("cities", Json.fromValues(children.map(Json.fromJsonObject)))
+
+      case (Nest(Select("languages", Nil), q), country: Country) =>
+        checkField("languages")
+        for {
+          languages <- root.languageRepo.fetchByCountryCode(country.code)
+          children  <- languages.sortBy(_.language).traverse { language => run(q, root, field("languages"), language, JsonObject.empty) }
+        } yield acc.add("languages", Json.fromValues(children.map(Json.fromJsonObject)))
+
+      // City queries
+
+      case (Select("name", Nil), city: City) =>
+        checkField("name")
+        acc.add("name", Json.fromString(city.name)).pure[F]
+
+      case (Nest(Select("country", Nil), q), city: City) =>
+        checkField("country")
+        for {
+          country <- root.countryRepo.fetchByCode(city.countryCode)
+          child   <- country.traverse { country => run(q, root, field("country"), country, JsonObject.empty) }
+        } yield acc.add("country", child.map(Json.fromJsonObject).getOrElse(Json.Null))
+
+      // Language queries
+
+      case (Select("language", Nil), language: Language) =>
+        checkField("language")
+        acc.add("language", Json.fromString(language.language)).pure[F]
+
+      // Generic ...
+
+      case (Group(siblings), elem) =>
+        siblings.foldLeftM(acc)((acc, q) => run(q, root, schema, elem, acc))
+    }
   }
 
   object CityCountryLanguageJoin {
@@ -274,77 +376,6 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
           }
         case _ => None
       }
-  }
-
-  def run[T](q: Query, root: Root[F], elem: T, acc: JsonObject): F[JsonObject] = (q, elem) match {
-
-    // Optimized queries
-
-    case (CityCountryLanguageJoin(pat), _: Root[F]) =>
-      for {
-        rows <- root.cityCountryLanguageRepo.fetchAll(pat)
-      } yield CityCountryLanguageJoin.add(acc, rows)
-
-    // Root queries
-
-    case (Nest(Select("countries", Nil), q), _: Root[F]) =>
-      for {
-        countries <- root.countryRepo.fetchAll
-        children  <- countries.sortBy(_.name).traverse { country => run(q, root, country, JsonObject.empty) }
-      } yield acc.add("countries", Json.fromValues(children.map(Json.fromJsonObject)))
-
-    case (Nest(Select("country", List(StringBinding("code", code))), q), _: Root[F]) =>
-      for {
-        country <- root.countryRepo.fetchByCode(code)
-        child   <- country.traverse { city => run(q, root, city, JsonObject.empty) }
-      } yield acc.add("country", child.map(Json.fromJsonObject).getOrElse(Json.Null))
-
-    case (Nest(Select("cities", List(StringBinding("namePattern", namePattern))), q), _: Root[F]) =>
-      for {
-        cities   <- root.cityRepo.fetchAll(Some(namePattern))
-        children <- cities.sortBy(_.name).traverse { city => run(q, root, city, JsonObject.empty) }
-      } yield acc.add("cities", Json.fromValues(children.map(Json.fromJsonObject)))
-
-    // Country queries
-
-    case (Select("name", Nil), country: Country) =>
-      acc.add("name", Json.fromString(country.name)).pure[F]
-
-    case (Select("code2", Nil), country: Country) =>
-      acc.add("code", Json.fromString(country.code2)).pure[F]
-
-    case (Nest(Select("cities", Nil), q), country: Country) =>
-      for {
-        cities   <- root.cityRepo.fetchByCountryCode(country.code)
-        children <- cities.sortBy(_.name).traverse { city => run(q, root, city, JsonObject.empty) }
-      } yield acc.add("cities", Json.fromValues(children.map(Json.fromJsonObject)))
-
-    case (Nest(Select("languages", Nil), q), country: Country) =>
-      for {
-        languages <- root.languageRepo.fetchByCountryCode(country.code)
-        children  <- languages.sortBy(_.language).traverse { language => run(q, root, language, JsonObject.empty) }
-      } yield acc.add("languages", Json.fromValues(children.map(Json.fromJsonObject)))
-
-    // City queries
-
-    case (Select("name", Nil), city: City) =>
-      acc.add("name", Json.fromString(city.name)).pure[F]
-
-    case (Nest(Select("country", Nil), q), city: City) =>
-      for {
-        country <- root.countryRepo.fetchByCode(city.countryCode)
-        child   <- country.traverse { country => run(q, root, country, JsonObject.empty) }
-      } yield acc.add("country", child.map(Json.fromJsonObject).getOrElse(Json.Null))
-
-    // Language queries
-
-    case (Select("language", Nil), language: Language) =>
-      acc.add("language", Json.fromString(language.language)).pure[F]
-
-    // Generic ...
-
-    case (Group(siblings), elem) =>
-      siblings.foldLeftM(acc)((acc, q) => run(q, root, elem, acc))
   }
 }
 

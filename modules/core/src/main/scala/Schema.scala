@@ -6,16 +6,22 @@ package edu.gemini.grackle
 object Schema {
 
   case class Schema(
-    queryType:        ObjectType,
-    mutationType:     Option[ObjectType],
-    subscriptionType: Option[ObjectType],
+    types:            List[NamedType],
+    queryType:        TypeRef,
+    mutationType:     Option[TypeRef],
+    subscriptionType: Option[TypeRef],
     directives:       List[Directive]
   )
 
   sealed trait Type
+  sealed trait NamedType extends Type {
+    def name: String
+  }
 
   /** Marker trait for types that can be wrapped with NonNull. */
   sealed trait NullableType extends Type
+
+  case class TypeRef(ref: String) extends NullableType
 
   /**
    * Represents scalar types such as Int, String, and Boolean. Scalars cannot have fields.
@@ -24,7 +30,9 @@ object Schema {
   case class ScalarType(
     name:        String,
     description: Option[String]
-  ) extends NullableType
+  ) extends NullableType {
+    override def toString: String = name
+  }
 
   object ScalarType {
     val IntType = ScalarType(
@@ -78,7 +86,7 @@ object Schema {
     name:        String,
     description: Option[String],
     fields:      List[Field]
-  ) extends NullableType
+  ) extends NullableType with NamedType
 
   /**
    * Object types represent concrete instantiations of sets of fields.
@@ -88,8 +96,10 @@ object Schema {
     name:        String,
     description: Option[String],
     fields:      List[Field],
-    interfaces:  List[InterfaceType]
-  ) extends NullableType
+    interfaces:  List[TypeRef]
+  ) extends NullableType with NamedType {
+    override def toString: String = s"$name ${fields.mkString("{", ", ", "}")}"
+  }
 
   /**
    * Unions are an abstract type where no common fields are declared. The possible types of a union
@@ -100,8 +110,8 @@ object Schema {
   case class UnionType(
     name:        String,
     description: Option[String],
-    members:     List[ObjectType]
-  ) extends NullableType
+    members:     List[TypeRef]
+  ) extends NullableType with NamedType
 
   /**
    * Enums are special scalars that can only have a defined set of values.
@@ -111,7 +121,7 @@ object Schema {
     name:        String,
     description: Option[String],
     enumValues:  List[EnumValue]
-  ) extends NullableType
+  ) extends NullableType with NamedType
 
   /**
    * The `EnumValue` type represents one of possible values of an enum.
@@ -142,7 +152,9 @@ object Schema {
    */
   case class ListType(
     ofType: Type
-  ) extends NullableType
+  ) extends NullableType {
+    override def toString: String = s"[$ofType]"
+  }
 
   /**
    * A Non‐null type is a type modifier: it wraps another type instance in the `ofType` field.
@@ -152,7 +164,9 @@ object Schema {
    */
   case class NonNullType(
     ofType: NullableType
-  ) extends Type
+  ) extends Type {
+    override def toString: String = s"$ofType!"
+  }
 
   /**
    * The `Field` type represents each field in an Object or Interface type.
@@ -162,22 +176,11 @@ object Schema {
     name:              String,
     description:       Option[String],
     args:              List[InputValue],
+    tpe:               Type,
     isDeprecated:      Boolean,
     deprecationReason: Option[String]
-  )(
-    tpe0:              => Type
   ) {
-    lazy val tpe = tpe0
-  }
-  object Field {
-    def apply(
-      name:              String,
-      description:       Option[String],
-      args:              List[InputValue],
-      tpe:               => Type,
-      isDeprecated:      Boolean,
-      deprecationReason: Option[String]
-    ) = new Field(name, description, args, isDeprecated, deprecationReason)(tpe)
+    override def toString: String = s"$name: $tpe"
   }
 
   /**
@@ -187,20 +190,9 @@ object Schema {
   case class InputValue private (
     name:         String,
     description:  Option[String],
+    tpe:          Type,
     defaultValue: Option[String]
-  )(
-    tpe0:         => Type
-  ) {
-    lazy val tpe = tpe0
-  }
-  object InputValue {
-    def apply(
-      name:              String,
-      description:       Option[String],
-      tpe:               => Type,
-      defaultValue:      Option[String]
-    ) = new InputValue(name, description, defaultValue)(tpe)
-  }
+  )
 
   /**
    * The `Directive` type represents a Directive that a server supports.
