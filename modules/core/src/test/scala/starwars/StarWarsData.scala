@@ -9,6 +9,7 @@ import cats.Id
 import io.circe.{ Json, JsonObject}
 
 import Query._, Binding._
+import Schema._
 
 object StarWarsData {
   object Episode extends Enumeration {
@@ -40,7 +41,9 @@ object StarWarsData {
       new Droid(id, name, appearsIn, primaryFunction)(friends)
   }
 
-  case class Root(characters: List[Character])
+  case class Root(characters: List[Character]) {
+    def schema: Schema = StarWarsSchema.schema
+  }
 
   val root = Root(List(
     LukeSkywalker, DarthVader, HanSolo, LeiaOrgana, WilhuffTarkin, C3PO, R2D2
@@ -100,19 +103,43 @@ object StarWarsData {
 object StarWarsQueryInterpreter extends QueryInterpreter[Id, Json] {
   import StarWarsData._
 
-  def run(q: Query): Json = Json.obj("data" -> Json.fromJsonObject(run(q, root, JsonObject.empty)))
+  def run(q: Query): Json = Json.obj("data" -> Json.fromJsonObject(run(q, root, root.schema.queryType, root, JsonObject.empty)))
 
-  def run[T](q: Query, elem: T, acc: JsonObject): JsonObject = (q, elem) match {
-    case (Nest(Select("character", List(StringBinding("id", id))), q), Root(characters)) =>
-      acc.add("character", characters.find(_.id == id).map(character => Json.fromJsonObject(run(q, character, JsonObject.empty))).getOrElse(Json.Null))
+  def run[T](q: Query, root: Root, schema: Type, elem: T, acc: JsonObject): JsonObject = {
+    println(s"schema: $schema")
 
-    case (Select("name", Nil), character: Character) =>
-      acc.add("name", character.name.map(Json.fromString).getOrElse(Json.Null))
+    def checkField(fieldName: String): Unit =
+      assert(schemaOfField(root.schema, schema, fieldName).isDefined)
 
-    case (Nest(Select("friends", Nil), q), character: Character) =>
-      acc.add("friends", Json.fromValues(character.friends.map(friend => Json.fromJsonObject(run(q, friend, JsonObject.empty)))))
+    def field(fieldName: String): Type =
+      schemaOfField(root.schema, schema, fieldName).get
 
-    case (Group(siblings), elem) =>
-      siblings.foldLeft(acc)((acc, q) => run(q, elem, acc))
+    (q, elem) match {
+      case (Nest(Select("character", List(StringBinding("id", id))), q), Root(characters)) =>
+        checkField("character")
+        val child = characters.find(_.id == id).map(character => run(q, root, field("character"), character, JsonObject.empty))
+        acc.add("character", child.map(child => Json.fromJsonObject(child)).getOrElse(Json.Null))
+
+      case (Select("name", Nil), character: Character) =>
+        checkField("name")
+        acc.add("name", character.name.map(Json.fromString).getOrElse(Json.Null))
+
+      case (Nest(Select("friends", Nil), q), character: Character) =>
+        checkField("friends")
+        val children = character.friends.map(friend => run(q, root, field("friends"), friend, JsonObject.empty))
+        acc.add("friends", Json.fromValues(children.map(Json.fromJsonObject)))
+
+      case (Group(siblings), elem) =>
+        siblings.foldLeft(acc)((acc, q) => run(q, root, schema, elem, acc))
+    }
+  }
+
+  def schemaOfField(schema: Schema, tpe: Type, fieldName: String): Option[Type] = tpe match {
+    case NonNullType(tpe) => schemaOfField(schema, tpe, fieldName)
+    case ListType(tpe) => schemaOfField(schema, tpe, fieldName)
+    case TypeRef(tpnme) => schema.types.find(_.name == tpnme).flatMap(tpe => schemaOfField(schema, tpe, fieldName))
+    case ObjectType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe)
+    case InterfaceType(_, _, fields) => fields.find(_.name == fieldName).map(_.tpe)
+    case _ => None
   }
 }

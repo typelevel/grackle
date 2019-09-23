@@ -227,14 +227,6 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
     } yield Json.obj("data" -> Json.fromJsonObject(res))
   }
 
-  def schemaOfField(schema: Schema, tpe: Type, fieldName: String): Option[Type] = tpe match {
-    case NonNullType(tpe) => schemaOfField(schema, tpe, fieldName)
-    case ListType(tpe) => schemaOfField(schema, tpe, fieldName)
-    case TypeRef(tpnme) => schema.types.find(_.name == tpnme).flatMap(tpe => schemaOfField(schema, tpe, fieldName))
-    case ObjectType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe)
-    case _ => None
-  }
-
   def run[T](q: Query, root: Root[F], schema: Type, elem: T, acc: JsonObject): F[JsonObject] = {
     println(s"schema: $schema")
 
@@ -324,6 +316,14 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
       case (Group(siblings), elem) =>
         siblings.foldLeftM(acc)((acc, q) => run(q, root, schema, elem, acc))
     }
+  }
+
+  def schemaOfField(schema: Schema, tpe: Type, fieldName: String): Option[Type] = tpe match {
+    case NonNullType(tpe) => schemaOfField(schema, tpe, fieldName)
+    case ListType(tpe) => schemaOfField(schema, tpe, fieldName)
+    case TypeRef(tpnme) => schema.types.find(_.name == tpnme).flatMap(tpe => schemaOfField(schema, tpe, fieldName))
+    case ObjectType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe)
+    case _ => None
   }
 
   object CityCountryLanguageJoin {
