@@ -6,6 +6,7 @@ package grackle
 package starwars
 
 import cats.data.Validated, Validated.{ Valid, Invalid }
+import io.circe.Json
 
 object StarWarsData {
   object Episode extends Enumeration {
@@ -132,7 +133,6 @@ case class StarWarsCursor(focus: Any) extends DataTypeCursor {
   }
 }
 
-object StarWarsQueryInterpreter extends CursorQueryInterpreter {
-  val rootSchema = StarWarsSchema.schema
-  val rootCursor = StarWarsCursor(StarWarsData.root)
+object StarWarsQueryInterpreter extends CursorQueryInterpreter(StarWarsSchema) {
+  def run(q: Query): Json = run(q, StarWarsCursor(StarWarsData.root))
 }

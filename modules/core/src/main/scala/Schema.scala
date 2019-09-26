@@ -3,21 +3,40 @@
 
 package edu.gemini.grackle
 
-object Schema {
+trait Schema {
+  val types:            List[NamedType]
+  val queryType:        TypeRef
+  val mutationType:     Option[TypeRef]
+  val subscriptionType: Option[TypeRef]
+  val directives:       List[Directive]
 
-  case class Schema(
-    types:            List[NamedType],
-    queryType:        TypeRef,
-    mutationType:     Option[TypeRef],
-    subscriptionType: Option[TypeRef],
-    directives:       List[Directive]
-  )
+  sealed trait Type {
+    def field(fieldName: String): Type = this match {
+      case NullableType(tpe) => tpe.field(fieldName)
+      case TypeRef(_) => dealias.field(fieldName)
+      case ObjectType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
+      case InterfaceType(_, _, fields) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
+      case _ => NoType
+    }
 
-  sealed trait Type
+    def dealias: Type = this match {
+      case NullableType(tpe) => tpe.dealias
+      case TypeRef(tpnme) => types.find(_.name == tpnme).getOrElse(NoType)
+      case _ => this
+    }
+
+    def item: Type = this match {
+      case NullableType(tpe) => tpe.item
+      case ListType(tpe) => tpe
+      case _ => NoType
+    }
+  }
+
   sealed trait NamedType extends Type {
     def name: String
   }
 
+  case object NoType extends Type
   case class TypeRef(ref: String) extends Type
 
   /**
@@ -222,17 +241,5 @@ object Schema {
     case object ENUM_VALUE             extends DirectiveLocation
     case object INPUT_OBJECT           extends DirectiveLocation
     case object INPUT_FIELD_DEFINITION extends DirectiveLocation
-  }
-}
-
-object SchemaUtils {
-  import Schema._
-
-  def schemaOfField(schema: Schema, tpe: Type, fieldName: String): Option[Type] = tpe match {
-    case NullableType(tpe) => schemaOfField(schema, tpe, fieldName)
-    case TypeRef(tpnme) => schema.types.find(_.name == tpnme).flatMap(tpe => schemaOfField(schema, tpe, fieldName))
-    case ObjectType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe)
-    case InterfaceType(_, _, fields) => fields.find(_.name == fieldName).map(_.tpe)
-    case _ => None
   }
 }

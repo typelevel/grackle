@@ -5,8 +5,8 @@ package edu.gemini
 package grackle
 package starwars
 
-object StarWarsSchema {
-  import Schema._, ScalarType._
+object StarWarsSchema extends Schema {
+  import ScalarType._
 
   val EpisodeArg = InputValue("episode", None, NullableType(TypeRef("Episode")), None)
   val IdArg = InputValue("id", None, StringType, None)
@@ -74,12 +74,9 @@ object StarWarsSchema {
       interfaces = List(TypeRef("Character"))
     )
 
-  val schema =
-    Schema(
-      types = List(QueryType, EpisodeType, CharacterType, HumanType, DroidType),
-      queryType = TypeRef("Query"),
-      mutationType = None,
-      subscriptionType = None,
-      directives = Nil
-    )
+  val types = List(QueryType, EpisodeType, CharacterType, HumanType, DroidType)
+  val queryType = TypeRef("Query")
+  val mutationType = None
+  val subscriptionType = None
+  val directives = Nil
 }

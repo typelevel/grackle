@@ -197,9 +197,7 @@ object WorldData {
     cityRepo: CityRepo[F],
     languageRepo: LanguageRepo[F],
     cityCountryLanguageRepo: CityCountryLanguageRepo[F]
-  ) {
-    def schema = WorldSchema.schema
-  }
+  )
 
   def fromTransactor[F[_]: Logger](xa: Transactor[F])(implicit ev: Bracket[F, Throwable]): Root[F] =
     Root(
@@ -212,8 +210,8 @@ object WorldData {
 
 trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
   import WorldData._
+  import WorldSchema._
 
-  import Schema._
   import Query._, Binding._
 
   implicit val logger: Logger[F]
@@ -223,18 +221,15 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
   def run(q: Query): F[Json] = {
     val root = WorldData.fromTransactor(xa)
     for {
-      res <- run(q, root, root.schema.queryType, root, JsonObject.empty)
+      res <- run(q, root, queryType, root, JsonObject.empty)
     } yield Json.obj("data" -> Json.fromJsonObject(res))
   }
 
-  def run[T](q: Query, root: Root[F], schema: Type, elem: T, acc: JsonObject): F[JsonObject] = {
-    //println(s"schema: $schema")
+  def run[T](q: Query, root: Root[F], tpe: Type, elem: T, acc: JsonObject): F[JsonObject] = {
+    assert(tpe != NoType)
 
-    def checkField(fieldName: String): Unit =
-      assert(schemaOfField(root.schema, schema, fieldName).isDefined)
-
-    def field(fieldName: String): Type =
-      schemaOfField(root.schema, schema, fieldName).get
+    def checkField(fieldName: String): Unit = 
+      assert(tpe.field(fieldName) != NoType)
 
     (q, elem) match {
 
@@ -249,23 +244,26 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
 
       case (Select("countries", Nil, q), _: Root[F]) =>
         checkField("countries")
+        val itemTpe = tpe.field("countries").item
         for {
           countries <- root.countryRepo.fetchAll
-          children  <- countries.sortBy(_.name).traverse { country => run(q, root, field("countries"), country, JsonObject.empty) }
+          children  <- countries.sortBy(_.name).traverse { country => run(q, root, itemTpe, country, JsonObject.empty) }
         } yield acc.add("countries", Json.fromValues(children.map(Json.fromJsonObject)))
 
       case (Select("country", List(StringBinding("code", code)), q), _: Root[F]) =>
         checkField("country")
+        val fieldTpe = tpe.field("country")
         for {
           country <- root.countryRepo.fetchByCode(code)
-          child   <- country.traverse { city => run(q, root, field("country"), city, JsonObject.empty) }
+          child   <- country.traverse { city => run(q, root, fieldTpe, city, JsonObject.empty) }
         } yield acc.add("country", child.map(Json.fromJsonObject).getOrElse(Json.Null))
 
       case (Select("cities", List(StringBinding("namePattern", namePattern)), q), _: Root[F]) =>
         checkField("cities")
+        val itemTpe = tpe.field("cities").item
         for {
           cities   <- root.cityRepo.fetchAll(Some(namePattern))
-          children <- cities.sortBy(_.name).traverse { city => run(q, root, field("cities"), city, JsonObject.empty) }
+          children <- cities.sortBy(_.name).traverse { city => run(q, root, itemTpe, city, JsonObject.empty) }
         } yield acc.add("cities", Json.fromValues(children.map(Json.fromJsonObject)))
 
       // Country queries
@@ -280,16 +278,18 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
 
       case (Select("cities", Nil, q), country: Country) =>
         checkField("cities")
+        val itemTpe = tpe.field("cities").item
         for {
           cities   <- root.cityRepo.fetchByCountryCode(country.code)
-          children <- cities.sortBy(_.name).traverse { city => run(q, root, field("cities"), city, JsonObject.empty) }
+          children <- cities.sortBy(_.name).traverse { city => run(q, root, itemTpe, city, JsonObject.empty) }
         } yield acc.add("cities", Json.fromValues(children.map(Json.fromJsonObject)))
 
       case (Select("languages", Nil, q), country: Country) =>
         checkField("languages")
+        val itemTpe = tpe.field("languages").item
         for {
           languages <- root.languageRepo.fetchByCountryCode(country.code)
-          children  <- languages.sortBy(_.language).traverse { language => run(q, root, field("languages"), language, JsonObject.empty) }
+          children  <- languages.sortBy(_.language).traverse { language => run(q, root, itemTpe, language, JsonObject.empty) }
         } yield acc.add("languages", Json.fromValues(children.map(Json.fromJsonObject)))
 
       // City queries
@@ -300,9 +300,10 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
 
       case (Select("country", Nil, q), city: City) =>
         checkField("country")
+        val fieldTpe = tpe.field("country")
         for {
           country <- root.countryRepo.fetchByCode(city.countryCode)
-          child   <- country.traverse { country => run(q, root, field("country"), country, JsonObject.empty) }
+          child   <- country.traverse { country => run(q, root, fieldTpe, country, JsonObject.empty) }
         } yield acc.add("country", child.map(Json.fromJsonObject).getOrElse(Json.Null))
 
       // Language queries
@@ -314,16 +315,8 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
       // Generic ...
 
       case (Group(siblings), elem) =>
-        siblings.foldLeftM(acc)((acc, q) => run(q, root, schema, elem, acc))
+        siblings.foldLeftM(acc)((acc, q) => run(q, root, tpe, elem, acc))
     }
-  }
-
-  def schemaOfField(schema: Schema, tpe: Type, fieldName: String): Option[Type] = tpe match {
-    case NullableType(tpe) => schemaOfField(schema, tpe, fieldName)
-    case ListType(tpe) => schemaOfField(schema, tpe, fieldName)
-    case TypeRef(tpnme) => schema.types.find(_.name == tpnme).flatMap(tpe => schemaOfField(schema, tpe, fieldName))
-    case ObjectType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe)
-    case _ => None
   }
 
   object CityCountryLanguageJoin {

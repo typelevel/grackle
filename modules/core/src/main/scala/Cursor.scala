@@ -24,27 +24,18 @@ trait Cursor {
   def field(label: String, args: Map[String, Any]): Result[Cursor]
 }
 
-trait CursorQueryInterpreter extends QueryInterpreter[Id, Json] {
+abstract class CursorQueryInterpreter(schema: Schema) extends QueryInterpreter[Id, Json] {
   import Query._
-  import Schema._
-  import SchemaUtils._
 
   type Result[T] = Validated[String, T]
   type Field = (String, Json)
 
-  val rootSchema: Schema
-  val rootCursor: Cursor
+  import schema._
 
-  def run(q: Query): Json =
-    run(q, rootSchema.queryType, rootCursor).map { fields =>
+  def run(q: Query, root: Cursor): Json =
+    run(q, queryType, root).map { fields =>
       Json.obj("data" -> Json.fromFields(fields))
     }.valueOr((err: String) => json""" { "errors": [ { "message": $err } ] } """)
-
-  def hasField(tpe: Type, fieldName: String): Boolean =
-    schemaOfField(rootSchema, tpe, fieldName).isDefined
-
-  def field(tpe: Type, fieldName: String): Type =
-    schemaOfField(rootSchema, tpe, fieldName).get
 
   def runValue(q: Query, tpe: Type, cursor: Cursor): Result[Json] = {
     tpe match {
@@ -61,7 +52,7 @@ trait CursorQueryInterpreter extends QueryInterpreter[Id, Json] {
         }
 
       case TypeRef(tpnme) =>
-        rootSchema.types.find(_.name == tpnme).map(tpe =>
+        types.find(_.name == tpnme).map(tpe =>
           runValue(q, tpe, cursor)
         ).getOrElse(Invalid(s"Unknown type '$tpnme'"))
 
@@ -79,14 +70,14 @@ trait CursorQueryInterpreter extends QueryInterpreter[Id, Json] {
 
   def run(q: Query, tpe: Type, cursor: Cursor): Result[List[Field]] = {
     (q, tpe) match {
-      case (sel@Select(fieldName, _, _), NullableType(tpe)) if hasField(tpe, fieldName) =>
+      case (sel@Select(fieldName, _, _), NullableType(tpe)) =>
         cursor.asNullable.andThen { (oc: Option[Cursor]) =>
           oc.map(c => run(sel, tpe, c)).getOrElse(Valid(List((fieldName, Json.Null))))
         }
 
-      case (Select(fieldName, bindings, child), tpe) if hasField(tpe, fieldName) =>
+      case (Select(fieldName, bindings, child), tpe) =>
         cursor.field(fieldName, Binding.toMap(bindings)).andThen { (c: Cursor) =>
-          runValue(child, field(tpe, fieldName), c).map(value => List((fieldName, value)))
+          runValue(child, tpe.field(fieldName), c).map(value => List((fieldName, value)))
         }
 
       case (Group(siblings), _) =>

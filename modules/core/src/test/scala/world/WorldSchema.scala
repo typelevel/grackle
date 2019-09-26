@@ -5,8 +5,8 @@ package edu.gemini
 package grackle
 package world
 
-object WorldSchema {
-  import Schema._, ScalarType._
+object WorldSchema extends Schema {
+  import ScalarType._
 
   val NamePatternArg = InputValue("namePattern", None, NullableType(StringType), Some("%"))
   val CodeArg = InputValue("code", None, NullableType(StringType), None)
@@ -73,12 +73,9 @@ object WorldSchema {
       interfaces = Nil
     )
 
-  val schema =
-    Schema(
-      types = List(QueryType, CityType, LanguageType, CountryType),
-      queryType = TypeRef("Query"),
-      mutationType = None,
-      subscriptionType = None,
-      directives = Nil
-    )
+  val types = List(QueryType, CityType, LanguageType, CountryType)
+  val queryType = TypeRef("Query")
+  val mutationType = None
+  val subscriptionType = None
+  val directives = Nil
 }
