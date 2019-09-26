@@ -79,14 +79,14 @@ trait CursorQueryInterpreter extends QueryInterpreter[Id, Json] {
 
   def run(q: Query, tpe: Type, cursor: Cursor): Result[List[Field]] = {
     (q, tpe) match {
-      case (sel@Select(fieldName, _), NullableType(tpe)) if hasField(tpe, fieldName) =>
+      case (sel@Select(fieldName, _, _), NullableType(tpe)) if hasField(tpe, fieldName) =>
         cursor.asNullable.andThen { (oc: Option[Cursor]) =>
           oc.map(c => run(sel, tpe, c)).getOrElse(Valid(List((fieldName, Json.Null))))
         }
 
-      case (sel@Select(fieldName, bindings), tpe) if hasField(tpe, fieldName) =>
+      case (Select(fieldName, bindings, child), tpe) if hasField(tpe, fieldName) =>
         cursor.field(fieldName, Binding.toMap(bindings)).andThen { (c: Cursor) =>
-          runValue(sel.child, field(tpe, fieldName), c).map(value => List((fieldName, value)))
+          runValue(child, field(tpe, fieldName), c).map(value => List((fieldName, value)))
         }
 
       case (Group(siblings), _) =>

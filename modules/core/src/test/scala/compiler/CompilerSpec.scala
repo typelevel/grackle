@@ -20,8 +20,8 @@ final class CompilerSuite extends CatsSuite {
     """
 
     val expected =
-      SelectObject("character", List(StringBinding("id", "1000")),
-        SelectLeaf("name", Nil)
+      Select("character", List(StringBinding("id", "1000")),
+        Select("name", Nil)
       )
 
     val res = Compiler.compileText(text)
@@ -41,12 +41,12 @@ final class CompilerSuite extends CatsSuite {
     """
 
     val expected =
-      SelectObject(
+      Select(
         "character", List(StringBinding("id", "1000")),
-        SelectLeaf("name", Nil) ~
-          SelectObject(
+        Select("name", Nil) ~
+          Select(
             "friends", Nil,
-            SelectLeaf("name", Nil)
+            Select("name", Nil)
           )
       )
 

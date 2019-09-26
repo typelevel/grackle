@@ -247,21 +247,21 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
 
       // Root queries
 
-      case (SelectObject("countries", Nil, q), _: Root[F]) =>
+      case (Select("countries", Nil, q), _: Root[F]) =>
         checkField("countries")
         for {
           countries <- root.countryRepo.fetchAll
           children  <- countries.sortBy(_.name).traverse { country => run(q, root, field("countries"), country, JsonObject.empty) }
         } yield acc.add("countries", Json.fromValues(children.map(Json.fromJsonObject)))
 
-      case (SelectObject("country", List(StringBinding("code", code)), q), _: Root[F]) =>
+      case (Select("country", List(StringBinding("code", code)), q), _: Root[F]) =>
         checkField("country")
         for {
           country <- root.countryRepo.fetchByCode(code)
           child   <- country.traverse { city => run(q, root, field("country"), city, JsonObject.empty) }
         } yield acc.add("country", child.map(Json.fromJsonObject).getOrElse(Json.Null))
 
-      case (SelectObject("cities", List(StringBinding("namePattern", namePattern)), q), _: Root[F]) =>
+      case (Select("cities", List(StringBinding("namePattern", namePattern)), q), _: Root[F]) =>
         checkField("cities")
         for {
           cities   <- root.cityRepo.fetchAll(Some(namePattern))
@@ -270,22 +270,22 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
 
       // Country queries
 
-      case (SelectLeaf("name", Nil), country: Country) =>
+      case (Select("name", Nil, Empty), country: Country) =>
         checkField("name")
         acc.add("name", Json.fromString(country.name)).pure[F]
 
-      case (SelectLeaf("code2", Nil), country: Country) =>
+      case (Select("code2", Nil, Empty), country: Country) =>
         checkField("code2")
         acc.add("code2", Json.fromString(country.code2)).pure[F]
 
-      case (SelectObject("cities", Nil, q), country: Country) =>
+      case (Select("cities", Nil, q), country: Country) =>
         checkField("cities")
         for {
           cities   <- root.cityRepo.fetchByCountryCode(country.code)
           children <- cities.sortBy(_.name).traverse { city => run(q, root, field("cities"), city, JsonObject.empty) }
         } yield acc.add("cities", Json.fromValues(children.map(Json.fromJsonObject)))
 
-      case (SelectObject("languages", Nil, q), country: Country) =>
+      case (Select("languages", Nil, q), country: Country) =>
         checkField("languages")
         for {
           languages <- root.languageRepo.fetchByCountryCode(country.code)
@@ -294,11 +294,11 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
 
       // City queries
 
-      case (SelectLeaf("name", Nil), city: City) =>
+      case (Select("name", Nil, Empty), city: City) =>
         checkField("name")
         acc.add("name", Json.fromString(city.name)).pure[F]
 
-      case (SelectObject("country", Nil, q), city: City) =>
+      case (Select("country", Nil, q), city: City) =>
         checkField("country")
         for {
           country <- root.countryRepo.fetchByCode(city.countryCode)
@@ -307,7 +307,7 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
 
       // Language queries
 
-      case (SelectLeaf("language", Nil), language: Language) =>
+      case (Select("language", Nil, Empty), language: Language) =>
         checkField("language")
         acc.add("language", Json.fromString(language.language)).pure[F]
 
@@ -350,17 +350,17 @@ trait WorldQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
     def unapply(q: Query): Option[Option[String]] =
       q match {
         case
-          SelectObject(
+          Select(
             "cities", bindings,
             Group(List(
-              SelectLeaf("name", Nil),
-              SelectObject(
+              Select("name", Nil, Empty),
+              Select(
                 "country", Nil,
                 Group(List(
-                  SelectLeaf("name", Nil),
-                  SelectObject(
+                  Select("name", Nil, Empty),
+                  Select(
                     "languages", Nil,
-                    SelectLeaf("language" ,Nil)
+                    Select("language" ,Nil, Empty)
                   )
                 ))
               )

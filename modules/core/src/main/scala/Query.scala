@@ -30,23 +30,8 @@ sealed trait Query {
   }
 }
 
-sealed trait Select extends Query {
-  val name: String
-  val args: List[Binding]
-  def child: Query
-}
-
-object Select {
-  def unapply(sel: Select): Option[(String, List[Binding])] =
-    Some((sel.name, sel.args))
-}
-
 object Query {
-  case class SelectLeaf(name: String, args: List[Binding]) extends Select {
-    def child = Empty
-  }
-  case class SelectObject(name: String, args: List[Binding], child: Query) extends Select
-
+  case class Select(name: String, args: List[Binding], child: Query = Empty) extends Query
   case class Group(queries: List[Query]) extends Query
   case object Empty extends Query
 }
