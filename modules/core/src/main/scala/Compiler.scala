@@ -38,9 +38,8 @@ object Compiler {
         args0 <- compileArgs(args)
         sels0 <- compileSelections(sels)
       } yield {
-        val parent = Select(name.value, args0)
-        if (sels.isEmpty) parent
-        else Nest(parent, sels0)
+        if (sels.isEmpty) SelectLeaf(name.value, args0)
+        else SelectObject(name.value, args0, sels0)
       }
     case _ => None
   }

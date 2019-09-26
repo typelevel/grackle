@@ -20,8 +20,9 @@ final class CompilerSuite extends CatsSuite {
     """
 
     val expected =
-      Select("character", List(StringBinding("id", "1000"))) /
-        Select("name", Nil)
+      SelectObject("character", List(StringBinding("id", "1000")),
+        SelectLeaf("name", Nil)
+      )
 
     val res = Compiler.compileText(text)
     assert(res == Some(expected))
@@ -40,10 +41,13 @@ final class CompilerSuite extends CatsSuite {
     """
 
     val expected =
-      Select("character", List(StringBinding("id", "1000"))) / (
-        Select("name", Nil) ~
-        (Select("friends", Nil) /
-          Select("name", Nil))
+      SelectObject(
+        "character", List(StringBinding("id", "1000")),
+        SelectLeaf("name", Nil) ~
+          SelectObject(
+            "friends", Nil,
+            SelectLeaf("name", Nil)
+          )
       )
 
     val res = Compiler.compileText(text)

@@ -18,10 +18,7 @@ object Schema {
     def name: String
   }
 
-  /** Marker trait for types that can be wrapped with NonNull. */
-  sealed trait NullableType extends Type
-
-  case class TypeRef(ref: String) extends NullableType
+  case class TypeRef(ref: String) extends Type
 
   /**
    * Represents scalar types such as Int, String, and Boolean. Scalars cannot have fields.
@@ -30,7 +27,7 @@ object Schema {
   case class ScalarType(
     name:        String,
     description: Option[String]
-  ) extends NullableType {
+  ) extends Type {
     override def toString: String = name
   }
 
@@ -86,7 +83,7 @@ object Schema {
     name:        String,
     description: Option[String],
     fields:      List[Field]
-  ) extends NullableType with NamedType
+  ) extends Type with NamedType
 
   /**
    * Object types represent concrete instantiations of sets of fields.
@@ -97,7 +94,7 @@ object Schema {
     description: Option[String],
     fields:      List[Field],
     interfaces:  List[TypeRef]
-  ) extends NullableType with NamedType {
+  ) extends Type with NamedType {
     override def toString: String = s"$name ${fields.mkString("{", ", ", "}")}"
   }
 
@@ -111,7 +108,7 @@ object Schema {
     name:        String,
     description: Option[String],
     members:     List[TypeRef]
-  ) extends NullableType with NamedType
+  ) extends Type with NamedType
 
   /**
    * Enums are special scalars that can only have a defined set of values.
@@ -121,7 +118,7 @@ object Schema {
     name:        String,
     description: Option[String],
     enumValues:  List[EnumValue]
-  ) extends NullableType with NamedType
+  ) extends Type with NamedType
 
   /**
    * The `EnumValue` type represents one of possible values of an enum.
@@ -152,7 +149,7 @@ object Schema {
    */
   case class ListType(
     ofType: Type
-  ) extends NullableType {
+  ) extends Type {
     override def toString: String = s"[$ofType]"
   }
 
@@ -162,10 +159,10 @@ object Schema {
    * and input object fields.
    * @see https://facebook.github.io/graphql/draft/#sec-Type-Kinds.Non-Null
    */
-  case class NonNullType(
-    ofType: NullableType
+  case class NullableType(
+    ofType: Type
   ) extends Type {
-    override def toString: String = s"$ofType!"
+    override def toString: String = s"$ofType?"
   }
 
   /**
@@ -225,5 +222,17 @@ object Schema {
     case object ENUM_VALUE             extends DirectiveLocation
     case object INPUT_OBJECT           extends DirectiveLocation
     case object INPUT_FIELD_DEFINITION extends DirectiveLocation
+  }
+}
+
+object SchemaUtils {
+  import Schema._
+
+  def schemaOfField(schema: Schema, tpe: Type, fieldName: String): Option[Type] = tpe match {
+    case NullableType(tpe) => schemaOfField(schema, tpe, fieldName)
+    case TypeRef(tpnme) => schema.types.find(_.name == tpnme).flatMap(tpe => schemaOfField(schema, tpe, fieldName))
+    case ObjectType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe)
+    case InterfaceType(_, _, fields) => fields.find(_.name == fieldName).map(_.tpe)
+    case _ => None
   }
 }

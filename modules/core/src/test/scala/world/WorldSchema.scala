@@ -8,17 +8,17 @@ package world
 object WorldSchema {
   import Schema._, ScalarType._
 
-  val NamePatternArg = InputValue("namePattern", None, StringType, Some("%"))
-  val CodeArg = InputValue("code", None, StringType, None)
+  val NamePatternArg = InputValue("namePattern", None, NullableType(StringType), Some("%"))
+  val CodeArg = InputValue("code", None, NullableType(StringType), None)
 
   val QueryType: ObjectType =
     ObjectType(
       name = "Query",
       description = None,
       fields = List(
-        Field("cities", None, List(NamePatternArg), ListType(TypeRef("City")), false, None),
-        Field("country", None, List(CodeArg), TypeRef("Country"), false, None),
-        Field("countries", None, Nil, ListType(TypeRef("Country")), false, None)
+        Field("cities", None, List(NamePatternArg), NullableType(ListType(TypeRef("City"))), false, None),
+        Field("country", None, List(CodeArg), NullableType(TypeRef("Country")), false, None),
+        Field("countries", None, Nil, NullableType(ListType(TypeRef("Country"))), false, None)
       ),
       interfaces = Nil
     )
@@ -28,10 +28,10 @@ object WorldSchema {
       name = "City",
       description = None,
       fields = List(
-        Field("name", None, Nil, NonNullType(StringType), false, None),
-        Field("country", None, Nil, NonNullType(TypeRef("Country")), false, None),
-        Field("district", None, Nil, NonNullType(StringType), false, None),
-        Field("population", None, Nil, NonNullType(IntType), false, None)
+        Field("name", None, Nil, StringType, false, None),
+        Field("country", None, Nil, TypeRef("Country"), false, None),
+        Field("district", None, Nil, StringType, false, None),
+        Field("population", None, Nil, IntType, false, None)
       ),
       interfaces = Nil
     )
@@ -41,9 +41,9 @@ object WorldSchema {
       name = "Language",
       description = None,
       fields = List(
-        Field("language", None, Nil, NonNullType(StringType), false, None),
-        Field("isOfficial", None, Nil, NonNullType(BooleanType), false, None),
-        Field("percentage", None, Nil, NonNullType(FloatType), false, None)
+        Field("language", None, Nil, StringType, false, None),
+        Field("isOfficial", None, Nil, BooleanType, false, None),
+        Field("percentage", None, Nil, FloatType, false, None)
       ),
       interfaces = Nil
     )
@@ -53,22 +53,22 @@ object WorldSchema {
       name = "Country",
       description = None,
       fields = List(
-        Field("name", None, Nil, NonNullType(StringType), false, None),
-        Field("continent", None, Nil, NonNullType(StringType), false, None),
-        Field("region", None, Nil, NonNullType(StringType), false, None),
-        Field("surfacearea", None, Nil, NonNullType(FloatType), false, None),
-        Field("indepyear", None, Nil, IntType, false, None),
-        Field("population", None, Nil, NonNullType(IntType), false, None),
-        Field("lifeexpectancy", None, Nil, FloatType, false, None),
-        Field("gnp", None, Nil, StringType, false, None),
-        Field("gnpold", None, Nil, StringType, false, None),
-        Field("localname", None, Nil, NonNullType(StringType), false, None),
-        Field("governmentform", None, Nil, NonNullType(StringType), false, None),
-        Field("headofstate", None, Nil, StringType, false, None),
-        Field("capitalId", None, Nil, IntType, false, None),
-        Field("code2", None, Nil, NonNullType(StringType), false, None),
-        Field("cities", None, Nil, NonNullType(ListType(CityType)), false, None),
-        Field("languages", None, Nil, NonNullType(ListType(TypeRef("Language"))), false, None)
+        Field("name", None, Nil, StringType, false, None),
+        Field("continent", None, Nil, StringType, false, None),
+        Field("region", None, Nil, StringType, false, None),
+        Field("surfacearea", None, Nil, FloatType, false, None),
+        Field("indepyear", None, Nil, NullableType(IntType), false, None),
+        Field("population", None, Nil, IntType, false, None),
+        Field("lifeexpectancy", None, Nil, NullableType(FloatType), false, None),
+        Field("gnp", None, Nil, NullableType(StringType), false, None),
+        Field("gnpold", None, Nil, NullableType(StringType), false, None),
+        Field("localname", None, Nil, StringType, false, None),
+        Field("governmentform", None, Nil, StringType, false, None),
+        Field("headofstate", None, Nil, NullableType(StringType), false, None),
+        Field("capitalId", None, Nil, NullableType(IntType), false, None),
+        Field("code2", None, Nil, StringType, false, None),
+        Field("cities", None, Nil, ListType(CityType), false, None),
+        Field("languages", None, Nil, ListType(TypeRef("Language")), false, None)
       ),
       interfaces = Nil
     )

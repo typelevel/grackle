@@ -30,6 +30,7 @@ final class StarWarsSpec extends CatsSuite {
 
     val compiledQuery = Compiler.compileText(query).get
     val res = StarWarsQueryInterpreter.run(compiledQuery)
+    //println(res)
 
     assert(res == expected)
   }
@@ -72,6 +73,7 @@ final class StarWarsSpec extends CatsSuite {
 
     val compiledQuery = Compiler.compileText(query).get
     val res = StarWarsQueryInterpreter.run(compiledQuery)
+    //println(res)
 
     assert(res == expected)
   }
