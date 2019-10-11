@@ -16,25 +16,59 @@ inThisBuild(Seq(
   scalaVersion := "2.13.0"
 ) ++ gspPublishSettings)
 
+lazy val commonSettings = Seq(
+  //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports"),
+  libraryDependencies ++= Seq(
+    "org.typelevel"     %% "cats-testkit"           % catsVersion % "test",
+    "org.typelevel"     %% "cats-testkit-scalatest" % catsTestkitScalaTestVersion % "test"
+  )
+)
+
+lazy val noPublishSettings = Seq(
+  skip in publish := true
+)
+
+lazy val modules: List[ProjectReference] = List(
+  core,
+  doobie
+)
+
+lazy val `gsp-graphql` = project.in(file("."))
+  .settings(commonSettings)
+  .settings(noPublishSettings)
+  .aggregate(modules:_*)
+
 lazy val core = project
   .in(file("modules/core"))
   .enablePlugins(AutomateHeaderPlugin)
+  .settings(commonSettings)
   .settings(
-    name := "gsp-graphql",
+    name := "gsp-graphql-core",
+    //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports"),
     libraryDependencies ++= Seq(
       "org.tpolecat"      %% "atto-core"              % attoVersion,
       "org.typelevel"     %% "cats-core"              % catsVersion,
-      "org.typelevel"     %% "cats-effect"            % catsEffectVersion,
       "io.circe"          %% "circe-core"             % circeVersion,
       "io.circe"          %% "circe-literal"          % circeVersion,
       "io.circe"          %% "circe-optics"           % circeOpticsVersion,
       "org.typelevel"     %% "jawn-parser"            % jawnVersion,
+    )
+  )
 
-      "io.chrisdavenport" %% "log4cats-slf4j"         % log4catsVersion % "test",
-      "org.slf4j"         %  "slf4j-simple"           % slf4jVersion % "test",
-      "org.tpolecat"      %% "doobie-core"            % doobieVersion % "test",
-      "org.tpolecat"      %% "doobie-postgres"        % doobieVersion % "test",
-      "org.typelevel"     %% "cats-testkit"           % catsVersion % "test",
-      "org.typelevel"     %% "cats-testkit-scalatest" % catsTestkitScalaTestVersion % "test"
+lazy val doobie = project
+  .in(file("modules/doobie"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .dependsOn(core)
+  .settings(commonSettings)
+  .settings(
+    name := "gsp-graphql-doobie",
+    //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports"),
+    libraryDependencies ++= Seq(
+      "org.typelevel"     %% "cats-effect"            % catsEffectVersion,
+      "io.chrisdavenport" %% "log4cats-slf4j"         % log4catsVersion,
+      "org.slf4j"         %  "slf4j-simple"           % slf4jVersion,
+      "org.tpolecat"      %% "doobie-core"            % doobieVersion,
+
+      "org.tpolecat"      %% "doobie-postgres"        % doobieVersion % "test"
     )
   )

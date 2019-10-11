@@ -1,9 +1,9 @@
 // Copyright (c) 2016-2019 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package edu.gemini
-package grackle
 package world
+
+import edu.gemini.grackle._
 
 object WorldSchema extends Schema {
   import ScalarType._
@@ -43,7 +43,8 @@ object WorldSchema extends Schema {
       fields = List(
         Field("language", None, Nil, StringType, false, None),
         Field("isOfficial", None, Nil, BooleanType, false, None),
-        Field("percentage", None, Nil, FloatType, false, None)
+        Field("percentage", None, Nil, FloatType, false, None),
+        Field("countries", None, Nil, ListType(TypeRef("Country")), false, None)
       ),
       interfaces = Nil
     )
@@ -67,7 +68,7 @@ object WorldSchema extends Schema {
         Field("headofstate", None, Nil, NullableType(StringType), false, None),
         Field("capitalId", None, Nil, NullableType(IntType), false, None),
         Field("code2", None, Nil, StringType, false, None),
-        Field("cities", None, Nil, ListType(CityType), false, None),
+        Field("cities", None, Nil, ListType(TypeRef("City")), false, None),
         Field("languages", None, Nil, ListType(TypeRef("Language")), false, None)
       ),
       interfaces = Nil

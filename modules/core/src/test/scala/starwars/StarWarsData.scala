@@ -1,11 +1,10 @@
 // Copyright (c) 2016-2019 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package edu.gemini
-package grackle
 package starwars
 
 import cats.data.Validated, Validated.{ Valid, Invalid }
+import edu.gemini.grackle._
 import io.circe.Json
 
 object StarWarsData {
@@ -95,6 +94,11 @@ object StarWarsData {
       primaryFunction = Some("Astromech"))
 }
 
+object StarWarsQueryInterpreter extends CursorQueryInterpreter {
+  def run(q: Query): Json =
+    QueryInterpreter.mkResponse(runValue(q, StarWarsSchema.queryType, StarWarsCursor(StarWarsData.root)))
+}
+
 case class StarWarsCursor(focus: Any) extends DataTypeCursor {
   import StarWarsData._
 
@@ -131,8 +135,4 @@ case class StarWarsCursor(focus: Any) extends DataTypeCursor {
       case _ => Invalid(s"No field '$field'")
     }
   }
-}
-
-object StarWarsQueryInterpreter extends CursorQueryInterpreter(StarWarsSchema) {
-  def run(q: Query): Json = run(q, StarWarsCursor(StarWarsData.root))
 }
