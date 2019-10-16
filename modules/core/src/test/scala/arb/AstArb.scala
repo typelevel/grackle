@@ -1,16 +1,15 @@
 // Copyright (c) 2016-2019 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package edu.gemini
-package grackle
 package arb
 
-import grackle.Ast._
+import edu.gemini.grackle._
 import org.scalacheck.{ Arbitrary, Gen }
 
 trait AstArb {
   import Arbitrary.arbitrary
   import Gen._
+  import Ast._
 
   def shortListOf[A](gen: Gen[A]): Gen[List[A]] =
     choose(0, 5).flatMap(listOfN(_, gen))
