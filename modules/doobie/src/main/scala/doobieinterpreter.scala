@@ -20,8 +20,6 @@ abstract class DoobieQueryInterpreter[F[_]] extends QueryInterpreter[F] {
   val logger: Logger[F]
   implicit val brkt: Bracket[F, Throwable]
 
-  type Result[T] = Validated[String, T]
-
   def run[T](q: Query, tpe: Type): F[Result[Json]]
 
   def runRoot(query: Query, tpe: Type, fieldName: String, predicates: List[Fragment]): F[Result[Json]] = {
@@ -38,20 +36,25 @@ abstract class DoobieQueryInterpreter[F[_]] extends QueryInterpreter[F] {
 }
 
 case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) extends Cursor {
+  import QueryInterpreter.mkError
+
   def asTable: Result[Table] = focus match {
-    case table: List[_] => Valid(table.asInstanceOf[Table])
-    case _ => Invalid(s"Not a table")
+    case table: List[_] => table.asInstanceOf[Table].rightIor
+    case _ => List(mkError(s"Not a table")).leftIor
   }
 
   def isLeaf: Boolean = tpe.isLeaf
 
   def asLeaf: Result[Json] =
     focus match {
-      case s: String => Valid(Json.fromString(s))
-      case i: Int => Valid(Json.fromInt(i))
-      case d: Double => Validated.fromOption(Json.fromDouble(d), s"Unrepresentable double %d")
-      case b: Boolean => Valid(Json.fromBoolean(b))
-      case _ => Invalid("Not a leaf")
+      case s: String => Json.fromString(s).rightIor
+      case i: Int => Json.fromInt(i).rightIor
+      case d: Double => Json.fromDouble(d) match {
+          case Some(j) => j.rightIor
+          case None => List(mkError(s"Unrepresentable double %d")).leftIor
+        }
+      case b: Boolean => Json.fromBoolean(b).rightIor
+      case _ => List(mkError("Not a leaf")).leftIor
     }
 
   def isList: Boolean =
@@ -61,7 +64,7 @@ case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) exte
     }
 
   def asList: Result[List[Cursor]] =
-    if (!tpe.isList) Invalid(s"Not a list: $tpe")
+    if (!tpe.isList) List(mkError(s"Not a list: $tpe")).leftIor
     else {
       val itemTpe = tpe.item.dealias
       asTable.map(table => mapped.group(table, itemTpe).map(table => copy(tpe = itemTpe, focus = table)))
@@ -75,11 +78,11 @@ case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) exte
 
   def asNullable: Result[Option[Cursor]] =
     (tpe, focus) match {
-      case (NullableType(_), None) => Valid(None)
-      case (NullableType(tpe), Some(v)) => Valid(Some(copy(tpe = tpe, focus = v)))
-      case (NullableType(_), null) => Valid(None)
-      case (NullableType(tpe), v) => Valid(Some(copy(tpe = tpe, focus = v)))
-      case _ => Invalid("Not nullable")
+      case (NullableType(_), None) => None.rightIor
+      case (NullableType(tpe), Some(v)) => Some(copy(tpe = tpe, focus = v)).rightIor
+      case (NullableType(_), null) => None.rightIor
+      case (NullableType(tpe), v) => Some(copy(tpe = tpe, focus = v)).rightIor
+      case _ => List(mkError("Not nullable")).leftIor
     }
 
   def hasField(field: String): Boolean =
@@ -90,6 +93,6 @@ case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) exte
     if (fieldTpe.isLeaf)
       asTable.map(table => copy(tpe = fieldTpe, focus = mapped.select(table.head, tpe, field)))
     else
-      Valid(copy(tpe = fieldTpe))
+      copy(tpe = fieldTpe).rightIor
   }
 }

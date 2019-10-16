@@ -12,13 +12,14 @@ trait QueryInterpreter[F[_]] {
 }
 
 object QueryInterpreter {
-  type Result[T] = Validated[String, T]
-
   def mkResponse(data: Option[Json], errors: List[Json] = Nil): Json = {
     val dataField = data.map { value => ("data", value) }.toList
     val errorField = if (errors.isEmpty) Nil else List(("errors", Json.fromValues(errors)))
     Json.fromFields(errorField ++ dataField)
   }
+
+  def mkResponse(result: Result[Json]): Json =
+    mkResponse(result.right, result.left.getOrElse(Nil))
 
   def mkError(message: String, locations: List[(Int, Int)] = Nil, path: List[String] = Nil): Json = {
     val locationsField =
@@ -34,11 +35,6 @@ object QueryInterpreter {
 
     Json.fromFields(("message", Json.fromString(message)) :: locationsField ++ pathField)
   }
-
-  def mkResponse(result: Result[Json]): Json =
-    (for {
-      data <- result
-    } yield mkResponse(Some(data), Nil)).valueOr(msg => mkResponse(None, List(mkError(msg))))
 }
 
 sealed trait Binding {

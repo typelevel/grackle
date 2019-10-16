@@ -4,6 +4,7 @@
 package starwars
 
 import cats.data.Validated, Validated.{ Valid, Invalid }
+import cats.implicits._
 import edu.gemini.grackle._
 import io.circe.Json
 
@@ -100,6 +101,7 @@ object StarWarsQueryInterpreter extends CursorQueryInterpreter {
 }
 
 case class StarWarsCursor(focus: Any) extends DataTypeCursor {
+  import QueryInterpreter.mkError
   import StarWarsData._
 
   def mkCursor(focus: Any): Cursor = StarWarsCursor(focus)
@@ -120,19 +122,19 @@ case class StarWarsCursor(focus: Any) extends DataTypeCursor {
 
     (focus, field) match {
       case (Root(_), "hero") =>
-        Valid(mkCursor(R2D2))
+        mkCursor(R2D2).rightIor
 
       case (Root(characters), "character" | "human") if args.contains("id") =>
         val id = args("id")
-        Valid(mkCursor(characters.find(_.id == id)))
+        mkCursor(characters.find(_.id == id)).rightIor
 
-      case (c: Character, "id") => Valid(mkCursor(c.id))
-      case (c: Character, "name") => Valid(mkCursor(c.name))
-      case (c: Character, "appearsIn") => Valid(mkCursor(c.appearsIn))
-      case (c: Character, "friends") => Valid(mkCursor(c.friends))
-      case (h: Human, "homePlanet") => Valid(mkCursor(h.homePlanet))
-      case (d: Droid, "primaryFunction") => Valid(mkCursor(d.primaryFunction))
-      case _ => Invalid(s"No field '$field'")
+      case (c: Character, "id") => mkCursor(c.id).rightIor
+      case (c: Character, "name") => mkCursor(c.name).rightIor
+      case (c: Character, "appearsIn") => mkCursor(c.appearsIn).rightIor
+      case (c: Character, "friends") => mkCursor(c.friends).rightIor
+      case (h: Human, "homePlanet") => mkCursor(h.homePlanet).rightIor
+      case (d: Droid, "primaryFunction") => mkCursor(d.primaryFunction).rightIor
+      case _ => List(mkError(s"No field '$field'")).leftIor
     }
   }
 }

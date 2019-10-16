@@ -11,8 +11,6 @@ import cats.implicits._
 import io.circe.Json
 
 trait Cursor {
-  type Result[T] = Validated[String, T]
-
   def isLeaf: Boolean
   def asLeaf: Result[Json]
   def isList: Boolean
@@ -25,19 +23,19 @@ trait Cursor {
 
 class CursorQueryInterpreter extends QueryInterpreter[Id] {
   import Query._
+  import QueryInterpreter.mkError
 
-  type Result[T] = Validated[String, T]
   type Field = (String, Json)
 
   def runFields(q: Query, tpe: Type, cursor: Cursor): Result[List[Field]] = {
     (q, tpe) match {
       case (sel@Select(fieldName, _, _), NullableType(tpe)) =>
-        cursor.asNullable.andThen { (oc: Option[Cursor]) =>
-          oc.map(c => runFields(sel, tpe, c)).getOrElse(Valid(List((fieldName, Json.Null))))
+        cursor.asNullable.flatMap { (oc: Option[Cursor]) =>
+          oc.map(c => runFields(sel, tpe, c)).getOrElse(List((fieldName, Json.Null)).rightIor)
         }
 
       case (Select(fieldName, bindings, child), tpe) =>
-        cursor.field(fieldName, Binding.toMap(bindings)).andThen { (c: Cursor) =>
+        cursor.field(fieldName, Binding.toMap(bindings)).flatMap { (c: Cursor) =>
           runValue(child, tpe.field(fieldName), c).map(value => List((fieldName, value)))
         }
 
@@ -45,19 +43,19 @@ class CursorQueryInterpreter extends QueryInterpreter[Id] {
         siblings.flatTraverse(q => runFields(q, tpe, cursor))
 
       case _ =>
-        Invalid(s"failed: $q $tpe")
+        List(mkError(s"failed: $q $tpe")).leftIor
     }
   }
 
   def runValue(q: Query, tpe: Type, cursor: Cursor): Result[Json] = {
     tpe match {
       case NullableType(tpe) =>
-        cursor.asNullable.andThen { (oc: Option[Cursor]) =>
-          oc.map(c => runValue(q, tpe, c)).getOrElse(Valid(Json.Null))
+        cursor.asNullable.flatMap { (oc: Option[Cursor]) =>
+          oc.map(c => runValue(q, tpe, c)).getOrElse(Json.Null.rightIor)
         }
 
       case ListType(tpe) =>
-        cursor.asList.andThen { (lc: List[Cursor]) =>
+        cursor.asList.flatMap { (lc: List[Cursor]) =>
           lc.traverse(c => runValue(q, tpe, c)).map { (values: List[Json]) =>
             Json.fromValues(values)
           }
@@ -66,7 +64,7 @@ class CursorQueryInterpreter extends QueryInterpreter[Id] {
       case TypeRef(schema, tpnme) =>
         schema.types.find(_.name == tpnme).map(tpe =>
           runValue(q, tpe, cursor)
-        ).getOrElse(Invalid(s"Unknown type '$tpnme'"))
+        ).getOrElse(List(mkError(s"Unknown type '$tpnme'")).leftIor)
 
       case (_: ScalarType) | (_: EnumType) => cursor.asLeaf
 
@@ -76,12 +74,14 @@ class CursorQueryInterpreter extends QueryInterpreter[Id] {
         }
 
       case _ =>
-        Invalid(s"Unsupported type $tpe")
+        List(mkError(s"Unsupported type $tpe")).leftIor
     }
   }
 }
 
 trait DataTypeCursor extends Cursor {
+  import QueryInterpreter.mkError
+
   val focus: Any
   def mkCursor(focus: Any): Cursor
 
@@ -92,12 +92,15 @@ trait DataTypeCursor extends Cursor {
 
   def asLeaf: Result[Json] = {
     focus match {
-      case s: String => Valid(Json.fromString(s))
-      case i: Int => Valid(Json.fromInt(i))
-      case d: Double => Validated.fromOption(Json.fromDouble(d), s"Unrepresentable double %d")
-      case b: Boolean => Valid(Json.fromBoolean(b))
-      case e: Enumeration#Value => Valid(Json.fromString(e.toString))
-      case _ => Invalid("Not a leaf")
+      case s: String => Json.fromString(s).rightIor
+      case i: Int => Json.fromInt(i).rightIor
+      case d: Double => Json.fromDouble(d) match {
+          case Some(j) => j.rightIor
+          case None => List(mkError(s"Unrepresentable double %d")).leftIor
+        }
+      case b: Boolean => Json.fromBoolean(b).rightIor
+      case e: Enumeration#Value => Json.fromString(e.toString).rightIor
+      case _ => List(mkError("Not a leaf")).leftIor
     }
   }
 
@@ -107,8 +110,8 @@ trait DataTypeCursor extends Cursor {
   }
 
   def asList: Result[List[Cursor]] = focus match {
-    case it: List[_] => Valid(it.map(mkCursor))
-    case _ => Invalid("Not a list")
+    case it: List[_] => it.map(mkCursor).rightIor
+    case _ => List(mkError("Not a list")).leftIor
   }
 
   def isNullable: Boolean = focus match {
@@ -117,7 +120,7 @@ trait DataTypeCursor extends Cursor {
   }
 
   def asNullable: Result[Option[Cursor]] = focus match {
-    case o: Option[_] => Valid(o.map(mkCursor))
-    case _ => Invalid("Not nullable")
+    case o: Option[_] => o.map(mkCursor).rightIor
+    case _ => List(mkError("Not nullable")).leftIor
   }
 }
