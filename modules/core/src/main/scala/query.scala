@@ -7,7 +7,7 @@ import cats.data.Validated
 import io.circe.Json
 import io.circe.literal.JsonStringContext
 
-trait QueryInterpreter[F[_], A] {
+trait QueryInterpreter[F[_]] {
   //def run(q: Query): F[A]
 }
 

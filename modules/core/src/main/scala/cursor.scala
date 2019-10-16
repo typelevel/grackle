@@ -23,7 +23,7 @@ trait Cursor {
   def field(field: String, args: Map[String, Any]): Result[Cursor]
 }
 
-class CursorQueryInterpreter extends QueryInterpreter[Id, Json] {
+class CursorQueryInterpreter extends QueryInterpreter[Id] {
   import Query._
 
   type Result[T] = Validated[String, T]

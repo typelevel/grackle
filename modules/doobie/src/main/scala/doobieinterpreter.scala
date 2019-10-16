@@ -14,7 +14,7 @@ import io.circe.Json
 
 import DoobieMapping._
 
-abstract class DoobieQueryInterpreter[F[_]] extends QueryInterpreter[F, Json] {
+abstract class DoobieQueryInterpreter[F[_]] extends QueryInterpreter[F] {
   val mapping: DoobieMapping
   val xa: Transactor[F]
   val logger: Logger[F]
