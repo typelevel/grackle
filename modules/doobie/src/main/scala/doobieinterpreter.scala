@@ -13,7 +13,7 @@ import io.circe.Json
 
 import DoobieMapping._
 
-trait DoobieQueryInterpreter[F[_]] extends CursorQueryInterpreter[F] {
+trait DoobieQueryInterpreter[F[_]] extends QueryInterpreter[F] {
   val mapping: DoobieMapping
   val xa: Transactor[F]
   val logger: Logger[F]

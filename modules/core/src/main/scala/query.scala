@@ -3,11 +3,69 @@
 
 package edu.gemini.grackle
 
+import cats.{ Applicative }
+import cats.implicits._
 import io.circe.Json
 import io.circe.literal.JsonStringContext
 
 trait QueryInterpreter[F[_]] {
-  //def run(q: Query): F[A]
+  import Query._
+  import QueryInterpreter.mkError
+
+  implicit val F: Applicative[F]
+
+  type Field = (String, Json)
+
+  def run(q: Query): F[Json]
+
+  def runFields(q: Query, tpe: Type, cursor: Cursor): F[Result[List[Field]]] = {
+    (q, tpe) match {
+      case (sel@Select(fieldName, _, _), NullableType(tpe)) =>
+        cursor.asNullable.flatTraverse(oc =>
+          oc.map(c => runFields(sel, tpe, c)).getOrElse(List((fieldName, Json.Null)).rightIor.pure[F])
+        )
+
+      case (Select(fieldName, bindings, child), tpe) =>
+        cursor.field(fieldName, Binding.toMap(bindings)).flatTraverse { (c: Cursor) =>
+          runValue(child, tpe.field(fieldName), c).nested.map(value => List((fieldName, value))).value
+        }
+
+      case (Group(siblings), _) =>
+        siblings.flatTraverse(q => runFields(q, tpe, cursor).nested).value
+
+      case _ =>
+        List(mkError(s"failed: $q $tpe")).leftIor.pure[F]
+    }
+  }
+
+  def runValue(q: Query, tpe: Type, cursor: Cursor): F[Result[Json]] = {
+    tpe match {
+      case NullableType(tpe) =>
+        cursor.asNullable.flatTraverse(oc =>
+          oc.map(c => runValue(q, tpe, c)).getOrElse(Json.Null.rightIor.pure[F])
+        )
+
+      case ListType(tpe) =>
+        cursor.asList.flatTraverse(lc =>
+          lc.traverse(c => runValue(q, tpe, c)).map(_.sequence.map(Json.fromValues))
+        )
+
+      case TypeRef(schema, tpnme) =>
+        schema.types.find(_.name == tpnme).map(tpe =>
+          runValue(q, tpe, cursor)
+        ).getOrElse(List(mkError(s"Unknown type '$tpnme'")).leftIor.pure[F])
+
+      case (_: ScalarType) | (_: EnumType) => cursor.asLeaf.pure[F]
+
+      case (_: ObjectType) | (_: InterfaceType) =>
+        runFields(q, tpe, cursor).nested.map((fields: List[Field]) =>
+          Json.fromFields(fields)
+        ).value
+
+      case _ =>
+        List(mkError(s"Unsupported type $tpe")).leftIor.pure[F]
+    }
+  }
 }
 
 object QueryInterpreter {

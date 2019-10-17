@@ -95,7 +95,7 @@ object StarWarsData {
       primaryFunction = Some("Astromech"))
 }
 
-object StarWarsQueryInterpreter extends CursorQueryInterpreter[Id] {
+object StarWarsQueryInterpreter extends QueryInterpreter[Id] {
   implicit val F = cats.catsInstancesForId
 
   def run(q: Query): Json =
