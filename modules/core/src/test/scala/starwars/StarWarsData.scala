@@ -3,7 +3,7 @@
 
 package starwars
 
-import cats.data.Validated, Validated.{ Valid, Invalid }
+import cats.Id
 import cats.implicits._
 import edu.gemini.grackle._
 import io.circe.Json
@@ -95,7 +95,9 @@ object StarWarsData {
       primaryFunction = Some("Astromech"))
 }
 
-object StarWarsQueryInterpreter extends CursorQueryInterpreter {
+object StarWarsQueryInterpreter extends CursorQueryInterpreter[Id] {
+  implicit val F = cats.catsInstancesForId
+
   def run(q: Query): Json =
     QueryInterpreter.mkResponse(runValue(q, StarWarsSchema.queryType, StarWarsCursor(StarWarsData.root)))
 }

@@ -88,7 +88,7 @@ object WorldData extends DoobieMapping {
   val objectMappings = List(queryMapping, countryMapping, cityMapping, languageMapping)
 }
 
-abstract class WorldQueryInterpreter[F[_]] extends DoobieQueryInterpreter[F] {
+trait WorldQueryInterpreter[F[_]] extends DoobieQueryInterpreter[F] {
   def run(q: Query): F[Json] =
     run(q, WorldSchema.queryType).map(QueryInterpreter.mkResponse)
 
@@ -107,11 +107,11 @@ abstract class WorldQueryInterpreter[F[_]] extends DoobieQueryInterpreter[F] {
 
 object WorldQueryInterpreter {
   def fromTransactor[F[_]](xa0: Transactor[F])
-    (implicit brkt0: Bracket[F, Throwable], logger0: Logger[F]): WorldQueryInterpreter[F] =
+    (implicit brkt: Bracket[F, Throwable], logger0: Logger[F]): WorldQueryInterpreter[F] =
       new WorldQueryInterpreter[F] {
         val mapping = WorldData
         val xa = xa0
         val logger = logger0
-        val brkt = brkt0
+        val F = brkt
       }
 }

@@ -4,7 +4,6 @@
 package edu.gemini.grackle
 package doobie
 
-import cats.data.Validated, Validated.{ Valid, Invalid }
 import cats.effect.Bracket
 import cats.implicits._
 import _root_.doobie.{ Fragment, Transactor }
@@ -14,22 +13,21 @@ import io.circe.Json
 
 import DoobieMapping._
 
-abstract class DoobieQueryInterpreter[F[_]] extends QueryInterpreter[F] {
+trait DoobieQueryInterpreter[F[_]] extends CursorQueryInterpreter[F] {
   val mapping: DoobieMapping
   val xa: Transactor[F]
   val logger: Logger[F]
-  implicit val brkt: Bracket[F, Throwable]
+  implicit val F: Bracket[F, Throwable]
 
   def run[T](q: Query, tpe: Type): F[Result[Json]]
 
   def runRoot(query: Query, tpe: Type, fieldName: String, predicates: List[Fragment]): F[Result[Json]] = {
     val fieldTpe = tpe.field(fieldName)
     val mapped = mapping.mapQuery(query, fieldTpe, predicates)
-    val interpreter = new CursorQueryInterpreter
 
     for {
       table <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(xa)
-      value  = interpreter.runValue(query, fieldTpe, DoobieCursor(fieldTpe, table, mapped))
+      value <- runValue(query, fieldTpe, DoobieCursor(fieldTpe, table, mapped))
     } yield
       value.map(value => Json.obj(fieldName -> value))
   }

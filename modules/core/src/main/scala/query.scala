@@ -3,7 +3,6 @@
 
 package edu.gemini.grackle
 
-import cats.data.Validated
 import io.circe.Json
 import io.circe.literal.JsonStringContext
 
