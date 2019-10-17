@@ -14,11 +14,9 @@ trait QueryInterpreter[F[_]] {
 
   implicit val F: Applicative[F]
 
-  type Field = (String, Json)
-
   def run(q: Query): F[Json]
 
-  def runFields(q: Query, tpe: Type, cursor: Cursor): F[Result[List[Field]]] = {
+  def runFields(q: Query, tpe: Type, cursor: Cursor): F[Result[List[(String, Json)]]] = {
     (q, tpe) match {
       case (sel@Select(fieldName, _, _), NullableType(tpe)) =>
         cursor.asNullable.flatTraverse(oc =>
@@ -26,9 +24,9 @@ trait QueryInterpreter[F[_]] {
         )
 
       case (Select(fieldName, bindings, child), tpe) =>
-        cursor.field(fieldName, Binding.toMap(bindings)).flatTraverse { (c: Cursor) =>
+        cursor.field(fieldName, Binding.toMap(bindings)).flatTraverse(c =>
           runValue(child, tpe.field(fieldName), c).nested.map(value => List((fieldName, value))).value
-        }
+        )
 
       case (Group(siblings), _) =>
         siblings.flatTraverse(q => runFields(q, tpe, cursor).nested).value
@@ -51,16 +49,14 @@ trait QueryInterpreter[F[_]] {
         )
 
       case TypeRef(schema, tpnme) =>
-        schema.types.find(_.name == tpnme).map(tpe =>
-          runValue(q, tpe, cursor)
-        ).getOrElse(List(mkError(s"Unknown type '$tpnme'")).leftIor.pure[F])
+        schema.types.find(_.name == tpnme)
+          .map(tpe => runValue(q, tpe, cursor))
+          .getOrElse(List(mkError(s"Unknown type '$tpnme'")).leftIor.pure[F])
 
       case (_: ScalarType) | (_: EnumType) => cursor.asLeaf.pure[F]
 
       case (_: ObjectType) | (_: InterfaceType) =>
-        runFields(q, tpe, cursor).nested.map((fields: List[Field]) =>
-          Json.fromFields(fields)
-        ).value
+        runFields(q, tpe, cursor).nested.map(Json.fromFields).value
 
       case _ =>
         List(mkError(s"Unsupported type $tpe")).leftIor.pure[F]
