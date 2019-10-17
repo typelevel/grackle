@@ -17,7 +17,7 @@ inThisBuild(Seq(
 ) ++ gspPublishSettings)
 
 lazy val commonSettings = Seq(
-  //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports"),
+  //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates"),
   libraryDependencies ++= Seq(
     "org.typelevel"     %% "cats-testkit"           % catsVersion % "test",
     "org.typelevel"     %% "cats-testkit-scalatest" % catsTestkitScalaTestVersion % "test"
