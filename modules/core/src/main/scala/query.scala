@@ -90,18 +90,6 @@ object QueryInterpreter {
   }
 }
 
-sealed trait Binding {
-  def name: String
-  type T
-  val value: T
-}
-object Binding {
-  case class StringBinding(name: String, value: String) extends Binding { type T = String }
-
-  def toMap(bindings: List[Binding]): Map[String, Any] =
-    bindings.map(b => (b.name, b.value)).toMap
-}
-
 sealed trait Query {
   import Query._
 
@@ -117,4 +105,16 @@ object Query {
   case class Select(name: String, args: List[Binding], child: Query = Empty) extends Query
   case class Group(queries: List[Query]) extends Query
   case object Empty extends Query
+
+  sealed trait Binding {
+    def name: String
+    type T
+    val value: T
+  }
+  object Binding {
+    case class StringBinding(name: String, value: String) extends Binding { type T = String }
+
+    def toMap(bindings: List[Binding]): Map[String, Any] =
+      bindings.map(b => (b.name, b.value)).toMap
+  }
 }
