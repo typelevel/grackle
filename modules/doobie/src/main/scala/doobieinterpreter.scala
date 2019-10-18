@@ -19,9 +19,7 @@ trait DoobieQueryInterpreter[F[_]] extends QueryInterpreter[F] {
   val logger: Logger[F]
   implicit val F: Bracket[F, Throwable]
 
-  def run[T](q: Query, tpe: Type): F[Result[Json]]
-
-  def runRoot(query: Query, tpe: Type, fieldName: String, predicates: List[Fragment]): F[Result[Json]] = {
+  def runDoobie(query: Query, tpe: Type, fieldName: String, predicates: List[Fragment]): F[Result[Json]] = {
     val fieldTpe = tpe.field(fieldName)
     val mapped = mapping.mapQuery(query, fieldTpe, predicates)
 

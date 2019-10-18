@@ -3,7 +3,6 @@
 
 package world
 
-import cats.implicits._
 import cats.effect.Bracket
 import doobie.Transactor
 import doobie.implicits._
@@ -89,19 +88,18 @@ object WorldData extends DoobieMapping {
 }
 
 trait WorldQueryInterpreter[F[_]] extends DoobieQueryInterpreter[F] {
-  def run(q: Query): F[Json] =
-    run(q, WorldSchema.queryType).map(QueryInterpreter.mkResponse)
+  val schema = WorldSchema
 
-  def run[T](query: Query, tpe: Type): F[Result[Json]] =
+  def runRoot(query: Query, tpe: Type): F[Result[Json]] =
     query match {
       case Select("countries", Nil, subquery) =>
-        runRoot(subquery, tpe, "countries", Nil)
+        runDoobie(subquery, tpe, "countries", Nil)
 
       case Select("country", List(StringBinding("code", code)), subquery) =>
-        runRoot(subquery, tpe, "country", List(fr"code = $code"))
+        runDoobie(subquery, tpe, "country", List(fr"code = $code"))
 
       case Select("cities", List(StringBinding("namePattern", namePattern)), subquery) =>
-        runRoot(subquery, tpe, "cities", List(fr"city.name ILIKE $namePattern"))
+        runDoobie(subquery, tpe, "cities", List(fr"city.name ILIKE $namePattern"))
     }
 }
 

@@ -98,8 +98,10 @@ object StarWarsData {
 object StarWarsQueryInterpreter extends QueryInterpreter[Id] {
   implicit val F = cats.catsInstancesForId
 
-  def run(q: Query): Json =
-    QueryInterpreter.mkResponse(runValue(q, StarWarsSchema.queryType, StarWarsCursor(StarWarsData.root)))
+  val schema = StarWarsSchema
+
+  def runRoot(query: Query, tpe: Type): Result[Json] =
+    runValue(query, tpe, StarWarsCursor(StarWarsData.root))
 }
 
 case class StarWarsCursor(focus: Any) extends DataTypeCursor {

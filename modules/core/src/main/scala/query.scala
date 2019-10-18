@@ -12,9 +12,14 @@ trait QueryInterpreter[F[_]] {
   import Query._
   import QueryInterpreter.mkError
 
+  val schema: Schema
+
   implicit val F: Applicative[F]
 
-  def run(q: Query): F[Json]
+  def run(q: Query): F[Json] =
+    runRoot(q, schema.queryType).map(QueryInterpreter.mkResponse)
+
+  def runRoot(query: Query, tpe: Type): F[Result[Json]]
 
   def runFields(q: Query, tpe: Type, cursor: Cursor): F[Result[List[(String, Json)]]] = {
     (q, tpe) match {
