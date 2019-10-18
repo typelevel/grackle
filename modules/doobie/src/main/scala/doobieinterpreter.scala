@@ -12,6 +12,8 @@ import io.chrisdavenport.log4cats.Logger
 import io.circe.Json
 
 import DoobieMapping._
+import Query._
+import QueryInterpreter.mkError
 
 trait DoobieQueryInterpreter[F[_]] extends QueryInterpreter[F] {
   val mapping: DoobieMapping
@@ -19,21 +21,24 @@ trait DoobieQueryInterpreter[F[_]] extends QueryInterpreter[F] {
   val logger: Logger[F]
   implicit val F: Bracket[F, Throwable]
 
-  def runDoobie(query: Query, tpe: Type, fieldName: String, predicates: List[Fragment]): F[Result[Json]] = {
-    val fieldTpe = tpe.field(fieldName)
-    val mapped = mapping.mapQuery(query, fieldTpe, predicates)
+  def predicates(fieldName: String, args: List[Binding]): List[Fragment]
 
-    for {
-      table <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(xa)
-      value <- runValue(query, fieldTpe, DoobieCursor(fieldTpe, table, mapped))
-    } yield
-      value.map(value => Json.obj(fieldName -> value))
-  }
+  def runRoot(query: Query): F[Result[Json]] =
+    query match {
+      case Select(fieldName, args, subquery) =>
+        val fieldTpe = schema.queryType.field(fieldName)
+        val mapped = mapping.mapQuery(subquery, fieldTpe, predicates(fieldName, args))
+
+        for {
+          table <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(xa)
+          value <- runObject(subquery, fieldName, fieldTpe, DoobieCursor(fieldTpe, table, mapped))
+        } yield value
+
+      case _ => List(mkError(s"Bad query")).leftIor.pure[F]
+    }
 }
 
 case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) extends Cursor {
-  import QueryInterpreter.mkError
-
   def asTable: Result[Table] = focus match {
     case table: List[_] => table.asInstanceOf[Table].rightIor
     case _ => List(mkError(s"Not a table")).leftIor

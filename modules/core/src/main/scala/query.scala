@@ -3,7 +3,7 @@
 
 package edu.gemini.grackle
 
-import cats.{ Applicative }
+import cats.Applicative
 import cats.implicits._
 import io.circe.Json
 import io.circe.literal.JsonStringContext
@@ -17,9 +17,15 @@ trait QueryInterpreter[F[_]] {
   implicit val F: Applicative[F]
 
   def run(q: Query): F[Json] =
-    runRoot(q, schema.queryType).map(QueryInterpreter.mkResponse)
+    runRoot(q).map(QueryInterpreter.mkResponse)
 
-  def runRoot(query: Query, tpe: Type): F[Result[Json]]
+  def runRoot(q: Query): F[Result[Json]]
+
+  def runField(q: Query, fieldName: String, fieldTpe: Type, cursor: Cursor): F[Result[List[(String, Json)]]] =
+    runValue(q, fieldTpe, cursor).nested.map(value => List((fieldName, value))).value
+
+  def runObject(q: Query, fieldName: String, fieldTpe: Type, cursor: Cursor): F[Result[Json]] =
+    runField(q, fieldName, fieldTpe, cursor).nested.map(Json.fromFields).value
 
   def runFields(q: Query, tpe: Type, cursor: Cursor): F[Result[List[(String, Json)]]] = {
     (q, tpe) match {
@@ -30,7 +36,7 @@ trait QueryInterpreter[F[_]] {
 
       case (Select(fieldName, bindings, child), tpe) =>
         cursor.field(fieldName, Binding.toMap(bindings)).flatTraverse(c =>
-          runValue(child, tpe.field(fieldName), c).nested.map(value => List((fieldName, value))).value
+          runField(child, fieldName, tpe.field(fieldName), c)
         )
 
       case (Group(siblings), _) =>

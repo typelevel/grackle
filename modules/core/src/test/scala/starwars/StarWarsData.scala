@@ -5,8 +5,11 @@ package starwars
 
 import cats.Id
 import cats.implicits._
-import edu.gemini.grackle._
 import io.circe.Json
+
+import edu.gemini.grackle._
+import Query._, Binding._
+import QueryInterpreter.mkError
 
 object StarWarsData {
   object Episode extends Enumeration {
@@ -38,11 +41,9 @@ object StarWarsData {
       new Droid(id, name, appearsIn, primaryFunction)(friends)
   }
 
-  case class Root(characters: List[Character])
-
-  val root = Root(List(
+  val characters = List(
     LukeSkywalker, DarthVader, HanSolo, LeiaOrgana, WilhuffTarkin, C3PO, R2D2
-  ))
+  )
 
   lazy val LukeSkywalker: Character =
     Human(
@@ -100,8 +101,18 @@ object StarWarsQueryInterpreter extends QueryInterpreter[Id] {
 
   val schema = StarWarsSchema
 
-  def runRoot(query: Query, tpe: Type): Result[Json] =
-    runValue(query, tpe, StarWarsCursor(StarWarsData.root))
+  import schema._
+  import StarWarsData._
+
+  def runRoot(query: Query): Result[Json] = {
+    query match {
+      case Select("hero", _, subquery) =>
+        runObject(subquery, "hero", CharacterType, StarWarsCursor(R2D2))
+      case Select(fieldName@("character" | "human"), List(StringBinding("id", id)), subquery) =>
+        runObject(subquery, fieldName, NullableType(CharacterType), StarWarsCursor(characters.find(_.id == id)))
+      case _ => List(mkError("Bad query")).leftIor
+    }
+  }
 }
 
 case class StarWarsCursor(focus: Any) extends DataTypeCursor {
@@ -125,13 +136,6 @@ case class StarWarsCursor(focus: Any) extends DataTypeCursor {
     }
 
     (focus, field) match {
-      case (Root(_), "hero") =>
-        mkCursor(R2D2).rightIor
-
-      case (Root(characters), "character" | "human") if args.contains("id") =>
-        val id = args("id")
-        mkCursor(characters.find(_.id == id)).rightIor
-
       case (c: Character, "id") => mkCursor(c.id).rightIor
       case (c: Character, "name") => mkCursor(c.name).rightIor
       case (c: Character, "appearsIn") => mkCursor(c.appearsIn).rightIor
