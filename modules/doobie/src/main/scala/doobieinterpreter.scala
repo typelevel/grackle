@@ -25,13 +25,13 @@ trait DoobieQueryInterpreter[F[_]] extends QueryInterpreter[F] {
 
   def runRoot(query: Query): F[Result[Json]] =
     query match {
-      case Select(fieldName, args, subquery) =>
+      case Select(fieldName, args, child) =>
         val fieldTpe = schema.queryType.field(fieldName)
-        val mapped = mapping.mapQuery(subquery, fieldTpe, predicates(fieldName, args))
+        val mapped = mapping.mapQuery(child, fieldTpe, predicates(fieldName, args))
 
         for {
           table <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(xa)
-          value <- runObject(subquery, fieldName, fieldTpe, DoobieCursor(fieldTpe, table, mapped))
+          value <- runObject(child, fieldName, fieldTpe, DoobieCursor(fieldTpe, table, mapped))
         } yield value
 
       case _ => List(mkError(s"Bad query")).leftIor.pure[F]

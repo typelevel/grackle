@@ -16,19 +16,19 @@ trait QueryInterpreter[F[_]] {
 
   implicit val F: Applicative[F]
 
-  def run(q: Query): F[Json] =
-    runRoot(q).map(QueryInterpreter.mkResponse)
+  def run(query: Query): F[Json] =
+    runRoot(query).map(QueryInterpreter.mkResponse)
 
-  def runRoot(q: Query): F[Result[Json]]
+  def runRoot(query: Query): F[Result[Json]]
 
-  def runField(q: Query, fieldName: String, fieldTpe: Type, cursor: Cursor): F[Result[List[(String, Json)]]] =
-    runValue(q, fieldTpe, cursor).nested.map(value => List((fieldName, value))).value
+  def runField(query: Query, fieldName: String, fieldTpe: Type, cursor: Cursor): F[Result[List[(String, Json)]]] =
+    runValue(query, fieldTpe, cursor).nested.map(value => List((fieldName, value))).value
 
-  def runObject(q: Query, fieldName: String, fieldTpe: Type, cursor: Cursor): F[Result[Json]] =
-    runField(q, fieldName, fieldTpe, cursor).nested.map(Json.fromFields).value
+  def runObject(query: Query, fieldName: String, fieldTpe: Type, cursor: Cursor): F[Result[Json]] =
+    runField(query, fieldName, fieldTpe, cursor).nested.map(Json.fromFields).value
 
-  def runFields(q: Query, tpe: Type, cursor: Cursor): F[Result[List[(String, Json)]]] = {
-    (q, tpe) match {
+  def runFields(query: Query, tpe: Type, cursor: Cursor): F[Result[List[(String, Json)]]] = {
+    (query, tpe) match {
       case (sel@Select(fieldName, _, _), NullableType(tpe)) =>
         cursor.asNullable.flatTraverse(oc =>
           oc.map(c => runFields(sel, tpe, c)).getOrElse(List((fieldName, Json.Null)).rightIor.pure[F])
@@ -40,34 +40,34 @@ trait QueryInterpreter[F[_]] {
         )
 
       case (Group(siblings), _) =>
-        siblings.flatTraverse(q => runFields(q, tpe, cursor).nested).value
+        siblings.flatTraverse(query => runFields(query, tpe, cursor).nested).value
 
       case _ =>
-        List(mkError(s"failed: $q $tpe")).leftIor.pure[F]
+        List(mkError(s"failed: $query $tpe")).leftIor.pure[F]
     }
   }
 
-  def runValue(q: Query, tpe: Type, cursor: Cursor): F[Result[Json]] = {
+  def runValue(query: Query, tpe: Type, cursor: Cursor): F[Result[Json]] = {
     tpe match {
       case NullableType(tpe) =>
         cursor.asNullable.flatTraverse(oc =>
-          oc.map(c => runValue(q, tpe, c)).getOrElse(Json.Null.rightIor.pure[F])
+          oc.map(c => runValue(query, tpe, c)).getOrElse(Json.Null.rightIor.pure[F])
         )
 
       case ListType(tpe) =>
         cursor.asList.flatTraverse(lc =>
-          lc.traverse(c => runValue(q, tpe, c)).map(_.sequence.map(Json.fromValues))
+          lc.traverse(c => runValue(query, tpe, c)).map(_.sequence.map(Json.fromValues))
         )
 
       case TypeRef(schema, tpnme) =>
         schema.types.find(_.name == tpnme)
-          .map(tpe => runValue(q, tpe, cursor))
+          .map(tpe => runValue(query, tpe, cursor))
           .getOrElse(List(mkError(s"Unknown type '$tpnme'")).leftIor.pure[F])
 
       case (_: ScalarType) | (_: EnumType) => cursor.asLeaf.pure[F]
 
       case (_: ObjectType) | (_: InterfaceType) =>
-        runFields(q, tpe, cursor).nested.map(Json.fromFields).value
+        runFields(query, tpe, cursor).nested.map(Json.fromFields).value
 
       case _ =>
         List(mkError(s"Unsupported type $tpe")).leftIor.pure[F]
@@ -104,7 +104,7 @@ object QueryInterpreter {
 sealed trait Query {
   import Query._
 
-  def ~(q: Query): Query = (this, q) match {
+  def ~(query: Query): Query = (this, query) match {
     case (Group(hd), Group(tl)) => Group(hd ++ tl)
     case (hd, Group(tl)) => Group(hd :: tl)
     case (Group(hd), tl) => Group(hd :+ tl)

@@ -106,10 +106,10 @@ object StarWarsQueryInterpreter extends QueryInterpreter[Id] {
 
   def runRoot(query: Query): Result[Json] = {
     query match {
-      case Select("hero", _, subquery) =>
-        runObject(subquery, "hero", CharacterType, StarWarsCursor(R2D2))
-      case Select(fieldName@("character" | "human"), List(StringBinding("id", id)), subquery) =>
-        runObject(subquery, fieldName, NullableType(CharacterType), StarWarsCursor(characters.find(_.id == id)))
+      case Select("hero", _, child) =>
+        runObject(child, "hero", CharacterType, StarWarsCursor(R2D2))
+      case Select(fieldName@("character" | "human"), List(StringBinding("id", id)), child) =>
+        runObject(child, fieldName, NullableType(CharacterType), StarWarsCursor(characters.find(_.id == id)))
       case _ => List(mkError("Bad query")).leftIor
     }
   }
