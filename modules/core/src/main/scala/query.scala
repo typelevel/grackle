@@ -10,7 +10,7 @@ import io.circe.literal.JsonStringContext
 
 trait QueryInterpreter[F[_]] {
   import Query._
-  import QueryInterpreter.mkError
+  import QueryInterpreter.{ mkError, ProtoJson }
 
   val schema: Schema
   val composedMapping: Mapping[F]
@@ -42,7 +42,7 @@ trait QueryInterpreter[F[_]] {
           composedMapping.objectMappings.find(_.tpe == tpe) match {
             case Some(om) => om.fieldMappings.find(_._1 == fieldName) match {
               case Some((_, so: composedMapping.Subobject[t])) =>
-                  List((fieldName, ProtoJson.deferred(so.subquery(cursor.focus.asInstanceOf[t], child), so.submapping.interpreter))).rightIor.pure[F]
+                  List((fieldName, ProtoJson.deferred(so.subquery(cursor.focus.asInstanceOf[t], child), so.submapping.tpe))).rightIor.pure[F]
                 case _ => List(mkError(s"failed: $query $tpe")).leftIor.pure[F]
               }
             case _ => List(mkError(s"failed: $query $tpe")).leftIor.pure[F]
@@ -87,46 +87,6 @@ trait QueryInterpreter[F[_]] {
         List(mkError(s"Unsupported type $tpe")).leftIor.pure[F]
     }
   }
-
-  sealed trait ProtoJson {
-    def run: F[Result[Json]]
-  }
-
-  object ProtoJson {
-    case class PureJson(value: Json) extends ProtoJson {
-      def run: F[Result[Json]] = value.rightIor.pure[F]
-    }
-
-    case class DeferredJson(query: Query, interpreter: QueryInterpreter[F]) extends ProtoJson {
-      def run: F[Result[Json]] = interpreter.runRootValue(query)
-    }
-
-    case class ProtoObject(fields: List[(String, ProtoJson)]) extends ProtoJson {
-      def run: F[Result[Json]] =
-        (fields.traverse { case (name, value) => value.run.nested.map(v => (name, v)) }).map(Json.fromFields).value
-    }
-
-    case class ProtoArray(elems: List[ProtoJson]) extends ProtoJson {
-      def run: F[Result[Json]] =
-        elems.traverse(_.run.nested).map(Json.fromValues).value
-    }
-
-    def deferred(query: Query, interpreter: QueryInterpreter[F]): ProtoJson = DeferredJson(query, interpreter)
-
-    def fromJson(value: Json): ProtoJson = PureJson(value)
-
-    def fromFields(fields: List[(String, ProtoJson)]): ProtoJson =
-      if(fields.forall(_._2.isInstanceOf[PureJson]))
-        PureJson(Json.fromFields(fields.map { case (name, c) => (name, c.asInstanceOf[PureJson].value) }))
-      else
-        ProtoObject(fields)
-
-    def fromValues(elems: List[ProtoJson]): ProtoJson =
-      if(elems.forall(_.isInstanceOf[PureJson]))
-        PureJson(Json.fromValues(elems.map(_.asInstanceOf[PureJson].value)))
-      else
-        ProtoArray(elems)
-  }
 }
 
 object QueryInterpreter {
@@ -152,6 +112,51 @@ object QueryInterpreter {
       else List(("path", Json.fromValues(path.map(Json.fromString))))
 
     Json.fromFields(("message", Json.fromString(message)) :: locationsField ++ pathField)
+  }
+
+  sealed trait ProtoJson {
+    import ProtoJson._
+
+    def run[FF[_]: Applicative](mapping: Mapping[FF]): FF[Result[Json]] =
+      this match {
+        case PureJson(value) => value.rightIor.pure[FF]
+
+        case DeferredJson(query, tpe) =>
+          mapping.objectMappings.find(_.tpe == tpe) match {
+            case Some(om) =>
+              om.interpreter.runRootValue(query)
+            case _ => List(mkError(s"failed: $query $tpe")).leftIor.pure[FF]
+          }
+
+        case ProtoObject(fields) =>
+          (fields.traverse { case (name, value) => value.run(mapping).nested.map(v => (name, v)) }).map(Json.fromFields).value
+
+        case ProtoArray(elems) =>
+          elems.traverse(value => value.run(mapping).nested).map(Json.fromValues).value
+      }
+  }
+
+  object ProtoJson {
+    case class PureJson(value: Json) extends ProtoJson
+    case class DeferredJson(query: Query, tpe: Type) extends ProtoJson
+    case class ProtoObject(fields: List[(String, ProtoJson)]) extends ProtoJson
+    case class ProtoArray(elems: List[ProtoJson]) extends ProtoJson
+
+    def deferred(query: Query, tpe: Type): ProtoJson = DeferredJson(query, tpe)
+
+    def fromJson(value: Json): ProtoJson = PureJson(value)
+
+    def fromFields(fields: List[(String, ProtoJson)]): ProtoJson =
+      if(fields.forall(_._2.isInstanceOf[PureJson]))
+        PureJson(Json.fromFields(fields.map { case (name, c) => (name, c.asInstanceOf[PureJson].value) }))
+      else
+        ProtoObject(fields)
+
+    def fromValues(elems: List[ProtoJson]): ProtoJson =
+      if(elems.forall(_.isInstanceOf[PureJson]))
+        PureJson(Json.fromValues(elems.map(_.asInstanceOf[PureJson].value)))
+      else
+        ProtoArray(elems)
   }
 }
 

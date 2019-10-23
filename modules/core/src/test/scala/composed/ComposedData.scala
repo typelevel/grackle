@@ -105,7 +105,7 @@ object CurrencyQueryInterpreter extends QueryInterpreter[Id] {
   def runRootValue(query: Query): Result[Json] = {
     query match {
       case Select("currency", List(StringBinding("code", code)), child) =>
-        runValue(child, NullableType(CurrencyType), CurrencyCursor(currencies.find(_.code == code))).flatMap(_.run)
+        runValue(child, NullableType(CurrencyType), CurrencyCursor(currencies.find(_.code == code))).flatMap(_.run(composedMapping))
       case _ => List(mkError("Bad query")).leftIor
     }
   }
@@ -160,7 +160,7 @@ object CountryQueryInterpreter extends QueryInterpreter[Id] {
   def runRootValue(query: Query): Result[Json] = {
     query match {
       case Select("country", List(StringBinding("code", code)), child) =>
-        runValue(child, NullableType(CountryType), CountryCursor(countries.find(_.code == code))).flatMap(_.run)
+        runValue(child, NullableType(CountryType), CountryCursor(countries.find(_.code == code))).flatMap(_.run(composedMapping))
       case _ => List(mkError("Bad query")).leftIor
     }
   }

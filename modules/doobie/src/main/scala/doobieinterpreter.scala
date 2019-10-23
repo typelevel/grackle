@@ -32,7 +32,7 @@ trait DoobieQueryInterpreter[F[_]] extends QueryInterpreter[F] {
         for {
           table  <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(xa)
           dvalue <- runValue(child, fieldTpe, DoobieCursor(fieldTpe, table, mapped))
-          value  <- dvalue.flatTraverse(_.run)
+          value  <- dvalue.flatTraverse(_.run(composedMapping))
         } yield value
 
       case _ => List(mkError(s"Bad query")).leftIor.pure[F]
