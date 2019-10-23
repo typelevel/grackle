@@ -12,7 +12,48 @@ trait QueryInterpreter[F[_]] {
   import Query._
   import QueryInterpreter.mkError
 
+  sealed trait DJson {
+    def run: F[Result[Json]]
+  }
+
+  object DJson {
+    case class CJson(value: Json) extends DJson {
+      def run: F[Result[Json]] = value.rightIor.pure[F]
+    }
+
+    case class PJson(query: Query, interpreter: QueryInterpreter[F]) extends DJson {
+      def run: F[Result[Json]] = interpreter.runRoot(query).nested.map(_.asObject.get.values.head).value
+    }
+
+    case class DObj(fields: List[(String, DJson)]) extends DJson {
+      def run: F[Result[Json]] =
+        (fields.traverse { case (name, value) => value.run.nested.map(v => (name, v)) }).map(Json.fromFields).value
+    }
+
+    case class DArray(elems: List[DJson]) extends DJson {
+      def run: F[Result[Json]] =
+        elems.traverse(_.run.nested).map(Json.fromValues).value
+    }
+
+    def partial(query: Query, interpreter: QueryInterpreter[F]): DJson = PJson(query, interpreter)
+
+    def fromJson(value: Json): DJson = CJson(value)
+
+    def fromFields(fields: List[(String, DJson)]): DJson =
+      if(fields.forall(_._2.isInstanceOf[CJson]))
+        CJson(Json.fromFields(fields.map { case (name, c) => (name, c.asInstanceOf[CJson].value) }))
+      else
+        DObj(fields)
+
+    def fromValues(elems: List[DJson]): DJson =
+      if(elems.forall(_.isInstanceOf[CJson]))
+        CJson(Json.fromValues(elems.map(_.asInstanceOf[CJson].value)))
+      else
+        DArray(elems)
+  }
+
   val schema: Schema
+  val composedMapping: Mapping[F]
 
   implicit val F: Applicative[F]
 
@@ -21,23 +62,33 @@ trait QueryInterpreter[F[_]] {
 
   def runRoot(query: Query): F[Result[Json]]
 
-  def runField(query: Query, fieldName: String, fieldTpe: Type, cursor: Cursor): F[Result[List[(String, Json)]]] =
+  def runField(query: Query, fieldName: String, fieldTpe: Type, cursor: Cursor): F[Result[List[(String, DJson)]]] =
     runValue(query, fieldTpe, cursor).nested.map(value => List((fieldName, value))).value
 
-  def runObject(query: Query, fieldName: String, fieldTpe: Type, cursor: Cursor): F[Result[Json]] =
-    runField(query, fieldName, fieldTpe, cursor).nested.map(Json.fromFields).value
+  def runObject(query: Query, fieldName: String, fieldTpe: Type, cursor: Cursor): F[Result[DJson]] =
+    runField(query, fieldName, fieldTpe, cursor).nested.map(DJson.fromFields).value
 
-  def runFields(query: Query, tpe: Type, cursor: Cursor): F[Result[List[(String, Json)]]] = {
+  def runFields(query: Query, tpe: Type, cursor: Cursor): F[Result[List[(String, DJson)]]] = {
     (query, tpe) match {
       case (sel@Select(fieldName, _, _), NullableType(tpe)) =>
         cursor.asNullable.flatTraverse(oc =>
-          oc.map(c => runFields(sel, tpe, c)).getOrElse(List((fieldName, Json.Null)).rightIor.pure[F])
+          oc.map(c => runFields(sel, tpe, c)).getOrElse(List((fieldName, DJson.fromJson(Json.Null))).rightIor.pure[F])
         )
 
       case (Select(fieldName, bindings, child), tpe) =>
-        cursor.field(fieldName, Binding.toMap(bindings)).flatTraverse(c =>
-          runField(child, fieldName, tpe.field(fieldName), c)
-        )
+        if (!cursor.hasField(fieldName)) {
+          composedMapping.objectMappings.find(_.tpe == tpe) match {
+            case Some(om) => om.fieldMappings.find(_._1 == fieldName) match {
+              case Some((_, so: composedMapping.Subobject[t])) =>
+                  List((fieldName, DJson.partial(so.subquery(cursor.focus.asInstanceOf[t], child), so.submapping.interpreter))).rightIor.pure[F]
+                case _ => List(mkError(s"failed: $query $tpe")).leftIor.pure[F]
+              }
+            case _ => List(mkError(s"failed: $query $tpe")).leftIor.pure[F]
+          }
+        } else
+          cursor.field(fieldName, Binding.toMap(bindings)).flatTraverse(c =>
+            runField(child, fieldName, tpe.field(fieldName), c)
+          )
 
       case (Group(siblings), _) =>
         siblings.flatTraverse(query => runFields(query, tpe, cursor).nested).value
@@ -47,16 +98,16 @@ trait QueryInterpreter[F[_]] {
     }
   }
 
-  def runValue(query: Query, tpe: Type, cursor: Cursor): F[Result[Json]] = {
+  def runValue(query: Query, tpe: Type, cursor: Cursor): F[Result[DJson]] = {
     tpe match {
       case NullableType(tpe) =>
         cursor.asNullable.flatTraverse(oc =>
-          oc.map(c => runValue(query, tpe, c)).getOrElse(Json.Null.rightIor.pure[F])
+          oc.map(c => runValue(query, tpe, c)).getOrElse(DJson.fromJson(Json.Null).rightIor.pure[F])
         )
 
       case ListType(tpe) =>
         cursor.asList.flatTraverse(lc =>
-          lc.traverse(c => runValue(query, tpe, c)).map(_.sequence.map(Json.fromValues))
+          lc.traverse(c => runValue(query, tpe, c).nested).map(DJson.fromValues).value
         )
 
       case TypeRef(schema, tpnme) =>
@@ -64,12 +115,13 @@ trait QueryInterpreter[F[_]] {
           .map(tpe => runValue(query, tpe, cursor))
           .getOrElse(List(mkError(s"Unknown type '$tpnme'")).leftIor.pure[F])
 
-      case (_: ScalarType) | (_: EnumType) => cursor.asLeaf.pure[F]
+      case (_: ScalarType) | (_: EnumType) => cursor.asLeaf.map(DJson.fromJson).pure[F]
 
       case (_: ObjectType) | (_: InterfaceType) =>
-        runFields(query, tpe, cursor).nested.map(Json.fromFields).value
+        runFields(query, tpe, cursor).nested.map(DJson.fromFields).value
 
       case _ =>
+        Thread.dumpStack
         List(mkError(s"Unsupported type $tpe")).leftIor.pure[F]
     }
   }

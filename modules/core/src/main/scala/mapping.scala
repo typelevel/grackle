@@ -21,3 +21,10 @@ trait Mapping[F[_]] {
     subquery: (T, Query) => Query = defaultJoin
   ) extends FieldMapping
 }
+
+object NoMapping {
+  def apply[F[_]]: Mapping[F] =
+    new Mapping[F] {
+      val objectMappings = Nil
+    }
+}

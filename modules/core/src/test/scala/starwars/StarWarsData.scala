@@ -100,6 +100,7 @@ object StarWarsQueryInterpreter extends QueryInterpreter[Id] {
   implicit val F = cats.catsInstancesForId
 
   val schema = StarWarsSchema
+  val composedMapping = NoMapping[Id]
 
   import schema._
   import StarWarsData._
@@ -107,9 +108,9 @@ object StarWarsQueryInterpreter extends QueryInterpreter[Id] {
   def runRoot(query: Query): Result[Json] = {
     query match {
       case Select("hero", _, child) =>
-        runObject(child, "hero", CharacterType, StarWarsCursor(R2D2))
+        runObject(child, "hero", CharacterType, StarWarsCursor(R2D2)).flatMap(_.run)
       case Select(fieldName@("character" | "human"), List(StringBinding("id", id)), child) =>
-        runObject(child, fieldName, NullableType(CharacterType), StarWarsCursor(characters.find(_.id == id)))
+        runObject(child, fieldName, NullableType(CharacterType), StarWarsCursor(characters.find(_.id == id))).flatMap(_.run)
       case _ => List(mkError("Bad query")).leftIor
     }
   }

@@ -52,13 +52,24 @@ object ComposedMapping extends Mapping[Id] {
 object ComposedQueryInterpreter extends QueryInterpreter[Id] {
   implicit val F = cats.catsInstancesForId
 
+  import ComposedMapping._
+
   val schema = ComposedSchema
+  val composedMapping = ComposedMapping
 
   def runRoot(query: Query): Result[Json] = {
-    runObject(query, null, null, null)
+    query match {
+      case Select(fieldName, _, _) =>
+        queryMapping.fieldMappings.find(_._1 == fieldName) match {
+          case Some((_, Subobject(mapping, _))) => mapping.interpreter.runRoot(query)
+          case None => List(mkError("Bad query")).leftIor
+        }
+      case _ => List(mkError("Bad query")).leftIor
+    }
   }
 }
 
+/*
 case class ComposedCursor() extends Cursor {
   def isLeaf: Boolean = ???
   def asLeaf: Result[Json] = ???
@@ -69,6 +80,7 @@ case class ComposedCursor() extends Cursor {
   def hasField(field: String): Boolean = ???
   def field(field: String, args: Map[String, Any]): Result[Cursor] = ???
 }
+*/
 
 object CurrencyData {
   case class Currency(
@@ -85,6 +97,7 @@ object CurrencyQueryInterpreter extends QueryInterpreter[Id] {
   implicit val F = cats.catsInstancesForId
 
   val schema = ComposedSchema
+  val composedMapping = ComposedMapping
 
   import schema._
   import CurrencyData._
@@ -92,7 +105,7 @@ object CurrencyQueryInterpreter extends QueryInterpreter[Id] {
   def runRoot(query: Query): Result[Json] = {
     query match {
       case Select("currency", List(StringBinding("code", code)), child) =>
-        runObject(child, "currency", NullableType(CurrencyType), CurrencyCursor(currencies.find(_.code == code)))
+        runObject(child, "currency", NullableType(CurrencyType), CurrencyCursor(currencies.find(_.code == code))).flatMap(_.run)
       case _ => List(mkError("Bad query")).leftIor
     }
   }
@@ -139,6 +152,7 @@ object CountryQueryInterpreter extends QueryInterpreter[Id] {
   implicit val F = cats.catsInstancesForId
 
   val schema = ComposedSchema
+  val composedMapping = ComposedMapping
 
   import schema._
   import CountryData._
@@ -146,7 +160,7 @@ object CountryQueryInterpreter extends QueryInterpreter[Id] {
   def runRoot(query: Query): Result[Json] = {
     query match {
       case Select("country", List(StringBinding("code", code)), child) =>
-        runObject(child, "country", NullableType(CountryType), CountryCursor(countries.find(_.code == code)))
+        runObject(child, "country", NullableType(CountryType), CountryCursor(countries.find(_.code == code))).flatMap(_.run)
       case _ => List(mkError("Bad query")).leftIor
     }
   }
@@ -158,7 +172,8 @@ case class CountryCursor(focus: Any) extends DataTypeCursor {
   def mkCursor(focus: Any): Cursor = CountryCursor(focus)
 
   def hasField(field: String): Boolean = (focus, field) match {
-    case (_: Country, "code" | "name" | "currency") => true
+    //case (_: Country, "code" | "name" | "currency") => true
+    case (_: Country, "code" | "name") => true
     case _ => false
   }
 

@@ -7,6 +7,7 @@ import cats.implicits._
 import io.circe.Json
 
 trait Cursor {
+  def focus: Any
   def isLeaf: Boolean
   def asLeaf: Result[Json]
   def isList: Boolean

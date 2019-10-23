@@ -30,8 +30,9 @@ trait DoobieQueryInterpreter[F[_]] extends QueryInterpreter[F] {
         val mapped = mapping.mapQuery(child, fieldTpe, predicates(fieldName, args))
 
         for {
-          table <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(xa)
-          value <- runObject(child, fieldName, fieldTpe, DoobieCursor(fieldTpe, table, mapped))
+          table  <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(xa)
+          dvalue <- runObject(child, fieldName, fieldTpe, DoobieCursor(fieldTpe, table, mapped))
+          value  <- dvalue.flatTraverse(_.run)
         } yield value
 
       case _ => List(mkError(s"Bad query")).leftIor.pure[F]

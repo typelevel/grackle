@@ -88,6 +88,7 @@ object WorldData extends DoobieMapping {
 
 trait WorldQueryInterpreter[F[_]] extends DoobieQueryInterpreter[F] {
   val schema = WorldSchema
+  val composedMapping = null
 
   def predicates(fieldName: String, args: List[Binding]): List[Fragment] =
     (fieldName, args) match {
