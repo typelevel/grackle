@@ -22,7 +22,7 @@ trait QueryInterpreter[F[_]] {
     }
 
     case class PJson(query: Query, interpreter: QueryInterpreter[F]) extends DJson {
-      def run: F[Result[Json]] = interpreter.runRoot(query).nested.map(_.asObject.get.values.head).value
+      def run: F[Result[Json]] = interpreter.runRootValue(query)
     }
 
     case class DObj(fields: List[(String, DJson)]) extends DJson {
@@ -60,13 +60,15 @@ trait QueryInterpreter[F[_]] {
   def run(query: Query): F[Json] =
     runRoot(query).map(QueryInterpreter.mkResponse)
 
-  def runRoot(query: Query): F[Result[Json]]
+  def runRoot(query: Query): F[Result[Json]] =
+    query match {
+      case Select(fieldName, _, _) =>
+        runRootValue(query).nested.map(value => Json.obj((fieldName, value))).value
+      case _ =>
+        List(mkError(s"Bad query: $query")).leftIor.pure[F]
+    }
 
-  def runField(query: Query, fieldName: String, fieldTpe: Type, cursor: Cursor): F[Result[List[(String, DJson)]]] =
-    runValue(query, fieldTpe, cursor).nested.map(value => List((fieldName, value))).value
-
-  def runObject(query: Query, fieldName: String, fieldTpe: Type, cursor: Cursor): F[Result[DJson]] =
-    runField(query, fieldName, fieldTpe, cursor).nested.map(DJson.fromFields).value
+  def runRootValue(query: Query): F[Result[Json]]
 
   def runFields(query: Query, tpe: Type, cursor: Cursor): F[Result[List[(String, DJson)]]] = {
     (query, tpe) match {
@@ -87,7 +89,7 @@ trait QueryInterpreter[F[_]] {
           }
         } else
           cursor.field(fieldName, Binding.toMap(bindings)).flatTraverse(c =>
-            runField(child, fieldName, tpe.field(fieldName), c)
+            runValue(child, tpe.field(fieldName), c).nested.map(value => List((fieldName, value))).value
           )
 
       case (Group(siblings), _) =>

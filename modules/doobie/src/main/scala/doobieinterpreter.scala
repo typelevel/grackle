@@ -23,7 +23,7 @@ trait DoobieQueryInterpreter[F[_]] extends QueryInterpreter[F] {
 
   def predicates(fieldName: String, args: List[Binding]): List[Fragment]
 
-  def runRoot(query: Query): F[Result[Json]] =
+  def runRootValue(query: Query): F[Result[Json]] =
     query match {
       case Select(fieldName, args, child) =>
         val fieldTpe = schema.queryType.field(fieldName)
@@ -31,7 +31,7 @@ trait DoobieQueryInterpreter[F[_]] extends QueryInterpreter[F] {
 
         for {
           table  <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(xa)
-          dvalue <- runObject(child, fieldName, fieldTpe, DoobieCursor(fieldTpe, table, mapped))
+          dvalue <- runValue(child, fieldTpe, DoobieCursor(fieldTpe, table, mapped))
           value  <- dvalue.flatTraverse(_.run)
         } yield value
 
