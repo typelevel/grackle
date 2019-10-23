@@ -5,11 +5,10 @@ package starwars
 
 import cats.Id
 import cats.implicits._
-import io.circe.Json
 
 import edu.gemini.grackle._
 import Query._, Binding._
-import QueryInterpreter.mkError
+import QueryInterpreter.{ mkError, ProtoJson }
 
 object StarWarsData {
   object Episode extends Enumeration {
@@ -105,12 +104,12 @@ object StarWarsQueryInterpreter extends QueryInterpreter[Id] {
   import schema._
   import StarWarsData._
 
-  def runRootValue(query: Query): Result[Json] = {
+  def runRootValue(query: Query): Result[ProtoJson] = {
     query match {
       case Select("hero", _, child) =>
-        runValue(child, CharacterType, StarWarsCursor(R2D2)).flatMap(_.run(composedMapping))
+        runValue(child, CharacterType, StarWarsCursor(R2D2))
       case Select("character" | "human", List(StringBinding("id", id)), child) =>
-        runValue(child, NullableType(CharacterType), StarWarsCursor(characters.find(_.id == id))).flatMap(_.run(composedMapping))
+        runValue(child, NullableType(CharacterType), StarWarsCursor(characters.find(_.id == id)))
       case _ => List(mkError("Bad query")).leftIor
     }
   }

@@ -13,7 +13,7 @@ import io.circe.Json
 
 import DoobieMapping._
 import Query._
-import QueryInterpreter.mkError
+import QueryInterpreter.{ mkError, ProtoJson }
 
 trait DoobieQueryInterpreter[F[_]] extends QueryInterpreter[F] {
   val mapping: DoobieMapping
@@ -23,16 +23,15 @@ trait DoobieQueryInterpreter[F[_]] extends QueryInterpreter[F] {
 
   def predicates(fieldName: String, args: List[Binding]): List[Fragment]
 
-  def runRootValue(query: Query): F[Result[Json]] =
+  def runRootValue(query: Query): F[Result[ProtoJson]] =
     query match {
       case Select(fieldName, args, child) =>
         val fieldTpe = schema.queryType.field(fieldName)
         val mapped = mapping.mapQuery(child, fieldTpe, predicates(fieldName, args))
 
         for {
-          table  <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(xa)
-          dvalue <- runValue(child, fieldTpe, DoobieCursor(fieldTpe, table, mapped))
-          value  <- dvalue.flatTraverse(_.run(composedMapping))
+          table <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(xa)
+          value <- runValue(child, fieldTpe, DoobieCursor(fieldTpe, table, mapped))
         } yield value
 
       case _ => List(mkError(s"Bad query")).leftIor.pure[F]

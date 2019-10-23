@@ -5,11 +5,10 @@ package composed
 
 import cats.Id
 import cats.implicits._
-import io.circe.Json
 
 import edu.gemini.grackle._
 import Query._, Binding._
-import QueryInterpreter.mkError
+import QueryInterpreter.{ mkError, ProtoJson }
 
 object ComposedMapping extends Mapping[Id] {
   import ComposedSchema._
@@ -57,7 +56,7 @@ object ComposedQueryInterpreter extends QueryInterpreter[Id] {
   val schema = ComposedSchema
   val composedMapping = ComposedMapping
 
-  def runRootValue(query: Query): Result[Json] = {
+  def runRootValue(query: Query): Result[ProtoJson] = {
     query match {
       case Select(fieldName, _, _) =>
         queryMapping.fieldMappings.find(_._1 == fieldName) match {
@@ -102,10 +101,10 @@ object CurrencyQueryInterpreter extends QueryInterpreter[Id] {
   import schema._
   import CurrencyData._
 
-  def runRootValue(query: Query): Result[Json] = {
+  def runRootValue(query: Query): Result[ProtoJson] = {
     query match {
       case Select("currency", List(StringBinding("code", code)), child) =>
-        runValue(child, NullableType(CurrencyType), CurrencyCursor(currencies.find(_.code == code))).flatMap(_.run(composedMapping))
+        runValue(child, NullableType(CurrencyType), CurrencyCursor(currencies.find(_.code == code)))
       case _ => List(mkError("Bad query")).leftIor
     }
   }
@@ -157,10 +156,10 @@ object CountryQueryInterpreter extends QueryInterpreter[Id] {
   import schema._
   import CountryData._
 
-  def runRootValue(query: Query): Result[Json] = {
+  def runRootValue(query: Query): Result[ProtoJson] = {
     query match {
       case Select("country", List(StringBinding("code", code)), child) =>
-        runValue(child, NullableType(CountryType), CountryCursor(countries.find(_.code == code))).flatMap(_.run(composedMapping))
+        runValue(child, NullableType(CountryType), CountryCursor(countries.find(_.code == code)))
       case _ => List(mkError("Bad query")).leftIor
     }
   }

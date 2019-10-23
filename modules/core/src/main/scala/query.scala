@@ -3,7 +3,7 @@
 
 package edu.gemini.grackle
 
-import cats.Applicative
+import cats.Monad
 import cats.implicits._
 import io.circe.Json
 import io.circe.literal.JsonStringContext
@@ -15,7 +15,7 @@ trait QueryInterpreter[F[_]] {
   val schema: Schema
   val composedMapping: Mapping[F]
 
-  implicit val F: Applicative[F]
+  implicit val F: Monad[F]
 
   def run(query: Query): F[Json] =
     runRoot(query).map(QueryInterpreter.mkResponse)
@@ -23,12 +23,12 @@ trait QueryInterpreter[F[_]] {
   def runRoot(query: Query): F[Result[Json]] =
     query match {
       case Select(fieldName, _, _) =>
-        runRootValue(query).nested.map(value => Json.obj((fieldName, value))).value
+        runRootValue(query).flatMap(_.flatTraverse(_.run(composedMapping))).nested.map(value => Json.obj((fieldName, value))).value
       case _ =>
         List(mkError(s"Bad query: $query")).leftIor.pure[F]
     }
 
-  def runRootValue(query: Query): F[Result[Json]]
+  def runRootValue(query: Query): F[Result[ProtoJson]]
 
   def runFields(query: Query, tpe: Type, cursor: Cursor): F[Result[List[(String, ProtoJson)]]] = {
     (query, tpe) match {
@@ -117,15 +117,15 @@ object QueryInterpreter {
   sealed trait ProtoJson {
     import ProtoJson._
 
-    def run[FF[_]: Applicative](mapping: Mapping[FF]): FF[Result[Json]] =
+    def run[F[_]: Monad](mapping: Mapping[F]): F[Result[Json]] =
       this match {
-        case PureJson(value) => value.rightIor.pure[FF]
+        case PureJson(value) => value.rightIor.pure[F]
 
         case DeferredJson(query, tpe) =>
           mapping.objectMappings.find(_.tpe == tpe) match {
             case Some(om) =>
-              om.interpreter.runRootValue(query)
-            case _ => List(mkError(s"failed: $query $tpe")).leftIor.pure[FF]
+              om.interpreter.runRootValue(query).flatMap(_.flatTraverse(_.run(mapping)))
+            case _ => List(mkError(s"failed: $query $tpe")).leftIor.pure[F]
           }
 
         case ProtoObject(fields) =>
