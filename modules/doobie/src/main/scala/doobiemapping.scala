@@ -22,7 +22,7 @@ trait DoobieMapping {
       case Select(name, _, q) =>
         val obj = tpe.underlyingObject
         (for {
-          om      <- objectMappings.find(_.tpe == obj)
+          om      <- objectMappings.find(_.tpe =:= obj)
           (_, cr) <- om.fieldMappings.find(_._1 == name)
         } yield loop(q, obj.underlyingField(name), (obj, cr) :: acc)).getOrElse(acc)
       case Group(queries) =>
@@ -38,7 +38,7 @@ trait DoobieMapping {
 
     val keys: List[ColumnRef] = types.flatMap { tpe =>
       val obj = tpe.underlyingObject
-      objectMappings.find(_.tpe == obj).map(_.key).getOrElse(Nil)
+      objectMappings.find(_.tpe =:= obj).map(_.key).getOrElse(Nil)
     }
 
     val columns: List[ColumnRef] = (mappings.foldLeft(keys) {
@@ -101,7 +101,7 @@ object DoobieMapping {
 
     def select(row: Row, tpe: Type, field: String): Any = {
       val obj = tpe.dealias
-      val om = mapping.objectMappings.find(_.tpe == obj).get
+      val om = mapping.objectMappings.find(_.tpe =:= obj).get
       val Some((_, col: ColumnRef)) = om.fieldMappings.find(_._1 == field)
       select(row, col)
     }
@@ -110,7 +110,7 @@ object DoobieMapping {
       table.groupBy(row => project(row, cols)).to(List).sortBy(_._1.toString).map(_._2)
 
     def group(table: Table, tpe: Type): List[Table] =
-      mapping.objectMappings.find(_.tpe == tpe) match {
+      mapping.objectMappings.find(_.tpe =:= tpe) match {
         case Some(om) if om.key.nonEmpty => group(table, om.key)
         case None => table.map(List(_))
       }

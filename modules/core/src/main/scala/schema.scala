@@ -23,6 +23,8 @@ sealed trait Type {
     case _ => NoType
   }
 
+  def =:=(other: Type): Boolean = (this eq other) || (dealias == other.dealias)
+
   def dealias: Type = this match {
     case TypeRef(schema, tpnme) => schema.types.find(_.name == tpnme).getOrElse(NoType)
     case _ => this

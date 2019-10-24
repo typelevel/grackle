@@ -5,15 +5,18 @@ package composed
 
 import cats.Id
 import cats.implicits._
-import io.circe.Json
 
 import edu.gemini.grackle._
 import Query._, Binding._
 import QueryInterpreter.{ mkError, ProtoJson }
 
-object ComposedMapping extends Mapping[Id] {
-  import ComposedSchema._
+object CountryCurrencyQueryInterpreter extends ComposedQueryInterpreter[Id] {
   import CountryData._
+
+  implicit val F = cats.catsInstancesForId
+  val schema = ComposedSchema
+
+  import schema._
 
   val currencyMapping =
     ObjectMapping(
@@ -35,7 +38,7 @@ object ComposedMapping extends Mapping[Id] {
   val queryMapping =
     ObjectMapping(
       tpe = QueryType,
-      interpreter = ComposedQueryInterpreter,
+      interpreter = this,
       fieldMappings =
         List(
           "country" -> Subobject(countryMapping),
@@ -50,27 +53,6 @@ object ComposedMapping extends Mapping[Id] {
     }
 
   val objectMappings = List(queryMapping, countryMapping, currencyMapping)
-}
-
-object ComposedQueryInterpreter extends QueryInterpreter[Id] {
-  implicit val F = cats.catsInstancesForId
-
-  import ComposedMapping._
-
-  val schema = ComposedSchema
-
-  def run(query: Query): Json = run(query, ComposedMapping)
-
-  def runRootValue(query: Query): Result[ProtoJson] = {
-    query match {
-      case Select(fieldName, _, _) =>
-        queryMapping.fieldMappings.find(_._1 == fieldName) match {
-          case Some((_, Subobject(mapping, _))) => mapping.interpreter.runRootValue(query)
-          case None => List(mkError("Bad query")).leftIor
-        }
-      case _ => List(mkError("Bad query")).leftIor
-    }
-  }
 }
 
 object CurrencyData {

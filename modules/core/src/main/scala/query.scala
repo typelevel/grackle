@@ -11,15 +11,16 @@ import io.circe.literal.JsonStringContext
 trait QueryInterpreter[F[_]] {
   import Query._
   import QueryInterpreter.{ mkError, ProtoJson }
+  import ComponentMapping.NoMapping
 
   val schema: Schema
 
   implicit val F: Monad[F]
 
-  def run(query: Query, mapping: Mapping[F] = NoMapping[F]): F[Json] =
+  def run(query: Query, mapping: ComponentMapping[F] = NoMapping): F[Json] =
     runRoot(query, mapping).map(QueryInterpreter.mkResponse)
 
-  def runRoot(query: Query, mapping: Mapping[F] = NoMapping[F]): F[Result[Json]] =
+  def runRoot(query: Query, mapping: ComponentMapping[F] = NoMapping): F[Result[Json]] =
     query match {
       case Select(fieldName, _, _) =>
         runRootValue(query).flatMap(_.flatTraverse(_.run(mapping))).nested.map(value => Json.obj((fieldName, value))).value
@@ -108,21 +109,19 @@ object QueryInterpreter {
   sealed trait ProtoJson {
     import ProtoJson._
 
-    def run[F[_]: Monad](mapping: Mapping[F]): F[Result[Json]] =
+    def run[F[_]: Monad](mapping: ComponentMapping[F]): F[Result[Json]] =
       this match {
         case PureJson(value) => value.rightIor.pure[F]
 
         case DeferredJson(cursor, tpe, fieldName, query) =>
-          import mapping._
-          objectMappings.find(_.tpe == tpe) match {
+          mapping.objectMappings.find(_.tpe =:= tpe) match {
             case Some(om) => om.fieldMappings.find(_._1 == fieldName) match {
-              case Some((_, Subobject(submapping, subquery))) =>
+              case Some((_, mapping.Subobject(submapping, subquery))) =>
                 submapping.interpreter.runRootValue(subquery(cursor, query)).flatMap(_.flatTraverse(_.run(mapping)))
-              case _ => List(mkError(s"failed: $query $tpe")).leftIor.pure[F]
+              case _ => List(mkError(s"failed: $tpe $fieldName $query")).leftIor.pure[F]
             }
-            case _ => List(mkError(s"failed: $query $tpe")).leftIor.pure[F]
+            case _ => List(mkError(s"failed: $tpe $fieldName $query")).leftIor.pure[F]
           }
-
         case ProtoObject(fields) =>
           (fields.traverse { case (name, value) => value.run(mapping).nested.map(v => (name, v)) }).map(Json.fromFields).value
 

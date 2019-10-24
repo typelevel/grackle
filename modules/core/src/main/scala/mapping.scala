@@ -3,7 +3,13 @@
 
 package edu.gemini.grackle
 
-trait Mapping[F[_]] {
+import cats.implicits._
+import io.circe.Json
+
+import Query._
+import QueryInterpreter.{ mkError, ProtoJson }
+
+trait ComponentMapping[F[_]] {
   val objectMappings: List[ObjectMapping]
 
   sealed trait FieldMapping
@@ -22,9 +28,28 @@ trait Mapping[F[_]] {
   ) extends FieldMapping
 }
 
-object NoMapping {
-  def apply[F[_]]: Mapping[F] =
-    new Mapping[F] {
+object ComponentMapping {
+  def NoMapping[F[_]]: ComponentMapping[F] =
+    new ComponentMapping[F] {
       val objectMappings = Nil
     }
+}
+
+trait ComposedQueryInterpreter[F[_]] extends QueryInterpreter[F] with ComponentMapping[F] {
+  def run(query: Query): F[Json] = run(query, this)
+
+  def runRootValue(query: Query): F[Result[ProtoJson]] = {
+    query match {
+      case Select(fieldName, _, _) =>
+        objectMappings.find(_.tpe =:= schema.queryType) match {
+          case Some(queryMapping) =>
+            queryMapping.fieldMappings.find(_._1 == fieldName) match {
+              case Some((_, Subobject(mapping, _))) => mapping.interpreter.runRootValue(query)
+              case None => List(mkError("Bad query 1")).leftIor.pure[F]
+            }
+          case _ => List(mkError("Bad query 2")).leftIor.pure[F]
+        }
+      case _ => List(mkError("Bad query 3")).leftIor.pure[F]
+    }
+  }
 }
