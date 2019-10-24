@@ -12,6 +12,16 @@ import QueryInterpreter.{ mkError, ProtoJson }
 trait ComponentMapping[F[_]] {
   val objectMappings: List[ObjectMapping]
 
+  def subobject(tpe: Type, fieldName: String): Option[Subobject] =
+    objectMappings.find(_.tpe =:= tpe) match {
+      case Some(om) =>
+        om.fieldMappings.find(_._1 == fieldName) match {
+          case Some((_, so: Subobject)) => Some(so)
+          case _ => None
+        }
+      case None => None
+    }
+
   sealed trait FieldMapping
 
   case class ObjectMapping(
@@ -41,15 +51,11 @@ trait ComposedQueryInterpreter[F[_]] extends QueryInterpreter[F] with ComponentM
   def runRootValue(query: Query): F[Result[ProtoJson]] = {
     query match {
       case Select(fieldName, _, _) =>
-        objectMappings.find(_.tpe =:= schema.queryType) match {
-          case Some(queryMapping) =>
-            queryMapping.fieldMappings.find(_._1 == fieldName) match {
-              case Some((_, Subobject(mapping, _))) => mapping.interpreter.runRootValue(query)
-              case None => List(mkError("Bad query 1")).leftIor.pure[F]
-            }
-          case _ => List(mkError("Bad query 2")).leftIor.pure[F]
+        subobject(schema.queryType, fieldName) match {
+          case Some(Subobject(submapping, _)) => submapping.interpreter.runRootValue(query)
+          case None => List(mkError("Bad query")).leftIor.pure[F]
         }
-      case _ => List(mkError("Bad query 3")).leftIor.pure[F]
+      case _ => List(mkError("Bad query")).leftIor.pure[F]
     }
   }
 }

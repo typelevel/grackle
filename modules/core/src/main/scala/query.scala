@@ -114,14 +114,12 @@ object QueryInterpreter {
         case PureJson(value) => value.rightIor.pure[F]
 
         case DeferredJson(cursor, tpe, fieldName, query) =>
-          mapping.objectMappings.find(_.tpe =:= tpe) match {
-            case Some(om) => om.fieldMappings.find(_._1 == fieldName) match {
-              case Some((_, mapping.Subobject(submapping, subquery))) =>
-                submapping.interpreter.runRootValue(subquery(cursor, query)).flatMap(_.flatTraverse(_.run(mapping)))
-              case _ => List(mkError(s"failed: $tpe $fieldName $query")).leftIor.pure[F]
-            }
+          mapping.subobject(tpe, fieldName) match {
+            case Some(mapping.Subobject(submapping, subquery)) =>
+              submapping.interpreter.runRootValue(subquery(cursor, query)).flatMap(_.flatTraverse(_.run(mapping)))
             case _ => List(mkError(s"failed: $tpe $fieldName $query")).leftIor.pure[F]
           }
+
         case ProtoObject(fields) =>
           (fields.traverse { case (name, value) => value.run(mapping).nested.map(v => (name, v)) }).map(Json.fromFields).value
 
