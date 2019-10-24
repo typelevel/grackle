@@ -104,6 +104,5 @@ object WorldQueryInterpreter {
         val mapping = WorldData
         val xa = xa0
         val logger = logger0
-        val F = brkt
       }
 }

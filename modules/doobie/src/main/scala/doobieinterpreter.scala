@@ -15,11 +15,10 @@ import DoobieMapping._
 import Query._
 import QueryInterpreter.mkError
 
-trait DoobieQueryInterpreter[F[_]] extends QueryInterpreter[F] {
+abstract class DoobieQueryInterpreter[F[_]](override implicit val F: Bracket[F, Throwable]) extends QueryInterpreter[F] {
   val mapping: DoobieMapping
   val xa: Transactor[F]
   val logger: Logger[F]
-  implicit val F: Bracket[F, Throwable]
 
   def predicates(fieldName: String, args: List[Binding]): List[Fragment]
 

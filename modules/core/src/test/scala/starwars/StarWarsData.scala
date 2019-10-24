@@ -96,11 +96,9 @@ object StarWarsData {
 }
 
 object StarWarsQueryInterpreter extends QueryInterpreter[Id] {
-  implicit val F = cats.catsInstancesForId
-
   val schema = StarWarsSchema
-
   import schema._
+
   import StarWarsData._
 
   def runRootValue(query: Query): Result[ProtoJson] = {

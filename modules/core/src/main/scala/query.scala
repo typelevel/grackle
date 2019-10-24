@@ -83,14 +83,12 @@ object ProtoJson {
       ProtoArray(elems)
 }
 
-trait QueryInterpreter[F[_]] {
+abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
   import Query._
   import QueryInterpreter.mkError
   import ComponentMapping.NoMapping
 
   val schema: Schema
-
-  implicit val F: Monad[F]
 
   def run(query: Query, mapping: ComponentMapping[F] = NoMapping): F[Json] =
     runRoot(query, mapping).map(QueryInterpreter.mkResponse)

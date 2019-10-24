@@ -11,12 +11,10 @@ import Query._, Binding._
 import QueryInterpreter.mkError
 
 object CountryCurrencyQueryInterpreter extends ComposedQueryInterpreter[Id] {
-  import CountryData._
-
-  implicit val F = cats.catsInstancesForId
   val schema = ComposedSchema
-
   import schema._
+
+  import CountryData._
 
   val currencyMapping =
     ObjectMapping(
@@ -67,11 +65,9 @@ object CurrencyData {
 }
 
 object CurrencyQueryInterpreter extends QueryInterpreter[Id] {
-  implicit val F = cats.catsInstancesForId
-
   val schema = ComposedSchema
-
   import schema._
+
   import CurrencyData._
 
   def runRootValue(query: Query): Result[ProtoJson] = {
@@ -113,11 +109,9 @@ object CountryData {
 }
 
 object CountryQueryInterpreter extends QueryInterpreter[Id] {
-  implicit val F = cats.catsInstancesForId
-
   val schema = ComposedSchema
-
   import schema._
+
   import CountryData._
 
   def runRootValue(query: Query): Result[ProtoJson] = {
