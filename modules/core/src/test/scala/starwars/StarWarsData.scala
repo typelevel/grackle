@@ -127,21 +127,13 @@ case class StarWarsCursor(focus: Any) extends DataTypeCursor {
     case _ => false
   }
 
-  def field(field: String, args: Map[String, Any]): Result[Cursor] = {
-    focus match {
-      case _: Option[_] => assert(false, s"Unexpected option")
-      case _: List[_]   => assert(false, s"Unexpected list")
-      case _ =>
-    }
-
-    (focus, field) match {
-      case (c: Character, "id") => mkCursor(c.id).rightIor
-      case (c: Character, "name") => mkCursor(c.name).rightIor
-      case (c: Character, "appearsIn") => mkCursor(c.appearsIn).rightIor
-      case (c: Character, "friends") => mkCursor(c.friends).rightIor
-      case (h: Human, "homePlanet") => mkCursor(h.homePlanet).rightIor
-      case (d: Droid, "primaryFunction") => mkCursor(d.primaryFunction).rightIor
-      case _ => List(mkError(s"No field '$field'")).leftIor
-    }
+  def field(field: String, args: Map[String, Any]): Result[Cursor] = (focus, field) match {
+    case (c: Character, "id") => mkCursor(c.id).rightIor
+    case (c: Character, "name") => mkCursor(c.name).rightIor
+    case (c: Character, "appearsIn") => mkCursor(c.appearsIn).rightIor
+    case (c: Character, "friends") => mkCursor(c.friends).rightIor
+    case (h: Human, "homePlanet") => mkCursor(h.homePlanet).rightIor
+    case (d: Droid, "primaryFunction") => mkCursor(d.primaryFunction).rightIor
+    case _ => List(mkError(s"No field '$field'")).leftIor
   }
 }

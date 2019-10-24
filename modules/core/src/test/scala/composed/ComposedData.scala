@@ -111,18 +111,10 @@ case class CurrencyCursor(focus: Any) extends DataTypeCursor {
     case _ => false
   }
 
-  def field(field: String, args: Map[String, Any]): Result[Cursor] = {
-    focus match {
-      case _: Option[_] => assert(false, s"Unexpected option")
-      case _: List[_]   => assert(false, s"Unexpected list")
-      case _ =>
-    }
-
-    (focus, field) match {
-      case (c: Currency, "code") => mkCursor(c.code).rightIor
-      case (c: Currency, "exchangeRate") => mkCursor(c.exchangeRate).rightIor
-      case _ => List(mkError(s"No field '$field'")).leftIor
-    }
+  def field(field: String, args: Map[String, Any]): Result[Cursor] = (focus, field) match {
+    case (c: Currency, "code") => mkCursor(c.code).rightIor
+    case (c: Currency, "exchangeRate") => mkCursor(c.exchangeRate).rightIor
+    case _ => List(mkError(s"No field '$field'")).leftIor
   }
 }
 
@@ -161,23 +153,13 @@ case class CountryCursor(focus: Any) extends DataTypeCursor {
   def mkCursor(focus: Any): Cursor = CountryCursor(focus)
 
   def hasField(field: String): Boolean = (focus, field) match {
-    //case (_: Country, "code" | "name" | "currency") => true
     case (_: Country, "code" | "name") => true
     case _ => false
   }
 
-  def field(field: String, args: Map[String, Any]): Result[Cursor] = {
-    focus match {
-      case _: Option[_] => assert(false, s"Unexpected option")
-      case _: List[_]   => assert(false, s"Unexpected list")
-      case _ =>
-    }
-
-    (focus, field) match {
-      case (c: Country, "code") => mkCursor(c.code).rightIor
-      case (c: Country, "name") => mkCursor(c.name).rightIor
-      case (_: Country, "currency") => ???
-      case _ => List(mkError(s"No field '$field'")).leftIor
-    }
+  def field(field: String, args: Map[String, Any]): Result[Cursor] = (focus, field) match {
+    case (c: Country, "code") => mkCursor(c.code).rightIor
+    case (c: Country, "name") => mkCursor(c.name).rightIor
+    case _ => List(mkError(s"No field '$field'")).leftIor
   }
 }
