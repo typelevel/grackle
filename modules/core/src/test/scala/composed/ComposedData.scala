@@ -8,7 +8,7 @@ import cats.implicits._
 
 import edu.gemini.grackle._
 import Query._, Binding._
-import QueryInterpreter.{ mkError, ProtoJson }
+import QueryInterpreter.mkError
 
 object CountryCurrencyQueryInterpreter extends ComposedQueryInterpreter[Id] {
   import CountryData._

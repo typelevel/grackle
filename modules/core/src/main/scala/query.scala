@@ -8,9 +8,84 @@ import cats.implicits._
 import io.circe.Json
 import io.circe.literal.JsonStringContext
 
+sealed trait Query {
+  import Query._
+
+  def ~(query: Query): Query = (this, query) match {
+    case (Group(hd), Group(tl)) => Group(hd ++ tl)
+    case (hd, Group(tl)) => Group(hd :: tl)
+    case (Group(hd), tl) => Group(hd :+ tl)
+    case (hd, tl) => Group(List(hd, tl))
+  }
+}
+
+object Query {
+  case class Select(name: String, args: List[Binding], child: Query = Empty) extends Query
+  case class Group(queries: List[Query]) extends Query
+  case object Empty extends Query
+
+  sealed trait Binding {
+    def name: String
+    type T
+    val value: T
+  }
+  object Binding {
+    case class StringBinding(name: String, value: String) extends Binding { type T = String }
+
+    def toMap(bindings: List[Binding]): Map[String, Any] =
+      bindings.map(b => (b.name, b.value)).toMap
+  }
+}
+
+sealed trait ProtoJson {
+  import ProtoJson._
+  import QueryInterpreter.mkError
+
+  def run[F[_]: Monad](mapping: ComponentMapping[F]): F[Result[Json]] =
+    this match {
+      case PureJson(value) => value.rightIor.pure[F]
+
+      case DeferredJson(cursor, tpe, fieldName, query) =>
+        mapping.subobject(tpe, fieldName) match {
+          case Some(mapping.Subobject(submapping, subquery)) =>
+            submapping.interpreter.runRootValue(subquery(cursor, query)).flatMap(_.flatTraverse(_.run(mapping)))
+          case _ => List(mkError(s"failed: $tpe $fieldName $query")).leftIor.pure[F]
+        }
+
+      case ProtoObject(fields) =>
+        (fields.traverse { case (name, value) => value.run(mapping).nested.map(v => (name, v)) }).map(Json.fromFields).value
+
+      case ProtoArray(elems) =>
+        elems.traverse(value => value.run(mapping).nested).map(Json.fromValues).value
+    }
+}
+
+object ProtoJson {
+  case class PureJson(value: Json) extends ProtoJson
+  case class DeferredJson(cursor: Cursor, tpe: Type, fieldName: String, query: Query) extends ProtoJson
+  case class ProtoObject(fields: List[(String, ProtoJson)]) extends ProtoJson
+  case class ProtoArray(elems: List[ProtoJson]) extends ProtoJson
+
+  def deferred(cursor: Cursor, tpe: Type, fieldName: String, query: Query): ProtoJson = DeferredJson(cursor, tpe, fieldName, query)
+
+  def fromJson(value: Json): ProtoJson = PureJson(value)
+
+  def fromFields(fields: List[(String, ProtoJson)]): ProtoJson =
+    if(fields.forall(_._2.isInstanceOf[PureJson]))
+      PureJson(Json.fromFields(fields.map { case (name, c) => (name, c.asInstanceOf[PureJson].value) }))
+    else
+      ProtoObject(fields)
+
+  def fromValues(elems: List[ProtoJson]): ProtoJson =
+    if(elems.forall(_.isInstanceOf[PureJson]))
+      PureJson(Json.fromValues(elems.map(_.asInstanceOf[PureJson].value)))
+    else
+      ProtoArray(elems)
+}
+
 trait QueryInterpreter[F[_]] {
   import Query._
-  import QueryInterpreter.{ mkError, ProtoJson }
+  import QueryInterpreter.mkError
   import ComponentMapping.NoMapping
 
   val schema: Schema
@@ -105,78 +180,58 @@ object QueryInterpreter {
 
     Json.fromFields(("message", Json.fromString(message)) :: locationsField ++ pathField)
   }
-
-  sealed trait ProtoJson {
-    import ProtoJson._
-
-    def run[F[_]: Monad](mapping: ComponentMapping[F]): F[Result[Json]] =
-      this match {
-        case PureJson(value) => value.rightIor.pure[F]
-
-        case DeferredJson(cursor, tpe, fieldName, query) =>
-          mapping.subobject(tpe, fieldName) match {
-            case Some(mapping.Subobject(submapping, subquery)) =>
-              submapping.interpreter.runRootValue(subquery(cursor, query)).flatMap(_.flatTraverse(_.run(mapping)))
-            case _ => List(mkError(s"failed: $tpe $fieldName $query")).leftIor.pure[F]
-          }
-
-        case ProtoObject(fields) =>
-          (fields.traverse { case (name, value) => value.run(mapping).nested.map(v => (name, v)) }).map(Json.fromFields).value
-
-        case ProtoArray(elems) =>
-          elems.traverse(value => value.run(mapping).nested).map(Json.fromValues).value
-      }
-  }
-
-  object ProtoJson {
-    case class PureJson(value: Json) extends ProtoJson
-    case class DeferredJson(cursor: Cursor, tpe: Type, fieldName: String, query: Query) extends ProtoJson
-    case class ProtoObject(fields: List[(String, ProtoJson)]) extends ProtoJson
-    case class ProtoArray(elems: List[ProtoJson]) extends ProtoJson
-
-    def deferred(cursor: Cursor, tpe: Type, fieldName: String, query: Query): ProtoJson = DeferredJson(cursor, tpe, fieldName, query)
-
-    def fromJson(value: Json): ProtoJson = PureJson(value)
-
-    def fromFields(fields: List[(String, ProtoJson)]): ProtoJson =
-      if(fields.forall(_._2.isInstanceOf[PureJson]))
-        PureJson(Json.fromFields(fields.map { case (name, c) => (name, c.asInstanceOf[PureJson].value) }))
-      else
-        ProtoObject(fields)
-
-    def fromValues(elems: List[ProtoJson]): ProtoJson =
-      if(elems.forall(_.isInstanceOf[PureJson]))
-        PureJson(Json.fromValues(elems.map(_.asInstanceOf[PureJson].value)))
-      else
-        ProtoArray(elems)
-  }
 }
 
-sealed trait Query {
+trait ComponentMapping[F[_]] {
+  val objectMappings: List[ObjectMapping]
+
+  def subobject(tpe: Type, fieldName: String): Option[Subobject] =
+    objectMappings.find(_.tpe =:= tpe) match {
+      case Some(om) =>
+        om.fieldMappings.find(_._1 == fieldName) match {
+          case Some((_, so: Subobject)) => Some(so)
+          case _ => None
+        }
+      case None => None
+    }
+
+  sealed trait FieldMapping
+
+  case class ObjectMapping(
+    tpe: Type,
+    interpreter: QueryInterpreter[F],
+    fieldMappings: List[(String, FieldMapping)]
+  )
+
+  val defaultJoin: (Cursor, Query) => Query = (_, subquery: Query) => subquery
+
+  case class Subobject(
+    submapping: ObjectMapping,
+    subquery: (Cursor, Query) => Query = defaultJoin
+  ) extends FieldMapping
+}
+
+object ComponentMapping {
+  def NoMapping[F[_]]: ComponentMapping[F] =
+    new ComponentMapping[F] {
+      val objectMappings = Nil
+    }
+}
+
+trait ComposedQueryInterpreter[F[_]] extends QueryInterpreter[F] with ComponentMapping[F] {
   import Query._
+  import QueryInterpreter.mkError
 
-  def ~(query: Query): Query = (this, query) match {
-    case (Group(hd), Group(tl)) => Group(hd ++ tl)
-    case (hd, Group(tl)) => Group(hd :: tl)
-    case (Group(hd), tl) => Group(hd :+ tl)
-    case (hd, tl) => Group(List(hd, tl))
-  }
-}
+  def run(query: Query): F[Json] = run(query, this)
 
-object Query {
-  case class Select(name: String, args: List[Binding], child: Query = Empty) extends Query
-  case class Group(queries: List[Query]) extends Query
-  case object Empty extends Query
-
-  sealed trait Binding {
-    def name: String
-    type T
-    val value: T
-  }
-  object Binding {
-    case class StringBinding(name: String, value: String) extends Binding { type T = String }
-
-    def toMap(bindings: List[Binding]): Map[String, Any] =
-      bindings.map(b => (b.name, b.value)).toMap
+  def runRootValue(query: Query): F[Result[ProtoJson]] = {
+    query match {
+      case Select(fieldName, _, _) =>
+        subobject(schema.queryType, fieldName) match {
+          case Some(Subobject(submapping, _)) => submapping.interpreter.runRootValue(query)
+          case None => List(mkError("Bad query")).leftIor.pure[F]
+        }
+      case _ => List(mkError("Bad query")).leftIor.pure[F]
+    }
   }
 }
