@@ -13,17 +13,16 @@ trait QueryInterpreter[F[_]] {
   import QueryInterpreter.{ mkError, ProtoJson }
 
   val schema: Schema
-  val composedMapping: Mapping[F]
 
   implicit val F: Monad[F]
 
-  def run(query: Query): F[Json] =
-    runRoot(query).map(QueryInterpreter.mkResponse)
+  def run(query: Query, mapping: Mapping[F] = NoMapping[F]): F[Json] =
+    runRoot(query, mapping).map(QueryInterpreter.mkResponse)
 
-  def runRoot(query: Query): F[Result[Json]] =
+  def runRoot(query: Query, mapping: Mapping[F] = NoMapping[F]): F[Result[Json]] =
     query match {
       case Select(fieldName, _, _) =>
-        runRootValue(query).flatMap(_.flatTraverse(_.run(composedMapping))).nested.map(value => Json.obj((fieldName, value))).value
+        runRootValue(query).flatMap(_.flatTraverse(_.run(mapping))).nested.map(value => Json.obj((fieldName, value))).value
       case _ =>
         List(mkError(s"Bad query: $query")).leftIor.pure[F]
     }
@@ -38,16 +37,8 @@ trait QueryInterpreter[F[_]] {
         )
 
       case (Select(fieldName, bindings, child), tpe) =>
-        if (!cursor.hasField(fieldName)) {
-          composedMapping.objectMappings.find(_.tpe == tpe) match {
-            case Some(om) => om.fieldMappings.find(_._1 == fieldName) match {
-              case Some((_, so: composedMapping.Subobject[t])) =>
-                  List((fieldName, ProtoJson.deferred(so.subquery(cursor.focus.asInstanceOf[t], child), so.submapping.tpe))).rightIor.pure[F]
-                case _ => List(mkError(s"failed: $query $tpe")).leftIor.pure[F]
-              }
-            case _ => List(mkError(s"failed: $query $tpe")).leftIor.pure[F]
-          }
-        } else
+        if (!cursor.hasField(fieldName)) List((fieldName, ProtoJson.deferred(cursor, tpe, fieldName, child))).rightIor.pure[F]
+        else
           cursor.field(fieldName, Binding.toMap(bindings)).flatTraverse(c =>
             runValue(child, tpe.field(fieldName), c).nested.map(value => List((fieldName, value))).value
           )
@@ -121,10 +112,14 @@ object QueryInterpreter {
       this match {
         case PureJson(value) => value.rightIor.pure[F]
 
-        case DeferredJson(query, tpe) =>
-          mapping.objectMappings.find(_.tpe == tpe) match {
-            case Some(om) =>
-              om.interpreter.runRootValue(query).flatMap(_.flatTraverse(_.run(mapping)))
+        case DeferredJson(cursor, tpe, fieldName, query) =>
+          import mapping._
+          objectMappings.find(_.tpe == tpe) match {
+            case Some(om) => om.fieldMappings.find(_._1 == fieldName) match {
+              case Some((_, Subobject(submapping, subquery))) =>
+                submapping.interpreter.runRootValue(subquery(cursor, query)).flatMap(_.flatTraverse(_.run(mapping)))
+              case _ => List(mkError(s"failed: $query $tpe")).leftIor.pure[F]
+            }
             case _ => List(mkError(s"failed: $query $tpe")).leftIor.pure[F]
           }
 
@@ -138,11 +133,11 @@ object QueryInterpreter {
 
   object ProtoJson {
     case class PureJson(value: Json) extends ProtoJson
-    case class DeferredJson(query: Query, tpe: Type) extends ProtoJson
+    case class DeferredJson(cursor: Cursor, tpe: Type, fieldName: String, query: Query) extends ProtoJson
     case class ProtoObject(fields: List[(String, ProtoJson)]) extends ProtoJson
     case class ProtoArray(elems: List[ProtoJson]) extends ProtoJson
 
-    def deferred(query: Query, tpe: Type): ProtoJson = DeferredJson(query, tpe)
+    def deferred(cursor: Cursor, tpe: Type, fieldName: String, query: Query): ProtoJson = DeferredJson(cursor, tpe, fieldName, query)
 
     def fromJson(value: Json): ProtoJson = PureJson(value)
 

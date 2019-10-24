@@ -5,6 +5,7 @@ package composed
 
 import cats.Id
 import cats.implicits._
+import io.circe.Json
 
 import edu.gemini.grackle._
 import Query._, Binding._
@@ -25,7 +26,7 @@ object ComposedMapping extends Mapping[Id] {
     ObjectMapping(
       tpe = CountryType,
       interpreter = CountryQueryInterpreter,
-      fieldMappings = 
+      fieldMappings =
         List(
           "currency" -> Subobject(currencyMapping, countryCurrencyJoin)
         )
@@ -42,8 +43,11 @@ object ComposedMapping extends Mapping[Id] {
         )
     )
 
-  def countryCurrencyJoin(c: Country, q: Query): Query =
-    Select("currency", List(StringBinding("code", c.currencyCode)), q)
+  def countryCurrencyJoin(c: Cursor, q: Query): Query =
+    c.focus match {
+      case c: Country =>
+        Select("currency", List(StringBinding("code", c.currencyCode)), q)
+    }
 
   val objectMappings = List(queryMapping, countryMapping, currencyMapping)
 }
@@ -54,7 +58,8 @@ object ComposedQueryInterpreter extends QueryInterpreter[Id] {
   import ComposedMapping._
 
   val schema = ComposedSchema
-  val composedMapping = ComposedMapping
+
+  def run(query: Query): Json = run(query, ComposedMapping)
 
   def runRootValue(query: Query): Result[ProtoJson] = {
     query match {
@@ -68,25 +73,12 @@ object ComposedQueryInterpreter extends QueryInterpreter[Id] {
   }
 }
 
-/*
-case class ComposedCursor() extends Cursor {
-  def isLeaf: Boolean = ???
-  def asLeaf: Result[Json] = ???
-  def isList: Boolean = ???
-  def asList: Result[List[Cursor]] = ???
-  def isNullable: Boolean = ???
-  def asNullable: Result[Option[Cursor]] = ???
-  def hasField(field: String): Boolean = ???
-  def field(field: String, args: Map[String, Any]): Result[Cursor] = ???
-}
-*/
-
 object CurrencyData {
   case class Currency(
     code: String,
     exchangeRate: Double
   )
-  
+
   val GBP = Currency("GBP", 1.25)
 
   val currencies = List(GBP)
@@ -96,7 +88,6 @@ object CurrencyQueryInterpreter extends QueryInterpreter[Id] {
   implicit val F = cats.catsInstancesForId
 
   val schema = ComposedSchema
-  val composedMapping = ComposedMapping
 
   import schema._
   import CurrencyData._
@@ -141,7 +132,7 @@ object CountryData {
     name: String,
     currencyCode: String
   )
-  
+
   val GBR = Country("GBR", "United Kingdom", "GBP")
 
   val countries = List(GBR)
@@ -151,7 +142,6 @@ object CountryQueryInterpreter extends QueryInterpreter[Id] {
   implicit val F = cats.catsInstancesForId
 
   val schema = ComposedSchema
-  val composedMapping = ComposedMapping
 
   import schema._
   import CountryData._

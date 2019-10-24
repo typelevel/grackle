@@ -14,11 +14,11 @@ trait Mapping[F[_]] {
     fieldMappings: List[(String, FieldMapping)]
   )
 
-  val defaultJoin: (Any, Query) => Query = (_, subquery: Query) => subquery
+  val defaultJoin: (Cursor, Query) => Query = (_, subquery: Query) => subquery
 
-  case class Subobject[T](
+  case class Subobject(
     submapping: ObjectMapping,
-    subquery: (T, Query) => Query = defaultJoin
+    subquery: (Cursor, Query) => Query = defaultJoin
   ) extends FieldMapping
 }
 

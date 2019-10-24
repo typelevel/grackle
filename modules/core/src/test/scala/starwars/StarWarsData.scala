@@ -99,7 +99,6 @@ object StarWarsQueryInterpreter extends QueryInterpreter[Id] {
   implicit val F = cats.catsInstancesForId
 
   val schema = StarWarsSchema
-  val composedMapping = NoMapping[Id]
 
   import schema._
   import StarWarsData._
