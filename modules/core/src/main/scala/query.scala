@@ -41,22 +41,22 @@ sealed trait ProtoJson {
   import ProtoJson._
   import QueryInterpreter.mkError
 
-  def run[F[_]: Monad](mapping: ComponentMapping[F]): F[Result[Json]] =
+  def complete[F[_]: Monad](mapping: ComponentMapping[F]): F[Result[Json]] =
     this match {
       case PureJson(value) => value.rightIor.pure[F]
 
       case DeferredJson(cursor, tpe, fieldName, query) =>
         mapping.subobject(tpe, fieldName) match {
           case Some(mapping.Subobject(submapping, subquery)) =>
-            submapping.interpreter.runRootValue(subquery(cursor, query)).flatMap(_.flatTraverse(_.run(mapping)))
+            submapping.interpreter.runRootValue(subquery(cursor, query)).flatMap(_.flatTraverse(_.complete(mapping)))
           case _ => List(mkError(s"failed: $tpe $fieldName $query")).leftIor.pure[F]
         }
 
       case ProtoObject(fields) =>
-        (fields.traverse { case (name, value) => value.run(mapping).nested.map(v => (name, v)) }).map(Json.fromFields).value
+        (fields.traverse { case (name, value) => value.complete(mapping).nested.map(v => (name, v)) }).map(Json.fromFields).value
 
       case ProtoArray(elems) =>
-        elems.traverse(value => value.run(mapping).nested).map(Json.fromValues).value
+        elems.traverse(value => value.complete(mapping).nested).map(Json.fromValues).value
     }
 }
 
@@ -96,7 +96,7 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
   def runRoot(query: Query, mapping: ComponentMapping[F] = NoMapping): F[Result[Json]] =
     query match {
       case Select(fieldName, _, _) =>
-        runRootValue(query).flatMap(_.flatTraverse(_.run(mapping))).nested.map(value => Json.obj((fieldName, value))).value
+        runRootValue(query).flatMap(_.flatTraverse(_.complete(mapping))).nested.map(value => Json.obj((fieldName, value))).value
       case _ =>
         List(mkError(s"Bad query: $query")).leftIor.pure[F]
     }
