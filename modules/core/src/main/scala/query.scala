@@ -48,7 +48,7 @@ sealed trait ProtoJson {
       case DeferredJson(cursor, tpe, fieldName, query) =>
         mapping.subobject(tpe, fieldName) match {
           case Some(mapping.Subobject(submapping, subquery)) =>
-            submapping.interpreter.runRootValue(subquery(cursor, query)).flatMap(_.flatTraverse(_.complete(mapping)))
+            subquery(cursor, query).flatTraverse(submapping.interpreter.runRootValue).flatMap(_.flatTraverse(_.complete(mapping)))
           case _ => List(mkError(s"failed: $tpe $fieldName $query")).leftIor.pure[F]
         }
 
@@ -201,11 +201,11 @@ trait ComponentMapping[F[_]] {
     fieldMappings: List[(String, FieldMapping)]
   )
 
-  val defaultJoin: (Cursor, Query) => Query = (_, subquery: Query) => subquery
+  val defaultJoin: (Cursor, Query) => Result[Query] = (_, subquery: Query) => subquery.rightIor
 
   case class Subobject(
     submapping: ObjectMapping,
-    subquery: (Cursor, Query) => Query = defaultJoin
+    subquery: (Cursor, Query) => Result[Query] = defaultJoin
   ) extends FieldMapping
 }
 

@@ -44,10 +44,12 @@ object CountryCurrencyQueryInterpreter extends ComposedQueryInterpreter[Id] {
         )
     )
 
-  def countryCurrencyJoin(c: Cursor, q: Query): Query =
+  def countryCurrencyJoin(c: Cursor, q: Query): Result[Query] =
     c.focus match {
       case c: Country =>
-        Select("currency", List(StringBinding("code", c.currencyCode)), q)
+        Select("currency", List(StringBinding("code", c.currencyCode)), q).rightIor
+      case _ =>
+        List(mkError("Bad query")).leftIor
     }
 
   val objectMappings = List(queryMapping, countryMapping, currencyMapping)
@@ -74,7 +76,8 @@ object CurrencyQueryInterpreter extends QueryInterpreter[Id] {
     query match {
       case Select("currency", List(StringBinding("code", code)), child) =>
         runValue(child, NullableType(CurrencyType), CurrencyCursor(currencies.find(_.code == code)))
-      case _ => List(mkError("Bad query")).leftIor
+      case _ =>
+        List(mkError("Bad query")).leftIor
     }
   }
 }
@@ -118,7 +121,8 @@ object CountryQueryInterpreter extends QueryInterpreter[Id] {
     query match {
       case Select("country", List(StringBinding("code", code)), child) =>
         runValue(child, NullableType(CountryType), CountryCursor(countries.find(_.code == code)))
-      case _ => List(mkError("Bad query")).leftIor
+      case _ =>
+        List(mkError("Bad query")).leftIor
     }
   }
 }
