@@ -4,6 +4,7 @@
 package edu.gemini.grackle
 
 import cats.Monad
+import cats.data.IorT
 import cats.implicits._
 import io.circe.Json
 import io.circe.literal.JsonStringContext
@@ -48,7 +49,12 @@ sealed trait ProtoJson {
       case DeferredJson(cursor, tpe, fieldName, query) =>
         mapping.subobject(tpe, fieldName) match {
           case Some(mapping.Subobject(submapping, subquery)) =>
-            subquery(cursor, query).flatTraverse(submapping.interpreter.runRootValue).flatMap(_.flatTraverse(_.complete(mapping)))
+            (for {
+              query  <- IorT(subquery(cursor, query).pure[F])
+              pvalue <- IorT(submapping.interpreter.runRootValue(query))
+              value  <- IorT(pvalue.complete(mapping))
+            } yield value).value
+
           case _ => List(mkError(s"failed: $tpe $fieldName $query")).leftIor.pure[F]
         }
 
@@ -66,7 +72,8 @@ object ProtoJson {
   case class ProtoObject(fields: List[(String, ProtoJson)]) extends ProtoJson
   case class ProtoArray(elems: List[ProtoJson]) extends ProtoJson
 
-  def deferred(cursor: Cursor, tpe: Type, fieldName: String, query: Query): ProtoJson = DeferredJson(cursor, tpe, fieldName, query)
+  def deferred(cursor: Cursor, tpe: Type, fieldName: String, query: Query): ProtoJson =
+    DeferredJson(cursor, tpe, fieldName, query)
 
   def fromJson(value: Json): ProtoJson = PureJson(value)
 
@@ -96,7 +103,11 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
   def runRoot(query: Query, mapping: ComponentMapping[F] = NoMapping): F[Result[Json]] =
     query match {
       case Select(fieldName, _, _) =>
-        runRootValue(query).flatMap(_.flatTraverse(_.complete(mapping))).nested.map(value => Json.obj((fieldName, value))).value
+        (for {
+          pvalue <- IorT(runRootValue(query))
+          value  <- IorT(pvalue.complete(mapping))
+        } yield Json.obj((fieldName, value))).value
+
       case _ =>
         List(mkError(s"Bad query: $query")).leftIor.pure[F]
     }
@@ -106,16 +117,21 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
   def runFields(query: Query, tpe: Type, cursor: Cursor): F[Result[List[(String, ProtoJson)]]] = {
     (query, tpe) match {
       case (sel@Select(fieldName, _, _), NullableType(tpe)) =>
-        cursor.asNullable.flatTraverse(oc =>
-          oc.map(c => runFields(sel, tpe, c)).getOrElse(List((fieldName, ProtoJson.fromJson(Json.Null))).rightIor.pure[F])
-        )
+        cursor.asNullable.sequence.map { rc =>
+          (for {
+            c      <- IorT(rc.pure[F])
+            fields <- IorT(runFields(sel, tpe, c))
+          } yield fields).value
+        }.getOrElse(List((fieldName, ProtoJson.fromJson(Json.Null))).rightIor.pure[F])
 
       case (Select(fieldName, bindings, child), tpe) =>
-        if (!cursor.hasField(fieldName)) List((fieldName, ProtoJson.deferred(cursor, tpe, fieldName, child))).rightIor.pure[F]
+        if (!cursor.hasField(fieldName))
+          List((fieldName, ProtoJson.deferred(cursor, tpe, fieldName, child))).rightIor.pure[F]
         else
-          cursor.field(fieldName, Binding.toMap(bindings)).flatTraverse(c =>
-            runValue(child, tpe.field(fieldName), c).nested.map(value => List((fieldName, value))).value
-          )
+          (for {
+            c     <- IorT(cursor.field(fieldName, Binding.toMap(bindings)).pure[F])
+            value <- IorT(runValue(child, tpe.field(fieldName), c))
+          } yield List((fieldName, value))).value
 
       case (Group(siblings), _) =>
         siblings.flatTraverse(query => runFields(query, tpe, cursor).nested).value
@@ -128,9 +144,12 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
   def runValue(query: Query, tpe: Type, cursor: Cursor): F[Result[ProtoJson]] = {
     tpe match {
       case NullableType(tpe) =>
-        cursor.asNullable.flatTraverse(oc =>
-          oc.map(c => runValue(query, tpe, c)).getOrElse(ProtoJson.fromJson(Json.Null).rightIor.pure[F])
-        )
+        cursor.asNullable.sequence.map { rc =>
+          (for {
+            c     <- IorT(rc.pure[F])
+            value <- IorT(runValue(query, tpe, c))
+          } yield value).value
+        }.getOrElse(ProtoJson.fromJson(Json.Null).rightIor.pure[F])
 
       case ListType(tpe) =>
         cursor.asList.flatTraverse(lc =>
