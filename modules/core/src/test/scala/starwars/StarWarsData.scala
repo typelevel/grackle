@@ -118,20 +118,20 @@ case class StarWarsCursor(focus: Any) extends DataTypeCursor {
 
   def mkCursor(focus: Any): Cursor = StarWarsCursor(focus)
 
-  def hasField(field: String): Boolean = (focus, field) match {
+  def hasField(fieldName: String): Boolean = (focus, fieldName) match {
     case (_: Character, "id" | "name" | "appearsIn" | "friends") => true
     case (_: Human, "homePlanet") => true
     case (_: Droid, "primaryFunction") => true
     case _ => false
   }
 
-  def field(field: String, args: Map[String, Any]): Result[Cursor] = (focus, field) match {
+  def field(fieldName: String, args: Map[String, Any]): Result[Cursor] = (focus, fieldName) match {
     case (c: Character, "id") => mkCursor(c.id).rightIor
     case (c: Character, "name") => mkCursor(c.name).rightIor
     case (c: Character, "appearsIn") => mkCursor(c.appearsIn).rightIor
     case (c: Character, "friends") => mkCursor(c.friends).rightIor
     case (h: Human, "homePlanet") => mkCursor(h.homePlanet).rightIor
     case (d: Droid, "primaryFunction") => mkCursor(d.primaryFunction).rightIor
-    case _ => List(mkError(s"No field '$field'")).leftIor
+    case _ => List(mkError(s"No field '$fieldName'")).leftIor
   }
 }

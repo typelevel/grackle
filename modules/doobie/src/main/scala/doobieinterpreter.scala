@@ -85,14 +85,25 @@ case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) exte
       case _ => List(mkError("Not nullable")).leftIor
     }
 
-  def hasField(field: String): Boolean =
-    tpe.field(field) != NoType
-
-  def field(field: String, args: Map[String, Any]): Result[Cursor] = {
-    val fieldTpe = tpe.dealias.field(field)
+  def hasField(fieldName: String): Boolean = {
+    val fieldTpe = tpe.field(fieldName)
     if (fieldTpe.isLeaf)
-      asTable.map(table => copy(tpe = fieldTpe, focus = mapped.select(table.head, tpe, field)))
+      mapped.hasField(tpe, fieldName)
+    else
+      mapped.hasSubobject(fieldTpe.underlyingObject)
+  }
+
+  def field(fieldName: String, args: Map[String, Any]): Result[Cursor] = {
+    val fieldTpe = tpe.field(fieldName)
+    if (fieldTpe.isLeaf)
+      asTable.map(table => copy(tpe = fieldTpe, focus = mapped.selectField(table.head, tpe, fieldName)))
     else
       copy(tpe = fieldTpe).rightIor
   }
+
+  def hasAttribute(attributeName: String): Boolean =
+    mapped.hasKey(tpe, attributeName)
+
+  def attribute(attributeName: String): Result[Any] =
+    asTable.map(table => mapped.selectKey(table.head, tpe, attributeName))
 }

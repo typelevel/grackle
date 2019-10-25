@@ -19,12 +19,12 @@ trait DoobieMapping {
 
   def mapQuery(q: Query, tpe: Type, predicates: List[Fragment]): MappedQuery = {
     def loop(q: Query, tpe: Type, acc: List[(Type, FieldMapping)]): List[(Type, FieldMapping)] = q match {
-      case Select(name, _, q) =>
+      case Select(fieldName, _, q) =>
         val obj = tpe.underlyingObject
         (for {
           om      <- objectMappings.find(_.tpe =:= obj)
-          (_, cr) <- om.fieldMappings.find(_._1 == name)
-        } yield loop(q, obj.underlyingField(name), (obj, cr) :: acc)).getOrElse(acc)
+          (_, cr) <- om.fieldMappings.find(_._1 == fieldName)
+        } yield loop(q, obj.underlyingField(fieldName), (obj, cr) :: acc)).getOrElse(acc)
       case Group(queries) =>
         queries.foldLeft(acc) {
           case (acc, sibling) => loop(sibling, tpe, acc)
@@ -99,11 +99,35 @@ object DoobieMapping {
     def select(row: Row, col: ColumnRef): Any =
       row(index(col))
 
-    def select(row: Row, tpe: Type, field: String): Any = {
+    def hasField(tpe: Type, fieldName: String): Boolean = {
       val obj = tpe.dealias
       val om = mapping.objectMappings.find(_.tpe =:= obj).get
-      val Some((_, col: ColumnRef)) = om.fieldMappings.find(_._1 == field)
+      om.fieldMappings.exists(_._1 == fieldName)
+    }
+
+    def selectField(row: Row, tpe: Type, fieldName: String): Any = {
+      val obj = tpe.dealias
+      val om = mapping.objectMappings.find(_.tpe =:= obj).get
+      val Some((_, col: ColumnRef)) = om.fieldMappings.find(_._1 == fieldName)
       select(row, col)
+    }
+
+    def hasKey(tpe: Type, keyName: String): Boolean = {
+      val obj = tpe.dealias
+      val om = mapping.objectMappings.find(_.tpe =:= obj).get
+      om.key.exists(_.column == keyName)
+    }
+
+    def selectKey(row: Row, tpe: Type, keyName: String): Any = {
+      val obj = tpe.dealias
+      val om = mapping.objectMappings.find(_.tpe =:= obj).get
+      val Some(col) = om.key.find(_.column == keyName)
+      select(row, col)
+    }
+
+    def hasSubobject(tpe: Type): Boolean = {
+      val obj = tpe.dealias
+      mapping.objectMappings.exists(_.tpe =:= obj)
     }
 
     def group(table: Table, cols: List[ColumnRef]): List[Table] =

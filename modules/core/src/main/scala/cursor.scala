@@ -14,8 +14,10 @@ trait Cursor {
   def asList: Result[List[Cursor]]
   def isNullable: Boolean
   def asNullable: Result[Option[Cursor]]
-  def hasField(field: String): Boolean
-  def field(field: String, args: Map[String, Any]): Result[Cursor]
+  def hasField(fieldName: String): Boolean
+  def field(fieldName: String, args: Map[String, Any]): Result[Cursor]
+  def hasAttribute(attributeName: String): Boolean
+  def attribute(attributeName: String): Result[Any]
 }
 
 trait DataTypeCursor extends Cursor {
@@ -62,4 +64,9 @@ trait DataTypeCursor extends Cursor {
     case o: Option[_] => o.map(mkCursor).rightIor
     case _ => List(mkError("Not nullable")).leftIor
   }
+
+  def hasAttribute(attributeName: String): Boolean = false
+
+  def attribute(attributeName: String): Result[Any] =
+    List(mkError(s"No attribute $attributeName")).leftIor
 }
