@@ -167,7 +167,6 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
         runFields(query, tpe, cursor).nested.map(ProtoJson.fromFields).value
 
       case _ =>
-        Thread.dumpStack
         List(mkError(s"Unsupported type $tpe")).leftIor.pure[F]
     }
   }
