@@ -64,10 +64,7 @@ sealed trait Type {
     case _ => NoType
   }
 
-  def shortString: String = this match {
-    case n: NamedType => n.name
-    case _ => toString
-  }
+  def shortString: String = toString
 
   def isLeaf: Boolean = this match {
     case NullableType(tpe) => tpe.isLeaf
@@ -79,10 +76,13 @@ sealed trait Type {
 
 sealed trait NamedType extends Type {
   def name: String
+  override def shortString: String = name
 }
 
 case object NoType extends Type
-case class TypeRef(schema: Schema, ref: String) extends Type
+case class TypeRef(schema: Schema, ref: String) extends Type {
+  override def toString: String = s"@$ref"
+}
 
 /**
  * Represents scalar types such as Int, String, and Boolean. Scalars cannot have fields.
@@ -214,6 +214,7 @@ case class InputObjectType(
 case class ListType(
   ofType: Type
 ) extends Type {
+  override def shortString: String = s"[${ofType.shortString}]"
   override def toString: String = s"[$ofType]"
 }
 
@@ -226,6 +227,7 @@ case class ListType(
 case class NullableType(
   ofType: Type
 ) extends Type {
+  override def shortString: String = s"${ofType.shortString}?"
   override def toString: String = s"$ofType?"
 }
 

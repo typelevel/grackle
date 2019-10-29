@@ -18,20 +18,37 @@ sealed trait Query {
     case (Group(hd), tl) => Group(hd :+ tl)
     case (hd, tl) => Group(List(hd, tl))
   }
+
+  def render: String
 }
 
 object Query {
-  case class Select(name: String, args: List[Binding], child: Query = Empty) extends Query
-  case class Group(queries: List[Query]) extends Query
-  case object Empty extends Query
+  case class Select(name: String, args: List[Binding], child: Query = Empty) extends Query {
+    def render = {
+      val rargs = if(args.isEmpty) "" else s"(${args.map(_.render).mkString(", ")})"
+      val rchild = if(child == Empty) "" else s" { ${child.render} }"
+      s"$name$rargs$rchild"
+    }
+  }
+  case class Group(queries: List[Query]) extends Query {
+    def render = queries.map(_.render).mkString(", ")
+  }
+  case object Empty extends Query {
+    def render = ""
+  }
 
   sealed trait Binding {
     def name: String
     type T
     val value: T
+
+    def render: String
   }
   object Binding {
-    case class StringBinding(name: String, value: String) extends Binding { type T = String }
+    case class StringBinding(name: String, value: String) extends Binding {
+      type T = String
+      def render = s"""$name: "$value""""
+    }
 
     def toMap(bindings: List[Binding]): Map[String, Any] =
       bindings.map(b => (b.name, b.value)).toMap
@@ -55,7 +72,7 @@ sealed trait ProtoJson {
               value  <- IorT(pvalue.complete(mapping))
             } yield value).value
 
-          case _ => List(mkError(s"failed: $tpe $fieldName $query")).leftIor.pure[F]
+          case _ => List(mkError(s"failed: ${tpe.shortString} $fieldName { ${query.render} }")).leftIor.pure[F]
         }
 
       case ProtoObject(fields) =>
@@ -137,7 +154,7 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
         siblings.flatTraverse(query => runFields(query, tpe, cursor).nested).value
 
       case _ =>
-        List(mkError(s"failed: $query $tpe")).leftIor.pure[F]
+        List(mkError(s"failed: { ${query.render} } ${tpe.shortString}")).leftIor.pure[F]
     }
   }
 
