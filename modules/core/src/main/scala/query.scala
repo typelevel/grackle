@@ -3,8 +3,11 @@
 
 package edu.gemini.grackle
 
+import scala.annotation.tailrec
+import scala.jdk.CollectionConverters._
+
 import cats.Monad
-import cats.data.IorT
+import cats.data.{ Chain, Ior, IorT }
 import cats.implicits._
 import io.circe.Json
 import io.circe.literal.JsonStringContext
@@ -84,10 +87,98 @@ sealed trait ProtoJson {
 }
 
 object ProtoJson {
+  import scala.collection.mutable
+
+  import QueryInterpreter.mkError
+
   case class PureJson(value: Json) extends ProtoJson
   case class DeferredJson(cursor: Cursor, tpe: Type, fieldName: String, query: Query) extends ProtoJson
   case class ProtoObject(fields: List[(String, ProtoJson)]) extends ProtoJson
   case class ProtoArray(elems: List[ProtoJson]) extends ProtoJson
+
+  def containsDeferred(pj: ProtoJson): Boolean =
+    pj match {
+      case _: PureJson => true
+      case _ => false
+    }
+
+  def gatherDeferred(pj: ProtoJson): List[DeferredJson] = {
+    @tailrec
+    def loop(pending: Chain[ProtoJson], acc: List[DeferredJson]): List[DeferredJson] =
+      pending.uncons match {
+        case None => acc
+        case Some((hd, tl)) => hd match {
+          case _: PureJson         => loop(tl, acc)
+          case d: DeferredJson     => loop(tl, d :: acc)
+          case ProtoObject(fields) => loop(Chain.fromSeq(fields.map(_._2)) ++ tl, acc)
+          case ProtoArray(elems)   => loop(Chain.fromSeq(elems) ++ tl, acc)
+        }
+      }
+
+    loop(Chain.one(pj), Nil)
+  }
+
+  def scatterResults(pj: ProtoJson, results: mutable.Map[DeferredJson, ProtoJson]): ProtoJson = {
+    def loop(pj: ProtoJson): ProtoJson =
+      pj match {
+        case p: PureJson       => p
+        case d: DeferredJson   => results.getOrElse(d, d)
+        case o@ProtoObject(fields) =>
+          val values = fields.map(f => loop(f._2))
+          if (values.corresponds(fields.iterator.map(_._2))(_ eq _)) o
+          else ProtoObject(fields.iterator.map(_._1).zip(values).toList)
+        case a@ProtoArray(elems) =>
+          val elems0 = elems.map(loop)
+          if (elems0.corresponds(elems)(_ eq _)) a
+          else ProtoArray(elems0)
+      }
+
+    loop(pj)
+  }
+
+  def mkSubstMap(good: List[(DeferredJson, Result[ProtoJson])], bad: List[DeferredJson]): mutable.Map[DeferredJson, ProtoJson] = {
+    val m = new java.util.IdentityHashMap[DeferredJson, ProtoJson]
+    bad.foreach(dj => m.put(dj, PureJson(Json.Null)))
+    good.foreach {
+      case (dj, rv) => rv.right match {
+        case Some(v) => m.put(dj, v)
+        case None => m.put(dj, PureJson(Json.Null))
+      }
+    }
+    m.asScala
+  }
+
+  def batch[F[_]: Monad](pj: ProtoJson, mapping: ComponentMapping[F]): F[Result[ProtoJson]] = {
+    val collected = gatherDeferred(pj)
+
+    val (good, bad, errors) =
+      collected.foldLeft((List.empty[(DeferredJson, QueryInterpreter[F], Query)], List.empty[DeferredJson], List.empty[Json])) {
+        case ((good, bad, errors), d@DeferredJson(cursor, tpe, fieldName, query)) =>
+          mapping.subobject(tpe, fieldName) match {
+            case Some(mapping.Subobject(submapping, subquery)) =>
+              subquery(cursor, query) match {
+                case Ior.Right(query) =>
+                  ((d, submapping.interpreter, query) :: good, bad, errors)
+                case Ior.Both(errs, query) =>
+                  ((d, submapping.interpreter, query) :: good, bad, errs ++ errors)
+                case Ior.Left(errs) =>
+                  (good, d :: bad, errs ++ errors)
+              }
+            case None =>
+              (good, d :: bad, mkError(s"Bad query: ${tpe.shortString} $fieldName ${query.render}") :: errors)
+          }
+      }
+
+    val grouped: F[List[(DeferredJson, Result[ProtoJson])]] =
+      good.groupMap(_._2)(e => (e._1, e._3)).toList.flatTraverse { case (i, dq) =>
+        val (ds, qs) = dq.unzip
+        i.runRootValues(qs).map(ds.zip(_))
+      }
+
+    grouped.map { substs =>
+      Ior.Both(errors, scatterResults(pj, mkSubstMap(substs, bad)))
+    }
+  }
 
   def deferred(cursor: Cursor, tpe: Type, fieldName: String, query: Query): ProtoJson =
     DeferredJson(cursor, tpe, fieldName, query)
@@ -130,6 +221,9 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
     }
 
   def runRootValue(query: Query): F[Result[ProtoJson]]
+
+  def runRootValues(query: List[Query]): F[List[Result[ProtoJson]]] =
+    query.traverse(runRootValue)
 
   def runFields(query: Query, tpe: Type, cursor: Cursor): F[Result[List[(String, ProtoJson)]]] = {
     (query, tpe) match {
