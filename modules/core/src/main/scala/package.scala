@@ -8,4 +8,6 @@ import io.circe.Json
 
 package object grackle {
   type Result[T] = IorNec[Json, T]
+
+  type ProtoJson <: AnyRef
 }
