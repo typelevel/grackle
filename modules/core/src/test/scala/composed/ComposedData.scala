@@ -8,7 +8,7 @@ import cats.implicits._
 
 import edu.gemini.grackle._
 import Query._, Binding._
-import QueryInterpreter.mkError
+import QueryInterpreter.mkErrorResult
 
 object CountryCurrencyQueryInterpreter extends ComposedQueryInterpreter[Id] {
   val schema = ComposedSchema
@@ -49,7 +49,7 @@ object CountryCurrencyQueryInterpreter extends ComposedQueryInterpreter[Id] {
       case c: Country =>
         Select("currency", List(StringBinding("code", c.currencyCode)), q).rightIor
       case _ =>
-        List(mkError("Bad query")).leftIor
+        mkErrorResult("Bad query")
     }
 
   val objectMappings = List(queryMapping, countryMapping, currencyMapping)
@@ -77,7 +77,7 @@ object CurrencyQueryInterpreter extends QueryInterpreter[Id] {
       case Select("currency", List(StringBinding("code", code)), child) =>
         runValue(child, NullableType(CurrencyType), CurrencyCursor(currencies.find(_.code == code)))
       case _ =>
-        List(mkError("Bad query")).leftIor
+        mkErrorResult("Bad query")
     }
   }
 }
@@ -95,7 +95,7 @@ case class CurrencyCursor(focus: Any) extends DataTypeCursor {
   def field(fieldName: String, args: Map[String, Any]): Result[Cursor] = (focus, fieldName) match {
     case (c: Currency, "code") => mkCursor(c.code).rightIor
     case (c: Currency, "exchangeRate") => mkCursor(c.exchangeRate).rightIor
-    case _ => List(mkError(s"No field '$fieldName'")).leftIor
+    case _ => mkErrorResult(s"No field '$fieldName'")
   }
 }
 
@@ -122,7 +122,7 @@ object CountryQueryInterpreter extends QueryInterpreter[Id] {
       case Select("country", List(StringBinding("code", code)), child) =>
         runValue(child, NullableType(CountryType), CountryCursor(countries.find(_.code == code)))
       case _ =>
-        List(mkError("Bad query")).leftIor
+        mkErrorResult("Bad query")
     }
   }
 }
@@ -140,6 +140,6 @@ case class CountryCursor(focus: Any) extends DataTypeCursor {
   def field(fieldName: String, args: Map[String, Any]): Result[Cursor] = (focus, fieldName) match {
     case (c: Country, "code") => mkCursor(c.code).rightIor
     case (c: Country, "name") => mkCursor(c.name).rightIor
-    case _ => List(mkError(s"No field '$fieldName'")).leftIor
+    case _ => mkErrorResult(s"No field '$fieldName'")
   }
 }

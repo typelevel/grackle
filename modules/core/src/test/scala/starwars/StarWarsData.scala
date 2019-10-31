@@ -8,7 +8,7 @@ import cats.implicits._
 
 import edu.gemini.grackle._
 import Query._, Binding._
-import QueryInterpreter.mkError
+import QueryInterpreter.mkErrorResult
 
 object StarWarsData {
   object Episode extends Enumeration {
@@ -107,13 +107,13 @@ object StarWarsQueryInterpreter extends QueryInterpreter[Id] {
         runValue(child, CharacterType, StarWarsCursor(R2D2))
       case Select("character" | "human", List(StringBinding("id", id)), child) =>
         runValue(child, NullableType(CharacterType), StarWarsCursor(characters.find(_.id == id)))
-      case _ => List(mkError("Bad query")).leftIor
+      case _ => mkErrorResult("Bad query")
     }
   }
 }
 
 case class StarWarsCursor(focus: Any) extends DataTypeCursor {
-  import QueryInterpreter.mkError
+  import QueryInterpreter.mkErrorResult
   import StarWarsData._
 
   def mkCursor(focus: Any): Cursor = StarWarsCursor(focus)
@@ -132,6 +132,6 @@ case class StarWarsCursor(focus: Any) extends DataTypeCursor {
     case (c: Character, "friends") => mkCursor(c.friends).rightIor
     case (h: Human, "homePlanet") => mkCursor(h.homePlanet).rightIor
     case (d: Droid, "primaryFunction") => mkCursor(d.primaryFunction).rightIor
-    case _ => List(mkError(s"No field '$fieldName'")).leftIor
+    case _ => mkErrorResult(s"No field '$fieldName'")
   }
 }

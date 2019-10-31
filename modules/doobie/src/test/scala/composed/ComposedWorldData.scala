@@ -13,7 +13,7 @@ import edu.gemini.grackle._, doobie._
 import io.chrisdavenport.log4cats.Logger
 
 import Query._, Binding._
-import QueryInterpreter.mkError
+import QueryInterpreter.mkErrorResult
 
 class WorldCurrencyQueryInterpreter[F[_]](xa: Transactor[F])(implicit brkt: Bracket[F, Throwable], logger: Logger[F])
   extends ComposedQueryInterpreter[F] {
@@ -53,7 +53,7 @@ class WorldCurrencyQueryInterpreter[F[_]](xa: Transactor[F])(implicit brkt: Brac
       case Ior.Right(countryCode: String) =>
         Select("currency", List(StringBinding("countryCode", countryCode)), q).rightIor
       case _ =>
-        List(mkError("Bad query")).leftIor
+        mkErrorResult("Bad query")
     }
   }
 
@@ -89,7 +89,7 @@ class CurrencyQueryInterpreter[F[_]](override implicit val F: Monad[F]) extends 
     query match {
       case Select("currency", List(StringBinding("countryCode", countryCode)), child) =>
         runValue(child, NullableType(CurrencyType), CurrencyCursor(currencies.find(_.countryCode == countryCode)))
-      case _ => List(mkError("Bad query")).leftIor.pure[F]
+      case _ => mkErrorResult("Bad query").pure[F]
     }
   }
 }
@@ -108,7 +108,7 @@ case class CurrencyCursor(focus: Any) extends DataTypeCursor {
     case (c: Currency, "code") => mkCursor(c.code).rightIor
     case (c: Currency, "exchangeRate") => mkCursor(c.exchangeRate).rightIor
     case (c: Currency, "countryCode") => mkCursor(c.countryCode).rightIor
-    case _ => List(mkError(s"No field '$fieldName'")).leftIor
+    case _ => mkErrorResult(s"No field '$fieldName'")
   }
 }
 

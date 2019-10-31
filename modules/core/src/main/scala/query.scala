@@ -7,7 +7,7 @@ import scala.annotation.tailrec
 import scala.jdk.CollectionConverters._
 
 import cats.Monad
-import cats.data.{ Chain, Ior, IorT }
+import cats.data.{ Chain, Ior, IorT, NonEmptyChain }
 import cats.implicits._
 import io.circe.Json
 import io.circe.literal.JsonStringContext
@@ -60,7 +60,7 @@ object Query {
 
 sealed trait ProtoJson {
   import ProtoJson._
-  import QueryInterpreter.mkError
+  import QueryInterpreter.mkErrorResult
 
   def complete[F[_]: Monad](mapping: ComponentMapping[F]): F[Result[Json]] =
     this match {
@@ -75,7 +75,7 @@ sealed trait ProtoJson {
               value  <- IorT(pvalue.complete(mapping))
             } yield value).value
 
-          case _ => List(mkError(s"failed: ${tpe.shortString} $fieldName { ${query.render} }")).leftIor.pure[F]
+          case _ => mkErrorResult(s"failed: ${tpe.shortString} $fieldName { ${query.render} }").pure[F]
         }
 
       case ProtoObject(fields) =>
@@ -152,7 +152,7 @@ object ProtoJson {
     val collected = gatherDeferred(pj)
 
     val (good, bad, errors) =
-      collected.foldLeft((List.empty[(DeferredJson, QueryInterpreter[F], Query)], List.empty[DeferredJson], List.empty[Json])) {
+      collected.foldLeft((List.empty[(DeferredJson, QueryInterpreter[F], Query)], List.empty[DeferredJson], Chain.empty[Json])) {
         case ((good, bad, errors), d@DeferredJson(cursor, tpe, fieldName, query)) =>
           mapping.subobject(tpe, fieldName) match {
             case Some(mapping.Subobject(submapping, subquery)) =>
@@ -160,12 +160,12 @@ object ProtoJson {
                 case Ior.Right(query) =>
                   ((d, submapping.interpreter, query) :: good, bad, errors)
                 case Ior.Both(errs, query) =>
-                  ((d, submapping.interpreter, query) :: good, bad, errs ++ errors)
+                  ((d, submapping.interpreter, query) :: good, bad, errs.toChain ++ errors)
                 case Ior.Left(errs) =>
-                  (good, d :: bad, errs ++ errors)
+                  (good, d :: bad, errs.toChain ++ errors)
               }
             case None =>
-              (good, d :: bad, mkError(s"Bad query: ${tpe.shortString} $fieldName ${query.render}") :: errors)
+              (good, d :: bad, mkError(s"Bad query: ${tpe.shortString} $fieldName ${query.render}") +: errors)
           }
       }
 
@@ -176,7 +176,11 @@ object ProtoJson {
       }
 
     grouped.map { substs =>
-      Ior.Both(errors, scatterResults(pj, mkSubstMap(substs, bad)))
+      val value = scatterResults(pj, mkSubstMap(substs, bad))
+      NonEmptyChain.fromChain(errors) match {
+        case Some(errors) => Ior.Both(errors, value)
+        case None => value.rightIor
+      }
     }
   }
 
@@ -200,7 +204,7 @@ object ProtoJson {
 
 abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
   import Query._
-  import QueryInterpreter.mkError
+  import QueryInterpreter.mkErrorResult
   import ComponentMapping.NoMapping
 
   val schema: Schema
@@ -217,7 +221,7 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
         } yield Json.obj((fieldName, value))).value
 
       case _ =>
-        List(mkError(s"Bad query: $query")).leftIor.pure[F]
+        mkErrorResult(s"Bad query: $query").pure[F]
     }
 
   def runRootValue(query: Query): F[Result[ProtoJson]]
@@ -248,7 +252,7 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
         siblings.flatTraverse(query => runFields(query, tpe, cursor).nested).value
 
       case _ =>
-        List(mkError(s"failed: { ${query.render} } ${tpe.shortString}")).leftIor.pure[F]
+        mkErrorResult(s"failed: { ${query.render} } ${tpe.shortString}").pure[F]
     }
   }
 
@@ -270,7 +274,7 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
       case TypeRef(schema, tpnme) =>
         schema.types.find(_.name == tpnme)
           .map(tpe => runValue(query, tpe, cursor))
-          .getOrElse(List(mkError(s"Unknown type '$tpnme'")).leftIor.pure[F])
+          .getOrElse(mkErrorResult(s"Unknown type '$tpnme'").pure[F])
 
       case (_: ScalarType) | (_: EnumType) => cursor.asLeaf.map(ProtoJson.fromJson).pure[F]
 
@@ -278,20 +282,20 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
         runFields(query, tpe, cursor).nested.map(ProtoJson.fromFields).value
 
       case _ =>
-        List(mkError(s"Unsupported type $tpe")).leftIor.pure[F]
+        mkErrorResult(s"Unsupported type $tpe").pure[F]
     }
   }
 }
 
 object QueryInterpreter {
-  def mkResponse(data: Option[Json], errors: List[Json] = Nil): Json = {
+  def mkResponse(data: Option[Json], errors: List[Json]): Json = {
     val dataField = data.map { value => ("data", value) }.toList
     val errorField = if (errors.isEmpty) Nil else List(("errors", Json.fromValues(errors)))
     Json.fromFields(errorField ++ dataField)
   }
 
   def mkResponse(result: Result[Json]): Json =
-    mkResponse(result.right, result.left.getOrElse(Nil))
+    mkResponse(result.right, result.left.map(_.toList).getOrElse(Nil))
 
   def mkError(message: String, locations: List[(Int, Int)] = Nil, path: List[String] = Nil): Json = {
     val locationsField =
@@ -307,6 +311,9 @@ object QueryInterpreter {
 
     Json.fromFields(("message", Json.fromString(message)) :: locationsField ++ pathField)
   }
+
+  def mkErrorResult[T](message: String, locations: List[(Int, Int)] = Nil, path: List[String] = Nil): Result[T] =
+    Ior.leftNec(mkError(message, locations, path))
 }
 
 trait ComponentMapping[F[_]] {
@@ -347,7 +354,7 @@ object ComponentMapping {
 
 trait ComposedQueryInterpreter[F[_]] extends QueryInterpreter[F] with ComponentMapping[F] {
   import Query._
-  import QueryInterpreter.mkError
+  import QueryInterpreter.mkErrorResult
 
   def run(query: Query): F[Json] = run(query, this)
 
@@ -356,9 +363,9 @@ trait ComposedQueryInterpreter[F[_]] extends QueryInterpreter[F] with ComponentM
       case Select(fieldName, _, _) =>
         subobject(schema.queryType, fieldName) match {
           case Some(Subobject(submapping, _)) => submapping.interpreter.runRootValue(query)
-          case None => List(mkError("Bad query")).leftIor.pure[F]
+          case None => mkErrorResult("Bad query").pure[F]
         }
-      case _ => List(mkError("Bad query")).leftIor.pure[F]
+      case _ => mkErrorResult("Bad query").pure[F]
     }
   }
 }

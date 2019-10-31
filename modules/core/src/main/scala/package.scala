@@ -3,9 +3,9 @@
 
 package edu.gemini
 
-import cats.data.Ior
+import cats.data.IorNec
 import io.circe.Json
 
 package object grackle {
-  type Result[T] = Ior[List[Json], T]
+  type Result[T] = IorNec[Json, T]
 }

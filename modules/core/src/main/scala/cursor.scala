@@ -21,7 +21,7 @@ trait Cursor {
 }
 
 trait DataTypeCursor extends Cursor {
-  import QueryInterpreter.mkError
+  import QueryInterpreter.mkErrorResult
 
   val focus: Any
   def mkCursor(focus: Any): Cursor
@@ -37,11 +37,11 @@ trait DataTypeCursor extends Cursor {
       case i: Int => Json.fromInt(i).rightIor
       case d: Double => Json.fromDouble(d) match {
           case Some(j) => j.rightIor
-          case None => List(mkError(s"Unrepresentable double %d")).leftIor
+          case None => mkErrorResult(s"Unrepresentable double %d")
         }
       case b: Boolean => Json.fromBoolean(b).rightIor
       case e: Enumeration#Value => Json.fromString(e.toString).rightIor
-      case _ => List(mkError("Not a leaf")).leftIor
+      case _ => mkErrorResult("Not a leaf")
     }
   }
 
@@ -52,7 +52,7 @@ trait DataTypeCursor extends Cursor {
 
   def asList: Result[List[Cursor]] = focus match {
     case it: List[_] => it.map(mkCursor).rightIor
-    case _ => List(mkError("Not a list")).leftIor
+    case _ => mkErrorResult("Not a list")
   }
 
   def isNullable: Boolean = focus match {
@@ -62,11 +62,11 @@ trait DataTypeCursor extends Cursor {
 
   def asNullable: Result[Option[Cursor]] = focus match {
     case o: Option[_] => o.map(mkCursor).rightIor
-    case _ => List(mkError("Not nullable")).leftIor
+    case _ => mkErrorResult("Not nullable")
   }
 
   def hasAttribute(attributeName: String): Boolean = false
 
   def attribute(attributeName: String): Result[Any] =
-    List(mkError(s"No attribute $attributeName")).leftIor
+    mkErrorResult(s"No attribute $attributeName")
 }
