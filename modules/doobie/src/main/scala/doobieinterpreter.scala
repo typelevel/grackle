@@ -13,7 +13,7 @@ import io.circe.Json
 
 import DoobieMapping._
 import Query._
-import QueryInterpreter.mkErrorResult
+import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
 abstract class DoobieQueryInterpreter[F[_]](override implicit val F: Bracket[F, Throwable]) extends QueryInterpreter[F] {
   val mapping: DoobieMapping

@@ -8,7 +8,7 @@ import cats.implicits._
 
 import edu.gemini.grackle._
 import Query._, Binding._
-import QueryInterpreter.mkErrorResult
+import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
 object StarWarsData {
   object Episode extends Enumeration {

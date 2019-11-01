@@ -5,6 +5,7 @@ package edu.gemini.grackle
 
 import scala.annotation.tailrec
 import scala.jdk.CollectionConverters._
+import scala.collection.mutable
 
 import cats.{ Monad, Monoid }
 import cats.data.{ Chain, Ior, IorT, NonEmptyChain }
@@ -58,33 +59,129 @@ object Query {
   }
 }
 
-object ProtoJson {
-  import scala.collection.mutable
+abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
+  import Query._
+  import QueryInterpreter.{ complete, mkErrorResult, ProtoJson }
+  import ComponentMapping.NoMapping
 
-  import QueryInterpreter.mkError
+  val schema: Schema
 
-  private case class DeferredJson(cursor: Cursor, tpe: Type, fieldName: String, query: Query)
-  private case class ProtoObject(fields: List[(String, ProtoJson)])
-  private case class ProtoArray(elems: List[ProtoJson])
+  def run(query: Query, mapping: ComponentMapping[F] = NoMapping): F[Json] =
+    runRoot(query, mapping).map(QueryInterpreter.mkResponse)
 
-  private def wrap(j: AnyRef): ProtoJson = j.asInstanceOf[ProtoJson]
+  def runRoot(query: Query, mapping: ComponentMapping[F] = NoMapping): F[Result[Json]] =
+    query match {
+      case Select(fieldName, _, _) =>
+        (for {
+          pvalue <- IorT(runRootValue(query))
+          value  <- IorT(complete(pvalue, mapping))
+        } yield Json.obj((fieldName, value))).value
 
-  def deferred(cursor: Cursor, tpe: Type, fieldName: String, query: Query): ProtoJson =
-    wrap(DeferredJson(cursor, tpe, fieldName, query))
+      case _ =>
+        mkErrorResult(s"Bad query: $query").pure[F]
+    }
 
-  def fromJson(value: Json): ProtoJson = wrap(value)
+  def runRootValue(query: Query): F[Result[ProtoJson]]
 
-  def fromFields(fields: List[(String, ProtoJson)]): ProtoJson =
-    if(fields.forall(_._2.isInstanceOf[Json]))
-      wrap(Json.fromFields(fields.asInstanceOf[List[(String, Json)]]))
-    else
-      wrap(ProtoObject(fields))
+  def runRootValues(query: List[Query]): F[(Chain[Json], List[ProtoJson])] =
+    query.traverse(runRootValue).map { rs =>
+      (rs.foldLeft((Chain.empty[Json], List.empty[ProtoJson])) {
+        case ((errors, elems), elem) =>
+          elem match {
+            case Ior.Left(errs) => (errs.toChain ++ errors, ProtoJson.fromJson(Json.Null) :: elems)
+            case Ior.Right(elem) => (errors, elem :: elems)
+            case Ior.Both(errs, elem) => (errs.toChain ++ errors, elem :: elems)
+          }
+      }).map(_.reverse)
+    }
 
-  def fromValues(elems: List[ProtoJson]): ProtoJson =
-    if(elems.forall(_.isInstanceOf[Json]))
-      wrap(Json.fromValues(elems.asInstanceOf[List[Json]]))
-    else
-      wrap(ProtoArray(elems))
+  def runFields(query: Query, tpe: Type, cursor: Cursor): F[Result[List[(String, ProtoJson)]]] = {
+    (query, tpe) match {
+      case (sel@Select(fieldName, _, _), NullableType(tpe)) =>
+        cursor.asNullable.sequence.map { rc =>
+          (for {
+            c      <- IorT(rc.pure[F])
+            fields <- IorT(runFields(sel, tpe, c))
+          } yield fields).value
+        }.getOrElse(List((fieldName, ProtoJson.fromJson(Json.Null))).rightIor.pure[F])
+
+      case (Select(fieldName, bindings, child), tpe) =>
+        if (!cursor.hasField(fieldName))
+          List((fieldName, ProtoJson.deferred(cursor, tpe, fieldName, child))).rightIor.pure[F]
+        else
+          (for {
+            c     <- IorT(cursor.field(fieldName, Binding.toMap(bindings)).pure[F])
+            value <- IorT(runValue(child, tpe.field(fieldName), c))
+          } yield List((fieldName, value))).value
+
+      case (Group(siblings), _) =>
+        siblings.flatTraverse(query => runFields(query, tpe, cursor).nested).value
+
+      case _ =>
+        mkErrorResult(s"failed: { ${query.render} } ${tpe.shortString}").pure[F]
+    }
+  }
+
+  def runValue(query: Query, tpe: Type, cursor: Cursor): F[Result[ProtoJson]] = {
+    tpe match {
+      case NullableType(tpe) =>
+        cursor.asNullable.sequence.map { rc =>
+          (for {
+            c     <- IorT(rc.pure[F])
+            value <- IorT(runValue(query, tpe, c))
+          } yield value).value
+        }.getOrElse(ProtoJson.fromJson(Json.Null).rightIor.pure[F])
+
+      case ListType(tpe) =>
+        cursor.asList.flatTraverse(lc =>
+          lc.traverse(c => runValue(query, tpe, c).nested).map(ProtoJson.fromValues).value
+        )
+
+      case TypeRef(schema, tpnme) =>
+        schema.types.find(_.name == tpnme)
+          .map(tpe => runValue(query, tpe, cursor))
+          .getOrElse(mkErrorResult(s"Unknown type '$tpnme'").pure[F])
+
+      case (_: ScalarType) | (_: EnumType) => cursor.asLeaf.map(ProtoJson.fromJson).pure[F]
+
+      case (_: ObjectType) | (_: InterfaceType) =>
+        runFields(query, tpe, cursor).nested.map(ProtoJson.fromFields).value
+
+      case _ =>
+        mkErrorResult(s"Unsupported type $tpe").pure[F]
+    }
+  }
+}
+
+object QueryInterpreter {
+  type ProtoJson <: AnyRef
+
+  object ProtoJson {
+    case class DeferredJson private (cursor: Cursor, tpe: Type, fieldName: String, query: Query)
+    case class ProtoObject private (fields: List[(String, ProtoJson)])
+    case class ProtoArray private (elems: List[ProtoJson])
+
+    def deferred(cursor: Cursor, tpe: Type, fieldName: String, query: Query): ProtoJson =
+      wrap(DeferredJson(cursor, tpe, fieldName, query))
+
+    def fromJson(value: Json): ProtoJson = wrap(value)
+
+    def fromFields(fields: List[(String, ProtoJson)]): ProtoJson =
+      if(fields.forall(_._2.isInstanceOf[Json]))
+        wrap(Json.fromFields(fields.asInstanceOf[List[(String, Json)]]))
+      else
+        wrap(ProtoObject(fields))
+
+    def fromValues(elems: List[ProtoJson]): ProtoJson =
+      if(elems.forall(_.isInstanceOf[Json]))
+        wrap(Json.fromValues(elems.asInstanceOf[List[Json]]))
+      else
+        wrap(ProtoArray(elems))
+
+    private def wrap(j: AnyRef): ProtoJson = j.asInstanceOf[ProtoJson]
+  }
+
+  import ProtoJson._
 
   def complete[F[_]: Monad](pj: ProtoJson, mapping: ComponentMapping[F]): F[Result[Json]] =
     completeAll(List(pj), mapping).map {
@@ -175,103 +272,7 @@ object ProtoJson {
         (errors0 ++ errors1, values)
     }
   }
-}
 
-abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
-  import Query._
-  import QueryInterpreter.mkErrorResult
-  import ComponentMapping.NoMapping
-
-  val schema: Schema
-
-  def run(query: Query, mapping: ComponentMapping[F] = NoMapping): F[Json] =
-    runRoot(query, mapping).map(QueryInterpreter.mkResponse)
-
-  def runRoot(query: Query, mapping: ComponentMapping[F] = NoMapping): F[Result[Json]] =
-    query match {
-      case Select(fieldName, _, _) =>
-        (for {
-          pvalue <- IorT(runRootValue(query))
-          value  <- IorT(ProtoJson.complete(pvalue, mapping))
-        } yield Json.obj((fieldName, value))).value
-
-      case _ =>
-        mkErrorResult(s"Bad query: $query").pure[F]
-    }
-
-  def runRootValue(query: Query): F[Result[ProtoJson]]
-
-  def runRootValues(query: List[Query]): F[(Chain[Json], List[ProtoJson])] =
-    query.traverse(runRootValue).map { rs =>
-      (rs.foldLeft((Chain.empty[Json], List.empty[ProtoJson])) {
-        case ((errors, elems), elem) =>
-          elem match {
-            case Ior.Left(errs) => (errs.toChain ++ errors, ProtoJson.fromJson(Json.Null) :: elems)
-            case Ior.Right(elem) => (errors, elem :: elems)
-            case Ior.Both(errs, elem) => (errs.toChain ++ errors, elem :: elems)
-          }
-      }).map(_.reverse)
-    }
-
-  def runFields(query: Query, tpe: Type, cursor: Cursor): F[Result[List[(String, ProtoJson)]]] = {
-    (query, tpe) match {
-      case (sel@Select(fieldName, _, _), NullableType(tpe)) =>
-        cursor.asNullable.sequence.map { rc =>
-          (for {
-            c      <- IorT(rc.pure[F])
-            fields <- IorT(runFields(sel, tpe, c))
-          } yield fields).value
-        }.getOrElse(List((fieldName, ProtoJson.fromJson(Json.Null))).rightIor.pure[F])
-
-      case (Select(fieldName, bindings, child), tpe) =>
-        if (!cursor.hasField(fieldName))
-          List((fieldName, ProtoJson.deferred(cursor, tpe, fieldName, child))).rightIor.pure[F]
-        else
-          (for {
-            c     <- IorT(cursor.field(fieldName, Binding.toMap(bindings)).pure[F])
-            value <- IorT(runValue(child, tpe.field(fieldName), c))
-          } yield List((fieldName, value))).value
-
-      case (Group(siblings), _) =>
-        siblings.flatTraverse(query => runFields(query, tpe, cursor).nested).value
-
-      case _ =>
-        mkErrorResult(s"failed: { ${query.render} } ${tpe.shortString}").pure[F]
-    }
-  }
-
-  def runValue(query: Query, tpe: Type, cursor: Cursor): F[Result[ProtoJson]] = {
-    tpe match {
-      case NullableType(tpe) =>
-        cursor.asNullable.sequence.map { rc =>
-          (for {
-            c     <- IorT(rc.pure[F])
-            value <- IorT(runValue(query, tpe, c))
-          } yield value).value
-        }.getOrElse(ProtoJson.fromJson(Json.Null).rightIor.pure[F])
-
-      case ListType(tpe) =>
-        cursor.asList.flatTraverse(lc =>
-          lc.traverse(c => runValue(query, tpe, c).nested).map(ProtoJson.fromValues).value
-        )
-
-      case TypeRef(schema, tpnme) =>
-        schema.types.find(_.name == tpnme)
-          .map(tpe => runValue(query, tpe, cursor))
-          .getOrElse(mkErrorResult(s"Unknown type '$tpnme'").pure[F])
-
-      case (_: ScalarType) | (_: EnumType) => cursor.asLeaf.map(ProtoJson.fromJson).pure[F]
-
-      case (_: ObjectType) | (_: InterfaceType) =>
-        runFields(query, tpe, cursor).nested.map(ProtoJson.fromFields).value
-
-      case _ =>
-        mkErrorResult(s"Unsupported type $tpe").pure[F]
-    }
-  }
-}
-
-object QueryInterpreter {
   def mkResponse(data: Option[Json], errors: List[Json]): Json = {
     val dataField = data.map { value => ("data", value) }.toList
     val errorField = if (errors.isEmpty) Nil else List(("errors", Json.fromValues(errors)))
@@ -338,7 +339,7 @@ object ComponentMapping {
 
 trait ComposedQueryInterpreter[F[_]] extends QueryInterpreter[F] with ComponentMapping[F] {
   import Query._
-  import QueryInterpreter.mkErrorResult
+  import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
   def run(query: Query): F[Json] = run(query, this)
 

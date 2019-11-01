@@ -13,7 +13,7 @@ import edu.gemini.grackle._, doobie._
 import io.chrisdavenport.log4cats.Logger
 
 import Query._, Binding._
-import QueryInterpreter.mkErrorResult
+import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
 class WorldCurrencyQueryInterpreter[F[_]](xa: Transactor[F])(implicit brkt: Bracket[F, Throwable], logger: Logger[F])
   extends ComposedQueryInterpreter[F] {
