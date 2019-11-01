@@ -30,8 +30,7 @@ abstract class DoobieQueryInterpreter[F[_]](override implicit val F: Bracket[F, 
 
         for {
           table <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(xa)
-          value <- runValue(child, fieldTpe, DoobieCursor(fieldTpe, table, mapped))
-        } yield value
+        } yield runValue(child, fieldTpe, DoobieCursor(fieldTpe, table, mapped))
 
       case _ => mkErrorResult(s"Bad query").pure[F]
     }

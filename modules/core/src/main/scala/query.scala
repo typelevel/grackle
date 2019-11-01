@@ -95,60 +95,60 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
       }).map(_.reverse)
     }
 
-  def runFields(query: Query, tpe: Type, cursor: Cursor): F[Result[List[(String, ProtoJson)]]] = {
+  def runFields(query: Query, tpe: Type, cursor: Cursor): Result[List[(String, ProtoJson)]] = {
     (query, tpe) match {
       case (sel@Select(fieldName, _, _), NullableType(tpe)) =>
         cursor.asNullable.sequence.map { rc =>
-          (for {
-            c      <- IorT(rc.pure[F])
-            fields <- IorT(runFields(sel, tpe, c))
-          } yield fields).value
-        }.getOrElse(List((fieldName, ProtoJson.fromJson(Json.Null))).rightIor.pure[F])
+          for {
+            c      <- rc
+            fields <- runFields(sel, tpe, c)
+          } yield fields
+        }.getOrElse(List((fieldName, ProtoJson.fromJson(Json.Null))).rightIor)
 
       case (Select(fieldName, bindings, child), tpe) =>
         if (!cursor.hasField(fieldName))
-          List((fieldName, ProtoJson.deferred(cursor, tpe, fieldName, child))).rightIor.pure[F]
+          List((fieldName, ProtoJson.deferred(cursor, tpe, fieldName, child))).rightIor
         else
-          (for {
-            c     <- IorT(cursor.field(fieldName, Binding.toMap(bindings)).pure[F])
-            value <- IorT(runValue(child, tpe.field(fieldName), c))
-          } yield List((fieldName, value))).value
+          for {
+            c     <- cursor.field(fieldName, Binding.toMap(bindings))
+            value <- runValue(child, tpe.field(fieldName), c)
+          } yield List((fieldName, value))
 
       case (Group(siblings), _) =>
-        siblings.flatTraverse(query => runFields(query, tpe, cursor).nested).value
+        siblings.flatTraverse(query => runFields(query, tpe, cursor))
 
       case _ =>
-        mkErrorResult(s"failed: { ${query.render} } ${tpe.shortString}").pure[F]
+        mkErrorResult(s"failed: { ${query.render} } ${tpe.shortString}")
     }
   }
 
-  def runValue(query: Query, tpe: Type, cursor: Cursor): F[Result[ProtoJson]] = {
+  def runValue(query: Query, tpe: Type, cursor: Cursor): Result[ProtoJson] = {
     tpe match {
       case NullableType(tpe) =>
         cursor.asNullable.sequence.map { rc =>
-          (for {
-            c     <- IorT(rc.pure[F])
-            value <- IorT(runValue(query, tpe, c))
-          } yield value).value
-        }.getOrElse(ProtoJson.fromJson(Json.Null).rightIor.pure[F])
+          for {
+            c     <- rc
+            value <- runValue(query, tpe, c)
+          } yield value
+        }.getOrElse(ProtoJson.fromJson(Json.Null).rightIor)
 
       case ListType(tpe) =>
-        cursor.asList.flatTraverse(lc =>
-          lc.traverse(c => runValue(query, tpe, c).nested).map(ProtoJson.fromValues).value
+        cursor.asList.flatMap(lc =>
+          lc.traverse(c => runValue(query, tpe, c)).map(ProtoJson.fromValues)
         )
 
       case TypeRef(schema, tpnme) =>
         schema.types.find(_.name == tpnme)
           .map(tpe => runValue(query, tpe, cursor))
-          .getOrElse(mkErrorResult(s"Unknown type '$tpnme'").pure[F])
+          .getOrElse(mkErrorResult(s"Unknown type '$tpnme'"))
 
-      case (_: ScalarType) | (_: EnumType) => cursor.asLeaf.map(ProtoJson.fromJson).pure[F]
+      case (_: ScalarType) | (_: EnumType) => cursor.asLeaf.map(ProtoJson.fromJson)
 
       case (_: ObjectType) | (_: InterfaceType) =>
-        runFields(query, tpe, cursor).nested.map(ProtoJson.fromFields).value
+        runFields(query, tpe, cursor).map(ProtoJson.fromFields)
 
       case _ =>
-        mkErrorResult(s"Unsupported type $tpe").pure[F]
+        mkErrorResult(s"Unsupported type $tpe")
     }
   }
 }

@@ -92,7 +92,7 @@ class CurrencyQueryInterpreter[F[_]](override implicit val F: Monad[F]) extends 
   def runRootValue(query: Query): F[Result[ProtoJson]] = {
     query match {
       case Select("currency", List(StringBinding("countryCode", countryCode)), child) =>
-        runValue(child, NullableType(CurrencyType), CurrencyCursor(currencies.find(_.countryCode == countryCode)))
+        runValue(child, NullableType(CurrencyType), CurrencyCursor(currencies.find(_.countryCode == countryCode))).pure[F]
       case _ => mkErrorResult("Bad query").pure[F]
     }
   }
