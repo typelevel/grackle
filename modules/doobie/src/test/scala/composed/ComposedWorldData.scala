@@ -44,6 +44,8 @@ class WorldCurrencyQueryInterpreter[F[_]](xa: Transactor[F])(implicit brkt: Brac
       fieldMappings =
         List(
           "country" -> Subobject(countryMapping),
+          "cities" -> Subobject(countryMapping),
+          "countries" -> Subobject(countryMapping),
           "currency" -> Subobject(currencyMapping)
         )
     )
@@ -74,9 +76,11 @@ object CurrencyData {
     countryCode: String
   )
 
+  val BRL = Currency("BRL", 0.25, "BRA")
+  val EUR = Currency("EUR", 1.12, "NLD")
   val GBP = Currency("GBP", 1.25, "GBR")
 
-  val currencies = List(GBP)
+  val currencies = List(BRL, EUR, GBP)
 }
 
 class CurrencyQueryInterpreter[F[_]](override implicit val F: Monad[F]) extends QueryInterpreter[F] {

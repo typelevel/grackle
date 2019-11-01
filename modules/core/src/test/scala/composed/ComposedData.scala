@@ -40,7 +40,8 @@ object CountryCurrencyQueryInterpreter extends ComposedQueryInterpreter[Id] {
       fieldMappings =
         List(
           "country" -> Subobject(countryMapping),
-          "currency" -> Subobject(currencyMapping)
+          "currency" -> Subobject(currencyMapping),
+          "countries" -> Subobject(countryMapping)
         )
     )
 
@@ -61,9 +62,10 @@ object CurrencyData {
     exchangeRate: Double
   )
 
+  val EUR = Currency("EUR", 1.12)
   val GBP = Currency("GBP", 1.25)
 
-  val currencies = List(GBP)
+  val currencies = List(EUR, GBP)
 }
 
 object CurrencyQueryInterpreter extends QueryInterpreter[Id] {
@@ -106,9 +108,11 @@ object CountryData {
     currencyCode: String
   )
 
+  val DEU = Country("DEU", "Germany", "EUR")
+  val FRA = Country("FRA", "France", "EUR")
   val GBR = Country("GBR", "United Kingdom", "GBP")
 
-  val countries = List(GBR)
+  val countries = List(DEU, FRA, GBR)
 }
 
 object CountryQueryInterpreter extends QueryInterpreter[Id] {
@@ -121,6 +125,8 @@ object CountryQueryInterpreter extends QueryInterpreter[Id] {
     query match {
       case Select("country", List(StringBinding("code", code)), child) =>
         runValue(child, NullableType(CountryType), CountryCursor(countries.find(_.code == code)))
+      case Select("countries", _, child) =>
+        runValue(child, ListType(CountryType), CountryCursor(countries))
       case _ =>
         mkErrorResult("Bad query")
     }

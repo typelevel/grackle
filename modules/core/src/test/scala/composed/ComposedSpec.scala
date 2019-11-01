@@ -96,4 +96,54 @@ final class ComposedSpec extends CatsSuite {
 
     assert(res == expected)
   }
+
+  test("simple multiple nested query") {
+    val query = """
+      query {
+        countries {
+          name
+          currency {
+            code
+            exchangeRate
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "countries" : [
+            {
+              "name" : "Germany",
+              "currency" : {
+                "code" : "EUR",
+                "exchangeRate" : 1.12
+              }
+            },
+            {
+              "name" : "France",
+              "currency" : {
+                "code" : "EUR",
+                "exchangeRate" : 1.12
+              }
+            },
+            {
+              "name" : "United Kingdom",
+              "currency" : {
+                "code" : "GBP",
+                "exchangeRate" : 1.25
+              }
+            }
+          ]
+        }
+      }
+    """
+
+    val compiledQuery = Compiler.compileText(query).get
+    val res = CountryCurrencyQueryInterpreter.run(compiledQuery)
+    //println(res)
+
+    assert(res == expected)
+  }
 }

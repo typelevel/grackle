@@ -17,6 +17,7 @@ object ComposedSchema extends Schema {
       fields = List(
         Field("country", None, List(CodeArg), NullableType(TypeRef("Country")), false, None),
         Field("currency", None, List(CodeArg), NullableType(TypeRef("Currency")), false, None),
+        Field("countries", None, Nil, ListType(TypeRef("Country")), false, None),
       ),
       interfaces = Nil
     )

@@ -58,4 +58,56 @@ final class ComposedWorldSpec extends CatsSuite {
 
     assert(res == expected)
   }
+
+  test("simple multiple nested query") {
+    val query = """
+      query {
+        cities(namePattern: "Ame%") {
+          name
+          country {
+            name
+            currency {
+              code
+              exchangeRate
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data": {
+          "cities" : [
+            {
+              "name" : "Amersfoort",
+              "country" : {
+                "name" : "Netherlands",
+                "currency" : {
+                  "code" : "EUR",
+                  "exchangeRate" : 1.12
+                }
+              }
+            },
+            {
+              "name" : "Americana",
+              "country" : {
+                "name" : "Brazil",
+                "currency" : {
+                  "code" : "BRL",
+                  "exchangeRate" : 0.25
+                }
+              }
+            }
+          ]
+        }
+      }
+    """
+
+    val compiledQuery = Compiler.compileText(query).get
+    val res = WorldCurrencyQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
 }
