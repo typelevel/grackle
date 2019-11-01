@@ -83,8 +83,8 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
 
   def runRootValue(query: Query): F[Result[ProtoJson]]
 
-  def runRootValues(query: List[Query]): F[(Chain[Json], List[ProtoJson])] =
-    query.traverse(runRootValue).map { rs =>
+  def runRootValues(queries: List[Query]): F[(Chain[Json], List[ProtoJson])] =
+    queries.traverse(runRootValue).map { rs =>
       (rs.foldLeft((Chain.empty[Json], List.empty[ProtoJson])) {
         case ((errors, elems), elem) =>
           elem match {
