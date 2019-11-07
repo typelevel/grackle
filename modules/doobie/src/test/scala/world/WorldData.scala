@@ -4,11 +4,12 @@
 package world
 
 import cats.effect.Bracket
-import doobie.{ Fragment, Transactor }
-import doobie.implicits._
+import doobie.Transactor
 import edu.gemini.grackle._, doobie._
 import io.chrisdavenport.log4cats.Logger
 
+import DoobiePredicate._
+import Predicate._
 import Query._, Binding._
 
 object WorldData extends DoobieMapping {
@@ -89,12 +90,14 @@ object WorldData extends DoobieMapping {
 trait WorldQueryInterpreter[F[_]] extends DoobieQueryInterpreter[F] {
   val schema = WorldSchema
 
-  def predicates(fieldName: String, args: List[Binding]): List[Fragment] =
-    (fieldName, args) match {
-      case ("country", List(StringBinding("code", code))) => List(fr"code = $code")
-      case ("cities", List(StringBinding("namePattern", namePattern))) => List(fr"city.name ILIKE $namePattern")
-      case _ => Nil
-    }
+  def prepare(query: Query): Query = query match {
+    case Select("country", args@List(StringBinding("code", code)), child) =>
+      Select("country", args, Unique(AttrEquals("code", code), child))
+    case Select("cities", args@List(StringBinding("namePattern", namePattern)), child) =>
+      Select("cities", args, Filter(FieldLike("name", namePattern, true), child))
+    case _ =>
+      query
+  }
 }
 
 object WorldQueryInterpreter {

@@ -7,6 +7,7 @@ import cats.Id
 import cats.implicits._
 
 import edu.gemini.grackle._
+import Predicate._
 import Query._, Binding._
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
@@ -77,7 +78,7 @@ object CurrencyQueryInterpreter extends QueryInterpreter[Id] {
   def runRootValue(query: Query): Result[ProtoJson] = {
     query match {
       case Select("currency", List(StringBinding("code", code)), child) =>
-        runValue(child, NullableType(CurrencyType), CurrencyCursor(currencies.find(_.code == code)))
+        runValue(Unique(FieldEquals("code", code), child), NullableType(CurrencyType), CurrencyCursor(currencies))
       case _ =>
         mkErrorResult("Bad query")
     }
@@ -124,7 +125,7 @@ object CountryQueryInterpreter extends QueryInterpreter[Id] {
   def runRootValue(query: Query): Result[ProtoJson] = {
     query match {
       case Select("country", List(StringBinding("code", code)), child) =>
-        runValue(child, NullableType(CountryType), CountryCursor(countries.find(_.code == code)))
+        runValue(Unique(FieldEquals("code", code), child), NullableType(CountryType), CountryCursor(countries))
       case Select("countries", _, child) =>
         runValue(child, ListType(CountryType), CountryCursor(countries))
       case _ =>

@@ -35,6 +35,11 @@ sealed trait Type {
     case _ => false
   }
 
+  def nonNull: Type = this match {
+    case NullableType(tpe) => tpe.nonNull
+    case _ => this
+  }
+
   def isList: Boolean = this match {
     case ListType(_) => true
     case _ => false

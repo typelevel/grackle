@@ -7,6 +7,8 @@ import cats.Id
 import cats.implicits._
 
 import edu.gemini.grackle._
+
+import Predicate._
 import Query._, Binding._
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
@@ -106,7 +108,7 @@ object StarWarsQueryInterpreter extends QueryInterpreter[Id] {
       case Select("hero", _, child) =>
         runValue(child, CharacterType, StarWarsCursor(R2D2))
       case Select("character" | "human", List(StringBinding("id", id)), child) =>
-        runValue(child, NullableType(CharacterType), StarWarsCursor(characters.find(_.id == id)))
+        runValue(Unique(FieldEquals("id", id), child), NullableType(CharacterType), StarWarsCursor(characters))
       case _ => mkErrorResult("Bad query")
     }
   }

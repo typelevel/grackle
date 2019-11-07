@@ -7,11 +7,12 @@ import cats.Monad
 import cats.data.Ior
 import cats.effect.Bracket
 import cats.implicits._
-import doobie.{ Fragment, Transactor }
-import doobie.implicits._
+import doobie.Transactor
 import edu.gemini.grackle._, doobie._
 import io.chrisdavenport.log4cats.Logger
 
+import DoobiePredicate._
+import Predicate._
 import Query._, Binding._
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
@@ -92,7 +93,7 @@ class CurrencyQueryInterpreter[F[_]](override implicit val F: Monad[F]) extends 
   def runRootValue(query: Query): F[Result[ProtoJson]] = {
     query match {
       case Select("currency", List(StringBinding("countryCode", countryCode)), child) =>
-        runValue(child, NullableType(CurrencyType), CurrencyCursor(currencies.find(_.countryCode == countryCode))).pure[F]
+        runValue(Unique(FieldEquals("countryCode", countryCode), child), NullableType(CurrencyType), CurrencyCursor(currencies)).pure[F]
       case _ => mkErrorResult("Bad query").pure[F]
     }
   }
@@ -194,12 +195,14 @@ object ComposedWorldData extends DoobieMapping {
 trait ComposedWorldQueryInterpreter[F[_]] extends DoobieQueryInterpreter[F] {
   val schema = ComposedWorldSchema
 
-  def predicates(fieldName: String, args: List[Binding]): List[Fragment] =
-    (fieldName, args) match {
-      case ("country", List(StringBinding("code", code))) => List(fr"code = $code")
-      case ("cities", List(StringBinding("namePattern", namePattern))) => List(fr"city.name ILIKE $namePattern")
-      case _ => Nil
-    }
+  def prepare(query: Query): Query = query match {
+    case Select("country", args@List(StringBinding("code", code)), child) =>
+      (Select("country", args, Unique(AttrEquals("code", code), child)))
+    case Select("cities", args@List(StringBinding("namePattern", namePattern)), child) =>
+      Select("cities", args, Filter(FieldLike("name", namePattern, true), child))
+    case _ =>
+      query
+  }
 }
 
 object ComposedWorldQueryInterpreter {

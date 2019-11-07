@@ -4,14 +4,18 @@
 package edu.gemini.grackle
 package doobie
 
+import scala.util.matching.Regex
+
+import cats.data.Ior
 import cats.effect.Bracket
 import cats.implicits._
-import _root_.doobie.{ Fragment, Transactor }
+import _root_.doobie.Transactor
 import _root_.doobie.implicits._
 import io.chrisdavenport.log4cats.Logger
 import io.circe.Json
 
 import DoobieMapping._
+import Predicate._
 import Query._
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
@@ -20,25 +24,52 @@ abstract class DoobieQueryInterpreter[F[_]](override implicit val F: Bracket[F, 
   val xa: Transactor[F]
   val logger: Logger[F]
 
-  def predicates(fieldName: String, args: List[Binding]): List[Fragment]
+  def prepare(query: Query): Query
 
   def runRootValue(query: Query): F[Result[ProtoJson]] =
-    query match {
-      case Select(fieldName, args, child) =>
+    prepare(query) match {
+      case Select(fieldName, _, child) =>
         val fieldTpe = schema.queryType.field(fieldName)
-        val mapped = mapping.mapQuery(child, fieldTpe, predicates(fieldName, args))
+        val mapped = mapping.mapQuery(child, fieldTpe)
 
         for {
           table <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(xa)
-        } yield runValue(child, fieldTpe, DoobieCursor(fieldTpe, table, mapped))
+        } yield runValue(child, fieldTpe, DoobieCursor(mapped.rootCursorType(fieldTpe), table, mapped))
 
       case _ => mkErrorResult(s"Bad query").pure[F]
     }
 }
 
+object DoobiePredicate {
+  def likeToRegex(pattern: String, caseInsensitive: Boolean): Regex = {
+    val csr = ("^"+pattern.replace("%", ".*").replace("_", ".")+"$")
+    (if (caseInsensitive) s"(?i:$csr)" else csr).r
+  }
+
+  case class FieldLike(fieldName: String, pattern: String, caseInsensitive: Boolean) extends Predicate {
+    lazy val r = likeToRegex(pattern, caseInsensitive)
+
+    def apply(c: Cursor): Boolean =
+      c.field(fieldName, Map.empty[String, Any]) match {
+        case Ior.Right(StringScalarFocus(value)) => r.matches(value)
+        case _ => false
+      }
+  }
+
+  case class AttrLike(keyName: String, pattern: String, caseInsensitive: Boolean) extends Predicate {
+    lazy val r = likeToRegex(pattern, caseInsensitive)
+
+    def apply(c: Cursor): Boolean =
+      c.attribute(keyName) match {
+        case Ior.Right(value: String) => r.matches(value)
+        case _ => false
+      }
+  }
+}
+
 case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) extends Cursor {
   def asTable: Result[Table] = focus match {
-    case table: List[_] => table.asInstanceOf[Table].rightIor
+    case table@((_: Row) :: _) => table.asInstanceOf[Table].rightIor
     case _ => mkErrorResult(s"Not a table")
   }
 
@@ -80,7 +111,7 @@ case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) exte
       case (NullableType(_), None) => None.rightIor
       case (NullableType(tpe), Some(v)) => Some(copy(tpe = tpe, focus = v)).rightIor
       case (NullableType(_), null) => None.rightIor
-      case (NullableType(tpe), v) => Some(copy(tpe = tpe, focus = v)).rightIor
+      case (NullableType(tpe), _) => Some(copy(tpe = tpe)).rightIor
       case _ => mkErrorResult("Not nullable")
     }
 

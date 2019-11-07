@@ -49,7 +49,7 @@ final class WorldSpec extends CatsSuite {
   test("simple restricted query") {
     val query = """
       query {
-        country(code: "AFG") {
+        country(code: "GBR") {
           name
         }
       }
@@ -59,7 +59,7 @@ final class WorldSpec extends CatsSuite {
       {
         "data": {
           "country": {
-            "name": "Afghanistan"
+            "name": "United Kingdom"
           }
         }
       }

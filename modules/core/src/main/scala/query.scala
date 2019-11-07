@@ -4,8 +4,10 @@
 package edu.gemini.grackle
 
 import scala.annotation.tailrec
-import scala.jdk.CollectionConverters._
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
+import scala.runtime.ScalaRunTime
+import scala.util.matching.Regex
 
 import cats.{ Monad, Monoid }
 import cats.data.{ Chain, Ior, IorT, NonEmptyChain }
@@ -37,6 +39,12 @@ object Query {
   case class Group(queries: List[Query]) extends Query {
     def render = queries.map(_.render).mkString(", ")
   }
+  case class Unique(pred: Predicate, child: Query) extends Query {
+    def render = s"<unique> $child"
+  }
+  case class Filter(pred: Predicate, child: Query) extends Query {
+    def render = s"<filter> $child"
+  }
   case object Empty extends Query {
     def render = ""
   }
@@ -56,6 +64,52 @@ object Query {
 
     def toMap(bindings: List[Binding]): Map[String, Any] =
       bindings.map(b => (b.name, b.value)).toMap
+  }
+}
+
+trait Predicate extends Product with (Cursor => Boolean) {
+  override def toString = ScalaRunTime._toString(this)
+}
+
+object Predicate {
+  object StringScalarFocus {
+    def unapply(c: Cursor): Option[String] =
+      c.focus match {
+        case s: String => Some(s)
+        case _ => None
+      }
+  }
+
+  case class FieldEquals(fieldName: String, value: String) extends Predicate {
+    def apply(c: Cursor): Boolean =
+      c.field(fieldName, Map.empty[String, Any]) match {
+        case Ior.Right(StringScalarFocus(`value`)) => true
+        case _ => false
+      }
+  }
+
+  case class FieldMatches(fieldName: String, r: Regex) extends Predicate {
+    def apply(c: Cursor): Boolean =
+      c.field(fieldName, Map.empty[String, Any]) match {
+        case Ior.Right(StringScalarFocus(value)) => r.matches(value)
+        case _ => false
+      }
+  }
+
+  case class AttrEquals(attrName: String, value: String) extends Predicate {
+    def apply(c: Cursor): Boolean =
+      c.attribute(attrName) match {
+        case Ior.Right(`value`) => true
+        case _ => false
+      }
+  }
+
+  case class AttrMatches(attrName: String, r: Regex) extends Predicate {
+    def apply(c: Cursor): Boolean =
+      c.attribute(attrName) match {
+        case Ior.Right(value: String) => r.matches(value)
+        case _ => false
+      }
   }
 }
 
@@ -96,7 +150,7 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
     }
 
   def runFields(query: Query, tpe: Type, cursor: Cursor): Result[List[(String, ProtoJson)]] = {
-    (query, tpe) match {
+    (query, tpe.dealias) match {
       case (sel@Select(fieldName, _, _), NullableType(tpe)) =>
         cursor.asNullable.sequence.map { rc =>
           for {
@@ -123,8 +177,18 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
   }
 
   def runValue(query: Query, tpe: Type, cursor: Cursor): Result[ProtoJson] = {
-    tpe match {
-      case NullableType(tpe) =>
+    (query, tpe.dealias) match {
+      case (Unique(pred, child), _) if cursor.isList =>
+        cursor.asList.map(_.filter(pred)).flatMap(lc =>
+          lc match {
+            case List(c) => runValue(child, tpe.nonNull, c)
+            case Nil if tpe.isNullable => ProtoJson.fromJson(Json.Null).rightIor
+            case Nil => mkErrorResult(s"No match")
+            case _ => mkErrorResult(s"Multiple matches")
+          }
+        )
+
+      case (_, NullableType(tpe)) =>
         cursor.asNullable.sequence.map { rc =>
           for {
             c     <- rc
@@ -132,23 +196,23 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
           } yield value
         }.getOrElse(ProtoJson.fromJson(Json.Null).rightIor)
 
-      case ListType(tpe) =>
+      case (Filter(pred, child), ListType(tpe)) =>
+        cursor.asList.map(_.filter(pred)).flatMap(lc =>
+          lc.traverse(c => runValue(child, tpe, c)).map(ProtoJson.fromValues)
+        )
+
+      case (_, ListType(tpe)) =>
         cursor.asList.flatMap(lc =>
           lc.traverse(c => runValue(query, tpe, c)).map(ProtoJson.fromValues)
         )
 
-      case TypeRef(schema, tpnme) =>
-        schema.types.find(_.name == tpnme)
-          .map(tpe => runValue(query, tpe, cursor))
-          .getOrElse(mkErrorResult(s"Unknown type '$tpnme'"))
+      case (_, (_: ScalarType) | (_: EnumType)) => cursor.asLeaf.map(ProtoJson.fromJson)
 
-      case (_: ScalarType) | (_: EnumType) => cursor.asLeaf.map(ProtoJson.fromJson)
-
-      case (_: ObjectType) | (_: InterfaceType) =>
+      case (_, (_: ObjectType) | (_: InterfaceType)) =>
         runFields(query, tpe, cursor).map(ProtoJson.fromFields)
 
       case _ =>
-        mkErrorResult(s"Unsupported type $tpe")
+        mkErrorResult(s"Unknown type $tpe")
     }
   }
 }

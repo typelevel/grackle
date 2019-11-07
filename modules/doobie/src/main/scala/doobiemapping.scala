@@ -8,31 +8,42 @@ import java.sql.ResultSet
 
 import cats.implicits._
 import _root_.doobie.{ ConnectionIO, Fragment, Fragments, Get, Read }
+import _root_.doobie.implicits._
 import _root_.doobie.enum.Nullability._
 
 import DoobieMapping._, FieldMapping._
+import DoobiePredicate._
+import Predicate._
 import Query._
 import ScalarType._
 
 trait DoobieMapping {
   val objectMappings: List[ObjectMapping]
 
-  def mapQuery(q: Query, tpe: Type, predicates: List[Fragment]): MappedQuery = {
-    def loop(q: Query, tpe: Type, acc: List[(Type, FieldMapping)]): List[(Type, FieldMapping)] = q match {
-      case Select(fieldName, _, q) =>
-        val obj = tpe.underlyingObject
-        (for {
-          om      <- objectMappings.find(_.tpe =:= obj)
-          (_, cr) <- om.fieldMappings.find(_._1 == fieldName)
-        } yield loop(q, obj.underlyingField(fieldName), (obj, cr) :: acc)).getOrElse(acc)
-      case Group(queries) =>
-        queries.foldLeft(acc) {
-          case (acc, sibling) => loop(sibling, tpe, acc)
-        }
-      case Empty => acc
-    }
+  def mapQuery(q: Query, tpe: Type): MappedQuery = {
+    type Acc = (List[(Type, FieldMapping)], List[(Type, Predicate)])
+    def loop(q: Query, tpe: Type, acc: Acc): Acc =
+      q match {
+        case Select(fieldName, _, q) =>
+          val obj = tpe.underlyingObject
+          (for {
+            om      <- objectMappings.find(_.tpe =:= obj)
+            (_, cr) <- om.fieldMappings.find(_._1 == fieldName)
+          } yield loop(q, obj.underlyingField(fieldName), ((obj, cr) :: acc._1, acc._2))).getOrElse(acc)
+        case Group(queries) =>
+          queries.foldLeft(acc) {
+            case (acc, sibling) => loop(sibling, tpe, acc)
+          }
+        case Filter(pred, child) =>
+          val obj = tpe.underlyingObject
+          loop(child, tpe, (acc._1, (obj, pred) :: acc._2))
+        case Unique(pred, child) =>
+          val obj = tpe.underlyingObject
+          loop(child, tpe, (acc._1, (obj, pred) :: acc._2))
+        case _ => acc
+      }
 
-    val mappings: List[(Type, FieldMapping)] = loop(q, tpe, Nil)
+    val (mappings, predicates) = loop(q, tpe, (Nil, Nil))
 
     val types: List[Type] = mappings.map(_._1).distinct
 
@@ -86,7 +97,7 @@ object DoobieMapping {
   case class MappedQuery(
     tables: List[String],
     columns: List[ColumnRef],
-    predicates: List[Fragment],
+    predicates: List[(Type, Predicate)],
     joins: List[Join],
     mapping: DoobieMapping
   ) {
@@ -105,6 +116,13 @@ object DoobieMapping {
       om.fieldMappings.exists(_._1 == fieldName)
     }
 
+    def columnOfField(tpe: Type, fieldName: String): ColumnRef = {
+      val obj = tpe.dealias
+      val om = mapping.objectMappings.find(_.tpe =:= obj).get
+      val Some((_, col: ColumnRef)) = om.fieldMappings.find(_._1 == fieldName)
+      col
+    }
+
     def selectField(row: Row, tpe: Type, fieldName: String): Any = {
       val obj = tpe.dealias
       val om = mapping.objectMappings.find(_.tpe =:= obj).get
@@ -116,6 +134,13 @@ object DoobieMapping {
       val obj = tpe.dealias
       val om = mapping.objectMappings.find(_.tpe =:= obj).get
       om.key.exists(_.column == keyName)
+    }
+
+    def columnOfKey(tpe: Type, keyName: String): ColumnRef = {
+      val obj = tpe.dealias
+      val om = mapping.objectMappings.find(_.tpe =:= obj).get
+      val Some(col: ColumnRef) = om.key.find(_.column == keyName)
+      col
     }
 
     def selectKey(row: Row, tpe: Type, keyName: String): Any = {
@@ -139,12 +164,45 @@ object DoobieMapping {
         case None => table.map(List(_))
       }
 
+    def rootCursorType(rootType: Type): Type = {
+      def loop(tpe: Type): Type =
+        tpe match {
+          case tpe@ListType(_) => tpe
+          case NullableType(tpe) => NullableType(loop(tpe))
+          case tpe => ListType(tpe)
+        }
+
+      loop(rootType)
+    }
+
     def fetch: ConnectionIO[Table] =
       fragment.query[Row](Row.mkRead(columns)).to[List]
 
     lazy val fragment: Fragment = {
       val cols = columns.map(_.toSql)
-      val where = Fragments.whereAnd(predicates ++ joins.map(join => Fragment.const(join.toSql)): _*)
+      val preds = predicates.map {
+        case (tpe, FieldEquals(fieldName, value)) =>
+          val col = columnOfField(tpe, fieldName)
+          Fragment.const(s"${col.toSql} = ") ++ fr"$value"
+
+        case (tpe, FieldLike(fieldName, pattern, caseInsensitive)) =>
+          val col = columnOfField(tpe, fieldName)
+          val op = if(caseInsensitive) "ILIKE" else "LIKE"
+          Fragment.const(s"${col.toSql} $op ") ++ fr"$pattern"
+
+        case (tpe, AttrEquals(keyName, value)) =>
+          val col = columnOfKey(tpe, keyName)
+          Fragment.const(s"${col.toSql} = ") ++ fr"$value"
+
+        case (tpe, AttrLike(keyName, pattern, caseInsensitive)) =>
+          val col = columnOfField(tpe, keyName)
+          val op = if(caseInsensitive) "ILIKE" else "LIKE"
+          Fragment.const(s"${col.toSql} $op ") ++ fr"$pattern"
+
+        case _ => Fragment.empty
+      }
+
+      val where = Fragments.whereAnd(preds ++ joins.map(join => Fragment.const(join.toSql)): _*)
 
       val select =
         Fragment.const(
