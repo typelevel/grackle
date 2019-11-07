@@ -44,7 +44,6 @@ lazy val core = project
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-core",
-    //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports"),
     libraryDependencies ++= Seq(
       "org.tpolecat"      %% "atto-core"              % attoVersion,
       "org.typelevel"     %% "cats-core"              % catsVersion,
@@ -62,7 +61,6 @@ lazy val doobie = project
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-doobie",
-    //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports"),
     libraryDependencies ++= Seq(
       "org.typelevel"     %% "cats-effect"            % catsEffectVersion,
       "io.chrisdavenport" %% "log4cats-slf4j"         % log4catsVersion,
