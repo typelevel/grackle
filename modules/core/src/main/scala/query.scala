@@ -221,9 +221,9 @@ object QueryInterpreter {
   type ProtoJson <: AnyRef
 
   object ProtoJson {
-    case class DeferredJson private (cursor: Cursor, tpe: Type, fieldName: String, query: Query)
-    case class ProtoObject private (fields: List[(String, ProtoJson)])
-    case class ProtoArray private (elems: List[ProtoJson])
+    private[QueryInterpreter] case class DeferredJson(cursor: Cursor, tpe: Type, fieldName: String, query: Query)
+    private[QueryInterpreter] case class ProtoObject(fields: List[(String, ProtoJson)])
+    private[QueryInterpreter] case class ProtoArray(elems: List[ProtoJson])
 
     def deferred(cursor: Cursor, tpe: Type, fieldName: String, query: Query): ProtoJson =
       wrap(DeferredJson(cursor, tpe, fieldName, query))
