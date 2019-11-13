@@ -9,22 +9,24 @@ import cats.implicits._
 import edu.gemini.grackle._
 import Predicate._
 import Query._, Binding._
-import QueryInterpreter.{ mkErrorResult, ProtoJson }
+import QueryInterpreter.mkErrorResult
 
-object CountryCurrencyQueryInterpreter extends ComposedQueryInterpreter[Id] {
-  val schema = ComposedSchema
-  import schema._
+import ComposedSchema._
 
+object CountryCurrencyQueryInterpreter extends
+  ComposedQueryInterpreter[Id](ComposedSchema, ComposedMapping)
+
+object ComposedMapping extends ComponentMapping[Id] {
   import CountryData._
 
-  val currencyMapping =
+  lazy val currencyMapping =
     ObjectMapping(
       tpe = CurrencyType,
       interpreter = CurrencyQueryInterpreter,
       fieldMappings = Nil
     )
 
-  val countryMapping =
+  lazy val countryMapping =
     ObjectMapping(
       tpe = CountryType,
       interpreter = CountryQueryInterpreter,
@@ -34,10 +36,10 @@ object CountryCurrencyQueryInterpreter extends ComposedQueryInterpreter[Id] {
         )
     )
 
-  val queryMapping =
+  lazy val queryMapping =
     ObjectMapping(
       tpe = QueryType,
-      interpreter = this,
+      interpreter = CountryCurrencyQueryInterpreter,
       fieldMappings =
         List(
           "country" -> Subobject(countryMapping),
@@ -54,7 +56,7 @@ object CountryCurrencyQueryInterpreter extends ComposedQueryInterpreter[Id] {
         mkErrorResult("Bad query")
     }
 
-  val objectMappings = List(queryMapping, countryMapping, currencyMapping)
+  lazy val objectMappings = List(queryMapping, countryMapping, currencyMapping)
 }
 
 object CurrencyData {
@@ -69,20 +71,21 @@ object CurrencyData {
   val currencies = List(EUR, GBP)
 }
 
-object CurrencyQueryInterpreter extends QueryInterpreter[Id] {
-  val schema = ComposedSchema
-  import schema._
-
+object CurrencyQueryInterpreter extends DataTypeQueryInterpreter[Id](ComposedSchema, ComposedMapping) {
   import CurrencyData._
 
-  def runRootValue(query: Query): Result[ProtoJson] = {
+  def rootCursor(query: Query): Result[(Type, Cursor)] =
     query match {
-      case Select("currency", List(StringBinding("code", code)), child) =>
-        runValue(Unique(FieldEquals("code", code), child), NullableType(CurrencyType), CurrencyCursor(currencies))
-      case _ =>
-        mkErrorResult("Bad query")
+      case Select("currency", _, _) => (NullableType(CurrencyType), CurrencyCursor(currencies)).rightIor
+      case _ => mkErrorResult("Bad query")
     }
-  }
+
+  def elaborateSelect(tpe: Type, query: Select): Result[Query] =
+    (tpe.dealias, query) match {
+      case (QueryType, Select("currency", List(StringBinding("code", code)), child)) =>
+        Unique(FieldEquals("code", code), child).rightIor
+      case _ => query.rightIor
+    }
 }
 
 case class CurrencyCursor(focus: Any) extends DataTypeCursor {
@@ -116,22 +119,23 @@ object CountryData {
   val countries = List(DEU, FRA, GBR)
 }
 
-object CountryQueryInterpreter extends QueryInterpreter[Id] {
-  val schema = ComposedSchema
-  import schema._
-
+object CountryQueryInterpreter extends DataTypeQueryInterpreter[Id](ComposedSchema, ComposedMapping) {
   import CountryData._
 
-  def runRootValue(query: Query): Result[ProtoJson] = {
+  def rootCursor(query: Query): Result[(Type, Cursor)] =
     query match {
-      case Select("country", List(StringBinding("code", code)), child) =>
-        runValue(Unique(FieldEquals("code", code), child), NullableType(CountryType), CountryCursor(countries))
-      case Select("countries", _, child) =>
-        runValue(child, ListType(CountryType), CountryCursor(countries))
-      case _ =>
-        mkErrorResult("Bad query")
+      case Select("country", _, _) => (NullableType(CountryType), CountryCursor(countries)).rightIor
+      case Select("countries", _, _) => (ListType(CountryType), CountryCursor(countries)).rightIor
+      case _ => mkErrorResult("Bad query")
     }
-  }
+
+  def elaborateSelect(tpe: Type, query: Select): Result[Query] =
+    (tpe.dealias, query) match {
+      case (QueryType, Select("country", List(StringBinding("code", code)), child)) =>
+        Unique(FieldEquals("code", code), child).rightIor
+      case (QueryType, Select("countries", _, child)) => child.rightIor
+      case _ => query.rightIor
+    }
 }
 
 case class CountryCursor(focus: Any) extends DataTypeCursor {

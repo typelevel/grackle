@@ -3,8 +3,12 @@
 
 package edu.gemini.grackle
 
+import cats.Monad
 import cats.implicits._
 import io.circe.Json
+
+import ComponentMapping.NoMapping
+import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
 trait Cursor {
   def focus: Any
@@ -20,9 +24,21 @@ trait Cursor {
   def attribute(attributeName: String): Result[Any]
 }
 
-trait DataTypeCursor extends Cursor {
-  import QueryInterpreter.mkErrorResult
+abstract class DataTypeQueryInterpreter[F[_]: Monad](schema: Schema, mapping: ComponentMapping[F] = NoMapping[F])
+  extends QueryInterpreter[F](schema, mapping) {
 
+  def rootCursor(query: Query): Result[(Type, Cursor)]
+
+  def runRootValue(query: Query): F[Result[ProtoJson]] =
+    (for {
+      elab          <- elaborateSelects(query)
+      root          <- rootCursor(query)
+      (tpe, cursor) =  root
+      value         <- runValue(elab, tpe, cursor)
+    } yield value).pure[F]
+}
+
+trait DataTypeCursor extends Cursor {
   val focus: Any
   def mkCursor(focus: Any): Cursor
 

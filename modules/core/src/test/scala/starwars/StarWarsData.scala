@@ -10,7 +10,10 @@ import edu.gemini.grackle._
 
 import Predicate._
 import Query._, Binding._
-import QueryInterpreter.{ mkErrorResult, ProtoJson }
+import QueryInterpreter.mkErrorResult
+
+import StarWarsData._
+import StarWarsSchema._
 
 object StarWarsData {
   object Episode extends Enumeration {
@@ -97,27 +100,25 @@ object StarWarsData {
       primaryFunction = Some("Astromech"))
 }
 
-object StarWarsQueryInterpreter extends QueryInterpreter[Id] {
-  val schema = StarWarsSchema
-  import schema._
-
-  import StarWarsData._
-
-  def runRootValue(query: Query): Result[ProtoJson] = {
+object StarWarsQueryInterpreter extends DataTypeQueryInterpreter[Id](StarWarsSchema) {
+  def rootCursor(query: Query): Result[(Type, Cursor)] =
     query match {
-      case Select("hero", _, child) =>
-        runValue(child, CharacterType, StarWarsCursor(R2D2))
-      case Select("character" | "human", List(StringBinding("id", id)), child) =>
-        runValue(Unique(FieldEquals("id", id), child), NullableType(CharacterType), StarWarsCursor(characters))
+      case Select("hero", _, _)                => (CharacterType, StarWarsCursor(characters)).rightIor
+      case Select("character" | "human", _, _) => (NullableType(CharacterType), StarWarsCursor(characters)).rightIor
       case _ => mkErrorResult("Bad query")
     }
-  }
+
+  def elaborateSelect(tpe: Type, query: Select): Result[Query] =
+    (tpe.dealias, query) match {
+      case (QueryType, Select("hero", _, child)) =>
+        Unique(FieldEquals("id", R2D2.id), child).rightIor
+      case (QueryType, Select("character" | "human", List(StringBinding("id", id)), child)) =>
+        Unique(FieldEquals("id", id), child).rightIor
+      case _ => query.rightIor
+    }
 }
 
 case class StarWarsCursor(focus: Any) extends DataTypeCursor {
-  import QueryInterpreter.mkErrorResult
-  import StarWarsData._
-
   def mkCursor(focus: Any): Cursor = StarWarsCursor(focus)
 
   def hasField(fieldName: String): Boolean = (focus, fieldName) match {

@@ -14,28 +14,31 @@ import _root_.doobie.implicits._
 import io.chrisdavenport.log4cats.Logger
 import io.circe.Json
 
+import ComponentMapping.NoMapping
 import DoobieMapping._
 import Predicate._
 import Query._
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
-abstract class DoobieQueryInterpreter[F[_]](override implicit val F: Bracket[F, Throwable]) extends QueryInterpreter[F] {
-  val mapping: DoobieMapping
+abstract class DoobieQueryInterpreter[F[_]](schema: Schema, cmapping: ComponentMapping[F] = NoMapping[F])
+  (override implicit val F: Bracket[F, Throwable]) extends QueryInterpreter[F](schema, cmapping) {
+  val dmapping: DoobieMapping
   val xa: Transactor[F]
   val logger: Logger[F]
 
-  def prepare(query: Query): Query
-
   def runRootValue(query: Query): F[Result[ProtoJson]] =
-    prepare(query) match {
-      case Select(fieldName, _, child) =>
-        val fieldTpe = schema.queryType.field(fieldName)
-        val mapped = mapping.mapQuery(child, fieldTpe)
+    query match {
+      case Select(fieldName, _, _) =>
+        elaborateSelects(query) match {
+          case Ior.Right(elaborated) =>
+            val fieldTpe = schema.queryType.field(fieldName)
+            val mapped = dmapping.mapQuery(elaborated, fieldTpe)
 
-        for {
-          table <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(xa)
-        } yield runValue(child, fieldTpe, DoobieCursor(mapped.rootCursorType(fieldTpe), table, mapped))
-
+            for {
+              table <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(xa)
+            } yield runValue(elaborated, fieldTpe, DoobieCursor(mapped.rootCursorType(fieldTpe), table, mapped))
+          case _ => mkErrorResult(s"Bad query").pure[F]
+        }
       case _ => mkErrorResult(s"Bad query").pure[F]
     }
 }

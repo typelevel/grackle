@@ -14,24 +14,33 @@ import io.chrisdavenport.log4cats.Logger
 import DoobiePredicate._
 import Predicate._
 import Query._, Binding._
-import QueryInterpreter.{ mkErrorResult, ProtoJson }
+import QueryInterpreter.mkErrorResult
 
-class WorldCurrencyQueryInterpreter[F[_]](xa: Transactor[F])(implicit brkt: Bracket[F, Throwable], logger: Logger[F])
-  extends ComposedQueryInterpreter[F] {
-  val schema = ComposedWorldSchema
-  import schema._
+import ComposedWorldSchema._
 
+class WorldCurrencyQueryInterpreter[F[_]: Monad](mapping: ComponentMapping[F])
+  extends ComposedQueryInterpreter[F](ComposedWorldSchema, mapping)
+
+object WorldCurrencyQueryInterpreter {
+  def fromTransactor[F[_]](xa: Transactor[F])
+    (implicit brkt: Bracket[F, Throwable], logger0: Logger[F]): QueryInterpreter[F] = {
+      val mapping = new ComposedWorldMapping(xa)
+      mapping.queryMapping.interpreter
+    }
+}
+
+class ComposedWorldMapping[F[_]](xa: Transactor[F])(implicit brkt: Bracket[F, Throwable], logger: Logger[F]) extends ComponentMapping[F] {
   val currencyMapping =
     ObjectMapping(
       tpe = CurrencyType,
-      interpreter = new CurrencyQueryInterpreter[F],
+      interpreter = new CurrencyQueryInterpreter[F](this),
       fieldMappings = Nil
     )
 
   val countryMapping =
     ObjectMapping(
       tpe = CountryType,
-      interpreter = ComposedWorldQueryInterpreter.fromTransactor(xa),
+      interpreter = ComposedWorldQueryInterpreter.fromTransactor(xa, this),
       fieldMappings =
         List(
           "currency" -> Subobject(currencyMapping, countryCurrencyJoin)
@@ -41,7 +50,7 @@ class WorldCurrencyQueryInterpreter[F[_]](xa: Transactor[F])(implicit brkt: Brac
   val queryMapping =
     ObjectMapping(
       tpe = QueryType,
-      interpreter = this,
+      interpreter = new WorldCurrencyQueryInterpreter(this),
       fieldMappings =
         List(
           "country" -> Subobject(countryMapping),
@@ -63,13 +72,6 @@ class WorldCurrencyQueryInterpreter[F[_]](xa: Transactor[F])(implicit brkt: Brac
   val objectMappings = List(queryMapping, countryMapping, currencyMapping)
 }
 
-object WorldCurrencyQueryInterpreter {
-  def fromTransactor[F[_]](xa: Transactor[F])
-    (implicit brkt: Bracket[F, Throwable], logger: Logger[F]): WorldCurrencyQueryInterpreter[F] = {
-      new WorldCurrencyQueryInterpreter[F](xa)
-    }
-}
-
 object CurrencyData {
   case class Currency(
     code: String,
@@ -84,19 +86,22 @@ object CurrencyData {
   val currencies = List(BRL, EUR, GBP)
 }
 
-class CurrencyQueryInterpreter[F[_]](override implicit val F: Monad[F]) extends QueryInterpreter[F] {
-  val schema = ComposedWorldSchema
-  import schema._
-
+class CurrencyQueryInterpreter[F[_]](mapping: ComponentMapping[F])(override implicit val F: Monad[F])
+  extends DataTypeQueryInterpreter[F](ComposedWorldSchema, mapping) {
   import CurrencyData._
 
-  def runRootValue(query: Query): F[Result[ProtoJson]] = {
+  def rootCursor(query: Query): Result[(Type, Cursor)] =
     query match {
-      case Select("currency", List(StringBinding("countryCode", countryCode)), child) =>
-        runValue(Unique(FieldEquals("countryCode", countryCode), child), NullableType(CurrencyType), CurrencyCursor(currencies)).pure[F]
-      case _ => mkErrorResult("Bad query").pure[F]
+      case Select("currency", _, _) => (NullableType(CurrencyType), CurrencyCursor(currencies)).rightIor
+      case _ => mkErrorResult("Bad query")
     }
-  }
+
+  def elaborateSelect(tpe: Type, query: Select): Result[Query] =
+    (tpe.dealias, query) match {
+      case (QueryType, Select("currency", List(StringBinding("countryCode", countryCode)), child)) =>
+        Unique(FieldEquals("countryCode", countryCode), child).rightIor
+      case _ => query.rightIor
+    }
 }
 
 case class CurrencyCursor(focus: Any) extends DataTypeCursor {
@@ -192,24 +197,24 @@ object ComposedWorldData extends DoobieMapping {
   val objectMappings = List(queryMapping, countryMapping, cityMapping, languageMapping)
 }
 
-trait ComposedWorldQueryInterpreter[F[_]] extends DoobieQueryInterpreter[F] {
-  val schema = ComposedWorldSchema
+abstract class ComposedWorldQueryInterpreter[F[_]](mapping: ComponentMapping[F])(implicit val brkt: Bracket[F, Throwable]) extends DoobieQueryInterpreter[F](ComposedWorldSchema, mapping) {
+  import ComposedWorldSchema._
 
-  def prepare(query: Query): Query = query match {
-    case Select("country", args@List(StringBinding("code", code)), child) =>
-      (Select("country", args, Unique(AttrEquals("code", code), child)))
-    case Select("cities", args@List(StringBinding("namePattern", namePattern)), child) =>
-      Select("cities", args, Filter(FieldLike("name", namePattern, true), child))
-    case _ =>
-      query
+  def elaborateSelect(tpe: Type, query: Select): Result[Query] = (tpe.dealias, query) match {
+    case (QueryType, Select("countries", Nil, child)) => child.rightIor
+    case (QueryType, Select("country", List(StringBinding("code", code)), child)) =>
+      Unique(AttrEquals("code", code), child).rightIor
+    case (QueryType, Select("cities", List(StringBinding("namePattern", namePattern)), child)) =>
+      Filter(FieldLike("name", namePattern, true), child).rightIor
+    case _ => query.rightIor
   }
 }
 
 object ComposedWorldQueryInterpreter {
-  def fromTransactor[F[_]](xa0: Transactor[F])
+  def fromTransactor[F[_]](xa0: Transactor[F], mapping: ComponentMapping[F])
     (implicit brkt: Bracket[F, Throwable], logger0: Logger[F]): ComposedWorldQueryInterpreter[F] =
-      new ComposedWorldQueryInterpreter[F] {
-        val mapping = ComposedWorldData
+      new ComposedWorldQueryInterpreter[F](mapping) {
+        val dmapping = ComposedWorldData
         val xa = xa0
         val logger = logger0
       }

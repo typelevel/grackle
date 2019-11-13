@@ -3,6 +3,7 @@
 
 package world
 
+import cats.implicits._
 import cats.effect.Bracket
 import doobie.Transactor
 import edu.gemini.grackle._, doobie._
@@ -87,16 +88,16 @@ object WorldData extends DoobieMapping {
   val objectMappings = List(queryMapping, countryMapping, cityMapping, languageMapping)
 }
 
-trait WorldQueryInterpreter[F[_]] extends DoobieQueryInterpreter[F] {
-  val schema = WorldSchema
+abstract class WorldQueryInterpreter[F[_]](implicit val brkt: Bracket[F, Throwable]) extends DoobieQueryInterpreter(WorldSchema) {
+  import WorldSchema._
 
-  def prepare(query: Query): Query = query match {
-    case Select("country", args@List(StringBinding("code", code)), child) =>
-      Select("country", args, Unique(AttrEquals("code", code), child))
-    case Select("cities", args@List(StringBinding("namePattern", namePattern)), child) =>
-      Select("cities", args, Filter(FieldLike("name", namePattern, true), child))
-    case _ =>
-      query
+  def elaborateSelect(tpe: Type, query: Select): Result[Query] = (tpe.dealias, query) match {
+    case (QueryType, Select("countries", Nil, child)) => child.rightIor
+    case (QueryType, Select("country", List(StringBinding("code", code)), child)) =>
+      Unique(AttrEquals("code", code), child).rightIor
+    case (QueryType, Select("cities", List(StringBinding("namePattern", namePattern)), child)) =>
+      Filter(FieldLike("name", namePattern, true), child).rightIor
+    case _ => query.rightIor
   }
 }
 
@@ -104,7 +105,7 @@ object WorldQueryInterpreter {
   def fromTransactor[F[_]](xa0: Transactor[F])
     (implicit brkt: Bracket[F, Throwable], logger0: Logger[F]): WorldQueryInterpreter[F] =
       new WorldQueryInterpreter[F] {
-        val mapping = WorldData
+        val dmapping = WorldData
         val xa = xa0
         val logger = logger0
       }

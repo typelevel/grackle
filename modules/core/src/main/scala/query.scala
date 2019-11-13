@@ -15,9 +15,10 @@ import cats.implicits._
 import io.circe.Json
 import io.circe.literal.JsonStringContext
 
-sealed trait Query {
-  import Query._
+import ComponentMapping.NoMapping
+import Query._
 
+sealed trait Query {
   def ~(query: Query): Query = (this, query) match {
     case (Group(hd), Group(tl)) => Group(hd ++ tl)
     case (hd, Group(tl)) => Group(hd :: tl)
@@ -113,17 +114,16 @@ object Predicate {
   }
 }
 
-abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
-  import Query._
+abstract class QueryInterpreter[F[_]]
+  (val schema: Schema, val mapping: ComponentMapping[F] = NoMapping[F])
+  (implicit val F: Monad[F]) {
+
   import QueryInterpreter.{ complete, mkErrorResult, ProtoJson }
-  import ComponentMapping.NoMapping
 
-  val schema: Schema
+  def run(query: Query): F[Json] =
+    runRoot(query).map(QueryInterpreter.mkResponse)
 
-  def run(query: Query, mapping: ComponentMapping[F] = NoMapping): F[Json] =
-    runRoot(query, mapping).map(QueryInterpreter.mkResponse)
-
-  def runRoot(query: Query, mapping: ComponentMapping[F] = NoMapping): F[Result[Json]] =
+  def runRoot(query: Query): F[Result[Json]] =
     query match {
       case Select(fieldName, _, _) =>
         (for {
@@ -134,6 +134,30 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
       case _ =>
         mkErrorResult(s"Bad query: $query").pure[F]
     }
+
+  def elaborateSelect(tpe: Type, query: Select): Result[Query]
+
+  def elaborateSelects(query: Query): Result[Query] = {
+    def loop(query: Query, tpe: Type, isRoot: Boolean): Result[Query] = {
+      if (!mapping.isNoMapping && !isRoot && mapping.interpreterForType(tpe.dealias).fold(true)(_ ne this))
+        query.rightIor
+      else
+        query match {
+          case Select(fieldName, args, child) =>
+            for {
+              elaboratedChild  <- loop(child, tpe.field(fieldName), false)
+              elaboratedParent <- elaborateSelect(tpe, Select(fieldName, args, elaboratedChild))
+            } yield elaboratedParent
+
+          case Group(queries)      => queries.traverse(q => loop(q, tpe, false)).map(Group(_))
+          case Unique(pred, child) => loop(child, tpe.nonNull, false).map(c => Unique(pred, c))
+          case Filter(pred, child) => loop(child, tpe.item, false).map(c => Filter(pred, c))
+          case Empty               => Empty.rightIor
+        }
+    }
+
+    loop(query, schema.queryType, true)
+  }
 
   def runRootValue(query: Query): F[Result[ProtoJson]]
 
@@ -368,6 +392,11 @@ object QueryInterpreter {
 trait ComponentMapping[F[_]] {
   val objectMappings: List[ObjectMapping]
 
+  def isNoMapping = false
+
+  def interpreterForType(tpe: Type): Option[QueryInterpreter[F]] =
+    objectMappings.find(_.tpe =:= tpe).map(_.interpreter)
+
   def subobject(tpe: Type, fieldName: String): Option[Subobject] =
     objectMappings.find(_.tpe =:= tpe) match {
       case Some(om) =>
@@ -397,15 +426,20 @@ trait ComponentMapping[F[_]] {
 object ComponentMapping {
   def NoMapping[F[_]]: ComponentMapping[F] =
     new ComponentMapping[F] {
+      override def isNoMapping = true
       val objectMappings = Nil
     }
 }
 
-trait ComposedQueryInterpreter[F[_]] extends QueryInterpreter[F] with ComponentMapping[F] {
-  import Query._
+abstract class ComposedQueryInterpreter[F[_]: Monad](schema: Schema, mapping: ComponentMapping[F])
+  extends QueryInterpreter[F](schema, mapping) {
+
   import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
-  def run(query: Query): F[Json] = run(query, this)
+  import mapping._
+
+  def elaborateSelect(tpe: Type, query: Select): Result[Query] =
+    query.rightIor
 
   def runRootValue(query: Query): F[Result[ProtoJson]] = {
     query match {
