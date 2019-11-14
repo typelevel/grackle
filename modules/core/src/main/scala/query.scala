@@ -41,10 +41,13 @@ object Query {
     def render = queries.map(_.render).mkString(", ")
   }
   case class Unique(pred: Predicate, child: Query) extends Query {
-    def render = s"<unique> $child"
+    def render = s"<unique: ${child.render}>"
   }
   case class Filter(pred: Predicate, child: Query) extends Query {
-    def render = s"<filter> $child"
+    def render = s"<filter: ${child.render}>"
+  }
+  case class Component(schema: SchemaComponent, join: (Cursor, Query) => Result[Query], child: Query) extends Query {
+    def render = s"<component: ${schema.getClass.getSimpleName} ${child.render}"
   }
   case object Empty extends Query {
     def render = ""
@@ -152,6 +155,7 @@ abstract class QueryInterpreter[F[_]]
           case Group(queries)      => queries.traverse(q => loop(q, tpe, false)).map(Group(_))
           case Unique(pred, child) => loop(child, tpe.nonNull, false).map(c => Unique(pred, c))
           case Filter(pred, child) => loop(child, tpe.item, false).map(c => Filter(pred, c))
+          case Component(_, _, _)  => ???
           case Empty               => Empty.rightIor
         }
     }
@@ -185,6 +189,7 @@ abstract class QueryInterpreter[F[_]]
 
       case (Select(fieldName, bindings, child), tpe) =>
         if (!cursor.hasField(fieldName))
+          // Elaborate (cursor, query) => query now
           List((fieldName, ProtoJson.deferred(cursor, tpe, fieldName, child))).rightIor
         else
           for {

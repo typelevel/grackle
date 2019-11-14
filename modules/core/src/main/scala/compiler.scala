@@ -57,3 +57,46 @@ object Compiler {
     case _ => mkErrorResult("Argument required")
   }
 }
+
+class SelectElaborator(mapping: Map[Type, Select => Result[Query]]) {
+  def apply(query: Query, tpe: Type): Result[Query] =
+    query match {
+      case Select(fieldName, args, child) =>
+        apply(child, tpe.field(fieldName)).flatMap { elaboratedChild =>
+          val elaborated0 = Select(fieldName, args, elaboratedChild)
+          mapping.get(tpe.dealias) match {
+            case Some(elaborator) => elaborator(elaborated0)
+            case None => elaborated0.rightIor
+          }
+        }
+
+      case g@Group(queries)         => queries.traverse(q => apply(q, tpe)).map(eqs => g.copy(queries = eqs))
+      case u@Unique(_, child)       => apply(child, tpe.nonNull).map(ec => u.copy(child = ec))
+      case f@Filter(_, child)       => apply(child, tpe.item).map(ec => f.copy(child = ec))
+      case c@Component(_, _, child) => apply(child, tpe).map(ec => c.copy(child = ec))
+      case Empty                    => Empty.rightIor
+    }
+}
+
+class ComponentElaborator(mapping: Map[(Type, String), (SchemaComponent, Type, (Cursor, Query) => Result[Query])]) {
+  def apply(query: Query, tpe: Type): Result[Query] =
+    query match {
+      case Select(fieldName, args, child) =>
+        mapping.get((tpe.dealias, fieldName)) match {
+          case Some((schema, tpe, join)) =>
+            apply(child, tpe).map { elaboratedChild =>
+              Component(schema, join, Select(fieldName, args, elaboratedChild))
+            }
+          case None =>
+            apply(child, tpe.field(fieldName)).map { elaboratedChild =>
+              Select(fieldName, args, elaboratedChild)
+            }
+        }
+
+      case g@Group(queries)         => queries.traverse(q => apply(q, tpe)).map(eqs => g.copy(queries = eqs))
+      case u@Unique(_, child)       => apply(child, tpe.nonNull).map(ec => u.copy(child = ec))
+      case f@Filter(_, child)       => apply(child, tpe.item).map(ec => f.copy(child = ec))
+      case c@Component(_, _, child) => apply(child, tpe).map(ec => c.copy(child = ec))
+      case Empty                    => Empty.rightIor
+    }
+}

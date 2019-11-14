@@ -3,15 +3,18 @@
 
 package edu.gemini.grackle
 
-trait Schema {
-  val types:            List[NamedType]
+trait SchemaComponent {
+  val types: List[NamedType]
+
+  def TypeRef(ref: String): TypeRef =
+    new TypeRef(this, ref)
+}
+
+trait Schema extends SchemaComponent {
   val queryType:        TypeRef
   val mutationType:     Option[TypeRef]
   val subscriptionType: Option[TypeRef]
   val directives:       List[Directive]
-
-  def TypeRef(ref: String): TypeRef =
-    new TypeRef(this, ref)
 }
 
 sealed trait Type {
@@ -85,7 +88,7 @@ sealed trait NamedType extends Type {
 }
 
 case object NoType extends Type
-case class TypeRef(schema: Schema, ref: String) extends Type {
+case class TypeRef(schema: SchemaComponent, ref: String) extends Type {
   override def toString: String = s"@$ref"
 }
 
