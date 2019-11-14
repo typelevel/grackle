@@ -4,35 +4,40 @@
 package edu.gemini.grackle
 
 import atto.Atto._
+import cats.data.{ Ior, NonEmptyChain }
 import cats.implicits._
 
 import Query._, Binding._
-import Ast._, OperationDefinition._, OperationType._, Selection._, Value._
+import QueryInterpreter.{ mkError, mkErrorResult }
+import Ast.{ Type => _, _ }, OperationDefinition._, OperationType._, Selection._, Value._
 
 object Compiler {
-  def compileText(text: String): Option[Query] =
+  def toResult[T](pr: Either[String, T]): Result[T] =
+    Ior.fromEither(pr).leftMap(msg => NonEmptyChain.one(mkError(msg)))
+
+  def compileText(text: String): Result[Query] =
     for {
-      doc   <- Parser.Document.parseOnly(text).option
+      doc   <- toResult(Parser.Document.parseOnly(text).either)
       query <- compileDocument(doc)
     } yield query
 
-  def compileDocument(doc: Document): Option[Query] = doc match {
+  def compileDocument(doc: Document): Result[Query] = doc match {
     case List(Left(op: Operation)) => compileOperation(op)
-    case _ => None
+    case _ => mkErrorResult("Operation required")
   }
 
-  def compileOperation(op: Operation): Option[Query] = op match {
+  def compileOperation(op: Operation): Result[Query] = op match {
     case Operation(Query, _, _, _, sels) =>
       compileSelections(sels)
-    case _ => None
+    case _ => mkErrorResult("Selection required")
   }
 
-  def compileSelections(sels: List[Selection]): Option[Query] =
-    sels.map(compileSelection).sequence.map { sels0 =>
+  def compileSelections(sels: List[Selection]): Result[Query] =
+    sels.traverse(compileSelection).map { sels0 =>
       if (sels0.size == 1) sels0.head else Group(sels0)
     }
 
-  def compileSelection(sel: Selection): Option[Query] = sel match {
+  def compileSelection(sel: Selection): Result[Query] = sel match {
     case Field(_, name, args, _, sels) =>
       for {
         args0 <- compileArgs(args)
@@ -41,14 +46,14 @@ object Compiler {
         if (sels.isEmpty) Select(name.value, args0, Empty)
         else Select(name.value, args0, sels0)
       }
-    case _ => None
+    case _ => mkErrorResult("Field required")
   }
 
-  def compileArgs(args: List[(Name, Value)]): Option[List[Binding]] =
-    args.map((compileArg _).tupled).sequence
+  def compileArgs(args: List[(Name, Value)]): Result[List[Binding]] =
+    args.traverse((compileArg _).tupled)
 
-  def compileArg(name: Name, value: Value): Option[Binding] = value match {
-    case StringValue(s) => Some(StringBinding(name.value, s))
-    case _ => None
+  def compileArg(name: Name, value: Value): Result[Binding] = value match {
+    case StringValue(s) => StringBinding(name.value, s).rightIor
+    case _ => mkErrorResult("Argument required")
   }
 }

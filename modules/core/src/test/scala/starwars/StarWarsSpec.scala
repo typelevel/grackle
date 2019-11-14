@@ -27,7 +27,7 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = Compiler.compileText(query).get
+    val compiledQuery = Compiler.compileText(query).right.get
     val res = StarWarsQueryInterpreter.run(compiledQuery)
     //println(res)
 
@@ -70,7 +70,7 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = Compiler.compileText(query).get
+    val compiledQuery = Compiler.compileText(query).right.get
     val res = StarWarsQueryInterpreter.run(compiledQuery)
     //println(res)
 

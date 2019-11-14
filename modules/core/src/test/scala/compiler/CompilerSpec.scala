@@ -3,6 +3,7 @@
 
 package compiler
 
+import cats.data.Ior
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle._
@@ -24,7 +25,7 @@ final class CompilerSuite extends CatsSuite {
       )
 
     val res = Compiler.compileText(text)
-    assert(res == Some(expected))
+    assert(res == Ior.Right(expected))
   }
 
   test("simple nested query") {
@@ -50,6 +51,6 @@ final class CompilerSuite extends CatsSuite {
       )
 
     val res = Compiler.compileText(text)
-    assert(res == Some(expected))
+    assert(res == Ior.Right(expected))
   }
 }

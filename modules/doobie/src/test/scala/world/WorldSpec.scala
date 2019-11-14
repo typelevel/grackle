@@ -37,7 +37,7 @@ final class WorldSpec extends CatsSuite {
 
     val expected = 239
 
-    val compiledQuery = Compiler.compileText(query).get
+    val compiledQuery = Compiler.compileText(query).right.get
     val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
     //println(res)
 
@@ -65,7 +65,7 @@ final class WorldSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = Compiler.compileText(query).get
+    val compiledQuery = Compiler.compileText(query).right.get
     val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
     //println(res)
 
@@ -139,7 +139,7 @@ final class WorldSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = Compiler.compileText(query).get
+    val compiledQuery = Compiler.compileText(query).right.get
     val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
     //println(res)
 
@@ -201,7 +201,7 @@ final class WorldSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = Compiler.compileText(query).get
+    val compiledQuery = Compiler.compileText(query).right.get
     val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
     //println(res)
 
@@ -351,7 +351,7 @@ final class WorldSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = Compiler.compileText(query).get
+    val compiledQuery = Compiler.compileText(query).right.get
     val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
     //println(res)
 
