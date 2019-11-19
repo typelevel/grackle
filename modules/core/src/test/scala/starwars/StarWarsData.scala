@@ -8,7 +8,8 @@ import cats.implicits._
 
 import edu.gemini.grackle._
 
-import Query._
+import Query._, Binding._, Predicate._
+import QueryCompiler._
 import QueryInterpreter.mkErrorResult
 
 import StarWarsData._
@@ -97,6 +98,19 @@ object StarWarsData {
       friends = Some(List(LukeSkywalker, HanSolo, LeiaOrgana)),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
       primaryFunction = Some("Astromech"))
+}
+
+object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
+  val selectElaborator = new SelectElaborator(Map(
+    QueryType -> {
+      case Select("hero", _, child) =>
+        Wrap("hero", Unique(FieldEquals("id", R2D2.id), child)).rightIor
+      case Select(f@("character" | "human"), List(StringBinding("id", id)), child) =>
+        Wrap(f, Unique(FieldEquals("id", id), child)).rightIor
+    }
+  ))
+
+  val phases = List(selectElaborator)
 }
 
 object StarWarsQueryInterpreter extends DataTypeQueryInterpreter[Id](StarWarsSchema) {

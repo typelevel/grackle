@@ -7,10 +7,66 @@ import cats.Id
 import cats.implicits._
 
 import edu.gemini.grackle._
-import Query._
+import Query._, Binding._, Predicate._
+import QueryCompiler._, ComponentElaborator.Mapping
 import QueryInterpreter.mkErrorResult
 
 import ComposedSchema._
+
+object CurrencyQueryCompiler extends QueryCompiler(ComposedSchema) {
+  val selectElaborator = new SelectElaborator(Map(
+    QueryType -> {
+      case Select("currency", List(StringBinding("code", code)), child) =>
+        Wrap("currency", Unique(FieldEquals("code", code), child)).rightIor
+    }
+  ))
+
+  val phases = List(selectElaborator)
+}
+
+object CountryQueryCompiler extends QueryCompiler(ComposedSchema) {
+  val selectElaborator = new SelectElaborator(Map(
+    QueryType -> {
+      case Select("country", List(StringBinding("code", code)), child) =>
+        Wrap("country", Unique(FieldEquals("code", code), child)).rightIor
+      case Select("countries", _, child) =>
+        Wrap("countries", child).rightIor
+    }
+  ))
+
+  val phases = List(selectElaborator)
+}
+
+object CountryCurrencyQueryCompiler extends QueryCompiler(ComposedSchema) {
+  import CountryData._
+
+  val selectElaborator =  new SelectElaborator(Map(
+    QueryType -> {
+      case Select("currency", List(StringBinding("code", code)), child) =>
+        Wrap("currency", Unique(FieldEquals("code", code), child)).rightIor
+      case Select("country", List(StringBinding("code", code)), child) =>
+        Wrap("country", Unique(FieldEquals("code", code), child)).rightIor
+      case Select("countries", _, child) =>
+        Wrap("countries", child).rightIor
+    }
+  ))
+
+  val countryCurrencyJoin = (c: Cursor, q: Query) =>
+    c.focus match {
+      case c: Country =>
+        Wrap("currency", Unique(FieldEquals("code", c.currencyCode), q)).rightIor
+      case _ =>
+        mkErrorResult(s"Unexpected cursor focus type in countryCurrencyJoin")
+    }
+
+  val componentElaborator = ComponentElaborator(
+    Mapping(QueryType, "country", CountrySchema),
+    Mapping(QueryType, "countries", CountrySchema),
+    Mapping(CountryType, "currency", CurrencySchema, countryCurrencyJoin)
+  )
+
+  val phases = List(selectElaborator, componentElaborator)
+}
 
 object CountryCurrencyQueryInterpreter extends
   ComposedQueryInterpreter[Id](ComposedSchema,
@@ -38,7 +94,7 @@ object CurrencyQueryInterpreter extends DataTypeQueryInterpreter[Id](ComposedSch
   def rootCursor(query: Query): Result[(Type, Cursor)] =
     query match {
       case Wrap("currency", _) => (NullableType(CurrencyType), CurrencyCursor(currencies)).rightIor
-      case _ => mkErrorResult("Bad query")
+      case _ => mkErrorResult(s"Unexpected query in CurrencyQueryInterpreter rootCursor: ${query.render}")
     }
 }
 
@@ -80,7 +136,9 @@ object CountryQueryInterpreter extends DataTypeQueryInterpreter[Id](ComposedSche
     query match {
       case Wrap("country", _) => (NullableType(CountryType), CountryCursor(countries)).rightIor
       case Wrap("countries", _) => (ListType(CountryType), CountryCursor(countries)).rightIor
-      case _ => mkErrorResult("Bad query")
+      case _ =>
+        Thread.dumpStack
+        mkErrorResult(s"Unexpected query in CountryQueryInterpreter rootCursor: $query")
     }
 }
 

@@ -6,56 +6,7 @@ package composed
 import cats.tests.CatsSuite
 import io.circe.literal.JsonStringContext
 
-import edu.gemini.grackle._
-import ComponentElaborator.Mapping
-import Query._, Binding._, Predicate._
-import QueryInterpreter.mkErrorResult
-
-import CountryData._
-import ComposedSchema._
-
 final class ComposedSpec extends CatsSuite {
-  val currencyElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("currency", List(StringBinding("code", code)), child) =>
-        Wrap("currency", Unique(FieldEquals("code", code), child)).rightIor
-    }
-  ))
-
-  val countryElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("country", List(StringBinding("code", code)), child) =>
-        Wrap("country", Unique(FieldEquals("code", code), child)).rightIor
-      case Select("countries", _, child) =>
-        Wrap("countries", child).rightIor
-    }
-  ))
-
-  val countryCurrencyElaborator =  new SelectElaborator(Map(
-    QueryType -> {
-      case Select("currency", List(StringBinding("code", code)), child) =>
-        Wrap("currency", Unique(FieldEquals("code", code), child)).rightIor
-      case Select("country", List(StringBinding("code", code)), child) =>
-        Wrap("country", Unique(FieldEquals("code", code), child)).rightIor
-      case Select("countries", _, child) =>
-        Wrap("countries", child).rightIor
-    }
-  ))
-
-  val countryCurrencyJoin = (c: Cursor, q: Query) =>
-    c.focus match {
-      case c: Country =>
-        Wrap("currency", Unique(FieldEquals("code", c.currencyCode), q)).rightIor
-      case _ =>
-        mkErrorResult("Bad query")
-    }
-
-  val componentElaborator = ComponentElaborator(
-    Mapping(QueryType, "country", CountrySchema),
-    Mapping(QueryType, "countries", CountrySchema),
-    Mapping(CountryType, "currency", CurrencySchema, countryCurrencyJoin)
-  )
-
   test("simple currency query") {
     val query = """
       query {
@@ -77,10 +28,8 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = Compiler.compileText(query)
-    val elaboratedQuery = compiledQuery.flatMap(currencyElaborator(_, QueryType)).right.get
-
-    val res = CurrencyQueryInterpreter.run(elaboratedQuery)
+    val compiledQuery = CurrencyQueryCompiler.compile(query).right.get
+    val res = CurrencyQueryInterpreter.run(compiledQuery)
     //println(res)
 
     assert(res == expected)
@@ -105,10 +54,8 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = Compiler.compileText(query)
-    val elaboratedQuery = compiledQuery.flatMap(countryElaborator(_, QueryType)).right.get
-
-    val res = CountryQueryInterpreter.run(elaboratedQuery)
+    val compiledQuery = CountryQueryCompiler.compile(query).right.get
+    val res = CountryQueryInterpreter.run(compiledQuery)
     //println(res)
 
     assert(res == expected)
@@ -141,14 +88,8 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val mappedQuery =
-      (for {
-        compiled <- Compiler.compileText(query)
-        elaborated <- countryCurrencyElaborator(compiled, QueryType)
-        mapped <- componentElaborator(elaborated, QueryType)
-      } yield mapped).right.get
-
-    val res = CountryCurrencyQueryInterpreter.run(mappedQuery)
+    val compiledQuery = CountryCurrencyQueryCompiler.compile(query).right.get
+    val res = CountryCurrencyQueryInterpreter.run(compiledQuery)
     //println(res)
 
     assert(res == expected)
@@ -197,14 +138,8 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val mappedQuery =
-      (for {
-        compiled <- Compiler.compileText(query)
-        elaborated <- countryCurrencyElaborator(compiled, QueryType)
-        mapped <- componentElaborator(elaborated, QueryType)
-      } yield mapped).right.get
-
-    val res = CountryCurrencyQueryInterpreter.run(mappedQuery)
+    val compiledQuery = CountryCurrencyQueryCompiler.compile(query).right.get
+    val res = CountryCurrencyQueryInterpreter.run(compiledQuery)
     //println(res)
 
     assert(res == expected)

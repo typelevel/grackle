@@ -4,10 +4,12 @@
 package compiler
 
 import cats.data.Ior
+import cats.implicits._
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle._
 import Query._, Binding._, Predicate._
+import QueryCompiler._, ComponentElaborator.{ Mapping, TrivialJoin }
 
 final class CompilerSuite extends CatsSuite {
   test("simple query") {
@@ -24,7 +26,7 @@ final class CompilerSuite extends CatsSuite {
         Select("name", Nil)
       )
 
-    val res = Compiler.compileText(text)
+    val res = QueryParser.compileText(text)
     assert(res == Ior.Right(expected))
   }
 
@@ -50,7 +52,7 @@ final class CompilerSuite extends CatsSuite {
           )
       )
 
-    val res = Compiler.compileText(text)
+    val res = QueryParser.compileText(text)
     assert(res == Ior.Right(expected))
   }
 
@@ -75,17 +77,7 @@ final class CompilerSuite extends CatsSuite {
           )
       )
 
-    import SimpleSchema._
-
-    val elaborator = new SelectElaborator(Map(
-      QueryType -> {
-        case Select("character", List(StringBinding("id", id)), child) =>
-          Unique(FieldEquals("id", id), child).rightIor
-      }
-    ))
-
-    val query: Result[Query] = Compiler.compileText(text)
-    val res: Result[Query]  = query.flatMap((q: Query) => elaborator(q, QueryType))
+    val res = SimpleCompiler.compile(text)
 
     assert(res == Ior.Right(expected))
   }
@@ -107,8 +99,6 @@ final class CompilerSuite extends CatsSuite {
       }
     """
 
-    import ComponentElaborator.{ Mapping, TrivialJoin }
-
     val expected =
       Wrap("componenta",
         Component(SchemaA, TrivialJoin,
@@ -128,16 +118,7 @@ final class CompilerSuite extends CatsSuite {
         )
       )
 
-    import CompositeSchema._
-
-    val elaborator = ComponentElaborator(
-      Mapping(QueryType, "componenta", SchemaA),
-      Mapping(FieldA2Type, "componentb", SchemaB),
-      Mapping(FieldB2Type, "componentc", SchemaC)
-    )
-
-    val query: Result[Query] = Compiler.compileText(text)
-    val res: Result[Query]  = query.flatMap((q: Query) => elaborator(q, QueryType))
+    val res = ComposedCompiler.compile(text)
 
     assert(res == Ior.Right(expected))
   }
@@ -174,6 +155,19 @@ object SimpleSchema extends Schema {
   val mutationType = None
   val subscriptionType = None
   val directives = Nil
+}
+
+object SimpleCompiler extends QueryCompiler(SimpleSchema) {
+  import SimpleSchema._
+
+  val selectElaborator = new SelectElaborator(Map(
+    QueryType -> {
+      case Select("character", List(StringBinding("id", id)), child) =>
+        Unique(FieldEquals("id", id), child).rightIor
+    }
+  ))
+
+  val phases = List(selectElaborator)
 }
 
 object SchemaA extends SchemaComponent {
@@ -238,7 +232,7 @@ object SchemaC extends SchemaComponent {
   val types = List(ComponentCType)
 }
 
-object CompositeSchema extends Schema {
+object ComposedSchema extends Schema {
   import ScalarType._
 
   val QueryType =
@@ -306,4 +300,16 @@ object CompositeSchema extends Schema {
   val mutationType = None
   val subscriptionType = None
   val directives = Nil
+}
+
+object ComposedCompiler extends QueryCompiler(ComposedSchema) {
+  import ComposedSchema._
+
+  val componentElaborator = ComponentElaborator(
+    Mapping(QueryType, "componenta", SchemaA),
+    Mapping(FieldA2Type, "componentb", SchemaB),
+    Mapping(FieldB2Type, "componentc", SchemaC)
+  )
+
+  val phases = List(componentElaborator)
 }

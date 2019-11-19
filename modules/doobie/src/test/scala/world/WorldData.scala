@@ -4,15 +4,20 @@
 package world
 
 import cats.effect.Bracket
+import cats.implicits._
 import doobie.Transactor
-import edu.gemini.grackle._, doobie._
 import io.chrisdavenport.log4cats.Logger
 
-object WorldData extends DoobieMapping {
-  import DoobieMapping._, FieldMapping._
-  import WorldSchema._
-  import ScalarType._
+import edu.gemini.grackle._, doobie._
+import Query._, Binding._, Predicate._
+import QueryCompiler._
+import DoobiePredicate._
+import DoobieMapping._, FieldMapping._
+import ScalarType._
 
+import WorldSchema._
+
+object WorldData extends DoobieMapping {
   val queryMapping =
     ObjectMapping(
       tpe = QueryType,
@@ -81,6 +86,21 @@ object WorldData extends DoobieMapping {
     )
 
   val objectMappings = List(queryMapping, countryMapping, cityMapping, languageMapping)
+}
+
+object WorldQueryCompiler extends QueryCompiler(WorldSchema) {
+  val selectElaborator = new SelectElaborator(Map(
+    QueryType -> {
+      case Select("countries", Nil, child) =>
+        Wrap("countries", child).rightIor
+      case Select("country", List(StringBinding("code", code)), child) =>
+        Wrap("country", Unique(AttrEquals("code", code), child)).rightIor
+      case Select("cities", List(StringBinding("namePattern", namePattern)), child) =>
+        Wrap("cities", Filter(FieldLike("name", namePattern, true), child)).rightIor
+      }
+  ))
+
+  val phases = List(selectElaborator)
 }
 
 object WorldQueryInterpreter {

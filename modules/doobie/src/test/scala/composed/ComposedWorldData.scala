@@ -4,16 +4,48 @@
 package composed
 
 import cats.Monad
+import cats.data.Ior
 import cats.effect.Bracket
 import cats.implicits._
 import doobie.Transactor
 import edu.gemini.grackle._, doobie._
 import io.chrisdavenport.log4cats.Logger
 
-import Query._
+import Query._, Binding._, Predicate._
+import QueryCompiler._, ComponentElaborator.Mapping
 import QueryInterpreter.mkErrorResult
+import DoobiePredicate._
 
 import ComposedWorldSchema._
+
+object CountryCurrencyQueryCompiler extends QueryCompiler(ComposedWorldSchema) {
+  val selectElaborator =  new SelectElaborator(Map(
+    QueryType -> {
+      case Select("country", List(StringBinding("code", code)), child) =>
+        Wrap("country", Unique(AttrEquals("code", code), child)).rightIor
+      case Select("countries", _, child) =>
+        Wrap("countries", child).rightIor
+      case Select("cities", List(StringBinding("namePattern", namePattern)), child) =>
+        Wrap("cities", Filter(FieldLike("name", namePattern, true), child)).rightIor
+    }
+  ))
+
+  val countryCurrencyJoin = (c: Cursor, q: Query) =>
+    c.attribute("code") match {
+      case Ior.Right(countryCode: String) =>
+        Wrap("currencies", Filter(FieldEquals("countryCode", countryCode), q)).rightIor
+      case _ => mkErrorResult("Bad query")
+    }
+
+  val componentElaborator = ComponentElaborator(
+    Mapping(QueryType, "country", WorldSchema),
+    Mapping(QueryType, "countries", WorldSchema),
+    Mapping(QueryType, "cities", WorldSchema),
+    Mapping(CountryType, "currencies", CurrencySchema, countryCurrencyJoin)
+  )
+
+  val phases = List(selectElaborator, componentElaborator)
+}
 
 object CountryCurrencyQueryInterpreter {
   def fromTransactor[F[_]](xa: Transactor[F])

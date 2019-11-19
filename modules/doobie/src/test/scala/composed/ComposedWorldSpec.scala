@@ -5,20 +5,11 @@ package composed
 
 import scala.concurrent.ExecutionContext
 
-import cats.data.Ior
 import cats.effect.{ ContextShift, IO }
 import cats.tests.CatsSuite
 import doobie.Transactor
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import io.circe.literal.JsonStringContext
-
-import edu.gemini.grackle._
-import ComponentElaborator.Mapping
-import Query._, Binding._, Predicate._
-import QueryInterpreter.mkErrorResult
-import doobie.DoobiePredicate._
-
-import ComposedWorldSchema._
 
 final class ComposedWorldSpec extends CatsSuite {
   implicit def contextShift: ContextShift[IO] =
@@ -31,31 +22,6 @@ final class ComposedWorldSpec extends CatsSuite {
     "jdbc:postgresql:world",
     "user",
     "password"
-  )
-
-  val countryCurrencyElaborator =  new SelectElaborator(Map(
-    QueryType -> {
-      case Select("country", List(StringBinding("code", code)), child) =>
-        Wrap("country", Unique(AttrEquals("code", code), child)).rightIor
-      case Select("countries", _, child) =>
-        Wrap("countries", child).rightIor
-      case Select("cities", List(StringBinding("namePattern", namePattern)), child) =>
-        Wrap("cities", Filter(FieldLike("name", namePattern, true), child)).rightIor
-    }
-  ))
-
-  val countryCurrencyJoin = (c: Cursor, q: Query) =>
-    c.attribute("code") match {
-      case Ior.Right(countryCode: String) =>
-        Wrap("currencies", Filter(FieldEquals("countryCode", countryCode), q)).rightIor
-      case _ => mkErrorResult("Bad query")
-    }
-
-  val componentElaborator = ComponentElaborator(
-    Mapping(QueryType, "country", WorldSchema),
-    Mapping(QueryType, "countries", WorldSchema),
-    Mapping(QueryType, "cities", WorldSchema),
-    Mapping(CountryType, "currencies", CurrencySchema, countryCurrencyJoin)
   )
 
   test("simple composed query") {
@@ -87,14 +53,8 @@ final class ComposedWorldSpec extends CatsSuite {
       }
     """
 
-    val mappedQuery =
-      (for {
-        compiled <- Compiler.compileText(query)
-        elaborated <- countryCurrencyElaborator(compiled, QueryType)
-        mapped <- componentElaborator(elaborated, QueryType)
-      } yield mapped).right.get
-
-    val res = CountryCurrencyQueryInterpreter.fromTransactor(xa).run(mappedQuery).unsafeRunSync
+    val compiledQuery = CountryCurrencyQueryCompiler.compile(query).right.get
+    val res = CountryCurrencyQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -149,14 +109,8 @@ final class ComposedWorldSpec extends CatsSuite {
       }
     """
 
-    val mappedQuery =
-      (for {
-        compiled <- Compiler.compileText(query)
-        elaborated <- countryCurrencyElaborator(compiled, QueryType)
-        mapped <- componentElaborator(elaborated, QueryType)
-      } yield mapped).right.get
-
-    val res = CountryCurrencyQueryInterpreter.fromTransactor(xa).run(mappedQuery).unsafeRunSync
+    val compiledQuery = CountryCurrencyQueryCompiler.compile(query).right.get
+    val res = CountryCurrencyQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
     //println(res)
 
     assert(res == expected)

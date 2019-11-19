@@ -8,10 +8,11 @@ import cats.data.{ Ior, NonEmptyChain }
 import cats.implicits._
 
 import Query._, Binding._
+import QueryCompiler._
 import QueryInterpreter.{ mkError, mkErrorResult }
 import Ast.{ Type => _, _ }, OperationDefinition._, OperationType._, Selection._, Value._
 
-object Compiler {
+object QueryParser {
   def toResult[T](pr: Either[String, T]): Result[T] =
     Ior.fromEither(pr).leftMap(msg => NonEmptyChain.one(mkError(msg)))
 
@@ -58,70 +59,86 @@ object Compiler {
   }
 }
 
-class SelectElaborator(mapping: Map[Type, PartialFunction[Select, Result[Query]]]) {
-  def apply(query: Query, tpe: Type): Result[Query] =
-    query match {
-      case Select(fieldName, args, child) =>
-        val childTpe = tpe.underlyingField(fieldName)
-        apply(child, childTpe).flatMap { elaboratedChild =>
-          val elaborated0 = Select(fieldName, args, elaboratedChild)
-          mapping.get(tpe.underlyingObject) match {
-            case Some(elaborator) if elaborator.isDefinedAt(elaborated0) => elaborator(elaborated0)
-            case _ => elaborated0.rightIor
+abstract class QueryCompiler(schema: Schema) {
+  val phases: List[Phase]
+
+  def compile(text: String): Result[Query] = {
+    val query = QueryParser.compileText(text)
+    val queryType = schema.queryType
+    phases.foldLeft(query) { (acc, phase) => acc.flatMap(phase(_, queryType)) }
+  }
+}
+
+object QueryCompiler {
+  trait Phase {
+    def apply(query: Query, tpe: Type): Result[Query]
+  }
+
+  class SelectElaborator(mapping: Map[Type, PartialFunction[Select, Result[Query]]]) extends Phase {
+    def apply(query: Query, tpe: Type): Result[Query] =
+      query match {
+        case Select(fieldName, args, child) =>
+          val childTpe = tpe.underlyingField(fieldName)
+          apply(child, childTpe).flatMap { elaboratedChild =>
+            val elaborated0 = Select(fieldName, args, elaboratedChild)
+            mapping.get(tpe.underlyingObject) match {
+              case Some(elaborator) if elaborator.isDefinedAt(elaborated0) => elaborator(elaborated0)
+              case _ => elaborated0.rightIor
+            }
           }
-        }
 
-      case w@Wrap(fieldName, child) => apply(child, tpe.underlyingField(fieldName)).map(ec => w.copy(child = ec))
-      case g@Group(queries)         => queries.traverse(q => apply(q, tpe)).map(eqs => g.copy(queries = eqs))
-      case u@Unique(_, child)       => apply(child, tpe.nonNull).map(ec => u.copy(child = ec))
-      case f@Filter(_, child)       => apply(child, tpe.item).map(ec => f.copy(child = ec))
-      case c@Component(_, _, child) => apply(child, tpe).map(ec => c.copy(child = ec))
-      case Empty                    => Empty.rightIor
-    }
-}
+        case w@Wrap(fieldName, child) => apply(child, tpe.underlyingField(fieldName)).map(ec => w.copy(child = ec))
+        case g@Group(queries)         => queries.traverse(q => apply(q, tpe)).map(eqs => g.copy(queries = eqs))
+        case u@Unique(_, child)       => apply(child, tpe.nonNull).map(ec => u.copy(child = ec))
+        case f@Filter(_, child)       => apply(child, tpe.item).map(ec => f.copy(child = ec))
+        case c@Component(_, _, child) => apply(child, tpe).map(ec => c.copy(child = ec))
+        case Empty                    => Empty.rightIor
+      }
+  }
 
-class ComponentElaborator private (mapping: Map[(Type, String), (SchemaComponent, (Cursor, Query) => Result[Query])]) {
-  def apply(query: Query, tpe: Type): Result[Query] =
-    query match {
-      case Select(fieldName, args, child) =>
-        val childTpe = tpe.underlyingField(fieldName)
-        mapping.get((tpe.underlyingObject, fieldName)) match {
-          case Some((schema, join)) =>
-            apply(child, childTpe).map { elaboratedChild =>
-              Wrap(fieldName, Component(schema, join, elaboratedChild))
-            }
-          case None =>
-            apply(child, childTpe).map { elaboratedChild =>
-              Select(fieldName, args, elaboratedChild)
-            }
-        }
+  class ComponentElaborator private (mapping: Map[(Type, String), (SchemaComponent, (Cursor, Query) => Result[Query])]) extends Phase {
+    def apply(query: Query, tpe: Type): Result[Query] =
+      query match {
+        case Select(fieldName, args, child) =>
+          val childTpe = tpe.underlyingField(fieldName)
+          mapping.get((tpe.underlyingObject, fieldName)) match {
+            case Some((schema, join)) =>
+              apply(child, childTpe).map { elaboratedChild =>
+                Wrap(fieldName, Component(schema, join, elaboratedChild))
+              }
+            case None =>
+              apply(child, childTpe).map { elaboratedChild =>
+                Select(fieldName, args, elaboratedChild)
+              }
+          }
 
-      case Wrap(fieldName, child) =>
-        val childTpe = tpe.underlyingField(fieldName)
-        mapping.get((tpe.underlyingObject, fieldName)) match {
-          case Some((schema, join)) =>
-            apply(child, childTpe).map { elaboratedChild =>
-              Wrap(fieldName, Component(schema, join, Wrap(fieldName, elaboratedChild)))
-            }
-          case None =>
-            apply(child, childTpe).map { elaboratedChild =>
-              Wrap(fieldName, elaboratedChild)
-            }
-        }
+        case Wrap(fieldName, child) =>
+          val childTpe = tpe.underlyingField(fieldName)
+          mapping.get((tpe.underlyingObject, fieldName)) match {
+            case Some((schema, join)) =>
+              apply(child, childTpe).map { elaboratedChild =>
+                Wrap(fieldName, Component(schema, join, Wrap(fieldName, elaboratedChild)))
+              }
+            case None =>
+              apply(child, childTpe).map { elaboratedChild =>
+                Wrap(fieldName, elaboratedChild)
+              }
+          }
 
-      case g@Group(queries)         => queries.traverse(q => apply(q, tpe)).map(eqs => g.copy(queries = eqs))
-      case u@Unique(_, child)       => apply(child, tpe.nonNull).map(ec => u.copy(child = ec))
-      case f@Filter(_, child)       => apply(child, tpe.item).map(ec => f.copy(child = ec))
-      case c@Component(_, _, child) => apply(child, tpe).map(ec => c.copy(child = ec))
-      case Empty                    => Empty.rightIor
-    }
-}
+        case g@Group(queries)         => queries.traverse(q => apply(q, tpe)).map(eqs => g.copy(queries = eqs))
+        case u@Unique(_, child)       => apply(child, tpe.nonNull).map(ec => u.copy(child = ec))
+        case f@Filter(_, child)       => apply(child, tpe.item).map(ec => f.copy(child = ec))
+        case c@Component(_, _, child) => apply(child, tpe).map(ec => c.copy(child = ec))
+        case Empty                    => Empty.rightIor
+      }
+  }
 
-object ComponentElaborator {
-  val TrivialJoin = (_: Cursor, q: Query) => q.rightIor
+  object ComponentElaborator {
+    val TrivialJoin = (_: Cursor, q: Query) => q.rightIor
 
-  case class Mapping(tpe: Type, fieldName: String, schema: SchemaComponent, join: (Cursor, Query) => Result[Query] = TrivialJoin)
+    case class Mapping(tpe: Type, fieldName: String, schema: SchemaComponent, join: (Cursor, Query) => Result[Query] = TrivialJoin)
 
-  def apply(mappings: Mapping*): ComponentElaborator =
-    new ComponentElaborator(mappings.map(m => ((m.tpe, m.fieldName), (m.schema, m.join))).toMap)
+    def apply(mappings: Mapping*): ComponentElaborator =
+      new ComponentElaborator(mappings.map(m => ((m.tpe, m.fieldName), (m.schema, m.join))).toMap)
+  }
 }
