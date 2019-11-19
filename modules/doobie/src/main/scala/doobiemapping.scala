@@ -30,6 +30,8 @@ trait DoobieMapping {
             om      <- objectMappings.find(_.tpe =:= obj)
             (_, cr) <- om.fieldMappings.find(_._1 == fieldName)
           } yield loop(q, obj.underlyingField(fieldName), ((obj, cr) :: acc._1, acc._2))).getOrElse(acc)
+        case Wrap(_, q) =>
+          loop(q, tpe, acc)
         case Group(queries) =>
           queries.foldLeft(acc) {
             case (acc, sibling) => loop(sibling, tpe, acc)
@@ -40,7 +42,8 @@ trait DoobieMapping {
         case Unique(pred, child) =>
           val obj = tpe.underlyingObject
           loop(child, tpe, (acc._1, (obj, pred) :: acc._2))
-        case _ => acc
+        case Component(_, _, q) => loop(q, tpe, acc)
+        case Empty => acc
       }
 
     val (mappings, predicates) = loop(q, tpe, (Nil, Nil))

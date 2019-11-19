@@ -51,3 +51,38 @@ object ComposedSchema extends Schema {
   val subscriptionType = None
   val directives = Nil
 }
+
+object CountrySchema extends SchemaComponent {
+  import ScalarType._
+
+  val CountryType: ObjectType =
+    ObjectType(
+      name = "Country",
+      description = None,
+      fields = List(
+        Field("code", None, Nil, StringType, false, None),
+        Field("name", None, Nil, StringType, false, None),
+        Field("currency", None, Nil, ListType(TypeRef("Currency")), false, None)
+      ),
+      interfaces = Nil
+    )
+
+  val types = List(CountryType)
+}
+
+object CurrencySchema extends SchemaComponent {
+  import ScalarType._
+
+  val CurrencyType: ObjectType =
+    ObjectType(
+      name = "Currency",
+      description = None,
+      fields = List(
+        Field("code", None, Nil, StringType, false, None),
+        Field("exchangeRate", None, Nil, FloatType, false, None),
+      ),
+      interfaces = Nil
+    )
+
+  val types = List(CurrencyType)
+}

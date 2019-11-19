@@ -7,8 +7,57 @@ import cats.tests.CatsSuite
 import io.circe.literal.JsonStringContext
 
 import edu.gemini.grackle._
+import Query._, Binding._, Predicate._
+import QueryInterpreter.mkErrorResult
+
+import CountryData._
+import ComposedSchema._
 
 final class ComposedSpec extends CatsSuite {
+  val currencyElaborator = new SelectElaborator(Map(
+    QueryType -> {
+      case Select("currency", List(StringBinding("code", code)), child) =>
+        Wrap("currency", Unique(FieldEquals("code", code), child)).rightIor
+    }
+  ))
+
+  val countryElaborator = new SelectElaborator(Map(
+    QueryType -> {
+      case Select("country", List(StringBinding("code", code)), child) =>
+        Wrap("country", Unique(FieldEquals("code", code), child)).rightIor
+      case Select("countries", _, child) =>
+        Wrap("countries", child).rightIor
+    }
+  ))
+
+  val countryCurrencyElaborator =  new SelectElaborator(Map(
+    QueryType -> {
+      case Select("currency", List(StringBinding("code", code)), child) =>
+        Wrap("currency", Unique(FieldEquals("code", code), child)).rightIor
+      case Select("country", List(StringBinding("code", code)), child) =>
+        Wrap("country", Unique(FieldEquals("code", code), child)).rightIor
+      case Select("countries", _, child) =>
+        Wrap("countries", child).rightIor
+    }
+  ))
+
+  val dummyJoin = (_: Cursor, q: Query) => q.rightIor
+
+  val countryCurrencyJoin = (c: Cursor, q: Query) =>
+    c.focus match {
+      case c: Country =>
+        Wrap("currency", Unique(FieldEquals("code", c.currencyCode), q)).rightIor
+      case _ =>
+        mkErrorResult("Bad query")
+    }
+
+  val componentElaborator = new ComponentElaborator(Map(
+    (QueryType,   "country")   -> ((CountrySchema, CountryType, dummyJoin)),
+    (QueryType,   "currency")  -> ((CurrencySchema, CurrencyType, dummyJoin)),
+    (QueryType,   "countries") -> ((CountrySchema, CountryType, dummyJoin)),
+    (CountryType, "currency")  -> ((CurrencySchema, CurrencyType, countryCurrencyJoin))
+  ))
+
   test("simple currency query") {
     val query = """
       query {
@@ -30,8 +79,10 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = Compiler.compileText(query).right.get
-    val res = CountryCurrencyQueryInterpreter.run(compiledQuery)
+    val compiledQuery = Compiler.compileText(query)
+    val elaboratedQuery = compiledQuery.flatMap(currencyElaborator(_, QueryType)).right.get
+
+    val res = CurrencyQueryInterpreter.run(elaboratedQuery)
     //println(res)
 
     assert(res == expected)
@@ -56,8 +107,10 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = Compiler.compileText(query).right.get
-    val res = CountryCurrencyQueryInterpreter.run(compiledQuery)
+    val compiledQuery = Compiler.compileText(query)
+    val elaboratedQuery = compiledQuery.flatMap(countryElaborator(_, QueryType)).right.get
+
+    val res = CountryQueryInterpreter.run(elaboratedQuery)
     //println(res)
 
     assert(res == expected)
@@ -90,8 +143,14 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = Compiler.compileText(query).right.get
-    val res = CountryCurrencyQueryInterpreter.run(compiledQuery)
+    val mappedQuery =
+      (for {
+        compiled <- Compiler.compileText(query)
+        elaborated <- countryCurrencyElaborator(compiled, QueryType)
+        mapped <- componentElaborator(elaborated, QueryType)
+      } yield mapped).right.get
+
+    val res = CountryCurrencyQueryInterpreter.run(mappedQuery)
     //println(res)
 
     assert(res == expected)
@@ -140,8 +199,14 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = Compiler.compileText(query).right.get
-    val res = CountryCurrencyQueryInterpreter.run(compiledQuery)
+    val mappedQuery =
+      (for {
+        compiled <- Compiler.compileText(query)
+        elaborated <- countryCurrencyElaborator(compiled, QueryType)
+        mapped <- componentElaborator(elaborated, QueryType)
+      } yield mapped).right.get
+
+    val res = CountryCurrencyQueryInterpreter.run(mappedQuery)
     //println(res)
 
     assert(res == expected)

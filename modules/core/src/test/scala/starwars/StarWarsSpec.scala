@@ -4,10 +4,25 @@
 package starwars
 
 import cats.tests.CatsSuite
-import edu.gemini.grackle._
 import io.circe.literal.JsonStringContext
 
+import edu.gemini.grackle._
+import Query._, Binding._, Predicate._
+
+import StarWarsData._
+import StarWarsSchema._
+
 final class StarWarsSpec extends CatsSuite {
+
+  val elaborator = new SelectElaborator(Map(
+    QueryType -> {
+      case Select("hero", _, child) =>
+        Wrap("hero", Unique(FieldEquals("id", R2D2.id), child)).rightIor
+      case Select(f@("character" | "human"), List(StringBinding("id", id)), child) =>
+        Wrap(f, Unique(FieldEquals("id", id), child)).rightIor
+    }
+  ))
+
   test("simple query") {
     val query = """
       query {
@@ -27,8 +42,10 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = Compiler.compileText(query).right.get
-    val res = StarWarsQueryInterpreter.run(compiledQuery)
+    val compiledQuery = Compiler.compileText(query)
+    val elaboratedQuery = compiledQuery.flatMap(elaborator(_, QueryType)).right.get
+
+    val res = StarWarsQueryInterpreter.run(elaboratedQuery)
     //println(res)
 
     assert(res == expected)
@@ -70,8 +87,10 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = Compiler.compileText(query).right.get
-    val res = StarWarsQueryInterpreter.run(compiledQuery)
+    val compiledQuery = Compiler.compileText(query)
+    val elaboratedQuery = compiledQuery.flatMap(elaborator(_, QueryType)).right.get
+
+    val res = StarWarsQueryInterpreter.run(elaboratedQuery)
     //println(res)
 
     assert(res == expected)

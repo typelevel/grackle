@@ -15,8 +15,8 @@ import cats.implicits._
 import io.circe.Json
 import io.circe.literal.JsonStringContext
 
-import ComponentMapping.NoMapping
 import Query._
+import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
 sealed trait Query {
   def ~(query: Query): Query = (this, query) match {
@@ -41,13 +41,19 @@ object Query {
     def render = queries.map(_.render).mkString(", ")
   }
   case class Unique(pred: Predicate, child: Query) extends Query {
-    def render = s"<unique: ${child.render}>"
+    def render = s"<unique: $pred ${child.render}>"
   }
   case class Filter(pred: Predicate, child: Query) extends Query {
-    def render = s"<filter: ${child.render}>"
+    def render = s"<filter: $pred ${child.render}>"
   }
   case class Component(schema: SchemaComponent, join: (Cursor, Query) => Result[Query], child: Query) extends Query {
-    def render = s"<component: ${schema.getClass.getSimpleName} ${child.render}"
+    def render = s"<component: ${schema.getClass.getSimpleName} ${child.render}>"
+  }
+  case class Wrap(name: String, child: Query) extends Query {
+    def render = {
+      val rchild = if(child == Empty) "" else s" { ${child.render} }"
+      s"$name$rchild"
+    }
   }
   case object Empty extends Query {
     def render = ""
@@ -117,50 +123,19 @@ object Predicate {
   }
 }
 
-abstract class QueryInterpreter[F[_]]
-  (val schema: Schema, val mapping: ComponentMapping[F] = NoMapping[F])
-  (implicit val F: Monad[F]) {
-
-  import QueryInterpreter.{ complete, mkErrorResult, ProtoJson }
+abstract class QueryInterpreter[F[_]](val schema: Schema)(implicit val F: Monad[F]) {
 
   def run(query: Query): F[Json] =
     runRoot(query).map(QueryInterpreter.mkResponse)
 
-  def runRoot(query: Query): F[Result[Json]] =
-    query match {
-      case Select(fieldName, _, _) =>
-        (for {
-          pvalue <- IorT(runRootValue(query))
-          value  <- IorT(complete(pvalue, mapping))
-        } yield Json.obj((fieldName, value))).value
+  def complete(pj: ProtoJson): F[Result[Json]] =
+    QueryInterpreter.complete(pj, Map(schema -> this))
 
-      case _ =>
-        mkErrorResult(s"Bad query: $query").pure[F]
-    }
-
-  def elaborateSelect(tpe: Type, query: Select): Result[Query]
-
-  def elaborateSelects(query: Query): Result[Query] = {
-    def loop(query: Query, tpe: Type, isRoot: Boolean): Result[Query] = {
-      if (!mapping.isNoMapping && !isRoot && mapping.interpreterForType(tpe.dealias).fold(true)(_ ne this))
-        query.rightIor
-      else
-        query match {
-          case Select(fieldName, args, child) =>
-            for {
-              elaboratedChild  <- loop(child, tpe.field(fieldName), false)
-              elaboratedParent <- elaborateSelect(tpe, Select(fieldName, args, elaboratedChild))
-            } yield elaboratedParent
-
-          case Group(queries)      => queries.traverse(q => loop(q, tpe, false)).map(Group(_))
-          case Unique(pred, child) => loop(child, tpe.nonNull, false).map(c => Unique(pred, c))
-          case Filter(pred, child) => loop(child, tpe.item, false).map(c => Filter(pred, c))
-          case Component(_, _, _)  => ???
-          case Empty               => Empty.rightIor
-        }
-    }
-
-    loop(query, schema.queryType, true)
+  def runRoot(query: Query): F[Result[Json]] = {
+    (for {
+      pvalue <- IorT(runRootValue(query))
+      value  <- IorT(complete(pvalue))
+    } yield value).value
   }
 
   def runRootValue(query: Query): F[Result[ProtoJson]]
@@ -188,14 +163,15 @@ abstract class QueryInterpreter[F[_]]
         }.getOrElse(List((fieldName, ProtoJson.fromJson(Json.Null))).rightIor)
 
       case (Select(fieldName, bindings, child), tpe) =>
-        if (!cursor.hasField(fieldName))
-          // Elaborate (cursor, query) => query now
-          List((fieldName, ProtoJson.deferred(cursor, tpe, fieldName, child))).rightIor
-        else
-          for {
-            c     <- cursor.field(fieldName, Binding.toMap(bindings))
-            value <- runValue(child, tpe.field(fieldName), c)
-          } yield List((fieldName, value))
+        for {
+          c     <- cursor.field(fieldName, Binding.toMap(bindings))
+          value <- runValue(child, tpe.field(fieldName), c)
+        } yield List((fieldName, value))
+
+      case (Wrap(fieldName, child), tpe) =>
+        for {
+          value <- runValue(child, tpe, cursor)
+        } yield List((fieldName, value))
 
       case (Group(siblings), _) =>
         siblings.flatTraverse(query => runFields(query, tpe, cursor))
@@ -207,6 +183,16 @@ abstract class QueryInterpreter[F[_]]
 
   def runValue(query: Query, tpe: Type, cursor: Cursor): Result[ProtoJson] = {
     (query, tpe.dealias) match {
+      case (Wrap(fieldName, child), _) =>
+        for {
+          pvalue <- runValue(child, tpe, cursor)
+        } yield ProtoJson.fromFields(List((fieldName, pvalue)))
+
+      case (Component(schema, join, child), _) =>
+        for {
+          cont <- join(cursor, child)
+        } yield ProtoJson.deferred(schema, cont)
+
       case (Unique(pred, child), _) if cursor.isList =>
         cursor.asList.map(_.filter(pred)).flatMap(lc =>
           lc match {
@@ -235,7 +221,8 @@ abstract class QueryInterpreter[F[_]]
           lc.traverse(c => runValue(query, tpe, c)).map(ProtoJson.fromValues)
         )
 
-      case (_, (_: ScalarType) | (_: EnumType)) => cursor.asLeaf.map(ProtoJson.fromJson)
+      case (_, (_: ScalarType) | (_: EnumType)) =>
+        cursor.asLeaf.map(ProtoJson.fromJson)
 
       case (_, (_: ObjectType) | (_: InterfaceType)) =>
         runFields(query, tpe, cursor).map(ProtoJson.fromFields)
@@ -250,12 +237,12 @@ object QueryInterpreter {
   type ProtoJson <: AnyRef
 
   object ProtoJson {
-    private[QueryInterpreter] case class DeferredJson(cursor: Cursor, tpe: Type, fieldName: String, query: Query)
+    private[QueryInterpreter] case class DeferredJson(schema: SchemaComponent, query: Query)
     private[QueryInterpreter] case class ProtoObject(fields: List[(String, ProtoJson)])
     private[QueryInterpreter] case class ProtoArray(elems: List[ProtoJson])
 
-    def deferred(cursor: Cursor, tpe: Type, fieldName: String, query: Query): ProtoJson =
-      wrap(DeferredJson(cursor, tpe, fieldName, query))
+    def deferred(schema: SchemaComponent, query: Query): ProtoJson =
+      wrap(DeferredJson(schema, query))
 
     def fromJson(value: Json): ProtoJson = wrap(value)
 
@@ -271,12 +258,15 @@ object QueryInterpreter {
       else
         wrap(ProtoArray(elems))
 
+    def isDeferred(p: ProtoJson): Boolean =
+      p.isInstanceOf[DeferredJson]
+
     private def wrap(j: AnyRef): ProtoJson = j.asInstanceOf[ProtoJson]
   }
 
   import ProtoJson._
 
-  def complete[F[_]: Monad](pj: ProtoJson, mapping: ComponentMapping[F]): F[Result[Json]] =
+  def complete[F[_]: Monad](pj: ProtoJson, mapping: Map[SchemaComponent, QueryInterpreter[F]]): F[Result[Json]] =
     completeAll(List(pj), mapping).map {
       case (errors, List(value)) =>
         NonEmptyChain.fromChain(errors) match {
@@ -285,7 +275,7 @@ object QueryInterpreter {
         }
     }
 
-  def completeAll[F[_]: Monad](pjs: List[ProtoJson], mapping: ComponentMapping[F]): F[(Chain[Json], List[Json])] = {
+  def completeAll[F[_]: Monad](pjs: List[ProtoJson], mapping: Map[SchemaComponent, QueryInterpreter[F]]): F[(Chain[Json], List[Json])] = {
     def gatherDeferred(pj: ProtoJson): List[DeferredJson] = {
       @tailrec
       def loop(pending: Chain[ProtoJson], acc: List[DeferredJson]): List[DeferredJson] =
@@ -311,8 +301,14 @@ object QueryInterpreter {
           case p: Json         => p
           case d: DeferredJson => subst(d)
           case ProtoObject(fields) =>
-            val values = fields.map(f => loop(f._2))
-            Json.fromFields(fields.iterator.map(_._1).zip(values).toList)
+            val newFields: List[(String, Json)] =
+              fields.flatMap { case (label, pvalue) =>
+                val value = loop(pvalue)
+                if (isDeferred(pvalue) && value.isObject) value.asObject.get.toList
+                else List((label, value))
+              }
+            Json.fromFields(newFields)
+
           case ProtoArray(elems) =>
             val elems0 = elems.map(loop)
             Json.fromValues(elems0)
@@ -325,19 +321,12 @@ object QueryInterpreter {
 
     val (good, bad, errors0) =
       collected.foldLeft((List.empty[(DeferredJson, QueryInterpreter[F], Query)], List.empty[DeferredJson], Chain.empty[Json])) {
-        case ((good, bad, errors), d@DeferredJson(cursor, tpe, fieldName, query)) =>
-          mapping.subobject(tpe, fieldName) match {
-            case Some(mapping.Subobject(submapping, subquery)) =>
-              subquery(cursor, query) match {
-                case Ior.Right(query) =>
-                  ((d, submapping.interpreter, query) :: good, bad, errors)
-                case Ior.Both(errs, query) =>
-                  ((d, submapping.interpreter, query) :: good, bad, errs.toChain ++ errors)
-                case Ior.Left(errs) =>
-                  (good, d :: bad, errs.toChain ++ errors)
-              }
+        case ((good, bad, errors), d@DeferredJson(schema, query)) =>
+          mapping.get(schema) match {
+            case Some(interpreter) =>
+              ((d, interpreter, query) :: good, bad, errors)
             case None =>
-              (good, d :: bad, mkError(s"Bad query: ${tpe.shortString} $fieldName ${query.render}") +: errors)
+              (good, d :: bad, mkError(s"Bad query: ${schema.getClass.getName} ${query.render}") +: errors)
           }
       }
 
@@ -394,66 +383,18 @@ object QueryInterpreter {
     Ior.leftNec(mkError(message, locations, path))
 }
 
-trait ComponentMapping[F[_]] {
-  val objectMappings: List[ObjectMapping]
+class ComposedQueryInterpreter[F[_]: Monad](schema: Schema, mapping: Map[SchemaComponent, QueryInterpreter[F]])
+  extends QueryInterpreter[F](schema) {
 
-  def isNoMapping = false
+  override def complete(pj: ProtoJson): F[Result[Json]] =
+    QueryInterpreter.complete(pj, mapping)
 
-  def interpreterForType(tpe: Type): Option[QueryInterpreter[F]] =
-    objectMappings.find(_.tpe =:= tpe).map(_.interpreter)
-
-  def subobject(tpe: Type, fieldName: String): Option[Subobject] =
-    objectMappings.find(_.tpe =:= tpe) match {
-      case Some(om) =>
-        om.fieldMappings.find(_._1 == fieldName) match {
-          case Some((_, so: Subobject)) => Some(so)
-          case _ => None
-        }
-      case None => None
-    }
-
-  sealed trait FieldMapping
-
-  case class ObjectMapping(
-    tpe: Type,
-    interpreter: QueryInterpreter[F],
-    fieldMappings: List[(String, FieldMapping)]
-  )
-
-  val defaultJoin: (Cursor, Query) => Result[Query] = (_, subquery: Query) => subquery.rightIor
-
-  case class Subobject(
-    submapping: ObjectMapping,
-    subquery: (Cursor, Query) => Result[Query] = defaultJoin
-  ) extends FieldMapping
-}
-
-object ComponentMapping {
-  def NoMapping[F[_]]: ComponentMapping[F] =
-    new ComponentMapping[F] {
-      override def isNoMapping = true
-      val objectMappings = Nil
-    }
-}
-
-abstract class ComposedQueryInterpreter[F[_]: Monad](schema: Schema, mapping: ComponentMapping[F])
-  extends QueryInterpreter[F](schema, mapping) {
-
-  import QueryInterpreter.{ mkErrorResult, ProtoJson }
-
-  import mapping._
-
-  def elaborateSelect(tpe: Type, query: Select): Result[Query] =
-    query.rightIor
-
-  def runRootValue(query: Query): F[Result[ProtoJson]] = {
-    query match {
-      case Select(fieldName, _, _) =>
-        subobject(schema.queryType, fieldName) match {
-          case Some(Subobject(submapping, _)) => submapping.interpreter.runRootValue(query)
-          case None => mkErrorResult("Bad query").pure[F]
-        }
-      case _ => mkErrorResult("Bad query").pure[F]
-    }
+  def runRootValue(query: Query): F[Result[ProtoJson]] = query match {
+    case Wrap(_, Component(schema, _, child)) =>
+      mapping.get(schema) match {
+        case Some(interpreter) => interpreter.runRootValue(child)
+        case None => mkErrorResult("Bad query").pure[F]
+      }
+    case _ => mkErrorResult("Bad query").pure[F]
   }
 }

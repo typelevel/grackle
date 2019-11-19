@@ -7,57 +7,20 @@ import cats.Id
 import cats.implicits._
 
 import edu.gemini.grackle._
-import Predicate._
-import Query._, Binding._
+import Query._
 import QueryInterpreter.mkErrorResult
 
 import ComposedSchema._
 
-object CountryCurrencyQueryInterpreter extends
-  ComposedQueryInterpreter[Id](ComposedSchema, ComposedMapping)
-
-object ComposedMapping extends ComponentMapping[Id] {
-  import CountryData._
-
-  lazy val currencyMapping =
-    ObjectMapping(
-      tpe = CurrencyType,
-      interpreter = CurrencyQueryInterpreter,
-      fieldMappings = Nil
-    )
-
-  lazy val countryMapping =
-    ObjectMapping(
-      tpe = CountryType,
-      interpreter = CountryQueryInterpreter,
-      fieldMappings =
-        List(
-          "currency" -> Subobject(currencyMapping, countryCurrencyJoin)
-        )
-    )
-
-  lazy val queryMapping =
-    ObjectMapping(
-      tpe = QueryType,
-      interpreter = CountryCurrencyQueryInterpreter,
-      fieldMappings =
-        List(
-          "country" -> Subobject(countryMapping),
-          "currency" -> Subobject(currencyMapping),
-          "countries" -> Subobject(countryMapping)
-        )
-    )
-
-  def countryCurrencyJoin(c: Cursor, q: Query): Result[Query] =
-    c.focus match {
-      case c: Country =>
-        Select("currency", List(StringBinding("code", c.currencyCode)), q).rightIor
-      case _ =>
-        mkErrorResult("Bad query")
-    }
-
-  lazy val objectMappings = List(queryMapping, countryMapping, currencyMapping)
+object ComposedMapping {
+  val mapping: Map[SchemaComponent, QueryInterpreter[Id]] = Map(
+    CountrySchema  -> CountryQueryInterpreter,
+    CurrencySchema -> CurrencyQueryInterpreter
+  )
 }
+
+object CountryCurrencyQueryInterpreter extends
+  ComposedQueryInterpreter[Id](ComposedSchema, ComposedMapping.mapping)
 
 object CurrencyData {
   case class Currency(
@@ -71,20 +34,13 @@ object CurrencyData {
   val currencies = List(EUR, GBP)
 }
 
-object CurrencyQueryInterpreter extends DataTypeQueryInterpreter[Id](ComposedSchema, ComposedMapping) {
+object CurrencyQueryInterpreter extends DataTypeQueryInterpreter[Id](ComposedSchema) {
   import CurrencyData._
 
   def rootCursor(query: Query): Result[(Type, Cursor)] =
     query match {
-      case Select("currency", _, _) => (NullableType(CurrencyType), CurrencyCursor(currencies)).rightIor
+      case Wrap("currency", _) => (NullableType(CurrencyType), CurrencyCursor(currencies)).rightIor
       case _ => mkErrorResult("Bad query")
-    }
-
-  def elaborateSelect(tpe: Type, query: Select): Result[Query] =
-    (tpe.dealias, query) match {
-      case (QueryType, Select("currency", List(StringBinding("code", code)), child)) =>
-        Unique(FieldEquals("code", code), child).rightIor
-      case _ => query.rightIor
     }
 }
 
@@ -119,22 +75,14 @@ object CountryData {
   val countries = List(DEU, FRA, GBR)
 }
 
-object CountryQueryInterpreter extends DataTypeQueryInterpreter[Id](ComposedSchema, ComposedMapping) {
+object CountryQueryInterpreter extends DataTypeQueryInterpreter[Id](ComposedSchema) {
   import CountryData._
 
   def rootCursor(query: Query): Result[(Type, Cursor)] =
     query match {
-      case Select("country", _, _) => (NullableType(CountryType), CountryCursor(countries)).rightIor
-      case Select("countries", _, _) => (ListType(CountryType), CountryCursor(countries)).rightIor
+      case Wrap("country", _) => (NullableType(CountryType), CountryCursor(countries)).rightIor
+      case Wrap("countries", _) => (ListType(CountryType), CountryCursor(countries)).rightIor
       case _ => mkErrorResult("Bad query")
-    }
-
-  def elaborateSelect(tpe: Type, query: Select): Result[Query] =
-    (tpe.dealias, query) match {
-      case (QueryType, Select("country", List(StringBinding("code", code)), child)) =>
-        Unique(FieldEquals("code", code), child).rightIor
-      case (QueryType, Select("countries", _, child)) => child.rightIor
-      case _ => query.rightIor
     }
 }
 

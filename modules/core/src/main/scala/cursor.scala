@@ -7,7 +7,6 @@ import cats.Monad
 import cats.implicits._
 import io.circe.Json
 
-import ComponentMapping.NoMapping
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
 trait Cursor {
@@ -24,17 +23,16 @@ trait Cursor {
   def attribute(attributeName: String): Result[Any]
 }
 
-abstract class DataTypeQueryInterpreter[F[_]: Monad](schema: Schema, mapping: ComponentMapping[F] = NoMapping[F])
-  extends QueryInterpreter[F](schema, mapping) {
+abstract class DataTypeQueryInterpreter[F[_]: Monad](schema: Schema)
+  extends QueryInterpreter[F](schema) {
 
   def rootCursor(query: Query): Result[(Type, Cursor)]
 
   def runRootValue(query: Query): F[Result[ProtoJson]] =
     (for {
-      elab          <- elaborateSelects(query)
       root          <- rootCursor(query)
       (tpe, cursor) =  root
-      value         <- runValue(elab, tpe, cursor)
+      value         <- runValue(query, tpe, cursor)
     } yield value).pure[F]
 }
 

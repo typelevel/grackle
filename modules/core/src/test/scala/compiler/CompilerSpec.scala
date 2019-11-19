@@ -110,16 +110,16 @@ final class CompilerSuite extends CatsSuite {
     val dummyJoin = (_: Cursor, q: Query) => q.rightIor
 
     val expected =
-      Component(SchemaA, dummyJoin,
-        Select("componenta", Nil,
+      Wrap("componenta",
+        Component(SchemaA, dummyJoin,
           Select("fielda1", Nil) ~
           Select("fielda2", Nil,
-            Component(SchemaB, dummyJoin,
-              Select("componentb", Nil,
+            Wrap("componentb",
+              Component(SchemaB, dummyJoin,
                 Select("fieldb1", Nil) ~
                 Select("fieldb2", Nil,
-                  Component(SchemaC, dummyJoin,
-                    Select("componentc", Nil)
+                  Wrap("componentc",
+                    Component(SchemaC, dummyJoin, Empty)
                   )
                 )
               )

@@ -3,15 +3,10 @@
 
 package world
 
-import cats.implicits._
 import cats.effect.Bracket
 import doobie.Transactor
 import edu.gemini.grackle._, doobie._
 import io.chrisdavenport.log4cats.Logger
-
-import DoobiePredicate._
-import Predicate._
-import Query._, Binding._
 
 object WorldData extends DoobieMapping {
   import DoobieMapping._, FieldMapping._
@@ -88,24 +83,14 @@ object WorldData extends DoobieMapping {
   val objectMappings = List(queryMapping, countryMapping, cityMapping, languageMapping)
 }
 
-abstract class WorldQueryInterpreter[F[_]](implicit val brkt: Bracket[F, Throwable]) extends DoobieQueryInterpreter(WorldSchema) {
-  import WorldSchema._
-
-  def elaborateSelect(tpe: Type, query: Select): Result[Query] = (tpe.dealias, query) match {
-    case (QueryType, Select("countries", Nil, child)) => child.rightIor
-    case (QueryType, Select("country", List(StringBinding("code", code)), child)) =>
-      Unique(AttrEquals("code", code), child).rightIor
-    case (QueryType, Select("cities", List(StringBinding("namePattern", namePattern)), child)) =>
-      Filter(FieldLike("name", namePattern, true), child).rightIor
-    case _ => query.rightIor
-  }
-}
+abstract class WorldQueryInterpreter[F[_]](implicit val brkt: Bracket[F, Throwable])
+  extends DoobieQueryInterpreter(WorldSchema)
 
 object WorldQueryInterpreter {
   def fromTransactor[F[_]](xa0: Transactor[F])
     (implicit brkt: Bracket[F, Throwable], logger0: Logger[F]): WorldQueryInterpreter[F] =
       new WorldQueryInterpreter[F] {
-        val dmapping = WorldData
+        val mapping = WorldData
         val xa = xa0
         val logger = logger0
       }

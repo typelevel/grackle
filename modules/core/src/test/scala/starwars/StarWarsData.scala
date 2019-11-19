@@ -8,8 +8,7 @@ import cats.implicits._
 
 import edu.gemini.grackle._
 
-import Predicate._
-import Query._, Binding._
+import Query._
 import QueryInterpreter.mkErrorResult
 
 import StarWarsData._
@@ -103,18 +102,9 @@ object StarWarsData {
 object StarWarsQueryInterpreter extends DataTypeQueryInterpreter[Id](StarWarsSchema) {
   def rootCursor(query: Query): Result[(Type, Cursor)] =
     query match {
-      case Select("hero", _, _)                => (CharacterType, StarWarsCursor(characters)).rightIor
-      case Select("character" | "human", _, _) => (NullableType(CharacterType), StarWarsCursor(characters)).rightIor
+      case Wrap("hero", _)                => (CharacterType, StarWarsCursor(characters)).rightIor
+      case Wrap("character" | "human", _) => (NullableType(CharacterType), StarWarsCursor(characters)).rightIor
       case _ => mkErrorResult("Bad query")
-    }
-
-  def elaborateSelect(tpe: Type, query: Select): Result[Query] =
-    (tpe.dealias, query) match {
-      case (QueryType, Select("hero", _, child)) =>
-        Unique(FieldEquals("id", R2D2.id), child).rightIor
-      case (QueryType, Select("character" | "human", List(StringBinding("id", id)), child)) =>
-        Unique(FieldEquals("id", id), child).rightIor
-      case _ => query.rightIor
     }
 }
 
