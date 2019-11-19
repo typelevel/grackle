@@ -19,11 +19,12 @@ import Predicate._
 import Query._
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
-abstract class DoobieQueryInterpreter[F[_]](schema: Schema)
-  (override implicit val F: Bracket[F, Throwable]) extends QueryInterpreter[F](schema) {
-  val mapping: DoobieMapping
-  val xa: Transactor[F]
-  val logger: Logger[F]
+class DoobieQueryInterpreter[F[_]](
+  schema: Schema,
+  mapping: DoobieMapping,
+  xa: Transactor[F],
+  logger: Logger[F]
+) (override implicit val F: Bracket[F, Throwable]) extends QueryInterpreter[F](schema) {
 
   def runRootValue(query: Query): F[Result[ProtoJson]] =
     query match {

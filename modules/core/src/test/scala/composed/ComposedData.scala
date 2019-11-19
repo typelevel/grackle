@@ -12,15 +12,13 @@ import QueryInterpreter.mkErrorResult
 
 import ComposedSchema._
 
-object ComposedMapping {
-  val mapping: Map[SchemaComponent, QueryInterpreter[Id]] = Map(
-    CountrySchema  -> CountryQueryInterpreter,
-    CurrencySchema -> CurrencyQueryInterpreter
-  )
-}
-
 object CountryCurrencyQueryInterpreter extends
-  ComposedQueryInterpreter[Id](ComposedSchema, ComposedMapping.mapping)
+  ComposedQueryInterpreter[Id](ComposedSchema,
+    Map(
+      CountrySchema  -> CountryQueryInterpreter,
+      CurrencySchema -> CurrencyQueryInterpreter
+    )
+  )
 
 object CurrencyData {
   case class Currency(
