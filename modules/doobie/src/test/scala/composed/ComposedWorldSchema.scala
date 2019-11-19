@@ -82,7 +82,7 @@ object ComposedWorldSchema extends Schema {
         Field("code2", None, Nil, StringType, false, None),
         Field("cities", None, Nil, ListType(TypeRef("City")), false, None),
         Field("languages", None, Nil, ListType(TypeRef("Language")), false, None),
-        Field("currency", None, Nil, ListType(TypeRef("Currency")), false, None)
+        Field("currencies", None, Nil, ListType(TypeRef("Currency")), false, None)
       ),
       interfaces = Nil
     )

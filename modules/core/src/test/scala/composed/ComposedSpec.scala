@@ -7,6 +7,7 @@ import cats.tests.CatsSuite
 import io.circe.literal.JsonStringContext
 
 import edu.gemini.grackle._
+import ComponentElaborator.Mapping
 import Query._, Binding._, Predicate._
 import QueryInterpreter.mkErrorResult
 
@@ -41,8 +42,6 @@ final class ComposedSpec extends CatsSuite {
     }
   ))
 
-  val dummyJoin = (_: Cursor, q: Query) => q.rightIor
-
   val countryCurrencyJoin = (c: Cursor, q: Query) =>
     c.focus match {
       case c: Country =>
@@ -51,12 +50,11 @@ final class ComposedSpec extends CatsSuite {
         mkErrorResult("Bad query")
     }
 
-  val componentElaborator = new ComponentElaborator(Map(
-    (QueryType,   "country")   -> ((CountrySchema, CountryType, dummyJoin)),
-    (QueryType,   "currency")  -> ((CurrencySchema, CurrencyType, dummyJoin)),
-    (QueryType,   "countries") -> ((CountrySchema, CountryType, dummyJoin)),
-    (CountryType, "currency")  -> ((CurrencySchema, CurrencyType, countryCurrencyJoin))
-  ))
+  val componentElaborator = ComponentElaborator(
+    Mapping(QueryType, "country", CountrySchema),
+    Mapping(QueryType, "countries", CountrySchema),
+    Mapping(CountryType, "currency", CurrencySchema, countryCurrencyJoin)
+  )
 
   test("simple currency query") {
     val query = """

@@ -107,19 +107,19 @@ final class CompilerSuite extends CatsSuite {
       }
     """
 
-    val dummyJoin = (_: Cursor, q: Query) => q.rightIor
+    import ComponentElaborator.{ Mapping, TrivialJoin }
 
     val expected =
       Wrap("componenta",
-        Component(SchemaA, dummyJoin,
+        Component(SchemaA, TrivialJoin,
           Select("fielda1", Nil) ~
           Select("fielda2", Nil,
             Wrap("componentb",
-              Component(SchemaB, dummyJoin,
+              Component(SchemaB, TrivialJoin,
                 Select("fieldb1", Nil) ~
                 Select("fieldb2", Nil,
                   Wrap("componentc",
-                    Component(SchemaC, dummyJoin, Empty)
+                    Component(SchemaC, TrivialJoin, Empty)
                   )
                 )
               )
@@ -129,15 +129,12 @@ final class CompilerSuite extends CatsSuite {
       )
 
     import CompositeSchema._
-    import SchemaA._
-    import SchemaB._
-    import SchemaC._
 
-    val elaborator = new ComponentElaborator(Map(
-      (QueryType, "componenta")   -> ((SchemaA, ComponentAType, dummyJoin)),
-      (FieldA2Type, "componentb") -> ((SchemaB, ComponentBType, dummyJoin)),
-      (FieldB2Type, "componentc") -> ((SchemaC, ComponentCType, dummyJoin))
-    ))
+    val elaborator = ComponentElaborator(
+      Mapping(QueryType, "componenta", SchemaA),
+      Mapping(FieldA2Type, "componentb", SchemaB),
+      Mapping(FieldB2Type, "componentc", SchemaC)
+    )
 
     val query: Result[Query] = Compiler.compileText(text)
     val res: Result[Query]  = query.flatMap((q: Query) => elaborator(q, QueryType))
@@ -242,15 +239,69 @@ object SchemaC extends SchemaComponent {
 }
 
 object CompositeSchema extends Schema {
+  import ScalarType._
+
   val QueryType =
     ObjectType(
       name = "Query",
+      description = None,
+      fields = List(
+        Field("componenta", None, Nil, TypeRef("ComponentA"), false, None)
+      ),
+      interfaces = Nil
+    )
+
+  val ComponentAType: ObjectType =
+    ObjectType(
+      name = "ComponentA",
+      description = None,
+      fields = List(
+        Field("fielda1", None, Nil, StringType, false, None),
+        Field("fielda2", None, Nil, TypeRef("FieldA2"), false, None)
+      ),
+      interfaces = Nil
+    )
+
+  val FieldA2Type: ObjectType =
+    ObjectType(
+      name = "FieldA2",
+      description = None,
+      fields = List(
+        Field("componentb", None, Nil, TypeRef("ComponentB"), false, None)
+      ),
+      interfaces = Nil
+    )
+
+  val ComponentBType: ObjectType =
+    ObjectType(
+      name = "ComponentB",
+      description = None,
+      fields = List(
+        Field("fieldb1", None, Nil, StringType, false, None),
+        Field("fieldb2", None, Nil, TypeRef("FieldB2"), false, None)
+      ),
+      interfaces = Nil
+    )
+
+  val FieldB2Type: ObjectType =
+    ObjectType(
+      name = "FieldB2",
+      description = None,
+      fields = List(
+        Field("componentc", None, Nil, TypeRef("ComponentC"), false, None)
+      ),
+      interfaces = Nil
+    )
+
+  val ComponentCType: ObjectType =
+    ObjectType(
+      name = "ComponentC",
       description = None,
       fields = Nil,
       interfaces = Nil
     )
 
-  val types = List(QueryType) ++ SchemaA.types ++ SchemaB.types ++ SchemaC.types
+  val types = List(QueryType, ComponentAType, FieldA2Type, ComponentBType, FieldB2Type, ComponentCType)
   val queryType = TypeRef("Query")
   val mutationType = None
   val subscriptionType = None

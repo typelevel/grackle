@@ -13,6 +13,7 @@ import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import io.circe.literal.JsonStringContext
 
 import edu.gemini.grackle._
+import ComponentElaborator.Mapping
 import Query._, Binding._, Predicate._
 import QueryInterpreter.mkErrorResult
 import doobie.DoobiePredicate._
@@ -34,8 +35,6 @@ final class ComposedWorldSpec extends CatsSuite {
 
   val countryCurrencyElaborator =  new SelectElaborator(Map(
     QueryType -> {
-      case Select("currency", List(StringBinding("code", code)), child) =>
-        Wrap("currency", Unique(FieldEquals("code", code), child)).rightIor
       case Select("country", List(StringBinding("code", code)), child) =>
         Wrap("country", Unique(AttrEquals("code", code), child)).rightIor
       case Select("countries", _, child) =>
@@ -45,28 +44,26 @@ final class ComposedWorldSpec extends CatsSuite {
     }
   ))
 
-  val dummyJoin = (_: Cursor, q: Query) => q.rightIor
-
   val countryCurrencyJoin = (c: Cursor, q: Query) =>
     c.attribute("code") match {
       case Ior.Right(countryCode: String) =>
-        Wrap("currency", Unique(FieldEquals("countryCode", countryCode), q)).rightIor
+        Wrap("currencies", Filter(FieldEquals("countryCode", countryCode), q)).rightIor
       case _ => mkErrorResult("Bad query")
     }
 
-  val componentElaborator = new ComponentElaborator(Map(
-    (QueryType,   "country")   -> ((WorldSchema, NullableType(CountryType), dummyJoin)),
-    (QueryType,   "countries") -> ((WorldSchema, NullableType(ListType(CountryType)), dummyJoin)),
-    (QueryType,   "cities")    -> ((WorldSchema, NullableType(ListType(CityType)), dummyJoin)),
-    (CountryType, "currency")  -> ((CurrencySchema, ListType(CurrencyType), countryCurrencyJoin))
-  ))
+  val componentElaborator = ComponentElaborator(
+    Mapping(QueryType, "country", WorldSchema),
+    Mapping(QueryType, "countries", WorldSchema),
+    Mapping(QueryType, "cities", WorldSchema),
+    Mapping(CountryType, "currencies", CurrencySchema, countryCurrencyJoin)
+  )
 
   test("simple composed query") {
     val query = """
       query {
         country(code: "GBR") {
           name
-          currency {
+          currencies {
             code
             exchangeRate
           }
@@ -79,10 +76,12 @@ final class ComposedWorldSpec extends CatsSuite {
         "data" : {
           "country" : {
             "name" : "United Kingdom",
-            "currency": {
-              "code": "GBP",
-              "exchangeRate": 1.25
-            }
+            "currencies": [
+              {
+                "code": "GBP",
+                "exchangeRate": 1.25
+              }
+            ]
           }
         }
       }
@@ -108,7 +107,7 @@ final class ComposedWorldSpec extends CatsSuite {
           name
           country {
             name
-            currency {
+            currencies {
               code
               exchangeRate
             }
@@ -125,20 +124,24 @@ final class ComposedWorldSpec extends CatsSuite {
               "name" : "Amersfoort",
               "country" : {
                 "name" : "Netherlands",
-                "currency" : {
-                  "code" : "EUR",
-                  "exchangeRate" : 1.12
-                }
+                "currencies" : [
+                  {
+                    "code" : "EUR",
+                    "exchangeRate" : 1.12
+                  }
+                ]
               }
             },
             {
               "name" : "Americana",
               "country" : {
                 "name" : "Brazil",
-                "currency" : {
-                  "code" : "BRL",
-                  "exchangeRate" : 0.25
-                }
+                "currencies" : [
+                  {
+                    "code" : "BRL",
+                    "exchangeRate" : 0.25
+                  }
+                ]
               }
             }
           ]

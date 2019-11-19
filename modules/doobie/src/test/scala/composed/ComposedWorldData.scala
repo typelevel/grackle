@@ -46,7 +46,7 @@ class CurrencyQueryInterpreter[F[_]](override implicit val F: Monad[F])
 
   def rootCursor(query: Query): Result[(Type, Cursor)] =
     query match {
-      case Wrap("currency", _) => (NullableType(CurrencyType), CurrencyCursor(currencies)).rightIor
+      case Wrap("currencies", _) => (ListType(CurrencyType), CurrencyCursor(currencies)).rightIor
       case _ => mkErrorResult("Bad query")
     }
 }

@@ -40,7 +40,7 @@ object ComposedSchema extends Schema {
       fields = List(
         Field("code", None, Nil, StringType, false, None),
         Field("name", None, Nil, StringType, false, None),
-        Field("currency", None, Nil, ListType(TypeRef("Currency")), false, None)
+        Field("currency", None, Nil, TypeRef("Currency"), false, None)
       ),
       interfaces = Nil
     )
@@ -61,8 +61,7 @@ object CountrySchema extends SchemaComponent {
       description = None,
       fields = List(
         Field("code", None, Nil, StringType, false, None),
-        Field("name", None, Nil, StringType, false, None),
-        Field("currency", None, Nil, ListType(TypeRef("Currency")), false, None)
+        Field("name", None, Nil, StringType, false, None)
       ),
       interfaces = Nil
     )
