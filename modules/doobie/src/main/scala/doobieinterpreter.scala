@@ -6,7 +6,7 @@ package doobie
 
 import scala.util.matching.Regex
 
-import cats.data.Ior
+import cats.data.{ Chain, Ior }
 import cats.effect.Bracket
 import cats.implicits._
 import _root_.doobie.Transactor
@@ -47,6 +47,11 @@ class DoobieQueryInterpreter[F[_]](
 
       case _ => mkErrorResult(s"Bad query").pure[F]
     }
+
+  override def runRootValues(queries: List[Query]): F[(Chain[Json], List[ProtoJson])] = {
+    //println(s"runRootValues: ${queries}")
+    super.runRootValues(queries)
+  }
 }
 
 object DoobiePredicate {
@@ -58,6 +63,7 @@ object DoobiePredicate {
   case class FieldLike(fieldName: String, pattern: String, caseInsensitive: Boolean) extends Predicate {
     lazy val r = likeToRegex(pattern, caseInsensitive)
 
+    def path = List(fieldName)
     def apply(c: Cursor): Boolean =
       c.field(fieldName, Map.empty[String, Any]) match {
         case Ior.Right(StringScalarFocus(value)) => r.matches(value)
@@ -68,6 +74,7 @@ object DoobiePredicate {
   case class AttrLike(keyName: String, pattern: String, caseInsensitive: Boolean) extends Predicate {
     lazy val r = likeToRegex(pattern, caseInsensitive)
 
+    def path = List(keyName)
     def apply(c: Cursor): Boolean =
       c.attribute(keyName) match {
         case Ior.Right(value: String) => r.matches(value)

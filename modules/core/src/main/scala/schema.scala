@@ -18,6 +18,8 @@ trait Schema extends SchemaComponent {
 }
 
 sealed trait Type {
+  def =:=(other: Type): Boolean = (this eq other) || (dealias == other.dealias)
+
   def field(fieldName: String): Type = this match {
     case NullableType(tpe) => tpe.field(fieldName)
     case TypeRef(_, _) => dealias.field(fieldName)
@@ -26,7 +28,41 @@ sealed trait Type {
     case _ => NoType
   }
 
-  def =:=(other: Type): Boolean = (this eq other) || (dealias == other.dealias)
+  def path(fns: List[String]): Type = (fns, this) match {
+    case (Nil, _) => this
+    case (_, ListType(tpe)) => tpe.path(fns)
+    case (_, NullableType(tpe)) => tpe.path(fns)
+    case (_, TypeRef(_, _)) => dealias.path(fns)
+    case (fieldName :: rest, ObjectType(_, _, fields, _)) =>
+      fields.find(_.name == fieldName).map(_.tpe.path(rest)).getOrElse(NoType)
+    case (fieldName :: rest, InterfaceType(_, _, fields)) =>
+      fields.find(_.name == fieldName).map(_.tpe.path(rest)).getOrElse(NoType)
+    case _ => NoType
+  }
+
+  def pathIsList(fns: List[String]): Boolean = (fns, this) match {
+    case (Nil, _) => false
+    case (_, _: ListType) => true
+    case (_, NullableType(tpe)) => tpe.pathIsList(fns)
+    case (_, TypeRef(_, _)) => dealias.pathIsList(fns)
+    case (fieldName :: rest, ObjectType(_, _, fields, _)) =>
+      fields.find(_.name == fieldName).map(_.tpe.pathIsList(rest)).getOrElse(false)
+    case (fieldName :: rest, InterfaceType(_, _, fields)) =>
+      fields.find(_.name == fieldName).map(_.tpe.pathIsList(rest)).getOrElse(false)
+    case _ => false
+  }
+
+  def pathIsNullable(fns: List[String]): Boolean = (fns, this) match {
+    case (Nil, _) => false
+    case (_, ListType(tpe)) => tpe.pathIsNullable(fns)
+    case (_, _: NullableType) => true
+    case (_, TypeRef(_, _)) => dealias.pathIsNullable(fns)
+    case (fieldName :: rest, ObjectType(_, _, fields, _)) =>
+      fields.find(_.name == fieldName).map(_.tpe.pathIsNullable(rest)).getOrElse(false)
+    case (fieldName :: rest, InterfaceType(_, _, fields)) =>
+      fields.find(_.name == fieldName).map(_.tpe.pathIsNullable(rest)).getOrElse(false)
+    case _ => false
+  }
 
   def dealias: Type = this match {
     case TypeRef(schema, tpnme) => schema.types.find(_.name == tpnme).getOrElse(NoType)

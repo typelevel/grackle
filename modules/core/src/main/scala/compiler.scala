@@ -92,6 +92,7 @@ object QueryCompiler {
         case u@Unique(_, child)       => apply(child, tpe.nonNull).map(ec => u.copy(child = ec))
         case f@Filter(_, child)       => apply(child, tpe.item).map(ec => f.copy(child = ec))
         case c@Component(_, _, child) => apply(child, tpe).map(ec => c.copy(child = ec))
+        case d@Defer(_, child)        => apply(child, tpe).map(ec => d.copy(child = ec))
         case Empty                    => Empty.rightIor
       }
   }
@@ -129,6 +130,7 @@ object QueryCompiler {
         case u@Unique(_, child)       => apply(child, tpe.nonNull).map(ec => u.copy(child = ec))
         case f@Filter(_, child)       => apply(child, tpe.item).map(ec => f.copy(child = ec))
         case c@Component(_, _, child) => apply(child, tpe).map(ec => c.copy(child = ec))
+        case d@Defer(_, child)        => apply(child, tpe).map(ec => d.copy(child = ec))
         case Empty                    => Empty.rightIor
       }
   }

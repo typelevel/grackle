@@ -49,6 +49,9 @@ object Query {
   case class Component(schema: SchemaComponent, join: (Cursor, Query) => Result[Query], child: Query) extends Query {
     def render = s"<component: ${schema.getClass.getSimpleName} ${child.render}>"
   }
+  case class Defer(join: (Cursor, Query) => Result[Query], child: Query) extends Query {
+    def render = s"<defer: ${child.render}>"
+  }
   case class Wrap(name: String, child: Query) extends Query {
     def render = {
       val rchild = if(child == Empty) "" else s" { ${child.render} }"
@@ -78,6 +81,8 @@ object Query {
 }
 
 trait Predicate extends Product with (Cursor => Boolean) {
+  def path: List[String]
+
   override def toString = ScalaRunTime._toString(this)
 }
 
@@ -91,6 +96,7 @@ object Predicate {
   }
 
   case class FieldEquals(fieldName: String, value: String) extends Predicate {
+    def path = List(fieldName)
     def apply(c: Cursor): Boolean =
       c.field(fieldName, Map.empty[String, Any]) match {
         case Ior.Right(StringScalarFocus(`value`)) => true
@@ -99,6 +105,7 @@ object Predicate {
   }
 
   case class FieldMatches(fieldName: String, r: Regex) extends Predicate {
+    def path = List(fieldName)
     def apply(c: Cursor): Boolean =
       c.field(fieldName, Map.empty[String, Any]) match {
         case Ior.Right(StringScalarFocus(value)) => r.matches(value)
@@ -106,7 +113,20 @@ object Predicate {
       }
   }
 
+  case class FieldContains(val path: List[String], value: String) extends Predicate {
+    def apply(c: Cursor): Boolean =
+      c.listPath(path) match {
+        case Ior.Right(cs) =>
+          cs.exists {
+            case StringScalarFocus(`value`) => true
+            case _ => false
+          }
+        case _ => false
+      }
+  }
+
   case class AttrEquals(attrName: String, value: String) extends Predicate {
+    def path = List(attrName)
     def apply(c: Cursor): Boolean =
       c.attribute(attrName) match {
         case Ior.Right(`value`) => true
@@ -115,6 +135,7 @@ object Predicate {
   }
 
   case class AttrMatches(attrName: String, r: Regex) extends Predicate {
+    def path = List(attrName)
     def apply(c: Cursor): Boolean =
       c.attribute(attrName) match {
         case Ior.Right(value: String) => r.matches(value)
@@ -189,6 +210,11 @@ abstract class QueryInterpreter[F[_]](val schema: Schema)(implicit val F: Monad[
         } yield ProtoJson.fromFields(List((fieldName, pvalue)))
 
       case (Component(schema, join, child), _) =>
+        for {
+          cont <- join(cursor, child)
+        } yield ProtoJson.deferred(schema, cont)
+
+      case (Defer(join, child), _) =>
         for {
           cont <- join(cursor, child)
         } yield ProtoJson.deferred(schema, cont)

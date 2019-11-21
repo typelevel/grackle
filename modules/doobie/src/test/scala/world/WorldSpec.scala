@@ -207,7 +207,7 @@ final class WorldSpec extends CatsSuite {
     assert(res == expected)
   }
 
-  ignore("expanding query") {
+  test("recursive query") {
     val query = """
       query {
         country(code: "ESP") {
@@ -259,13 +259,13 @@ final class WorldSpec extends CatsSuite {
                 "language" : "Spanish",
                 "countries" : [
                   {
+                    "name" : "Aruba"
+                  },
+                  {
                     "name" : "Andorra"
                   },
                   {
                     "name" : "Argentina"
-                  },
-                  {
-                    "name" : "Aruba"
                   },
                   {
                     "name" : "Belize"
@@ -295,7 +295,7 @@ final class WorldSpec extends CatsSuite {
                     "name" : "Ecuador"
                   },
                   {
-                    "name" : "El Salvador"
+                    "name" : "Spain"
                   },
                   {
                     "name" : "France"
@@ -316,25 +316,25 @@ final class WorldSpec extends CatsSuite {
                     "name" : "Panama"
                   },
                   {
-                    "name" : "Paraguay"
-                  },
-                  {
                     "name" : "Peru"
                   },
                   {
                     "name" : "Puerto Rico"
                   },
                   {
-                    "name" : "Spain"
+                    "name" : "Paraguay"
+                  },
+                  {
+                    "name" : "El Salvador"
                   },
                   {
                     "name" : "Sweden"
                   },
                   {
-                    "name" : "United States"
+                    "name" : "Uruguay"
                   },
                   {
-                    "name" : "Uruguay"
+                    "name" : "United States"
                   },
                   {
                     "name" : "Venezuela"
@@ -350,7 +350,7 @@ final class WorldSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = WorldQueryCompiler.compile(query).right.get
+    val compiledQuery = StagedWorldQueryCompiler.compile(query).right.get
     val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
     //println(res)
 

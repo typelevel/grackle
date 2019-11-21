@@ -20,6 +20,9 @@ import ScalarType._
 trait DoobieMapping {
   val objectMappings: List[ObjectMapping]
 
+  def mkSelects(path: List[String]): Query =
+    path.foldRight(Empty: Query) { (fieldName, child) => Select(fieldName, Nil, child) }
+
   def mapQuery(q: Query, tpe: Type): MappedQuery = {
     type Acc = (List[(Type, FieldMapping)], List[(Type, Predicate)])
     def loop(q: Query, tpe: Type, acc: Acc): Acc =
@@ -38,11 +41,13 @@ trait DoobieMapping {
           }
         case Filter(pred, child) =>
           val obj = tpe.underlyingObject
-          loop(child, tpe, (acc._1, (obj, pred) :: acc._2))
+          val mc = loop(child, tpe, (acc._1, (obj, pred) :: acc._2))
+          loop(mkSelects(pred.path), tpe, mc)
         case Unique(pred, child) =>
           val obj = tpe.underlyingObject
-          loop(child, tpe, (acc._1, (obj, pred) :: acc._2))
-        case Component(_, _, q) => loop(q, tpe, acc)
+          val mc = loop(child, tpe, (acc._1, (obj, pred) :: acc._2))
+          loop(mkSelects(pred.path), tpe, mc)
+        case (_: Component) | (_: Defer) => acc
         case Empty => acc
       }
 
@@ -104,6 +109,10 @@ object DoobieMapping {
     joins: List[Join],
     mapping: DoobieMapping
   ) {
+    override def toString: String = {
+      columns.toString
+    }
+
     def index(col: ColumnRef): Int =
       columns.indexOf(col)
 
@@ -201,6 +210,11 @@ object DoobieMapping {
           val col = columnOfField(tpe, keyName)
           val op = if(caseInsensitive) "ILIKE" else "LIKE"
           Fragment.const(s"${col.toSql} $op ") ++ fr"$pattern"
+
+        case (tpe, FieldContains(path, value)) =>
+          val tpe1 = tpe.path(path.init).underlyingObject
+          val col = columnOfField(tpe1, path.last)
+          Fragment.const(s"${col.toSql} = ") ++ fr"$value"
 
         case _ => Fragment.empty
       }

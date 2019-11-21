@@ -108,3 +108,61 @@ object WorldQueryInterpreter {
     (implicit brkt: Bracket[F, Throwable], logger: Logger[F]): DoobieQueryInterpreter[F] =
       new DoobieQueryInterpreter[F](WorldSchema, WorldData, xa, logger)
 }
+
+object StagedWorldQueryCompiler extends QueryCompiler(WorldSchema) {
+  val selectElaborator = new SelectElaborator(Map(
+    QueryType -> {
+      case Select("countries", Nil, child) =>
+        Wrap("countries", child).rightIor
+      case Select("country", List(StringBinding("code", code)), child) =>
+        Wrap("country", Unique(AttrEquals("code", code), child)).rightIor
+      case Select("cities", List(StringBinding("namePattern", namePattern)), child) =>
+        Wrap("cities", Filter(FieldLike("name", namePattern, true), child)).rightIor
+      }
+  ))
+
+  class StagingElaborator extends Phase {
+    val stagingJoin = (c: Cursor, q: Query) => {
+      val language = c.attribute("language").right.get.asInstanceOf[String]
+
+      q match {
+        case Select("countries", Nil, child) =>
+          Wrap("countries", Filter(FieldContains(List("languages", "language"), language), child)).rightIor
+        case _ => ???
+      }
+    }
+
+    def apply(query: Query, tpe: Type): Result[Query] = {
+      def loop(query: Query, tpe: Type, filtered: Set[Type]): Result[Query] = {
+        query match {
+          case s@Select(fieldName, _, child) =>
+            val childTpe = tpe.underlyingField(fieldName)
+            if(filtered(childTpe.underlyingObject))
+              Wrap(fieldName, Defer(stagingJoin, s)).rightIor
+            else
+              loop(child, childTpe, filtered).map(ec => s.copy(child = ec))
+
+          case w@Wrap(fieldName, child)      =>
+            val childTpe = tpe.underlyingField(fieldName)
+            if(filtered(childTpe.underlyingObject))
+              Wrap(fieldName, Defer(stagingJoin, w)).rightIor
+            else
+              loop(child, tpe.underlyingField(fieldName), filtered).map(ec => w.copy(child = ec))
+
+          case g@Group(queries)              => queries.traverse(q => loop(q, tpe, filtered)).map(eqs => g.copy(queries = eqs))
+          case u@Unique(_, child)            => loop(child, tpe.nonNull, filtered + tpe.underlyingObject).map(ec => u.copy(child = ec))
+          case f@Filter(_, child)            => loop(child, tpe.item, filtered + tpe.underlyingObject).map(ec => f.copy(child = ec))
+          case c: Component                  => c.rightIor
+          case d: Defer                      => d.rightIor
+          case Empty                         => Empty.rightIor
+        }
+      }
+
+      loop(query, tpe, Set.empty[Type])
+    }
+  }
+
+  val stagingElaborator = new StagingElaborator
+
+  val phases = List(selectElaborator, stagingElaborator)
+}
