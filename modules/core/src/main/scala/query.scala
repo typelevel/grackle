@@ -142,6 +142,14 @@ object Predicate {
         case _ => false
       }
   }
+
+  case class AttrContains(val path: List[String], value: String) extends Predicate {
+    def apply(c: Cursor): Boolean =
+      c.attrListPath(path) match {
+        case Ior.Right(attrs) => attrs.exists(_ == value)
+        case _ => false
+      }
+  }
 }
 
 abstract class QueryInterpreter[F[_]](val schema: Schema)(implicit val F: Monad[F]) {

@@ -207,7 +207,7 @@ final class WorldSpec extends CatsSuite {
     assert(res == expected)
   }
 
-  test("recursive query") {
+  test("recursive query (1)") {
     val query = """
       query {
         country(code: "ESP") {
@@ -350,7 +350,289 @@ final class WorldSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StagedWorldQueryCompiler.compile(query).right.get
+    val compiledQuery = WorldQueryCompiler.compile(query).right.get
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("recursive query (2)") {
+    val query = """
+      query {
+        cities(namePattern: "Brighton") {
+          name
+          country {
+            name
+            cities {
+              name
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "cities" : [
+            {
+              "name" : "Brighton",
+              "country" : {
+                "name" : "United Kingdom",
+                "cities" : [
+                  {
+                    "name" : "London"
+                  },
+                  {
+                    "name" : "Birmingham"
+                  },
+                  {
+                    "name" : "Glasgow"
+                  },
+                  {
+                    "name" : "Liverpool"
+                  },
+                  {
+                    "name" : "Edinburgh"
+                  },
+                  {
+                    "name" : "Sheffield"
+                  },
+                  {
+                    "name" : "Manchester"
+                  },
+                  {
+                    "name" : "Leeds"
+                  },
+                  {
+                    "name" : "Bristol"
+                  },
+                  {
+                    "name" : "Cardiff"
+                  },
+                  {
+                    "name" : "Coventry"
+                  },
+                  {
+                    "name" : "Leicester"
+                  },
+                  {
+                    "name" : "Bradford"
+                  },
+                  {
+                    "name" : "Belfast"
+                  },
+                  {
+                    "name" : "Nottingham"
+                  },
+                  {
+                    "name" : "Kingston upon Hull"
+                  },
+                  {
+                    "name" : "Plymouth"
+                  },
+                  {
+                    "name" : "Stoke-on-Trent"
+                  },
+                  {
+                    "name" : "Wolverhampton"
+                  },
+                  {
+                    "name" : "Derby"
+                  },
+                  {
+                    "name" : "Swansea"
+                  },
+                  {
+                    "name" : "Southampton"
+                  },
+                  {
+                    "name" : "Aberdeen"
+                  },
+                  {
+                    "name" : "Northampton"
+                  },
+                  {
+                    "name" : "Dudley"
+                  },
+                  {
+                    "name" : "Portsmouth"
+                  },
+                  {
+                    "name" : "Newcastle upon Tyne"
+                  },
+                  {
+                    "name" : "Sunderland"
+                  },
+                  {
+                    "name" : "Luton"
+                  },
+                  {
+                    "name" : "Swindon"
+                  },
+                  {
+                    "name" : "Southend-on-Sea"
+                  },
+                  {
+                    "name" : "Walsall"
+                  },
+                  {
+                    "name" : "Bournemouth"
+                  },
+                  {
+                    "name" : "Peterborough"
+                  },
+                  {
+                    "name" : "Brighton"
+                  },
+                  {
+                    "name" : "Blackpool"
+                  },
+                  {
+                    "name" : "Dundee"
+                  },
+                  {
+                    "name" : "West Bromwich"
+                  },
+                  {
+                    "name" : "Reading"
+                  },
+                  {
+                    "name" : "Oldbury/Smethwick (Warley)"
+                  },
+                  {
+                    "name" : "Middlesbrough"
+                  },
+                  {
+                    "name" : "Huddersfield"
+                  },
+                  {
+                    "name" : "Oxford"
+                  },
+                  {
+                    "name" : "Poole"
+                  },
+                  {
+                    "name" : "Bolton"
+                  },
+                  {
+                    "name" : "Blackburn"
+                  },
+                  {
+                    "name" : "Newport"
+                  },
+                  {
+                    "name" : "Preston"
+                  },
+                  {
+                    "name" : "Stockport"
+                  },
+                  {
+                    "name" : "Norwich"
+                  },
+                  {
+                    "name" : "Rotherham"
+                  },
+                  {
+                    "name" : "Cambridge"
+                  },
+                  {
+                    "name" : "Watford"
+                  },
+                  {
+                    "name" : "Ipswich"
+                  },
+                  {
+                    "name" : "Slough"
+                  },
+                  {
+                    "name" : "Exeter"
+                  },
+                  {
+                    "name" : "Cheltenham"
+                  },
+                  {
+                    "name" : "Gloucester"
+                  },
+                  {
+                    "name" : "Saint Helens"
+                  },
+                  {
+                    "name" : "Sutton Coldfield"
+                  },
+                  {
+                    "name" : "York"
+                  },
+                  {
+                    "name" : "Oldham"
+                  },
+                  {
+                    "name" : "Basildon"
+                  },
+                  {
+                    "name" : "Worthing"
+                  },
+                  {
+                    "name" : "Chelmsford"
+                  },
+                  {
+                    "name" : "Colchester"
+                  },
+                  {
+                    "name" : "Crawley"
+                  },
+                  {
+                    "name" : "Gillingham"
+                  },
+                  {
+                    "name" : "Solihull"
+                  },
+                  {
+                    "name" : "Rochdale"
+                  },
+                  {
+                    "name" : "Birkenhead"
+                  },
+                  {
+                    "name" : "Worcester"
+                  },
+                  {
+                    "name" : "Hartlepool"
+                  },
+                  {
+                    "name" : "Halifax"
+                  },
+                  {
+                    "name" : "Woking/Byfleet"
+                  },
+                  {
+                    "name" : "Southport"
+                  },
+                  {
+                    "name" : "Maidstone"
+                  },
+                  {
+                    "name" : "Eastbourne"
+                  },
+                  {
+                    "name" : "Grimsby"
+                  },
+                  {
+                    "name" : "Saint Helier"
+                  },
+                  {
+                    "name" : "Douglas"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    """
+
+    val compiledQuery = WorldQueryCompiler.compile(query).right.get
     val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
     //println(res)
 

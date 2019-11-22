@@ -99,4 +99,29 @@ trait Cursor {
           case Ior.Both(es, _) => es.leftIor
         }
   }
+
+  def attrListPath(fns: List[String]): Result[List[Any]] = fns match {
+    case Nil => List(this).rightIor
+    case List(attrName) if hasAttribute(attrName) =>
+      List(attribute(attrName).right.get).rightIor
+    case fieldName :: rest =>
+      if (isNullable)
+        asNullable match {
+          case Ior.Right(Some(c)) => c.attrListPath(fns)
+          case Ior.Right(None) => Nil.rightIor
+          case Ior.Left(es) => es.leftIor
+          case Ior.Both(es, _) => es.leftIor
+        }
+      else if (isList)
+        asList match {
+          case Ior.Right(cs) => cs.flatTraverse(_.attrListPath(fns))
+          case other => other
+        }
+      else
+        field(fieldName, Map.empty) match {
+          case Ior.Right(c) => c.attrListPath(rest)
+          case Ior.Left(es) => es.leftIor
+          case Ior.Both(es, _) => es.leftIor
+        }
+  }
 }

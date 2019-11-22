@@ -11,11 +11,13 @@ import _root_.doobie.{ ConnectionIO, Fragment, Fragments, Get, Read }
 import _root_.doobie.implicits._
 import _root_.doobie.enum.Nullability._
 
+import QueryCompiler._, ComponentElaborator.TrivialJoin
 import DoobieMapping._, FieldMapping._
 import DoobiePredicate._
 import Predicate._
 import Query._
 import ScalarType._
+import QueryInterpreter.mkErrorResult
 
 trait DoobieMapping {
   val objectMappings: List[ObjectMapping]
@@ -62,14 +64,14 @@ trait DoobieMapping {
 
     val columns: List[ColumnRef] = (mappings.foldLeft(keys) {
       case (acc, (_, cr: ColumnRef)) => cr :: acc
-      case (acc, (_, Subobject(_, joins))) => joins.map(_.parent) ++ acc
+      case (acc, (_, Subobject(_, joins, _))) => joins.map(_.parent) ++ acc
       case (acc, _) => acc
     }).distinct
 
     val tables: List[String] = columns.map(_.table).distinct
 
     val joins: List[Join] = (mappings.foldLeft(List.empty[Join]) {
-      case (acc, (_, Subobject(_, joins))) => joins ++ acc
+      case (acc, (_, Subobject(_, joins, _))) => joins ++ acc
       case (acc, _) => acc
     }).distinctBy(_.normalize)
 
@@ -89,7 +91,7 @@ object DoobieMapping {
     case class ColumnRef(table: String, column: String, tpe: Type) extends FieldMapping {
       def toSql: String = s"$table.$column"
     }
-    case class Subobject(tpe: Type, joins: List[Join])  extends FieldMapping
+    case class Subobject(tpe: Type, joins: List[Join], stagingJoin: (Cursor, Query) => Result[Query] = TrivialJoin) extends FieldMapping
 
     case class Join(parent: ColumnRef, child: ColumnRef) {
       def normalize: Join = {
@@ -216,6 +218,11 @@ object DoobieMapping {
           val col = columnOfField(tpe1, path.last)
           Fragment.const(s"${col.toSql} = ") ++ fr"$value"
 
+        case (tpe, AttrContains(path, value)) =>
+          val tpe1 = tpe.path(path.init).underlyingObject
+          val col = columnOfKey(tpe1, path.last)
+          Fragment.const(s"${col.toSql} = ") ++ fr"$value"
+
         case _ => Fragment.empty
       }
 
@@ -230,6 +237,58 @@ object DoobieMapping {
         )
 
       (select ++ where)
+    }
+  }
+
+  class StagingElaborator(mapping: DoobieMapping) extends Phase {
+    val stagingJoin = (c: Cursor, q: Query) => (c, q) match {
+      case (dc: DoobieCursor, Select(fieldName, _, _)) =>
+        val tpe = dc.tpe.underlyingObject
+
+        val osj = for {
+          om                 <- mapping.objectMappings.find(_.tpe =:= tpe)
+          (_, so: Subobject) <- om.fieldMappings.find(_._1 == fieldName)
+        } yield so.stagingJoin
+
+        osj match {
+          case Some(stagingJoin) => stagingJoin(c, q)
+          case None =>
+            mkErrorResult(s"No staging join for field '$fieldName' of type ${tpe.shortString}")
+        }
+      case _ => mkErrorResult(s"No staging join for non-Select $q")
+    }
+
+    def apply(query: Query, tpe: Type): Result[Query] = {
+      def loop(query: Query, tpe: Type, filtered: Set[Type]): Result[Query] = {
+        query match {
+          case s@Select(fieldName, _, child) =>
+            val childTpe = tpe.underlyingField(fieldName)
+            if(filtered(childTpe.underlyingObject)) {
+              val elaboratedSelect = loop(child, childTpe, Set.empty).map(ec => s.copy(child = ec))
+              elaboratedSelect.map(ec => Wrap(fieldName, Defer(stagingJoin, ec)))
+            } else {
+              loop(child, childTpe, filtered + tpe.underlyingObject).map(ec => s.copy(child = ec))
+            }
+
+          case w@Wrap(fieldName, child)      =>
+            val childTpe = tpe.underlyingField(fieldName)
+            if(filtered(childTpe.underlyingObject)) {
+              val elaboratedSelect = loop(child, childTpe, Set.empty).map(ec => w.copy(child = ec))
+              elaboratedSelect.map(ec => Wrap(fieldName, Defer(stagingJoin, ec)))
+            } else {
+              loop(child, childTpe, filtered + tpe.underlyingObject).map(ec => w.copy(child = ec))
+            }
+
+          case g@Group(queries)              => queries.traverse(q => loop(q, tpe, filtered)).map(eqs => g.copy(queries = eqs))
+          case u@Unique(_, child)            => loop(child, tpe.nonNull, filtered + tpe.underlyingObject).map(ec => u.copy(child = ec))
+          case f@Filter(_, child)            => loop(child, tpe.item, filtered + tpe.underlyingObject).map(ec => f.copy(child = ec))
+          case c: Component                  => c.rightIor
+          case d: Defer                      => d.rightIor
+          case Empty                         => Empty.rightIor
+        }
+      }
+
+      loop(query, tpe, Set.empty)
     }
   }
 }
