@@ -27,7 +27,9 @@ object WorldData extends DoobieMapping {
         List(
           "cities" -> Subobject(ListType(CityType), Nil),
           "country" -> Subobject(CountryType, Nil),
-          "countries" -> Subobject(ListType(CountryType), Nil)
+          "countries" -> Subobject(ListType(CountryType), Nil),
+          "language" -> Subobject(LanguageType, Nil),
+          "languages" -> Subobject(ListType(LanguageType), Nil)
         )
     )
 
@@ -64,15 +66,17 @@ object WorldData extends DoobieMapping {
 
   def countryCityJoin(c: Cursor, q: Query): Result[Query] = q match {
     case Select("cities", Nil, child) =>
-      val code = c.attribute("code").right.get.asInstanceOf[String]
-      Wrap("cities", Filter(AttrEquals("countrycode", code), child)).rightIor
+      c.attribute("code").map { case (code: String) =>
+        Wrap("cities", Filter(AttrEquals("countrycode", code), child))
+      }
     case _ => mkErrorResult("Bad staging join")
   }
 
   def countryLanguageJoin(c: Cursor, q: Query): Result[Query] = q match {
     case Select("languages", Nil, child) =>
-      val code = c.attribute("code").right.get.asInstanceOf[String]
-      Wrap("languages", Filter(AttrContains(List("countries", "code"), code), child)).rightIor
+      c.attribute("code").map { case (code: String) =>
+        Wrap("languages", Filter(FieldEquals("countrycode", code), child))
+      }
     case _ => mkErrorResult("Bad staging join")
   }
 
@@ -81,7 +85,7 @@ object WorldData extends DoobieMapping {
       tpe = CityType,
       key = List(
         ColumnRef("city", "id", IntType),
-        ColumnRef("city", "countrycode", IntType)
+        ColumnRef("city", "countrycode", IntType) // FIXME: should be a private non-key attribute
       ),
       fieldMappings =
         List(
@@ -97,20 +101,24 @@ object WorldData extends DoobieMapping {
 
   def cityCountryJoin(c: Cursor, q: Query): Result[Query] = q match {
     case Select("country", Nil, child) =>
-      val countrycode = c.attribute("countrycode").right.get.asInstanceOf[String]
-      Wrap("country", Unique(AttrEquals("code", countrycode), child)).rightIor
+      c.attribute("countrycode").map { case (countrycode: String) =>
+        Wrap("country", Unique(AttrEquals("code", countrycode), child))
+      }
     case _ => mkErrorResult("Bad staging join")
   }
 
   val languageMapping =
     ObjectMapping(
       tpe = LanguageType,
-      key = List(ColumnRef("countryLanguage", "language", StringType)),
+      key = List(
+        ColumnRef("countryLanguage", "language", StringType),
+      ),
       fieldMappings =
         List(
           "language" -> ColumnRef("countryLanguage", "language", StringType),
           "isOfficial" -> ColumnRef("countryLanguage", "isOfficial", BooleanType),
           "percentage" -> ColumnRef("countryLanguage", "percentage", FloatType),
+          "countrycode" -> ColumnRef("countryLanguage", "countrycode", StringType), // FIXME: should be a private non-key attribute
           "countries" -> Subobject(ListType(CountryType),
             List(Join(ColumnRef("countryLanguage", "countrycode", StringType), ColumnRef("country", "code", StringType))),
             languageCountryJoin
@@ -120,8 +128,9 @@ object WorldData extends DoobieMapping {
 
   def languageCountryJoin(c: Cursor, q: Query): Result[Query] = q match {
     case Select("countries", Nil, child) =>
-      val language = c.attribute("language").right.get.asInstanceOf[String]
-      Wrap("countries", Filter(FieldContains(List("languages", "language"), language), child)).rightIor
+      c.attribute("language").map { case (language: String) =>
+        Wrap("countries", Filter(FieldContains(List("languages", "language"), language), child))
+      }
     case _ => mkErrorResult("Bad staging join")
   }
 
@@ -131,13 +140,17 @@ object WorldData extends DoobieMapping {
 object WorldQueryCompiler extends QueryCompiler(WorldSchema) {
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
-      case Select("countries", Nil, child) =>
-        Wrap("countries", child).rightIor
       case Select("country", List(StringBinding("code", code)), child) =>
         Wrap("country", Unique(AttrEquals("code", code), child)).rightIor
+      case Select("countries", Nil, child) =>
+        Wrap("countries", child).rightIor
       case Select("cities", List(StringBinding("namePattern", namePattern)), child) =>
         Wrap("cities", Filter(FieldLike("name", namePattern, true), child)).rightIor
-      }
+      case Select("language", List(StringBinding("language", language)), child) =>
+        Wrap("language", Unique(FieldEquals("language", language), child)).rightIor
+      case Select("languages", Nil, child) =>
+        Wrap("languages", child).rightIor
+    }
   ))
 
   val stagingElaborator = new StagingElaborator(WorldData)

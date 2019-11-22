@@ -10,6 +10,7 @@ object WorldSchema extends Schema {
 
   val NamePatternArg = InputValue("namePattern", None, NullableType(StringType), Some("%"))
   val CodeArg = InputValue("code", None, NullableType(StringType), None)
+  val LanguageArg = InputValue("language", None, NullableType(StringType), None)
 
   val QueryType: ObjectType =
     ObjectType(
@@ -18,7 +19,9 @@ object WorldSchema extends Schema {
       fields = List(
         Field("cities", None, List(NamePatternArg), NullableType(ListType(TypeRef("City"))), false, None),
         Field("country", None, List(CodeArg), NullableType(TypeRef("Country")), false, None),
-        Field("countries", None, Nil, NullableType(ListType(TypeRef("Country"))), false, None)
+        Field("countries", None, Nil, NullableType(ListType(TypeRef("Country"))), false, None),
+        Field("language", None, List(LanguageArg), NullableType(TypeRef("Language")), false, None),
+        Field("languages", None, Nil, NullableType(ListType(TypeRef("Language"))), false, None)
       ),
       interfaces = Nil
     )
@@ -44,6 +47,7 @@ object WorldSchema extends Schema {
         Field("language", None, Nil, StringType, false, None),
         Field("isOfficial", None, Nil, BooleanType, false, None),
         Field("percentage", None, Nil, FloatType, false, None),
+        Field("countrycode", None, Nil, StringType, false, None), // FIXME: should be a private non-key attribute
         Field("countries", None, Nil, ListType(TypeRef("Country")), false, None)
       ),
       interfaces = Nil

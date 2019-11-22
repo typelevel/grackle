@@ -49,7 +49,7 @@ class DoobieQueryInterpreter[F[_]](
     }
 
   override def runRootValues(queries: List[Query]): F[(Chain[Json], List[ProtoJson])] = {
-    //println(s"runRootValues: ${queries}")
+    // TODO: combine sibling queries here
     super.runRootValues(queries)
   }
 }

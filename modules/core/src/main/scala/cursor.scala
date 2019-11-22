@@ -103,7 +103,7 @@ trait Cursor {
   def attrListPath(fns: List[String]): Result[List[Any]] = fns match {
     case Nil => List(this).rightIor
     case List(attrName) if hasAttribute(attrName) =>
-      List(attribute(attrName).right.get).rightIor
+      attribute(attrName).map(List(_))
     case fieldName :: rest =>
       if (isNullable)
         asNullable match {
