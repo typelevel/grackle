@@ -148,7 +148,7 @@ final class WorldSpec extends CatsSuite {
   test("recursive query (1)") {
     val query = """
       query {
-        cities(namePattern: "Tirana") {
+        cities(namePattern: "Monte-Carlo") {
           name
           country {
             name
@@ -170,34 +170,60 @@ final class WorldSpec extends CatsSuite {
     """
 
     val expected = json"""
-      {
-        "data": {
-          "cities": [
-            {
-              "name": "Tirana",
-              "country": {
-                "name": "Albania",
-                "cities": [
-                  {
-                    "name": "Tirana",
-                    "country": {
-                      "name": "Albania",
-                      "cities": [
-                        {
-                          "name": "Tirana",
-                          "country": {
-                            "name": "Albania"
-                          }
+    {
+      "data" : {
+        "cities" : [
+          {
+            "name" : "Monte-Carlo",
+            "country" : {
+              "name" : "Monaco",
+              "cities" : [
+                {
+                  "name" : "Monte-Carlo",
+                  "country" : {
+                    "name" : "Monaco",
+                    "cities" : [
+                      {
+                        "name" : "Monte-Carlo",
+                        "country" : {
+                          "name" : "Monaco"
                         }
-                      ]
-                    }
+                      },
+                      {
+                        "name" : "Monaco-Ville",
+                        "country" : {
+                          "name" : "Monaco"
+                        }
+                      }
+                    ]
                   }
-                ]
-              }
+                },
+                {
+                  "name" : "Monaco-Ville",
+                  "country" : {
+                    "name" : "Monaco",
+                    "cities" : [
+                      {
+                        "name" : "Monte-Carlo",
+                        "country" : {
+                          "name" : "Monaco"
+                        }
+                      },
+                      {
+                        "name" : "Monaco-Ville",
+                        "country" : {
+                          "name" : "Monaco"
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
             }
-          ]
-        }
+          }
+        ]
       }
+    }
     """
 
     val compiledQuery = WorldQueryCompiler.compile(query).right.get
