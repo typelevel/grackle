@@ -100,7 +100,7 @@ object DoobieMapping {
         else Join(child, parent)
       }
 
-      def toSql: String = s"${parent.toSql} = ${child.toSql}"
+      def toSql: String = s"LEFT JOIN ${child.table} ON ${parent.toSql} = ${child.toSql}"
     }
   }
 
@@ -226,13 +226,16 @@ object DoobieMapping {
         case _ => Fragment.empty
       }
 
-      val where = Fragments.whereAnd(preds ++ joins.map(join => Fragment.const0(join.toSql)): _*)
+      // we shouldn't need to do this because `tables` should really just be the root table
+      val tablesʹ = tables.filterNot(joins.map(_.child.table).toSet)
+
+      val where = Fragments.whereAnd(preds: _*)
 
       val select =
         Fragment.const0(
           s"""
           |SELECT ${cols.mkString(", ")}
-          |FROM ${tables.mkString(", ")}
+          |FROM ${tablesʹ.mkString(", ")}${if (joins.isEmpty) "" else joins.map(_.toSql).mkString("\n", "\n", "")}
           |""".stripMargin
         )
 
