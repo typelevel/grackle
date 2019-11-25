@@ -197,39 +197,39 @@ object DoobieMapping {
       val preds = predicates.map {
         case (tpe, FieldEquals(fieldName, value)) =>
           val col = columnOfField(tpe, fieldName)
-          Fragment.const(s"${col.toSql} = ") ++ fr"$value"
+          Fragment.const(s"${col.toSql} =") ++ fr0"$value"
 
         case (tpe, FieldLike(fieldName, pattern, caseInsensitive)) =>
           val col = columnOfField(tpe, fieldName)
           val op = if(caseInsensitive) "ILIKE" else "LIKE"
-          Fragment.const(s"${col.toSql} $op ") ++ fr"$pattern"
+          Fragment.const(s"${col.toSql} $op") ++ fr0"$pattern"
 
         case (tpe, AttrEquals(keyName, value)) =>
           val col = columnOfKey(tpe, keyName)
-          Fragment.const(s"${col.toSql} = ") ++ fr"$value"
+          Fragment.const(s"${col.toSql} =") ++ fr0"$value"
 
         case (tpe, AttrLike(keyName, pattern, caseInsensitive)) =>
           val col = columnOfField(tpe, keyName)
           val op = if(caseInsensitive) "ILIKE" else "LIKE"
-          Fragment.const(s"${col.toSql} $op ") ++ fr"$pattern"
+          Fragment.const(s"${col.toSql} $op") ++ fr0"$pattern"
 
         case (tpe, FieldContains(path, value)) =>
           val tpe1 = tpe.path(path.init).underlyingObject
           val col = columnOfField(tpe1, path.last)
-          Fragment.const(s"${col.toSql} = ") ++ fr"$value"
+          Fragment.const(s"${col.toSql} =") ++ fr0"$value"
 
         case (tpe, AttrContains(path, value)) =>
           val tpe1 = tpe.path(path.init).underlyingObject
           val col = columnOfKey(tpe1, path.last)
-          Fragment.const(s"${col.toSql} = ") ++ fr"$value"
+          Fragment.const(s"${col.toSql} =") ++ fr0"$value"
 
         case _ => Fragment.empty
       }
 
-      val where = Fragments.whereAnd(preds ++ joins.map(join => Fragment.const(join.toSql)): _*)
+      val where = Fragments.whereAnd(preds ++ joins.map(join => Fragment.const0(join.toSql)): _*)
 
       val select =
-        Fragment.const(
+        Fragment.const0(
           s"""
           |SELECT ${cols.mkString(", ")}
           |FROM ${tables.mkString(", ")}
