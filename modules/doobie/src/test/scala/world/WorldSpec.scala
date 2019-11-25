@@ -548,4 +548,65 @@ final class WorldSpec extends CatsSuite {
 
     assert(res == expected)
   }
+
+  // fails: no match because we're using inner joins
+  // test("country with no cities") {
+  //   val query = """
+  //     query {
+  //       country(code: "ATA") {
+  //         name
+  //         cities {
+  //           name
+  //         }
+  //       }
+  //     }
+  //   """
+
+  //   val expected = json"""
+  //     {
+  //       "data": {
+  //         "country": {
+  //           "name": "Antarctica",
+  //           "cities": []
+  //         }
+  //       }
+  //     }
+  //   """
+
+  //   val compiledQuery = WorldQueryCompiler.compile(query).right.get
+  //   val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+  //   //println(res)
+
+  //   assert(res == expected)
+  // }
+
+  test("no such country") {
+    val query = """
+      query {
+        country(code: "XXX") {
+          name
+          cities {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "No match"
+          }
+        ]
+      }
+    """
+
+    val compiledQuery = WorldQueryCompiler.compile(query).right.get
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
+
 }

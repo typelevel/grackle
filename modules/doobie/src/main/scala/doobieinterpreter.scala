@@ -85,7 +85,7 @@ object DoobiePredicate {
 
 case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) extends Cursor {
   def asTable: Result[Table] = focus match {
-    case table@((_: Row) :: _) => table.asInstanceOf[Table].rightIor
+    case table@((_: Row) :: _ | Nil) => table.asInstanceOf[Table].rightIor
     case _ => mkErrorResult(s"Not a table")
   }
 
