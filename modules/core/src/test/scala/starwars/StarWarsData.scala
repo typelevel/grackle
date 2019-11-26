@@ -10,7 +10,6 @@ import edu.gemini.grackle._
 
 import Query._, Binding._, Predicate._
 import QueryCompiler._
-import QueryInterpreter.mkErrorResult
 
 import StarWarsData._
 import StarWarsSchema._
@@ -113,32 +112,18 @@ object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
   val phases = List(selectElaborator)
 }
 
-object StarWarsQueryInterpreter extends DataTypeQueryInterpreter[Id](StarWarsSchema) {
-  def rootCursor(query: Query): Result[(Type, Cursor)] =
-    query match {
-      case Wrap("hero", _)                => (CharacterType, StarWarsCursor(characters)).rightIor
-      case Wrap("character" | "human", _) => (NullableType(CharacterType), StarWarsCursor(characters)).rightIor
-      case _ => mkErrorResult("Bad query")
-    }
-}
-
-case class StarWarsCursor(focus: Any) extends DataTypeCursor {
-  def mkCursor(focus: Any): Cursor = StarWarsCursor(focus)
-
-  def hasField(fieldName: String): Boolean = (focus, fieldName) match {
-    case (_: Character, "id" | "name" | "appearsIn" | "friends") => true
-    case (_: Human, "homePlanet") => true
-    case (_: Droid, "primaryFunction") => true
-    case _ => false
+object StarWarsQueryInterpreter extends DataTypeQueryInterpreter[Id](
+  StarWarsSchema,
+  {
+    case "hero"                        => (ListType(CharacterType), characters)
+    case "character" | "human"         => (ListType(CharacterType), characters)
+  },
+  {
+    case (c: Character, "id")          => c.id
+    case (c: Character, "name")        => c.name
+    case (c: Character, "appearsIn")   => c.appearsIn
+    case (c: Character, "friends")     => c.friends
+    case (h: Human, "homePlanet")      => h.homePlanet
+    case (d: Droid, "primaryFunction") => d.primaryFunction
   }
-
-  def field(fieldName: String, args: Map[String, Any]): Result[Cursor] = (focus, fieldName) match {
-    case (c: Character, "id") => mkCursor(c.id).rightIor
-    case (c: Character, "name") => mkCursor(c.name).rightIor
-    case (c: Character, "appearsIn") => mkCursor(c.appearsIn).rightIor
-    case (c: Character, "friends") => mkCursor(c.friends).rightIor
-    case (h: Human, "homePlanet") => mkCursor(h.homePlanet).rightIor
-    case (d: Droid, "primaryFunction") => mkCursor(d.primaryFunction).rightIor
-    case _ => mkErrorResult(s"No field '$fieldName'")
-  }
-}
+)

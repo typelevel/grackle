@@ -28,6 +28,9 @@ sealed trait Type {
     case _ => NoType
   }
 
+  def hasField(fieldName: String): Boolean =
+    field(fieldName) != NoType
+
   def path(fns: List[String]): Type = (fns, this) match {
     case (Nil, _) => this
     case (_, ListType(tpe)) => tpe.path(fns)

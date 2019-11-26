@@ -262,7 +262,7 @@ abstract class QueryInterpreter[F[_]](val schema: Schema)(implicit val F: Monad[
         runFields(query, tpe, cursor).map(ProtoJson.fromFields)
 
       case _ =>
-        mkErrorResult(s"Unknown type $tpe")
+        mkErrorResult(s"Stuck at type $tpe for ${query.render}")
     }
   }
 }

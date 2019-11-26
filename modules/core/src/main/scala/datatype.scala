@@ -7,66 +7,90 @@ import cats.Monad
 import cats.implicits._
 import io.circe.Json
 
+import Query.Wrap
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
+import ScalarType._
 
-abstract class DataTypeQueryInterpreter[F[_]: Monad](schema: Schema)
-  extends QueryInterpreter[F](schema) {
-
-  def rootCursor(query: Query): Result[(Type, Cursor)]
+class DataTypeQueryInterpreter[F[_]: Monad](
+  schema: Schema,
+  root:   PartialFunction[String, (Type, Any)],
+  fields: PartialFunction[(Any, String), Any],
+  attrs:  PartialFunction[(Any, String), Any] = PartialFunction.empty
+) extends QueryInterpreter[F](schema) {
 
   def runRootValue(query: Query): F[Result[ProtoJson]] =
-    (for {
-      root          <- rootCursor(query)
-      (tpe, cursor) =  root
-      value         <- runValue(query, tpe, cursor)
-    } yield value).pure[F]
+    query match {
+      case Wrap(fieldName, _) =>
+        if (root.isDefinedAt(fieldName)) {
+          val (tpe, focus) = root(fieldName)
+          val rootType = schema.queryType.field(fieldName)
+          val cursor = DataTypeCursor(tpe, focus, fields, attrs)
+          runValue(query, rootType, cursor).pure[F]
+        } else
+          mkErrorResult(s"No root field '$fieldName'").pure[F]
+      case _ =>
+        mkErrorResult(s"Bad query: '${query.render}").pure[F]
+    }
 }
 
-trait DataTypeCursor extends Cursor {
-  val focus: Any
-  def mkCursor(focus: Any): Cursor
-
-  def isLeaf: Boolean = focus match {
-    case (_ : String | _ : Int | _ : Double | _ : Boolean | _ : Enumeration#Value) => true
+case class DataTypeCursor(
+  tpe:    Type,
+  focus:  Any,
+  fields: PartialFunction[(Any, String), Any],
+  attrs:  PartialFunction[(Any, String), Any]
+) extends Cursor {
+  def isLeaf: Boolean = (tpe, focus) match {
+    case (_: ScalarType, (_ : String | _ : Int | _ : Double | _ : Boolean | _ : Enumeration#Value)) => true
     case _ => false
   }
 
-  def asLeaf: Result[Json] = {
-    focus match {
-      case s: String => Json.fromString(s).rightIor
-      case i: Int => Json.fromInt(i).rightIor
-      case d: Double => Json.fromDouble(d) match {
-          case Some(j) => j.rightIor
-          case None => mkErrorResult(s"Unrepresentable double %d")
-        }
-      case b: Boolean => Json.fromBoolean(b).rightIor
-      case e: Enumeration#Value => Json.fromString(e.toString).rightIor
-      case _ => mkErrorResult("Not a leaf")
-    }
+  def asLeaf: Result[Json] = (tpe, focus) match {
+    case (StringType,  s: String)  => Json.fromString(s).rightIor
+    case (IntType,     i: Int)     => Json.fromInt(i).rightIor
+    case (FloatType,   d: Double)  => Json.fromDouble(d) match {
+        case Some(j) => j.rightIor
+        case None => mkErrorResult(s"Unrepresentable double %d")
+      }
+    case (BooleanType, b: Boolean) => Json.fromBoolean(b).rightIor
+    case (_: EnumType, e: Enumeration#Value) => Json.fromString(e.toString).rightIor
+    case _ => mkErrorResult(s"Expected Scalar type, found ${tpe.shortString}")
   }
 
-  def isList: Boolean = focus match {
-    case _: List[_] => true
+  def isList: Boolean = (tpe, focus) match {
+    case (_: ListType, _: List[_]) => true
     case _ => false
   }
 
-  def asList: Result[List[Cursor]] = focus match {
-    case it: List[_] => it.map(mkCursor).rightIor
-    case _ => mkErrorResult("Not a list")
+  def asList: Result[List[Cursor]] = (tpe, focus) match {
+    case (ListType(tpe), it: List[_]) => it.map(f => copy(tpe = tpe, focus = f)).rightIor
+    case _ => mkErrorResult(s"Expected List type, found ${tpe.shortString}")
   }
 
   def isNullable: Boolean = focus match {
-    case _: Option[_] => true
+    case (_: NullableType, _: Option[_]) => true
     case _ => false
   }
 
-  def asNullable: Result[Option[Cursor]] = focus match {
-    case o: Option[_] => o.map(mkCursor).rightIor
-    case _ => mkErrorResult("Not nullable")
+  def asNullable: Result[Option[Cursor]] = (tpe, focus) match {
+    case (NullableType(tpe), o: Option[_]) => o.map(f => copy(tpe = tpe, focus = f)).rightIor
+    case _ => mkErrorResult(s"Expected Nullable type, found ${tpe.shortString}")
   }
 
-  def hasAttribute(attributeName: String): Boolean = false
+  def hasField(fieldName: String): Boolean =
+    tpe.hasField(fieldName) && fields.isDefinedAt((focus, fieldName))
+
+  def field(fieldName: String, args: Map[String, Any]): Result[Cursor] =
+    if (hasField(fieldName))
+      copy(tpe = tpe.field(fieldName), focus = fields((focus, fieldName))).rightIor
+    else
+      mkErrorResult(s"No field '$fieldName' for type ${tpe.shortString}")
+
+  def hasAttribute(attributeName: String): Boolean =
+    attrs.isDefinedAt((focus, attributeName))
 
   def attribute(attributeName: String): Result[Any] =
-    mkErrorResult(s"No attribute $attributeName")
+    if (hasAttribute(attributeName))
+      attrs((focus, attributeName)).rightIor
+    else
+      mkErrorResult(s"No attribute '$attributeName' for type ${tpe.shortString}")
 }

@@ -52,7 +52,7 @@ object CountryCurrencyQueryInterpreter {
     (implicit brkt: Bracket[F, Throwable], logger0: Logger[F]): ComposedQueryInterpreter[F] = {
       val mapping: Map[SchemaComponent, QueryInterpreter[F]] = Map(
         WorldSchema    -> WorldQueryInterpreter.fromTransactor(xa),
-        CurrencySchema -> new CurrencyQueryInterpreter[F]
+        CurrencySchema -> CurrencyQueryInterpreter[F]
       )
       new ComposedQueryInterpreter(ComposedWorldSchema, mapping)
   }
@@ -72,33 +72,20 @@ object CurrencyData {
   val currencies = List(BRL, EUR, GBP)
 }
 
-class CurrencyQueryInterpreter[F[_]](override implicit val F: Monad[F])
-  extends DataTypeQueryInterpreter[F](ComposedWorldSchema) {
+object CurrencyQueryInterpreter {
   import CurrencyData._
 
-  def rootCursor(query: Query): Result[(Type, Cursor)] =
-    query match {
-      case Wrap("currencies", _) => (ListType(CurrencyType), CurrencyCursor(currencies)).rightIor
-      case _ => mkErrorResult("Bad query")
+  def apply[F[_]: Monad] = new DataTypeQueryInterpreter[F](
+    ComposedWorldSchema,
+    {
+      case "currencies" => (ListType(CurrencyType), currencies)
+    },
+    {
+      case (c: Currency, "code")         => c.code
+      case (c: Currency, "exchangeRate") => c.exchangeRate
+      case (c: Currency, "countryCode")  => c.countryCode
     }
-}
-
-case class CurrencyCursor(focus: Any) extends DataTypeCursor {
-  import CurrencyData._
-
-  def mkCursor(focus: Any): Cursor = CurrencyCursor(focus)
-
-  def hasField(fieldName: String): Boolean = (focus, fieldName) match {
-    case (_: Currency, "code" | "exchangeRate" | "countryCode") => true
-    case _ => false
-  }
-
-  def field(fieldName: String, args: Map[String, Any]): Result[Cursor] = (focus, fieldName) match {
-    case (c: Currency, "code") => mkCursor(c.code).rightIor
-    case (c: Currency, "exchangeRate") => mkCursor(c.exchangeRate).rightIor
-    case (c: Currency, "countryCode") => mkCursor(c.countryCode).rightIor
-    case _ => mkErrorResult(s"No field '$fieldName'")
-  }
+  )
 }
 
 object ComposedWorldData extends DoobieMapping {
