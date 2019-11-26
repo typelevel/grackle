@@ -29,7 +29,7 @@ class DataTypeQueryInterpreter[F[_]: Monad](
         } else
           mkErrorResult(s"No root field '$fieldName'").pure[F]
       case _ =>
-        mkErrorResult(s"Bad query: '${query.render}").pure[F]
+        mkErrorResult(s"Bad root query '${query.render}' in DataTypeQueryInterpreter").pure[F]
     }
 }
 
