@@ -68,14 +68,20 @@ trait DoobieMapping {
       case (acc, _) => acc
     }).distinct
 
-    val tables: List[String] = columns.map(_.table).distinct
-
     val joins: List[Join] = (mappings.foldLeft(List.empty[Join]) {
       case (acc, (_, Subobject(_, joins, _))) => joins ++ acc
       case (acc, _) => acc
     }).distinctBy(_.normalize)
 
-    new MappedQuery(tables, columns, predicates, joins, this)
+    // There should be a single root table, with possibly many joined child tables. It would be
+    // nice to do this better.
+    val table: String =
+      columns.map(_.table).filterNot(joins.map(_.child.table).toSet).distinct match {
+        case t :: Nil => t
+        case otherwise => sys.error(s"expected unique root table, found $otherwise")
+      }
+
+    new MappedQuery(table, columns, predicates, joins, this)
   }
 }
 
@@ -105,7 +111,7 @@ object DoobieMapping {
   }
 
   case class MappedQuery(
-    tables: List[String],
+    table: String,
     columns: List[ColumnRef],
     predicates: List[(Type, Predicate)],
     joins: List[Join],
@@ -189,8 +195,13 @@ object DoobieMapping {
       loop(rootType)
     }
 
+    // A column is the prodict of an outer join (and may therefore be null) if its table is on the
+    // child side of a `Join`.
+    private lazy val isJoin: ColumnRef => Boolean =
+      joins.map(_.child.table).toSet.compose((cr: ColumnRef) => cr.table)
+
     def fetch: ConnectionIO[Table] =
-      fragment.query[Row](Row.mkRead(columns)).to[List]
+      fragment.query[Row](Row.mkRead(columns, isJoin)).to[List]
 
     lazy val fragment: Fragment = {
       val cols = columns.map(_.toSql)
@@ -226,16 +237,13 @@ object DoobieMapping {
         case _ => Fragment.empty
       }
 
-      // we shouldn't need to do this because `tables` should really just be the root table
-      val tablesʹ = tables.filterNot(joins.map(_.child.table).toSet)
-
       val where = Fragments.whereAnd(preds: _*)
 
       val select =
         Fragment.const0(
           s"""
           |SELECT ${cols.mkString(", ")}
-          |FROM ${tablesʹ.mkString(", ")}${if (joins.isEmpty) "" else joins.map(_.toSql).mkString("\n", "\n", "")}
+          |FROM $table${if (joins.isEmpty) "" else joins.map(_.toSql).mkString("\n", "\n", "")}
           |""".stripMargin
         )
 
@@ -301,29 +309,35 @@ case class Row(elems: List[Any]) {
 }
 
 object Row {
-  def mkRead(cols: List[ColumnRef]): Read[Row] = {
 
-    def typeToGet(tpe: Type): (Get[_], NullabilityKnown) =
-      tpe match {
-        case NullableType(t) => (typeToGet(t)._1, Nullable)
-        case IntType         => (Get[Int],  NoNulls)
-        case FloatType       => (Get[Double],  NoNulls)
-        case StringType      => (Get[String],  NoNulls)
-        case BooleanType     => (Get[Boolean], NoNulls)
+  // Placeholder for nulls read from non-nullable columns introduced via an outer join.
+  case object FailedJoin
+
+  def mkRead(cols: List[ColumnRef], isJoin: ColumnRef => Boolean): Read[Row] = {
+
+    def typeToGet(cr: ColumnRef): (ColumnRef, (Get[_], NullabilityKnown)) =
+      cr.tpe match {
+        case NullableType(t) => (cr, (typeToGet(cr.copy(tpe = t))._2._1, Nullable))
+        case IntType         => (cr, (Get[Int],     NoNulls))
+        case FloatType       => (cr, (Get[Double],  NoNulls))
+        case StringType      => (cr, (Get[String],  NoNulls))
+        case BooleanType     => (cr, (Get[Boolean], NoNulls))
         case t               => sys.error(s"no Get instance for schema type $t")
     }
 
-    val gets: List[(Get[_], NullabilityKnown)] =
-      cols.map(col => typeToGet(col.tpe))
+    val gets: List[(ColumnRef, (Get[_], NullabilityKnown))] =
+      cols.map(typeToGet)
 
     def unsafeGet(rs: ResultSet, n: Int): Row =
       Row {
         gets.zipWithIndex.map {
-          case ((g, NoNulls),  i) => g.unsafeGetNonNullable(rs, n+i)
-          case ((g, Nullable), i) => g.unsafeGetNullable(rs, n+i)
+          case ((c, (g, NoNulls)),  i) =>
+            if (isJoin(c)) g.unsafeGetNullable(rs, n+i).getOrElse(FailedJoin)
+            else g.unsafeGetNonNullable(rs, n+i)
+          case ((_, (g, Nullable)), i) => g.unsafeGetNullable(rs, n+i)
         }
       }
 
-    new Read(gets, unsafeGet)
+    new Read(gets.map(_._2), unsafeGet)
   }
 }

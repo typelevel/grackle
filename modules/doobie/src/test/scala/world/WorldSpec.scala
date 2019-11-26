@@ -575,36 +575,55 @@ final class WorldSpec extends CatsSuite {
     assert(res == expected)
   }
 
-  // fails: no match because we're using inner joins
-  // test("country with no cities") {
-  //   val query = """
-  //     query {
-  //       country(code: "ATA") {
-  //         name
-  //         cities {
-  //           name
-  //         }
-  //       }
-  //     }
-  //   """
+  test("country with no cities") {
+    val query = """
+      query {
+        country(code: "ATA") {
+          name
+          cities {
+            name
+          }
+        }
+      }
+    """
 
-  //   val expected = json"""
-  //     {
-  //       "data": {
-  //         "country": {
-  //           "name": "Antarctica",
-  //           "cities": []
-  //         }
-  //       }
-  //     }
-  //   """
+    val expected = json"""
+      {
+        "data": {
+          "country": {
+            "name": "Antarctica",
+            "cities": []
+          }
+        }
+      }
+    """
 
-  //   val compiledQuery = WorldQueryCompiler.compile(query).right.get
-  //   val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
-  //   //println(res)
+    val compiledQuery = WorldQueryCompiler.compile(query).right.get
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    //println(res)
 
-  //   assert(res == expected)
-  // }
+    assert(res == expected)
+  }
+
+  // Outer join in which some parents have children and others do not.
+  test("countries, some with no cities") {
+    val query = """
+      query {
+        countries {
+          name
+          cities {
+            name
+          }
+        }
+      }
+    """
+    val cquery    = WorldQueryCompiler.compile(query).right.get
+    val json      = WorldQueryInterpreter.fromTransactor(xa).run(cquery).unsafeRunSync
+    val countries = root.data.countries.arr.getOption(json).get
+    val map       = countries.map(j => root.name.string.getOption(j).get -> root.cities.arr.getOption(j).get.length).toMap
+    assert(map("Kazakstan")  == 21)
+    assert(map("Antarctica") == 0)
+  }
 
   test("no such country") {
     val query = """
