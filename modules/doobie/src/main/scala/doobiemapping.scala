@@ -195,10 +195,10 @@ object DoobieMapping {
       loop(rootType)
     }
 
-    // A column is the prodict of an outer join (and may therefore be null) if its table is on the
-    // child side of a `Join`.
-    private lazy val isJoin: ColumnRef => Boolean =
-      joins.map(_.child.table).toSet.compose((cr: ColumnRef) => cr.table)
+    // A column is the product of an outer join (and may therefore be null even if it's non-nullable
+    // in the schema) if its table introduced on the child side of a `Join`.
+    private lazy val isJoin: ColumnRef => Boolean = cr =>
+      joins.map(_.child.table).toSet(cr.table)
 
     def fetch: ConnectionIO[Table] =
       fragment.query[Row](Row.mkRead(columns, isJoin)).to[List]
