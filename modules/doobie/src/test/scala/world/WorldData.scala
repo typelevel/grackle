@@ -43,7 +43,7 @@ object WorldData extends DoobieMapping {
           "continent" -> ColumnRef("country", "continent", StringType),
           "region" -> ColumnRef("country", "region", StringType),
           "surfacearea" -> ColumnRef("country", "surfacearea", FloatType),
-          "indepyear" -> ColumnRef("country", "indepyear", IntType),
+          "indepyear" -> ColumnRef("country", "indepyear", NullableType(IntType)),
           "population" -> ColumnRef("country", "population", IntType),
           "lifeexpectancy" -> ColumnRef("country", "lifeexpectancy", FloatType),
           "gnp" -> ColumnRef("country", "gnp", StringType),
@@ -85,7 +85,7 @@ object WorldData extends DoobieMapping {
       tpe = CityType,
       key = List(
         ColumnRef("city", "id", IntType),
-        ColumnRef("city", "countrycode", IntType) // FIXME: should be a private non-key attribute
+        ColumnRef("city", "countrycode", StringType) // FIXME: should be a private non-key attribute
       ),
       fieldMappings =
         List(

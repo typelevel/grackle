@@ -126,8 +126,7 @@ case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) exte
     (tpe, focus) match {
       case (NullableType(_), None) => None.rightIor
       case (NullableType(tpe), Some(v)) => Some(copy(tpe = tpe, focus = v)).rightIor
-      case (NullableType(_), null) => None.rightIor
-      case (NullableType(tpe), _) => Some(copy(tpe = tpe)).rightIor
+      case (NullableType(tpe), _) => Some(copy(tpe = tpe)).rightIor // non-nullable column as nullable schema type (ok)
       case _ => mkErrorResult("Not nullable")
     }
 

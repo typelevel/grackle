@@ -302,19 +302,27 @@ case class Row(elems: List[Any]) {
 
 object Row {
   def mkRead(cols: List[ColumnRef]): Read[Row] = {
-    def typeToGet(tpe: Type): Get[_] = tpe match {
-      case IntType => Get[String]
-      case FloatType => Get[Double]
-      case StringType => Get[String]
-      case BooleanType => Get[Boolean]
-      case _ => Get[String]
+
+    def typeToGet(tpe: Type): (Get[_], NullabilityKnown) =
+      tpe match {
+        case NullableType(t) => (typeToGet(t)._1, Nullable)
+        case IntType         => (Get[Int],  NoNulls)
+        case FloatType       => (Get[Double],  NoNulls)
+        case StringType      => (Get[String],  NoNulls)
+        case BooleanType     => (Get[Boolean], NoNulls)
+        case t               => sys.error(s"no Get instance for schema type $t")
     }
 
-    val gets = cols.map(col => (typeToGet(col.tpe), NoNulls))
+    val gets: List[(Get[_], NullabilityKnown)] =
+      cols.map(col => typeToGet(col.tpe))
 
-    def unsafeGet(rs: ResultSet, n: Int): Row = {
-      Row(gets.zipWithIndex.map { case (g, i) => g._1.unsafeGetNonNullable(rs, n+i) })
-    }
+    def unsafeGet(rs: ResultSet, n: Int): Row =
+      Row {
+        gets.zipWithIndex.map {
+          case ((g, NoNulls),  i) => g.unsafeGetNonNullable(rs, n+i)
+          case ((g, Nullable), i) => g.unsafeGetNullable(rs, n+i)
+        }
+      }
 
     new Read(gets, unsafeGet)
   }

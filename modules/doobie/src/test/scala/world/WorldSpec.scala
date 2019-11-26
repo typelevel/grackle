@@ -635,4 +635,60 @@ final class WorldSpec extends CatsSuite {
     assert(res == expected)
   }
 
+  test("nullable column (null)") {
+    val query = """
+    query {
+        country(code: "ANT") {
+          name
+          indepyear
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "name" : "Netherlands Antilles",
+            "indepyear" : null
+          }
+        }
+      }
+    """
+
+    val compiledQuery = WorldQueryCompiler.compile(query).right.get
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("nullable column (non-null)") {
+    val query = """
+    query {
+        country(code: "USA") {
+          name
+          indepyear
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "name" : "United States",
+            "indepyear" : 1776
+          }
+        }
+      }
+    """
+
+    val compiledQuery = WorldQueryCompiler.compile(query).right.get
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
+
 }
