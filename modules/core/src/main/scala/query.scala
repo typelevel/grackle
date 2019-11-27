@@ -360,7 +360,7 @@ object QueryInterpreter {
             case Some(interpreter) =>
               ((d, interpreter, query) :: good, bad, errors)
             case None =>
-              (good, d :: bad, mkError(s"Bad query: ${schema.getClass.getName} ${query.render}") +: errors)
+              (good, d :: bad, mkError(s"No interpreter for query '${query.render}' which maps to schema '${schema.getClass.getName}'") +: errors)
           }
       }
 
@@ -427,8 +427,8 @@ class ComposedQueryInterpreter[F[_]: Monad](schema: Schema, mapping: Map[SchemaC
     case Wrap(_, Component(schema, _, child)) =>
       mapping.get(schema) match {
         case Some(interpreter) => interpreter.runRootValue(child)
-        case None => mkErrorResult("Bad query").pure[F]
+        case None => mkErrorResult(s"No interpreter for query '${query.render}' which maps to schema '${schema.getClass.getSimpleName}'").pure[F]
       }
-    case _ => mkErrorResult("Bad query").pure[F]
+    case _ => mkErrorResult(s"Bad root query '${query.render}' in ComposedQueryInterpreter").pure[F]
   }
 }

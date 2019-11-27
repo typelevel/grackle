@@ -45,7 +45,7 @@ class DoobieQueryInterpreter[F[_]](
           table <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(xa)
         } yield runValue(query, fieldTpe, DoobieCursor(mapped.rootCursorType(fieldTpe), table, mapped))
 
-      case _ => mkErrorResult(s"Bad query").pure[F]
+      case _ => mkErrorResult(s"Bad root query '${query.render}' in DoobieQueryInterpreter").pure[F]
     }
 
   override def runRootValues(queries: List[Query]): F[(Chain[Json], List[ProtoJson])] = {

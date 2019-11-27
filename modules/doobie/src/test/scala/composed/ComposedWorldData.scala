@@ -34,7 +34,7 @@ object CountryCurrencyQueryCompiler extends QueryCompiler(ComposedWorldSchema) {
     c.attribute("code") match {
       case Ior.Right(countryCode: String) =>
         Wrap("currencies", Filter(FieldEquals("countryCode", countryCode), q)).rightIor
-      case _ => mkErrorResult("Bad query")
+      case _ => mkErrorResult(s"Expected 'code' attribute at ${c.tpe.shortString}")
     }
 
   val componentElaborator = ComponentElaborator(
