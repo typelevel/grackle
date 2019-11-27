@@ -241,9 +241,9 @@ object DoobieMapping {
   }
 
   class StagingElaborator(mapping: DoobieMapping) extends Phase {
-    val stagingJoin = (c: Cursor, q: Query) => (c, q) match {
-      case (dc: DoobieCursor, Select(fieldName, _, _)) =>
-        val tpe = dc.tpe.underlyingObject
+    val stagingJoin = (c: Cursor, q: Query) => q match {
+      case Select(fieldName, _, _) =>
+        val tpe = c.tpe.underlyingObject
 
         val osj = for {
           om                 <- mapping.objectMappings.find(_.tpe =:= tpe)

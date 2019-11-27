@@ -88,32 +88,18 @@ object CurrencyData {
   val currencies = List(EUR, GBP)
 }
 
-object CurrencyQueryInterpreter extends DataTypeQueryInterpreter[Id](ComposedSchema) {
-  import CurrencyData._
+import CurrencyData._
 
-  def rootCursor(query: Query): Result[(Type, Cursor)] =
-    query match {
-      case Wrap("currency", _) => (NullableType(CurrencyType), CurrencyCursor(currencies)).rightIor
-      case _ => mkErrorResult(s"Unexpected query in CurrencyQueryInterpreter rootCursor: ${query.render}")
-    }
-}
-
-case class CurrencyCursor(focus: Any) extends DataTypeCursor {
-  import CurrencyData._
-
-  def mkCursor(focus: Any): Cursor = CurrencyCursor(focus)
-
-  def hasField(fieldName: String): Boolean = (focus, fieldName) match {
-    case (_: Currency, "code" | "exchangeRate") => true
-    case _ => false
+object CurrencyQueryInterpreter extends DataTypeQueryInterpreter[Id](
+  ComposedSchema,
+  {
+    case "currency" => (ListType(CurrencyType), currencies)
+  },
+  {
+    case (c: Currency, "code")         => c.code
+    case (c: Currency, "exchangeRate") => c.exchangeRate
   }
-
-  def field(fieldName: String, args: Map[String, Any]): Result[Cursor] = (focus, fieldName) match {
-    case (c: Currency, "code") => mkCursor(c.code).rightIor
-    case (c: Currency, "exchangeRate") => mkCursor(c.exchangeRate).rightIor
-    case _ => mkErrorResult(s"No field '$fieldName'")
-  }
-}
+)
 
 object CountryData {
   case class Country(
@@ -129,32 +115,15 @@ object CountryData {
   val countries = List(DEU, FRA, GBR)
 }
 
-object CountryQueryInterpreter extends DataTypeQueryInterpreter[Id](ComposedSchema) {
-  import CountryData._
+import CountryData._
 
-  def rootCursor(query: Query): Result[(Type, Cursor)] =
-    query match {
-      case Wrap("country", _) => (NullableType(CountryType), CountryCursor(countries)).rightIor
-      case Wrap("countries", _) => (ListType(CountryType), CountryCursor(countries)).rightIor
-      case _ =>
-        Thread.dumpStack
-        mkErrorResult(s"Unexpected query in CountryQueryInterpreter rootCursor: $query")
-    }
-}
-
-case class CountryCursor(focus: Any) extends DataTypeCursor {
-  import CountryData._
-
-  def mkCursor(focus: Any): Cursor = CountryCursor(focus)
-
-  def hasField(fieldName: String): Boolean = (focus, fieldName) match {
-    case (_: Country, "code" | "name") => true
-    case _ => false
+object CountryQueryInterpreter extends DataTypeQueryInterpreter[Id](
+  ComposedSchema,
+  {
+      case "country" | "countries"  => (ListType(CountryType), countries)
+  },
+  {
+    case (c: Country, "code") => c.code
+    case (c: Country, "name") => c.name
   }
-
-  def field(fieldName: String, args: Map[String, Any]): Result[Cursor] = (focus, fieldName) match {
-    case (c: Country, "code") => mkCursor(c.code).rightIor
-    case (c: Country, "name") => mkCursor(c.name).rightIor
-    case _ => mkErrorResult(s"No field '$fieldName'")
-  }
-}
+)

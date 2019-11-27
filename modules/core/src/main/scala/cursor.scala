@@ -11,6 +11,7 @@ import QueryInterpreter.mkErrorResult
 
 trait Cursor {
   def focus: Any
+  def tpe: Type
   def isLeaf: Boolean
   def asLeaf: Result[Json]
   def isList: Boolean

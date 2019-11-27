@@ -18,7 +18,8 @@ object ComposedWorldSchema extends Schema {
       fields = List(
         Field("cities", None, List(NamePatternArg), NullableType(ListType(TypeRef("City"))), false, None),
         Field("country", None, List(CodeArg), NullableType(TypeRef("Country")), false, None),
-        Field("countries", None, Nil, NullableType(ListType(TypeRef("Country"))), false, None)
+        Field("countries", None, Nil, NullableType(ListType(TypeRef("Country"))), false, None),
+        Field("currencies", None, Nil, ListType(TypeRef("Currency")), false, None) // Should be local to CurrencySchema
       ),
       interfaces = Nil
     )
