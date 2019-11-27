@@ -53,7 +53,7 @@ case class DataTypeCursor(
       }
     case (BooleanType, b: Boolean) => Json.fromBoolean(b).rightIor
     case (_: EnumType, e: Enumeration#Value) => Json.fromString(e.toString).rightIor
-    case _ => mkErrorResult(s"Expected Scalar type, found ${tpe.shortString}")
+    case _ => mkErrorResult(s"Expected Scalar type, found ${tpe.shortString} for focus ${focus}")
   }
 
   def isList: Boolean = (tpe, focus) match {
