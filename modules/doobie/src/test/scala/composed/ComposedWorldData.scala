@@ -38,10 +38,10 @@ object CountryCurrencyQueryCompiler extends QueryCompiler(ComposedWorldSchema) {
     }
 
   val componentElaborator = ComponentElaborator(
-    Mapping(QueryType, "country", WorldSchema),
-    Mapping(QueryType, "countries", WorldSchema),
-    Mapping(QueryType, "cities", WorldSchema),
-    Mapping(CountryType, "currencies", CurrencySchema, countryCurrencyJoin)
+    Mapping(QueryType, "country", "WorldSchema"),
+    Mapping(QueryType, "countries", "WorldSchema"),
+    Mapping(QueryType, "cities", "WorldSchema"),
+    Mapping(CountryType, "currencies", "CurrencySchema", countryCurrencyJoin)
   )
 
   val phases = List(selectElaborator, componentElaborator)
@@ -50,9 +50,9 @@ object CountryCurrencyQueryCompiler extends QueryCompiler(ComposedWorldSchema) {
 object CountryCurrencyQueryInterpreter {
   def fromTransactor[F[_]](xa: Transactor[F])
     (implicit brkt: Bracket[F, Throwable], logger0: Logger[F]): ComposedQueryInterpreter[F] = {
-      val mapping: Map[Schema, QueryInterpreter[F]] = Map(
-        WorldSchema    -> WorldQueryInterpreter.fromTransactor(xa),
-        CurrencySchema -> CurrencyQueryInterpreter[F]
+      val mapping: Map[String, QueryInterpreter[F]] = Map(
+        "WorldSchema"    -> WorldQueryInterpreter.fromTransactor(xa),
+        "CurrencySchema" -> CurrencyQueryInterpreter[F]
       )
       new ComposedQueryInterpreter(ComposedWorldSchema, mapping)
   }

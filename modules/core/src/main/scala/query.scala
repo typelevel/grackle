@@ -46,8 +46,8 @@ object Query {
   case class Filter(pred: Predicate, child: Query) extends Query {
     def render = s"<filter: $pred ${child.render}>"
   }
-  case class Component(schema: Schema, join: (Cursor, Query) => Result[Query], child: Query) extends Query {
-    def render = s"<component: ${schema.getClass.getSimpleName} ${child.render}>"
+  case class Component(componentId: String, join: (Cursor, Query) => Result[Query], child: Query) extends Query {
+    def render = s"<component: $componentId ${child.render}>"
   }
   case class Defer(join: (Cursor, Query) => Result[Query], child: Query) extends Query {
     def render = s"<defer: ${child.render}>"
@@ -158,7 +158,7 @@ abstract class QueryInterpreter[F[_]](val schema: Schema)(implicit val F: Monad[
     runRoot(query).map(QueryInterpreter.mkResponse)
 
   def complete(pj: ProtoJson): F[Result[Json]] =
-    QueryInterpreter.complete(pj, Map(schema -> this))
+    QueryInterpreter.complete[F](pj, Map.empty)
 
   def runRoot(query: Query): F[Result[Json]] = {
     (for {
@@ -217,15 +217,15 @@ abstract class QueryInterpreter[F[_]](val schema: Schema)(implicit val F: Monad[
           pvalue <- runValue(child, tpe, cursor)
         } yield ProtoJson.fromFields(List((fieldName, pvalue)))
 
-      case (Component(schema, join, child), _) =>
+      case (Component(cid, join, child), _) =>
         for {
           cont <- join(cursor, child)
-        } yield ProtoJson.deferred(schema, cont, tpe)
+        } yield ProtoJson.component(cid, cont, tpe)
 
       case (Defer(join, child), _) =>
         for {
           cont <- join(cursor, child)
-        } yield ProtoJson.deferred(schema, cont, tpe)
+        } yield ProtoJson.staged(this, cont, tpe)
 
       case (Unique(pred, child), _) if cursor.isList =>
         cursor.asList.map(_.filter(pred)).flatMap(lc =>
@@ -271,12 +271,17 @@ object QueryInterpreter {
   type ProtoJson <: AnyRef
 
   object ProtoJson {
-    private[QueryInterpreter] case class DeferredJson(schema: Schema, query: Query, rootTpe: Type)
+    private[QueryInterpreter] sealed trait DeferredJson
+    private[QueryInterpreter] case class ComponentJson(componentId: String, query: Query, rootTpe: Type) extends DeferredJson
+    private[QueryInterpreter] case class StagedJson[F[_]](interpreter: QueryInterpreter[F], query: Query, rootTpe: Type) extends DeferredJson
     private[QueryInterpreter] case class ProtoObject(fields: List[(String, ProtoJson)])
     private[QueryInterpreter] case class ProtoArray(elems: List[ProtoJson])
 
-    def deferred(schema: Schema, query: Query, rootTpe: Type): ProtoJson =
-      wrap(DeferredJson(schema, query, rootTpe))
+    def component(componentId: String, query: Query, rootTpe: Type): ProtoJson =
+      wrap(ComponentJson(componentId, query, rootTpe))
+
+    def staged[F[_]](interpreter: QueryInterpreter[F], query: Query, rootTpe: Type): ProtoJson =
+      wrap(StagedJson(interpreter, query, rootTpe))
 
     def fromJson(value: Json): ProtoJson = wrap(value)
 
@@ -300,7 +305,7 @@ object QueryInterpreter {
 
   import ProtoJson._
 
-  def complete[F[_]: Monad](pj: ProtoJson, mapping: Map[Schema, QueryInterpreter[F]]): F[Result[Json]] =
+  def complete[F[_]: Monad](pj: ProtoJson, mapping: Map[String, QueryInterpreter[F]]): F[Result[Json]] =
     completeAll(List(pj), mapping).map {
       case (errors, List(value)) =>
         NonEmptyChain.fromChain(errors) match {
@@ -309,7 +314,7 @@ object QueryInterpreter {
         }
     }
 
-  def completeAll[F[_]: Monad](pjs: List[ProtoJson], mapping: Map[Schema, QueryInterpreter[F]]): F[(Chain[Json], List[Json])] = {
+  def completeAll[F[_]: Monad](pjs: List[ProtoJson], mapping: Map[String, QueryInterpreter[F]]): F[(Chain[Json], List[Json])] = {
     def gatherDeferred(pj: ProtoJson): List[DeferredJson] = {
       @tailrec
       def loop(pending: Chain[ProtoJson], acc: List[DeferredJson]): List[DeferredJson] =
@@ -355,13 +360,15 @@ object QueryInterpreter {
 
     val (good, bad, errors0) =
       collected.foldLeft((List.empty[(DeferredJson, QueryInterpreter[F], (Query, Type))], List.empty[DeferredJson], Chain.empty[Json])) {
-        case ((good, bad, errors), d@DeferredJson(schema, query, rootTpe)) =>
-          mapping.get(schema) match {
+        case ((good, bad, errors), d@ComponentJson(cid, query, rootTpe)) =>
+          mapping.get(cid) match {
             case Some(interpreter) =>
               ((d, interpreter, (query, rootTpe)) :: good, bad, errors)
             case None =>
-              (good, d :: bad, mkError(s"No interpreter for query '${query.render}' which maps to schema '${schema.getClass.getName}'") +: errors)
+              (good, d :: bad, mkError(s"No interpreter for query '${query.render}' which maps to component '$cid'") +: errors)
           }
+        case ((good, bad, errors), d@StagedJson(interpreter, query, rootTpe)) =>
+          ((d, interpreter.asInstanceOf[QueryInterpreter[F]], (query, rootTpe)) :: good, bad, errors)
       }
 
     val grouped = good.groupMap(_._2)(e => (e._1, e._3)).toList
@@ -417,17 +424,17 @@ object QueryInterpreter {
     Ior.leftNec(mkError(message, locations, path))
 }
 
-class ComposedQueryInterpreter[F[_]: Monad](schema: Schema, mapping: Map[Schema, QueryInterpreter[F]])
+class ComposedQueryInterpreter[F[_]: Monad](schema: Schema, mapping: Map[String, QueryInterpreter[F]])
   extends QueryInterpreter[F](schema) {
 
   override def complete(pj: ProtoJson): F[Result[Json]] =
     QueryInterpreter.complete(pj, mapping)
 
   def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]] = query match {
-    case Wrap(_, Component(schema, _, child)) =>
-      mapping.get(schema) match {
+    case Wrap(_, Component(cid, _, child)) =>
+      mapping.get(cid) match {
         case Some(interpreter) => interpreter.runRootValue(child, rootTpe)
-        case None => mkErrorResult(s"No interpreter for query '${query.render}' which maps to schema '${schema.getClass.getSimpleName}'").pure[F]
+        case None => mkErrorResult(s"No interpreter for query '${query.render}' which maps to component '$cid'").pure[F]
       }
     case _ => mkErrorResult(s"Bad root query '${query.render}' in ComposedQueryInterpreter").pure[F]
   }

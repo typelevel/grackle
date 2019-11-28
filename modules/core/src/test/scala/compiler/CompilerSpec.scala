@@ -101,15 +101,15 @@ final class CompilerSuite extends CatsSuite {
 
     val expected =
       Wrap("componenta",
-        Component(SchemaA, TrivialJoin,
+        Component("SchemaA", TrivialJoin,
           Select("fielda1", Nil) ~
           Select("fielda2", Nil,
             Wrap("componentb",
-              Component(SchemaB, TrivialJoin,
+              Component("SchemaB", TrivialJoin,
                 Select("fieldb1", Nil) ~
                 Select("fieldb2", Nil,
                   Wrap("componentc",
-                    Component(SchemaC, TrivialJoin, Empty)
+                    Component("SchemaC", TrivialJoin, Empty)
                   )
                 )
               )
@@ -321,9 +321,9 @@ object ComposedCompiler extends QueryCompiler(ComposedSchema) {
   import ComposedSchema._
 
   val componentElaborator = ComponentElaborator(
-    Mapping(QueryType, "componenta", SchemaA),
-    Mapping(FieldA2Type, "componentb", SchemaB),
-    Mapping(FieldB2Type, "componentc", SchemaC)
+    Mapping(QueryType, "componenta", "SchemaA"),
+    Mapping(FieldA2Type, "componentb", "SchemaB"),
+    Mapping(FieldB2Type, "componentc", "SchemaC")
   )
 
   val phases = List(componentElaborator)

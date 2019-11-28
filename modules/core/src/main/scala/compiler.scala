@@ -97,15 +97,15 @@ object QueryCompiler {
       }
   }
 
-  class ComponentElaborator private (mapping: Map[(Type, String), (Schema, (Cursor, Query) => Result[Query])]) extends Phase {
+  class ComponentElaborator private (mapping: Map[(Type, String), (String, (Cursor, Query) => Result[Query])]) extends Phase {
     def apply(query: Query, tpe: Type): Result[Query] =
       query match {
         case Select(fieldName, args, child) =>
           val childTpe = tpe.underlyingField(fieldName)
           mapping.get((tpe.underlyingObject, fieldName)) match {
-            case Some((schema, join)) =>
+            case Some((cid, join)) =>
               apply(child, childTpe).map { elaboratedChild =>
-                Wrap(fieldName, Component(schema, join, elaboratedChild))
+                Wrap(fieldName, Component(cid, join, elaboratedChild))
               }
             case None =>
               apply(child, childTpe).map { elaboratedChild =>
@@ -116,9 +116,9 @@ object QueryCompiler {
         case Wrap(fieldName, child) =>
           val childTpe = tpe.underlyingField(fieldName)
           mapping.get((tpe.underlyingObject, fieldName)) match {
-            case Some((schema, join)) =>
+            case Some((cid, join)) =>
               apply(child, childTpe).map { elaboratedChild =>
-                Wrap(fieldName, Component(schema, join, Wrap(fieldName, elaboratedChild)))
+                Wrap(fieldName, Component(cid, join, Wrap(fieldName, elaboratedChild)))
               }
             case None =>
               apply(child, childTpe).map { elaboratedChild =>
@@ -138,9 +138,9 @@ object QueryCompiler {
   object ComponentElaborator {
     val TrivialJoin = (_: Cursor, q: Query) => q.rightIor
 
-    case class Mapping(tpe: Type, fieldName: String, schema: Schema, join: (Cursor, Query) => Result[Query] = TrivialJoin)
+    case class Mapping(tpe: Type, fieldName: String, componentId: String, join: (Cursor, Query) => Result[Query] = TrivialJoin)
 
     def apply(mappings: Mapping*): ComponentElaborator =
-      new ComponentElaborator(mappings.map(m => ((m.tpe, m.fieldName), (m.schema, m.join))).toMap)
+      new ComponentElaborator(mappings.map(m => ((m.tpe, m.fieldName), (m.componentId, m.join))).toMap)
   }
 }
