@@ -54,7 +54,7 @@ object CountryCurrencyQueryInterpreter {
         "WorldSchema"    -> WorldQueryInterpreter.fromTransactor(xa),
         "CurrencySchema" -> CurrencyQueryInterpreter[F]
       )
-      new ComposedQueryInterpreter(ComposedWorldSchema, mapping)
+      new ComposedQueryInterpreter(mapping)
   }
 }
 
@@ -76,7 +76,6 @@ object CurrencyQueryInterpreter {
   import CurrencyData._
 
   def apply[F[_]: Monad] = new DataTypeQueryInterpreter[F](
-    ComposedWorldSchema,
     {
       case "currencies" => (ListType(CurrencyType), currencies)
     },
@@ -165,5 +164,5 @@ object ComposedWorldData extends DoobieMapping {
 object WorldQueryInterpreter {
   def fromTransactor[F[_]](xa: Transactor[F])
     (implicit brkt: Bracket[F, Throwable], logger: Logger[F]): DoobieQueryInterpreter[F] =
-      new DoobieQueryInterpreter[F](ComposedWorldSchema, ComposedWorldData, xa, logger)
+      new DoobieQueryInterpreter[F](ComposedWorldData, xa, logger)
 }

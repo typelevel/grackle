@@ -12,11 +12,10 @@ import QueryInterpreter.{ mkErrorResult, ProtoJson }
 import ScalarType._
 
 class DataTypeQueryInterpreter[F[_]: Monad](
-  schema: Schema,
   root:   PartialFunction[String, (Type, Any)],
   fields: PartialFunction[(Any, String), Any],
   attrs:  PartialFunction[(Any, String), Any] = PartialFunction.empty
-) extends QueryInterpreter[F](schema) {
+) extends QueryInterpreter[F] {
 
   def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]] =
     query match {

@@ -152,17 +152,17 @@ object Predicate {
   }
 }
 
-abstract class QueryInterpreter[F[_]](val schema: Schema)(implicit val F: Monad[F]) {
+abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
 
-  def run(query: Query): F[Json] =
-    runRoot(query).map(QueryInterpreter.mkResponse)
+  def run(query: Query, rootTpe: Type): F[Json] =
+    runRoot(query, rootTpe).map(QueryInterpreter.mkResponse)
 
   def complete(pj: ProtoJson): F[Result[Json]] =
     QueryInterpreter.complete[F](pj, Map.empty)
 
-  def runRoot(query: Query): F[Result[Json]] = {
+  def runRoot(query: Query, rootTpe: Type): F[Result[Json]] = {
     (for {
-      pvalue <- IorT(runRootValue(query, schema.queryType))
+      pvalue <- IorT(runRootValue(query, rootTpe))
       value  <- IorT(complete(pvalue))
     } yield value).value
   }
@@ -424,8 +424,8 @@ object QueryInterpreter {
     Ior.leftNec(mkError(message, locations, path))
 }
 
-class ComposedQueryInterpreter[F[_]: Monad](schema: Schema, mapping: Map[String, QueryInterpreter[F]])
-  extends QueryInterpreter[F](schema) {
+class ComposedQueryInterpreter[F[_]: Monad](mapping: Map[String, QueryInterpreter[F]])
+  extends QueryInterpreter[F] {
 
   override def complete(pj: ProtoJson): F[Result[Json]] =
     QueryInterpreter.complete(pj, mapping)

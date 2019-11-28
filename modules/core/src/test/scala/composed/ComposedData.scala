@@ -11,7 +11,7 @@ import Query._, Binding._, Predicate._
 import QueryCompiler._, ComponentElaborator.Mapping
 import QueryInterpreter.mkErrorResult
 
-import ComposedSchema._
+import ComposedSchema.{ CountryType, QueryType }
 
 object CurrencyQueryCompiler extends QueryCompiler(ComposedSchema) {
   val selectElaborator = new SelectElaborator(Map(
@@ -69,12 +69,10 @@ object CountryCurrencyQueryCompiler extends QueryCompiler(ComposedSchema) {
 }
 
 object CountryCurrencyQueryInterpreter extends
-  ComposedQueryInterpreter[Id](ComposedSchema,
-    Map(
-      "CountrySchema"  -> CountryQueryInterpreter,
-      "CurrencySchema" -> CurrencyQueryInterpreter
-    )
-  )
+  ComposedQueryInterpreter[Id](Map(
+    "CountrySchema"  -> CountryQueryInterpreter,
+    "CurrencySchema" -> CurrencyQueryInterpreter
+  ))
 
 object CurrencyData {
   case class Currency(
@@ -88,12 +86,11 @@ object CurrencyData {
   val currencies = List(EUR, GBP)
 }
 
-import CurrencyData._
+import CurrencyData.{ Currency, currencies }
 
 object CurrencyQueryInterpreter extends DataTypeQueryInterpreter[Id](
-  ComposedSchema,
   {
-    case "currency" => (ListType(CurrencyType), currencies)
+    case "currency" => (ListType(CurrencySchema.CurrencyType), currencies)
   },
   {
     case (c: Currency, "code")         => c.code
@@ -115,12 +112,11 @@ object CountryData {
   val countries = List(DEU, FRA, GBR)
 }
 
-import CountryData._
+import CountryData.{ Country, countries }
 
 object CountryQueryInterpreter extends DataTypeQueryInterpreter[Id](
-  ComposedSchema,
   {
-      case "country" | "countries"  => (ListType(CountryType), countries)
+    case "country" | "countries"  => (ListType(CountrySchema.CountryType), countries)
   },
   {
     case (c: Country, "code") => c.code

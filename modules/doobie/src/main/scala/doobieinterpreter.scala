@@ -20,11 +20,10 @@ import Query._
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
 class DoobieQueryInterpreter[F[_]](
-  schema: Schema,
   mapping: DoobieMapping,
   xa: Transactor[F],
   logger: Logger[F]
-) (override implicit val F: Bracket[F, Throwable]) extends QueryInterpreter[F](schema) {
+) (override implicit val F: Bracket[F, Throwable]) extends QueryInterpreter[F] {
 
   def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]] =
     query match {

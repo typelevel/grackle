@@ -54,7 +54,7 @@ final class ComposedWorldSpec extends CatsSuite {
     """
 
     val compiledQuery = CountryCurrencyQueryCompiler.compile(query).right.get
-    val res = CountryCurrencyQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    val res = CountryCurrencyQueryInterpreter.fromTransactor(xa).run(compiledQuery, ComposedWorldSchema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -110,7 +110,7 @@ final class ComposedWorldSpec extends CatsSuite {
     """
 
     val compiledQuery = CountryCurrencyQueryCompiler.compile(query).right.get
-    val res = CountryCurrencyQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    val res = CountryCurrencyQueryInterpreter.fromTransactor(xa).run(compiledQuery, ComposedWorldSchema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)

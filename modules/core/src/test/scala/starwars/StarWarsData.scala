@@ -113,7 +113,6 @@ object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
 }
 
 object StarWarsQueryInterpreter extends DataTypeQueryInterpreter[Id](
-  StarWarsSchema,
   {
     case "hero"                        => (ListType(CharacterType), characters)
     case "character" | "human"         => (ListType(CharacterType), characters)

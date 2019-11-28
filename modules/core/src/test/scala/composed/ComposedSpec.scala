@@ -29,7 +29,7 @@ final class ComposedSpec extends CatsSuite {
     """
 
     val compiledQuery = CurrencyQueryCompiler.compile(query).right.get
-    val res = CurrencyQueryInterpreter.run(compiledQuery)
+    val res = CurrencyQueryInterpreter.run(compiledQuery, CurrencySchema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -55,7 +55,7 @@ final class ComposedSpec extends CatsSuite {
     """
 
     val compiledQuery = CountryQueryCompiler.compile(query).right.get
-    val res = CountryQueryInterpreter.run(compiledQuery)
+    val res = CountryQueryInterpreter.run(compiledQuery, CountrySchema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -89,7 +89,7 @@ final class ComposedSpec extends CatsSuite {
     """
 
     val compiledQuery = CountryCurrencyQueryCompiler.compile(query).right.get
-    val res = CountryCurrencyQueryInterpreter.run(compiledQuery)
+    val res = CountryCurrencyQueryInterpreter.run(compiledQuery, ComposedSchema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -139,7 +139,7 @@ final class ComposedSpec extends CatsSuite {
     """
 
     val compiledQuery = CountryCurrencyQueryCompiler.compile(query).right.get
-    val res = CountryCurrencyQueryInterpreter.run(compiledQuery)
+    val res = CountryCurrencyQueryInterpreter.run(compiledQuery, ComposedSchema.queryType)
     //println(res)
 
     assert(res == expected)

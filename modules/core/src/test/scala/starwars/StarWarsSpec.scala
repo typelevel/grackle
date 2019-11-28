@@ -28,7 +28,7 @@ final class StarWarsSpec extends CatsSuite {
     """
 
     val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
-    val res = StarWarsQueryInterpreter.run(compiledQuery)
+    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsSchema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -71,7 +71,7 @@ final class StarWarsSpec extends CatsSuite {
     """
 
     val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
-    val res = StarWarsQueryInterpreter.run(compiledQuery)
+    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsSchema.queryType)
     //println(res)
 
     assert(res == expected)

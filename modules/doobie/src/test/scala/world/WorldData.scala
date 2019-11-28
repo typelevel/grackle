@@ -161,5 +161,5 @@ object WorldQueryCompiler extends QueryCompiler(WorldSchema) {
 object WorldQueryInterpreter {
   def fromTransactor[F[_]](xa: Transactor[F])
     (implicit brkt: Bracket[F, Throwable], logger: Logger[F]): DoobieQueryInterpreter[F] =
-      new DoobieQueryInterpreter[F](WorldSchema, WorldData, xa, logger)
+      new DoobieQueryInterpreter[F](WorldData, xa, logger)
 }

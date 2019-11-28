@@ -37,7 +37,7 @@ final class WorldSpec extends CatsSuite {
     val expected = 239
 
     val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
     //println(res)
 
     val resSize = root.data.countries.arr.getOption(res).map(_.size)
@@ -65,7 +65,7 @@ final class WorldSpec extends CatsSuite {
     """
 
     val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -139,7 +139,7 @@ final class WorldSpec extends CatsSuite {
     """
 
     val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -201,7 +201,7 @@ final class WorldSpec extends CatsSuite {
     """
 
     val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -351,7 +351,7 @@ final class WorldSpec extends CatsSuite {
     """
 
     val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -405,7 +405,7 @@ final class WorldSpec extends CatsSuite {
     """
 
     val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -469,7 +469,7 @@ final class WorldSpec extends CatsSuite {
     """
 
     val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -543,7 +543,7 @@ final class WorldSpec extends CatsSuite {
     """
 
     val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
