@@ -97,7 +97,7 @@ object QueryCompiler {
       }
   }
 
-  class ComponentElaborator private (mapping: Map[(Type, String), (SchemaComponent, (Cursor, Query) => Result[Query])]) extends Phase {
+  class ComponentElaborator private (mapping: Map[(Type, String), (Schema, (Cursor, Query) => Result[Query])]) extends Phase {
     def apply(query: Query, tpe: Type): Result[Query] =
       query match {
         case Select(fieldName, args, child) =>
@@ -138,7 +138,7 @@ object QueryCompiler {
   object ComponentElaborator {
     val TrivialJoin = (_: Cursor, q: Query) => q.rightIor
 
-    case class Mapping(tpe: Type, fieldName: String, schema: SchemaComponent, join: (Cursor, Query) => Result[Query] = TrivialJoin)
+    case class Mapping(tpe: Type, fieldName: String, schema: Schema, join: (Cursor, Query) => Result[Query] = TrivialJoin)
 
     def apply(mappings: Mapping*): ComponentElaborator =
       new ComponentElaborator(mappings.map(m => ((m.tpe, m.fieldName), (m.schema, m.join))).toMap)

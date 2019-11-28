@@ -170,7 +170,7 @@ object SimpleCompiler extends QueryCompiler(SimpleSchema) {
   val phases = List(selectElaborator)
 }
 
-object SchemaA extends SchemaComponent {
+object SchemaA extends Schema {
   import ScalarType._
 
   val FieldA2Type: ObjectType =
@@ -192,10 +192,15 @@ object SchemaA extends SchemaComponent {
       interfaces = Nil
     )
 
+  val queryType = NoType
+  val mutationType = None
+  val subscriptionType = None
+  val directives = Nil
+
   val types = List(ComponentAType, FieldA2Type)
 }
 
-object SchemaB extends SchemaComponent {
+object SchemaB extends Schema {
   import ScalarType._
 
   val FieldB2Type: ObjectType =
@@ -217,10 +222,15 @@ object SchemaB extends SchemaComponent {
       interfaces = Nil
     )
 
+  val queryType = NoType
+  val mutationType = None
+  val subscriptionType = None
+  val directives = Nil
+
   val types = List(ComponentBType, FieldB2Type)
 }
 
-object SchemaC extends SchemaComponent {
+object SchemaC extends Schema {
   val ComponentCType: ObjectType =
     ObjectType(
       name = "ComponentC",
@@ -228,6 +238,11 @@ object SchemaC extends SchemaComponent {
       fields = Nil,
       interfaces = Nil
     )
+
+  val queryType = NoType
+  val mutationType = None
+  val subscriptionType = None
+  val directives = Nil
 
   val types = List(ComponentCType)
 }

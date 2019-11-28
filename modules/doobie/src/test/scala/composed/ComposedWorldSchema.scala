@@ -171,7 +171,7 @@ object WorldSchema extends Schema {
   val directives = Nil
 }
 
-object CurrencySchema extends SchemaComponent {
+object CurrencySchema extends Schema {
   import ScalarType._
 
   val CurrencyType: ObjectType =
@@ -187,4 +187,8 @@ object CurrencySchema extends SchemaComponent {
     )
 
   val types = List(CurrencyType)
+  val queryType = NoType
+  val mutationType = None
+  val subscriptionType = None
+  val directives = Nil
 }

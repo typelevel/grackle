@@ -3,18 +3,16 @@
 
 package edu.gemini.grackle
 
-trait SchemaComponent {
+trait Schema {
   val types: List[NamedType]
 
-  def TypeRef(ref: String): TypeRef =
-    new TypeRef(this, ref)
-}
-
-trait Schema extends SchemaComponent {
-  val queryType:        TypeRef
+  val queryType:        Type
   val mutationType:     Option[TypeRef]
   val subscriptionType: Option[TypeRef]
   val directives:       List[Directive]
+
+  def TypeRef(ref: String): TypeRef =
+    new TypeRef(this, ref)
 }
 
 sealed trait Type {
@@ -25,7 +23,9 @@ sealed trait Type {
     case TypeRef(_, _) => dealias.field(fieldName)
     case ObjectType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
     case InterfaceType(_, _, fields) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
-    case _ => NoType
+    case _ =>
+      println(s"Type ${this.shortString} has no field $fieldName")
+      NoType
   }
 
   def hasField(fieldName: String): Boolean =
@@ -127,7 +127,7 @@ sealed trait NamedType extends Type {
 }
 
 case object NoType extends Type
-case class TypeRef(schema: SchemaComponent, ref: String) extends Type {
+case class TypeRef(schema: Schema, ref: String) extends Type {
   override def toString: String = s"@$ref"
 }
 

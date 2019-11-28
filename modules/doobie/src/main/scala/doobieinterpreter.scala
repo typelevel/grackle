@@ -26,10 +26,10 @@ class DoobieQueryInterpreter[F[_]](
   logger: Logger[F]
 ) (override implicit val F: Bracket[F, Throwable]) extends QueryInterpreter[F](schema) {
 
-  def runRootValue(query: Query): F[Result[ProtoJson]] =
+  def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]] =
     query match {
       case Select(fieldName, _, _) =>
-        val fieldTpe = schema.queryType.field(fieldName)
+        val fieldTpe = rootTpe.field(fieldName)
         val mapped = mapping.mapQuery(query, fieldTpe)
 
         for {
@@ -38,7 +38,7 @@ class DoobieQueryInterpreter[F[_]](
 
       // deduplicate
       case Wrap(fieldName, _) =>
-        val fieldTpe = schema.queryType.field(fieldName)
+        val fieldTpe = rootTpe.field(fieldName)
         val mapped = mapping.mapQuery(query, fieldTpe)
 
         for {
@@ -48,7 +48,7 @@ class DoobieQueryInterpreter[F[_]](
       case _ => mkErrorResult(s"Bad root query '${query.render}' in DoobieQueryInterpreter").pure[F]
     }
 
-  override def runRootValues(queries: List[Query]): F[(Chain[Json], List[ProtoJson])] = {
+  override def runRootValues(queries: List[(Query, Type)]): F[(Chain[Json], List[ProtoJson])] = {
     // TODO: combine sibling queries here
     super.runRootValues(queries)
   }

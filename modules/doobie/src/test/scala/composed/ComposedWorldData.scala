@@ -50,7 +50,7 @@ object CountryCurrencyQueryCompiler extends QueryCompiler(ComposedWorldSchema) {
 object CountryCurrencyQueryInterpreter {
   def fromTransactor[F[_]](xa: Transactor[F])
     (implicit brkt: Bracket[F, Throwable], logger0: Logger[F]): ComposedQueryInterpreter[F] = {
-      val mapping: Map[SchemaComponent, QueryInterpreter[F]] = Map(
+      val mapping: Map[Schema, QueryInterpreter[F]] = Map(
         WorldSchema    -> WorldQueryInterpreter.fromTransactor(xa),
         CurrencySchema -> CurrencyQueryInterpreter[F]
       )

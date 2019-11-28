@@ -18,14 +18,13 @@ class DataTypeQueryInterpreter[F[_]: Monad](
   attrs:  PartialFunction[(Any, String), Any] = PartialFunction.empty
 ) extends QueryInterpreter[F](schema) {
 
-  def runRootValue(query: Query): F[Result[ProtoJson]] =
+  def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]] =
     query match {
       case Wrap(fieldName, _) =>
         if (root.isDefinedAt(fieldName)) {
           val (tpe, focus) = root(fieldName)
-          val rootType = schema.queryType.field(fieldName)
           val cursor = DataTypeCursor(tpe, focus, fields, attrs)
-          runValue(query, rootType, cursor).pure[F]
+          runValue(query, rootTpe.field(fieldName), cursor).pure[F]
         } else
           mkErrorResult(s"No root field '$fieldName'").pure[F]
       case _ =>
