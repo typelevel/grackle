@@ -22,6 +22,23 @@ import QueryInterpreter.mkErrorResult
 trait DoobieMapping {
   val objectMappings: List[ObjectMapping]
 
+  def objectMapping(tpe: Type): Option[ObjectMapping] = {
+    tpe match {
+      case nt0: NamedType =>
+        objectMappings.find(_.tpe match {
+          case nt1: NamedType => nt0.name == nt1.name
+          case _ => false
+        })
+      case _ => None
+    }
+  }
+
+  def fieldMapping(tpe: Type, fieldName: String): Option[FieldMapping] =
+    for {
+      om <- objectMapping(tpe)
+      fm <- om.fieldMapping(fieldName)
+    } yield fm
+
   def mkSelects(path: List[String]): Query =
     path.foldRight(Empty: Query) { (fieldName, child) => Select(fieldName, Nil, child) }
 
@@ -32,9 +49,8 @@ trait DoobieMapping {
         case Select(fieldName, _, q) =>
           val obj = tpe.underlyingObject
           (for {
-            om      <- objectMappings.find(_.tpe =:= obj)
-            (_, cr) <- om.fieldMappings.find(_._1 == fieldName)
-          } yield loop(q, obj.underlyingField(fieldName), ((obj, cr) :: acc._1, acc._2))).getOrElse(acc)
+            fm <- fieldMapping(obj, fieldName)
+          } yield loop(q, obj.underlyingField(fieldName), ((obj, fm) :: acc._1, acc._2))).getOrElse(acc)
         case Wrap(_, q) =>
           loop(q, tpe, acc)
         case Group(queries) =>
@@ -59,7 +75,7 @@ trait DoobieMapping {
 
     val keys: List[ColumnRef] = types.flatMap { tpe =>
       val obj = tpe.underlyingObject
-      objectMappings.find(_.tpe =:= obj).map(_.key).getOrElse(Nil)
+      objectMapping(obj).map(_.key).getOrElse(Nil)
     }
 
     val columns: List[ColumnRef] = (mappings.foldLeft(keys) {
@@ -84,7 +100,10 @@ object DoobieMapping {
     tpe: Type,
     key: List[ColumnRef],
     fieldMappings: List[(String, FieldMapping)]
-  )
+  ) {
+    def fieldMapping(fieldName: String): Option[FieldMapping] =
+      fieldMappings.find(_._1 == fieldName).map(_._2)
+  }
 
   sealed trait FieldMapping
   object FieldMapping {
@@ -126,40 +145,37 @@ object DoobieMapping {
 
     def hasField(tpe: Type, fieldName: String): Boolean = {
       val obj = tpe.dealias
-      val om = mapping.objectMappings.find(_.tpe =:= obj).get
-      om.fieldMappings.exists(_._1 == fieldName)
+      mapping.fieldMapping(obj, fieldName).map(_ => true).getOrElse(false)
     }
 
     def columnOfField(tpe: Type, fieldName: String): ColumnRef = {
       val obj = tpe.dealias
-      val om = mapping.objectMappings.find(_.tpe =:= obj).get
-      val Some((_, col: ColumnRef)) = om.fieldMappings.find(_._1 == fieldName)
+      val Some(col: ColumnRef) = mapping.fieldMapping(obj, fieldName)
       col
     }
 
     def selectField(row: Row, tpe: Type, fieldName: String): Any = {
       val obj = tpe.dealias
-      val om = mapping.objectMappings.find(_.tpe =:= obj).get
-      val Some((_, col: ColumnRef)) = om.fieldMappings.find(_._1 == fieldName)
+      val Some(col: ColumnRef) = mapping.fieldMapping(obj, fieldName)
       select(row, col)
     }
 
     def hasKey(tpe: Type, keyName: String): Boolean = {
       val obj = tpe.dealias
-      val om = mapping.objectMappings.find(_.tpe =:= obj).get
+      val om = mapping.objectMapping(obj).get
       om.key.exists(_.column == keyName)
     }
 
     def columnOfKey(tpe: Type, keyName: String): ColumnRef = {
       val obj = tpe.dealias
-      val om = mapping.objectMappings.find(_.tpe =:= obj).get
+      val om = mapping.objectMapping(obj).get
       val Some(col: ColumnRef) = om.key.find(_.column == keyName)
       col
     }
 
     def selectKey(row: Row, tpe: Type, keyName: String): Any = {
       val obj = tpe.dealias
-      val om = mapping.objectMappings.find(_.tpe =:= obj).get
+      val om = mapping.objectMapping(obj).get
       val Some(col) = om.key.find(_.column == keyName)
       select(row, col)
     }
@@ -173,7 +189,7 @@ object DoobieMapping {
       table.groupBy(row => project(row, cols)).to(List).sortBy(_._1.toString).map(_._2)
 
     def group(table: Table, tpe: Type): List[Table] =
-      mapping.objectMappings.find(_.tpe =:= tpe) match {
+      mapping.objectMapping(tpe) match {
         case Some(om) if om.key.nonEmpty => group(table, om.key)
         case None => table.map(List(_))
       }
@@ -243,17 +259,14 @@ object DoobieMapping {
   class StagingElaborator(mapping: DoobieMapping) extends Phase {
     val stagingJoin = (c: Cursor, q: Query) => q match {
       case Select(fieldName, _, _) =>
-        val tpe = c.tpe.underlyingObject
+        val obj = c.tpe.underlyingObject
 
-        val osj = for {
-          om                 <- mapping.objectMappings.find(_.tpe =:= tpe)
-          (_, so: Subobject) <- om.fieldMappings.find(_._1 == fieldName)
-        } yield so.stagingJoin
+        val osj = mapping.fieldMapping(obj, fieldName).collect { case so: Subobject => so.stagingJoin }
 
         osj match {
           case Some(stagingJoin) => stagingJoin(c, q)
           case None =>
-            mkErrorResult(s"No staging join for field '$fieldName' of type ${tpe.shortString}")
+            mkErrorResult(s"No staging join for field '$fieldName' of type ${obj.shortString}")
         }
       case _ => mkErrorResult(s"No staging join for non-Select $q")
     }
