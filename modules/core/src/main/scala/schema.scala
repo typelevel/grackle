@@ -5,27 +5,47 @@ package edu.gemini.grackle
 
 trait Schema {
   val types: List[NamedType]
-
-  val queryType:        Type
-  val mutationType:     Option[TypeRef]
-  val subscriptionType: Option[TypeRef]
-  val directives:       List[Directive]
+  val directives: List[Directive]
 
   def TypeRef(ref: String): TypeRef =
     new TypeRef(this, ref)
+
+  def defaultSchemaType =
+    ObjectType(
+      name = "Schema",
+      description = None,
+      fields = List(
+        Field("query", None, Nil, TypeRef("Query"), false, None),
+        Field("mutation", None, Nil, NullableType(TypeRef("Mutation")), false, None),
+        Field("subscription", None, Nil, ListType(TypeRef("Subscription")), false, None)
+      ),
+      interfaces = Nil
+    )
+
+  def tpe(name: String): Type =
+    types.find(_.name == name).getOrElse(NoType)
+
+  def schemaType = tpe("Schema") orElse defaultSchemaType
+
+  def queryType: Type = schemaType.field("query")
+  def mutationType: Type = schemaType.field("mutation")
+  def subscriptionType: Type = schemaType.field("subscription")
 }
 
 sealed trait Type {
   def =:=(other: Type): Boolean = (this eq other) || (dealias == other.dealias)
+
+  def orElse(other: => Type): Type = this match {
+    case NoType => other
+    case _ => this
+  }
 
   def field(fieldName: String): Type = this match {
     case NullableType(tpe) => tpe.field(fieldName)
     case TypeRef(_, _) => dealias.field(fieldName)
     case ObjectType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
     case InterfaceType(_, _, fields) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
-    case _ =>
-      println(s"Type ${this.shortString} has no field $fieldName")
-      NoType
+    case _ => NoType
   }
 
   def hasField(fieldName: String): Boolean =

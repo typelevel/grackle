@@ -16,9 +16,10 @@ import QueryCompiler._, ComponentElaborator.Mapping
 import QueryInterpreter.mkErrorResult
 import DoobiePredicate._
 
-import ComposedWorldSchema._
-
 object CountryCurrencyQueryCompiler extends QueryCompiler(ComposedWorldSchema) {
+  val QueryType = ComposedWorldSchema.tpe("Query")
+  val CountryType = ComposedWorldSchema.tpe("Country")
+
   val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {
       case Select("country", List(StringBinding("code", code)), child) =>
@@ -75,6 +76,8 @@ object CurrencyData {
 object CurrencyQueryInterpreter {
   import CurrencyData._
 
+  val CurrencyType = ComposedWorldSchema.tpe("Currency")
+
   def apply[F[_]: Monad] = new DataTypeQueryInterpreter[F](
     {
       case "currencies" => (ListType(CurrencyType), currencies)
@@ -90,6 +93,11 @@ object CurrencyQueryInterpreter {
 object ComposedWorldData extends DoobieMapping {
   import DoobieMapping._, FieldMapping._
   import ScalarType._
+
+  val QueryType = ComposedWorldSchema.tpe("Query")
+  val CountryType = ComposedWorldSchema.tpe("Country")
+  val CityType = ComposedWorldSchema.tpe("City")
+  val LanguageType = ComposedWorldSchema.tpe("Language")
 
   val queryMapping =
     ObjectMapping(

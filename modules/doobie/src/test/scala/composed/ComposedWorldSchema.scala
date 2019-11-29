@@ -11,7 +11,7 @@ object ComposedWorldSchema extends Schema {
   val NamePatternArg = InputValue("namePattern", None, NullableType(StringType), Some("%"))
   val CodeArg = InputValue("code", None, NullableType(StringType), None)
 
-  val QueryType: ObjectType =
+  val types = List(
     ObjectType(
       name = "Query",
       description = None,
@@ -22,9 +22,7 @@ object ComposedWorldSchema extends Schema {
         Field("currencies", None, Nil, ListType(TypeRef("Currency")), false, None) // Should be local to CurrencySchema
       ),
       interfaces = Nil
-    )
-
-  val CityType: ObjectType =
+    ),
     ObjectType(
       name = "City",
       description = None,
@@ -35,9 +33,7 @@ object ComposedWorldSchema extends Schema {
         Field("population", None, Nil, IntType, false, None)
       ),
       interfaces = Nil
-    )
-
-  val LanguageType: ObjectType =
+    ),
     ObjectType(
       name = "Language",
       description = None,
@@ -48,9 +44,7 @@ object ComposedWorldSchema extends Schema {
         Field("countries", None, Nil, ListType(TypeRef("Country")), false, None)
       ),
       interfaces = Nil
-    )
-
-  val CurrencyType: ObjectType =
+    ),
     ObjectType(
       name = "Currency",
       description = None,
@@ -60,9 +54,7 @@ object ComposedWorldSchema extends Schema {
         Field("countryCode", None, Nil, StringType, false, None)
       ),
       interfaces = Nil
-    )
-
-  val CountryType: ObjectType =
+    ),
     ObjectType(
       name = "Country",
       description = None,
@@ -87,11 +79,8 @@ object ComposedWorldSchema extends Schema {
       ),
       interfaces = Nil
     )
+  )
 
-  val types = List(QueryType, CityType, LanguageType, CurrencyType, CountryType)
-  val queryType = TypeRef("Query")
-  val mutationType = None
-  val subscriptionType = None
   val directives = Nil
 }
 
@@ -101,7 +90,7 @@ object WorldSchema extends Schema {
   val NamePatternArg = InputValue("namePattern", None, NullableType(StringType), Some("%"))
   val CodeArg = InputValue("code", None, NullableType(StringType), None)
 
-  val QueryType: ObjectType =
+  val types = List(
     ObjectType(
       name = "Query",
       description = None,
@@ -111,9 +100,7 @@ object WorldSchema extends Schema {
         Field("countries", None, Nil, NullableType(ListType(TypeRef("Country"))), false, None)
       ),
       interfaces = Nil
-    )
-
-  val CityType: ObjectType =
+    ),
     ObjectType(
       name = "City",
       description = None,
@@ -124,9 +111,7 @@ object WorldSchema extends Schema {
         Field("population", None, Nil, IntType, false, None)
       ),
       interfaces = Nil
-    )
-
-  val LanguageType: ObjectType =
+    ),
     ObjectType(
       name = "Language",
       description = None,
@@ -137,9 +122,7 @@ object WorldSchema extends Schema {
         Field("countries", None, Nil, ListType(TypeRef("Country")), false, None)
       ),
       interfaces = Nil
-    )
-
-  val CountryType: ObjectType =
+    ),
     ObjectType(
       name = "Country",
       description = None,
@@ -163,18 +146,15 @@ object WorldSchema extends Schema {
       ),
       interfaces = Nil
     )
+  )
 
-  val types = List(QueryType, CityType, LanguageType, CountryType)
-  val queryType = TypeRef("Query")
-  val mutationType = None
-  val subscriptionType = None
   val directives = Nil
 }
 
 object CurrencySchema extends Schema {
   import ScalarType._
 
-  val CurrencyType: ObjectType =
+  val types = List(
     ObjectType(
       name = "Currency",
       description = None,
@@ -185,10 +165,7 @@ object CurrencySchema extends Schema {
       ),
       interfaces = Nil
     )
+  )
 
-  val types = List(CurrencyType)
-  val queryType = NoType
-  val mutationType = None
-  val subscriptionType = None
   val directives = Nil
 }

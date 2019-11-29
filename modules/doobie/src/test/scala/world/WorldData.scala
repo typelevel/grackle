@@ -16,9 +16,12 @@ import DoobiePredicate._
 import DoobieMapping._, FieldMapping._
 import ScalarType._
 
-import WorldSchema._
-
 object WorldData extends DoobieMapping {
+  val QueryType = WorldSchema.tpe("Query")
+  val CountryType = WorldSchema.tpe("Country")
+  val CityType = WorldSchema.tpe("City")
+  val LanguageType = WorldSchema.tpe("Language")
+
   val queryMapping =
     ObjectMapping(
       tpe = QueryType,
@@ -138,6 +141,8 @@ object WorldData extends DoobieMapping {
 }
 
 object WorldQueryCompiler extends QueryCompiler(WorldSchema) {
+  val QueryType = WorldSchema.tpe("Query")
+
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("country", List(StringBinding("code", code)), child) =>

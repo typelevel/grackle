@@ -10,7 +10,7 @@ object ComposedSchema extends Schema {
 
   val CodeArg = InputValue("code", None, NullableType(StringType), None)
 
-  val QueryType: ObjectType =
+  val types = List(
     ObjectType(
       name = "Query",
       description = None,
@@ -20,9 +20,7 @@ object ComposedSchema extends Schema {
         Field("countries", None, Nil, ListType(TypeRef("Country")), false, None)
       ),
       interfaces = Nil
-    )
-
-  val CurrencyType: ObjectType =
+    ),
     ObjectType(
       name = "Currency",
       description = None,
@@ -31,9 +29,7 @@ object ComposedSchema extends Schema {
         Field("exchangeRate", None, Nil, FloatType, false, None),
       ),
       interfaces = Nil
-    )
-
-  val CountryType: ObjectType =
+    ),
     ObjectType(
       name = "Country",
       description = None,
@@ -44,11 +40,8 @@ object ComposedSchema extends Schema {
       ),
       interfaces = Nil
     )
+  )
 
-  val types = List(QueryType, CurrencyType, CountryType)
-  val queryType = TypeRef("Query")
-  val mutationType = None
-  val subscriptionType = None
   val directives = Nil
 }
 
@@ -57,7 +50,7 @@ object CountrySchema extends Schema {
 
   val CodeArg = InputValue("code", None, NullableType(StringType), None)
 
-  val QueryType: ObjectType =
+  val types = List(
     ObjectType(
       name = "Query",
       description = None,
@@ -66,9 +59,7 @@ object CountrySchema extends Schema {
         Field("countries", None, Nil, ListType(TypeRef("Country")), false, None)
       ),
       interfaces = Nil
-    )
-
-  val CountryType: ObjectType =
+    ),
     ObjectType(
       name = "Country",
       description = None,
@@ -78,11 +69,8 @@ object CountrySchema extends Schema {
       ),
       interfaces = Nil
     )
+  )
 
-  val types = List(QueryType, CountryType)
-  val queryType = TypeRef("Query")
-  val mutationType = None
-  val subscriptionType = None
   val directives = Nil
 }
 
@@ -91,7 +79,7 @@ object CurrencySchema extends Schema {
 
   val CodeArg = InputValue("code", None, NullableType(StringType), None)
 
-  val QueryType: ObjectType =
+  val types = List(
     ObjectType(
       name = "Query",
       description = None,
@@ -99,9 +87,7 @@ object CurrencySchema extends Schema {
         Field("currency", None, List(CodeArg), NullableType(TypeRef("Currency")), false, None)
       ),
       interfaces = Nil
-    )
-
-  val CurrencyType: ObjectType =
+    ),
     ObjectType(
       name = "Currency",
       description = None,
@@ -111,10 +97,7 @@ object CurrencySchema extends Schema {
       ),
       interfaces = Nil
     )
+  )
 
-  val types = List(QueryType, CurrencyType)
-  val queryType = TypeRef("Query")
-  val mutationType = None
-  val subscriptionType = None
   val directives = Nil
 }
