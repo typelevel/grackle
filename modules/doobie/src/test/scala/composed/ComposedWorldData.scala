@@ -16,48 +16,7 @@ import QueryCompiler._, ComponentElaborator.Mapping
 import QueryInterpreter.mkErrorResult
 import DoobiePredicate._
 
-object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
-  val QueryType = ComposedSchema.tpe("Query")
-  val CountryType = ComposedSchema.tpe("Country")
-
-  val selectElaborator =  new SelectElaborator(Map(
-    QueryType -> {
-      case Select("country", List(StringBinding("code", code)), child) =>
-        Wrap("country", Unique(AttrEquals("code", code), child)).rightIor
-      case Select("countries", _, child) =>
-        Wrap("countries", child).rightIor
-      case Select("cities", List(StringBinding("namePattern", namePattern)), child) =>
-        Wrap("cities", Filter(FieldLike("name", namePattern, true), child)).rightIor
-    }
-  ))
-
-  val countryCurrencyJoin = (c: Cursor, q: Query) =>
-    c.attribute("code") match {
-      case Ior.Right(countryCode: String) =>
-        Wrap("currencies", Filter(FieldEquals("countryCode", countryCode), q)).rightIor
-      case _ => mkErrorResult(s"Expected 'code' attribute at ${c.tpe.shortString}")
-    }
-
-  val componentElaborator = ComponentElaborator(
-    Mapping(QueryType, "country", "WorldComponent"),
-    Mapping(QueryType, "countries", "WorldComponent"),
-    Mapping(QueryType, "cities", "WorldComponent"),
-    Mapping(CountryType, "currencies", "CurrencyComponent", countryCurrencyJoin)
-  )
-
-  val phases = List(selectElaborator, componentElaborator)
-}
-
-object ComposedQueryInterpreter {
-  def fromTransactor[F[_]](xa: Transactor[F])
-    (implicit brkt: Bracket[F, Throwable], logger0: Logger[F]): ComposedQueryInterpreter[F] = {
-      val mapping: Map[String, QueryInterpreter[F]] = Map(
-        "WorldComponent"    -> WorldQueryInterpreter.fromTransactor(xa),
-        "CurrencyComponent" -> CurrencyQueryInterpreter[F]
-      )
-      new ComposedQueryInterpreter(mapping)
-  }
-}
+/* Currency component */
 
 object CurrencyData {
   case class Currency(
@@ -89,6 +48,8 @@ object CurrencyQueryInterpreter {
     }
   )
 }
+
+/* World component */
 
 object WorldData extends DoobieMapping {
   import DoobieMapping._, FieldMapping._
@@ -173,4 +134,49 @@ object WorldQueryInterpreter {
   def fromTransactor[F[_]](xa: Transactor[F])
     (implicit brkt: Bracket[F, Throwable], logger: Logger[F]): DoobieQueryInterpreter[F] =
       new DoobieQueryInterpreter[F](WorldData, xa, logger)
+}
+
+/* Composition */
+
+object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
+  val QueryType = ComposedSchema.tpe("Query")
+  val CountryType = ComposedSchema.tpe("Country")
+
+  val selectElaborator =  new SelectElaborator(Map(
+    QueryType -> {
+      case Select("country", List(StringBinding("code", code)), child) =>
+        Wrap("country", Unique(AttrEquals("code", code), child)).rightIor
+      case Select("countries", _, child) =>
+        Wrap("countries", child).rightIor
+      case Select("cities", List(StringBinding("namePattern", namePattern)), child) =>
+        Wrap("cities", Filter(FieldLike("name", namePattern, true), child)).rightIor
+    }
+  ))
+
+  val countryCurrencyJoin = (c: Cursor, q: Query) =>
+    c.attribute("code") match {
+      case Ior.Right(countryCode: String) =>
+        Wrap("currencies", Filter(FieldEquals("countryCode", countryCode), q)).rightIor
+      case _ => mkErrorResult(s"Expected 'code' attribute at ${c.tpe.shortString}")
+    }
+
+  val componentElaborator = ComponentElaborator(
+    Mapping(QueryType, "country", "WorldComponent"),
+    Mapping(QueryType, "countries", "WorldComponent"),
+    Mapping(QueryType, "cities", "WorldComponent"),
+    Mapping(CountryType, "currencies", "CurrencyComponent", countryCurrencyJoin)
+  )
+
+  val phases = List(selectElaborator, componentElaborator)
+}
+
+object ComposedQueryInterpreter {
+  def fromTransactor[F[_]](xa: Transactor[F])
+    (implicit brkt: Bracket[F, Throwable], logger0: Logger[F]): ComposedQueryInterpreter[F] = {
+      val mapping: Map[String, QueryInterpreter[F]] = Map(
+        "WorldComponent"    -> WorldQueryInterpreter.fromTransactor(xa),
+        "CurrencyComponent" -> CurrencyQueryInterpreter[F]
+      )
+      new ComposedQueryInterpreter(mapping)
+  }
 }

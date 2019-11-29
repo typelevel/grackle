@@ -11,9 +11,37 @@ import Query._, Binding._, Predicate._
 import QueryCompiler._, ComponentElaborator.Mapping
 import QueryInterpreter.mkErrorResult
 
+/* Currency component */
+
+object CurrencyData {
+  case class Currency(
+    code: String,
+    exchangeRate: Double
+  )
+
+  val EUR = Currency("EUR", 1.12)
+  val GBP = Currency("GBP", 1.25)
+
+  val currencies = List(EUR, GBP)
+}
+
+import CurrencyData.{ Currency, currencies }
+
+object CurrencyQueryInterpreter extends DataTypeQueryInterpreter[Id](
+  {
+    case "currency" => (ListType(CurrencySchema.tpe("Currency")), currencies)
+  },
+  {
+    case (c: Currency, "code")         => c.code
+    case (c: Currency, "exchangeRate") => c.exchangeRate
+  }
+)
+
 object CurrencyQueryCompiler extends QueryCompiler(ComposedSchema) {
+  val QueryType = ComposedSchema.tpe("Query").dealias
+
   val selectElaborator = new SelectElaborator(Map(
-    ComposedSchema.tpe("Query").dealias -> {
+    QueryType -> {
       case Select("currency", List(StringBinding("code", code)), child) =>
         Wrap("currency", Unique(FieldEquals("code", code), child)).rightIor
     }
@@ -22,9 +50,39 @@ object CurrencyQueryCompiler extends QueryCompiler(ComposedSchema) {
   val phases = List(selectElaborator)
 }
 
+/* Country component */
+
+object CountryData {
+  case class Country(
+    code: String,
+    name: String,
+    currencyCode: String
+  )
+
+  val DEU = Country("DEU", "Germany", "EUR")
+  val FRA = Country("FRA", "France", "EUR")
+  val GBR = Country("GBR", "United Kingdom", "GBP")
+
+  val countries = List(DEU, FRA, GBR)
+}
+
+import CountryData.{ Country, countries }
+
+object CountryQueryInterpreter extends DataTypeQueryInterpreter[Id](
+  {
+    case "country" | "countries"  => (ListType(CountrySchema.tpe("Country")), countries)
+  },
+  {
+    case (c: Country, "code") => c.code
+    case (c: Country, "name") => c.name
+  }
+)
+
 object CountryQueryCompiler extends QueryCompiler(ComposedSchema) {
+  val QueryType = ComposedSchema.tpe("Query").dealias
+
   val selectElaborator = new SelectElaborator(Map(
-    ComposedSchema.tpe("Query").dealias -> {
+    QueryType -> {
       case Select("country", List(StringBinding("code", code)), child) =>
         Wrap("country", Unique(FieldEquals("code", code), child)).rightIor
       case Select("countries", _, child) =>
@@ -34,6 +92,8 @@ object CountryQueryCompiler extends QueryCompiler(ComposedSchema) {
 
   val phases = List(selectElaborator)
 }
+
+/* Composition */
 
 object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
   import CountryData._
@@ -71,53 +131,3 @@ object ComposedQueryInterpreter extends
     "CountryComponent"  -> CountryQueryInterpreter,
     "CurrencyComponent" -> CurrencyQueryInterpreter
   ))
-
-object CurrencyData {
-  case class Currency(
-    code: String,
-    exchangeRate: Double
-  )
-
-  val EUR = Currency("EUR", 1.12)
-  val GBP = Currency("GBP", 1.25)
-
-  val currencies = List(EUR, GBP)
-}
-
-import CurrencyData.{ Currency, currencies }
-
-object CurrencyQueryInterpreter extends DataTypeQueryInterpreter[Id](
-  {
-    case "currency" => (ListType(CurrencySchema.tpe("Currency")), currencies)
-  },
-  {
-    case (c: Currency, "code")         => c.code
-    case (c: Currency, "exchangeRate") => c.exchangeRate
-  }
-)
-
-object CountryData {
-  case class Country(
-    code: String,
-    name: String,
-    currencyCode: String
-  )
-
-  val DEU = Country("DEU", "Germany", "EUR")
-  val FRA = Country("FRA", "France", "EUR")
-  val GBR = Country("GBR", "United Kingdom", "GBP")
-
-  val countries = List(DEU, FRA, GBR)
-}
-
-import CountryData.{ Country, countries }
-
-object CountryQueryInterpreter extends DataTypeQueryInterpreter[Id](
-  {
-    case "country" | "countries"  => (ListType(CountrySchema.tpe("Country")), countries)
-  },
-  {
-    case (c: Country, "code") => c.code
-    case (c: Country, "name") => c.name
-  }
-)
