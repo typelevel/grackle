@@ -35,7 +35,7 @@ object CountryQueryCompiler extends QueryCompiler(ComposedSchema) {
   val phases = List(selectElaborator)
 }
 
-object CountryCurrencyQueryCompiler extends QueryCompiler(ComposedSchema) {
+object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
   import CountryData._
 
   val selectElaborator =  new SelectElaborator(Map(
@@ -58,18 +58,18 @@ object CountryCurrencyQueryCompiler extends QueryCompiler(ComposedSchema) {
     }
 
   val componentElaborator = ComponentElaborator(
-    Mapping(ComposedSchema.tpe("Query"), "country", "CountrySchema"),
-    Mapping(ComposedSchema.tpe("Query"), "countries", "CountrySchema"),
-    Mapping(ComposedSchema.tpe("Country"), "currency", "CurrencySchema", countryCurrencyJoin)
+    Mapping(ComposedSchema.tpe("Query"), "country", "CountryComponent"),
+    Mapping(ComposedSchema.tpe("Query"), "countries", "CountryComponent"),
+    Mapping(ComposedSchema.tpe("Country"), "currency", "CurrencyComponent", countryCurrencyJoin)
   )
 
   val phases = List(selectElaborator, componentElaborator)
 }
 
-object CountryCurrencyQueryInterpreter extends
+object ComposedQueryInterpreter extends
   ComposedQueryInterpreter[Id](Map(
-    "CountrySchema"  -> CountryQueryInterpreter,
-    "CurrencySchema" -> CurrencyQueryInterpreter
+    "CountryComponent"  -> CountryQueryInterpreter,
+    "CurrencyComponent" -> CurrencyQueryInterpreter
   ))
 
 object CurrencyData {

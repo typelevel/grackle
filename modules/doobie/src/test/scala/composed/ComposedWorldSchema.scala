@@ -5,7 +5,7 @@ package composed
 
 import edu.gemini.grackle._
 
-object ComposedWorldSchema extends Schema {
+object ComposedSchema extends Schema {
   import ScalarType._
 
   val NamePatternArg = InputValue("namePattern", None, NullableType(StringType), Some("%"))
