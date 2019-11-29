@@ -117,9 +117,9 @@ object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
   ))
 
   val countryCurrencyJoin = (c: Cursor, q: Query) =>
-    c.focus match {
-      case c: Country =>
-        Wrap("currency", Unique(FieldEquals("code", c.currencyCode), q)).rightIor
+    (c.focus, q) match {
+      case (c: Country, Select("currency", _, child)) =>
+        Wrap("currency", Unique(FieldEquals("code", c.currencyCode), child)).rightIor
       case _ =>
         mkErrorResult(s"Unexpected cursor focus type in countryCurrencyJoin")
     }
@@ -130,7 +130,7 @@ object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
     Mapping(CountryType, "currency", "CurrencyComponent", countryCurrencyJoin)
   )
 
-  val phases = List(selectElaborator, componentElaborator)
+  val phases = List(componentElaborator, selectElaborator)
 }
 
 object ComposedQueryInterpreter extends

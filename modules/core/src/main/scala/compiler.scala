@@ -87,7 +87,7 @@ object QueryCompiler {
             }
           }
 
-        case w@Wrap(fieldName, child) => apply(child, tpe.underlyingField(fieldName)).map(ec => w.copy(child = ec))
+        case w@Wrap(_, child)         => apply(child, tpe).map(ec => w.copy(child = ec))
         case g@Group(queries)         => queries.traverse(q => apply(q, tpe)).map(eqs => g.copy(queries = eqs))
         case u@Unique(_, child)       => apply(child, tpe.nonNull).map(ec => u.copy(child = ec))
         case f@Filter(_, child)       => apply(child, tpe.item).map(ec => f.copy(child = ec))
@@ -105,7 +105,7 @@ object QueryCompiler {
           mapping.get((tpe.underlyingObject, fieldName)) match {
             case Some((cid, join)) =>
               apply(child, childTpe).map { elaboratedChild =>
-                Wrap(fieldName, Component(cid, join, elaboratedChild))
+                Wrap(fieldName, Component(cid, join, Select(fieldName, args, elaboratedChild)))
               }
             case None =>
               apply(child, childTpe).map { elaboratedChild =>
@@ -113,19 +113,7 @@ object QueryCompiler {
               }
           }
 
-        case Wrap(fieldName, child) =>
-          val childTpe = tpe.underlyingField(fieldName)
-          mapping.get((tpe.underlyingObject, fieldName)) match {
-            case Some((cid, join)) =>
-              apply(child, childTpe).map { elaboratedChild =>
-                Wrap(fieldName, Component(cid, join, Wrap(fieldName, elaboratedChild)))
-              }
-            case None =>
-              apply(child, childTpe).map { elaboratedChild =>
-                Wrap(fieldName, elaboratedChild)
-              }
-          }
-
+        case w@Wrap(_, child)         => apply(child, tpe).map(ec => w.copy(child = ec))
         case g@Group(queries)         => queries.traverse(q => apply(q, tpe)).map(eqs => g.copy(queries = eqs))
         case u@Unique(_, child)       => apply(child, tpe.nonNull).map(ec => u.copy(child = ec))
         case f@Filter(_, child)       => apply(child, tpe.item).map(ec => f.copy(child = ec))
