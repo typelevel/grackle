@@ -23,13 +23,15 @@ object CurrencyData {
   val GBP = Currency("GBP", 1.25)
 
   val currencies = List(EUR, GBP)
+
+  val CurrencyType = CurrencySchema.tpe("Currency")
 }
 
-import CurrencyData.{ Currency, currencies }
+import CurrencyData.{ Currency, CurrencyType, currencies }
 
 object CurrencyQueryInterpreter extends DataTypeQueryInterpreter[Id](
   {
-    case "currency" => (ListType(CurrencySchema.tpe("Currency")), currencies)
+    case "currency" => (ListType(CurrencyType), currencies)
   },
   {
     case (c: Currency, "code")         => c.code
@@ -64,13 +66,15 @@ object CountryData {
   val GBR = Country("GBR", "United Kingdom", "GBP")
 
   val countries = List(DEU, FRA, GBR)
+
+  val CountryType = CountrySchema.tpe("Country")
 }
 
-import CountryData.{ Country, countries }
+import CountryData.{ Country, CountryType, countries }
 
 object CountryQueryInterpreter extends DataTypeQueryInterpreter[Id](
   {
-    case "country" | "countries"  => (ListType(CountrySchema.tpe("Country")), countries)
+    case "country" | "countries"  => (ListType(CountryType), countries)
   },
   {
     case (c: Country, "code") => c.code
@@ -98,8 +102,11 @@ object CountryQueryCompiler extends QueryCompiler(CountrySchema) {
 object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
   import CountryData._
 
+  val QueryType = ComposedSchema.tpe("Query").dealias
+  val CountryType = ComposedSchema.tpe("Country")
+
   val selectElaborator =  new SelectElaborator(Map(
-    ComposedSchema.tpe("Query").dealias -> {
+    QueryType -> {
       case Select("currency", List(StringBinding("code", code)), child) =>
         Wrap("currency", Unique(FieldEquals("code", code), child)).rightIor
       case Select("country", List(StringBinding("code", code)), child) =>
@@ -118,9 +125,9 @@ object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
     }
 
   val componentElaborator = ComponentElaborator(
-    Mapping(ComposedSchema.tpe("Query"), "country", "CountryComponent"),
-    Mapping(ComposedSchema.tpe("Query"), "countries", "CountryComponent"),
-    Mapping(ComposedSchema.tpe("Country"), "currency", "CurrencyComponent", countryCurrencyJoin)
+    Mapping(QueryType, "country", "CountryComponent"),
+    Mapping(QueryType, "countries", "CountryComponent"),
+    Mapping(CountryType, "currency", "CurrencyComponent", countryCurrencyJoin)
   )
 
   val phases = List(selectElaborator, componentElaborator)
