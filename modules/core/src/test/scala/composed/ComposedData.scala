@@ -37,8 +37,8 @@ object CurrencyQueryInterpreter extends DataTypeQueryInterpreter[Id](
   }
 )
 
-object CurrencyQueryCompiler extends QueryCompiler(ComposedSchema) {
-  val QueryType = ComposedSchema.tpe("Query").dealias
+object CurrencyQueryCompiler extends QueryCompiler(CurrencySchema) {
+  val QueryType = CurrencySchema.tpe("Query").dealias
 
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
@@ -78,8 +78,8 @@ object CountryQueryInterpreter extends DataTypeQueryInterpreter[Id](
   }
 )
 
-object CountryQueryCompiler extends QueryCompiler(ComposedSchema) {
-  val QueryType = ComposedSchema.tpe("Query").dealias
+object CountryQueryCompiler extends QueryCompiler(CountrySchema) {
+  val QueryType = CountrySchema.tpe("Query").dealias
 
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {

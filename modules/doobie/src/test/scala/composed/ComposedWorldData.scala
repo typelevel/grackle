@@ -35,7 +35,7 @@ object CurrencyData {
 object CurrencyQueryInterpreter {
   import CurrencyData._
 
-  val CurrencyType = ComposedSchema.tpe("Currency")
+  val CurrencyType = CurrencySchema.tpe("Currency")
 
   def apply[F[_]: Monad] = new DataTypeQueryInterpreter[F](
     {
@@ -55,10 +55,10 @@ object WorldData extends DoobieMapping {
   import DoobieMapping._, FieldMapping._
   import ScalarType._
 
-  val QueryType = ComposedSchema.tpe("Query")
-  val CountryType = ComposedSchema.tpe("Country")
-  val CityType = ComposedSchema.tpe("City")
-  val LanguageType = ComposedSchema.tpe("Language")
+  val QueryType = WorldSchema.tpe("Query")
+  val CountryType = WorldSchema.tpe("Country")
+  val CityType = WorldSchema.tpe("City")
+  val LanguageType = WorldSchema.tpe("Language")
 
   val queryMapping =
     ObjectMapping(
