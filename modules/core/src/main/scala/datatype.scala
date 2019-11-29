@@ -7,7 +7,7 @@ import cats.Monad
 import cats.implicits._
 import io.circe.Json
 
-import Query.Wrap
+import Query.{ Select, Wrap }
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
 import ScalarType._
 
@@ -19,11 +19,11 @@ class DataTypeQueryInterpreter[F[_]: Monad](
 
   def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]] =
     query match {
-      case Wrap(fieldName, _) =>
+      case Select(fieldName, _, child) =>
         if (root.isDefinedAt(fieldName)) {
           val (tpe, focus) = root(fieldName)
           val cursor = DataTypeCursor(tpe, focus, fields, attrs)
-          runValue(query, rootTpe.field(fieldName), cursor).pure[F]
+          runValue(Wrap(fieldName, child), rootTpe.field(fieldName), cursor).pure[F]
         } else
           mkErrorResult(s"No root field '$fieldName'").pure[F]
       case _ =>

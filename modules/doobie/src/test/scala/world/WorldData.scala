@@ -70,7 +70,7 @@ object WorldData extends DoobieMapping {
   def countryCityJoin(c: Cursor, q: Query): Result[Query] = q match {
     case Select("cities", Nil, child) =>
       c.attribute("code").map { case (code: String) =>
-        Wrap("cities", Filter(AttrEquals("countrycode", code), child))
+        Select("cities", Nil, Filter(AttrEquals("countrycode", code), child))
       }
     case _ => mkErrorResult("Bad staging join")
   }
@@ -78,7 +78,7 @@ object WorldData extends DoobieMapping {
   def countryLanguageJoin(c: Cursor, q: Query): Result[Query] = q match {
     case Select("languages", Nil, child) =>
       c.attribute("code").map { case (code: String) =>
-        Wrap("languages", Filter(FieldEquals("countrycode", code), child))
+        Select("languages", Nil, Filter(FieldEquals("countrycode", code), child))
       }
     case _ => mkErrorResult("Bad staging join")
   }
@@ -105,7 +105,7 @@ object WorldData extends DoobieMapping {
   def cityCountryJoin(c: Cursor, q: Query): Result[Query] = q match {
     case Select("country", Nil, child) =>
       c.attribute("countrycode").map { case (countrycode: String) =>
-        Wrap("country", Unique(AttrEquals("code", countrycode), child))
+        Select("country", Nil, Unique(AttrEquals("code", countrycode), child))
       }
     case _ => mkErrorResult("Bad staging join")
   }
@@ -132,7 +132,7 @@ object WorldData extends DoobieMapping {
   def languageCountryJoin(c: Cursor, q: Query): Result[Query] = q match {
     case Select("countries", Nil, child) =>
       c.attribute("language").map { case (language: String) =>
-        Wrap("countries", Filter(FieldContains(List("languages", "language"), language), child))
+        Select("countries", Nil, Filter(FieldContains(List("languages", "language"), language), child))
       }
     case _ => mkErrorResult("Bad staging join")
   }
@@ -146,15 +146,15 @@ object WorldQueryCompiler extends QueryCompiler(WorldSchema) {
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("country", List(StringBinding("code", code)), child) =>
-        Wrap("country", Unique(AttrEquals("code", code), child)).rightIor
+        Select("country", Nil, Unique(AttrEquals("code", code), child)).rightIor
       case Select("countries", Nil, child) =>
-        Wrap("countries", child).rightIor
+        Select("countries", Nil, child).rightIor
       case Select("cities", List(StringBinding("namePattern", namePattern)), child) =>
-        Wrap("cities", Filter(FieldLike("name", namePattern, true), child)).rightIor
+        Select("cities", Nil, Filter(FieldLike("name", namePattern, true), child)).rightIor
       case Select("language", List(StringBinding("language", language)), child) =>
-        Wrap("language", Unique(FieldEquals("language", language), child)).rightIor
+        Select("language", Nil, Unique(FieldEquals("language", language), child)).rightIor
       case Select("languages", Nil, child) =>
-        Wrap("languages", child).rightIor
+        Select("languages", Nil, child).rightIor
     }
   ))
 

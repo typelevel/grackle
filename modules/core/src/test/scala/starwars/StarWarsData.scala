@@ -102,9 +102,9 @@ object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
   val selectElaborator = new SelectElaborator(Map(
     StarWarsSchema.tpe("Query").dealias -> {
       case Select("hero", _, child) =>
-        Wrap("hero", Unique(FieldEquals("id", R2D2.id), child)).rightIor
+        Select("hero", Nil, Unique(FieldEquals("id", R2D2.id), child)).rightIor
       case Select(f@("character" | "human"), List(StringBinding("id", id)), child) =>
-        Wrap(f, Unique(FieldEquals("id", id), child)).rightIor
+        Select(f, Nil, Unique(FieldEquals("id", id), child)).rightIor
     }
   ))
 

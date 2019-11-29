@@ -45,7 +45,7 @@ object CurrencyQueryCompiler extends QueryCompiler(CurrencySchema) {
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("currency", List(StringBinding("code", code)), child) =>
-        Wrap("currency", Unique(FieldEquals("code", code), child)).rightIor
+        Select("currency", Nil, Unique(FieldEquals("code", code), child)).rightIor
     }
   ))
 
@@ -88,9 +88,9 @@ object CountryQueryCompiler extends QueryCompiler(CountrySchema) {
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("country", List(StringBinding("code", code)), child) =>
-        Wrap("country", Unique(FieldEquals("code", code), child)).rightIor
+        Select("country", Nil, Unique(FieldEquals("code", code), child)).rightIor
       case Select("countries", _, child) =>
-        Wrap("countries", child).rightIor
+        Select("countries", Nil, child).rightIor
     }
   ))
 
@@ -108,18 +108,18 @@ object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
   val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {
       case Select("currency", List(StringBinding("code", code)), child) =>
-        Wrap("currency", Unique(FieldEquals("code", code), child)).rightIor
+        Select("currency", Nil, Unique(FieldEquals("code", code), child)).rightIor
       case Select("country", List(StringBinding("code", code)), child) =>
-        Wrap("country", Unique(FieldEquals("code", code), child)).rightIor
+        Select("country", Nil, Unique(FieldEquals("code", code), child)).rightIor
       case Select("countries", _, child) =>
-        Wrap("countries", child).rightIor
+        Select("countries", Nil, child).rightIor
     }
   ))
 
   val countryCurrencyJoin = (c: Cursor, q: Query) =>
     (c.focus, q) match {
       case (c: Country, Select("currency", _, child)) =>
-        Wrap("currency", Unique(FieldEquals("code", c.currencyCode), child)).rightIor
+        Select("currency", Nil, Unique(FieldEquals("code", c.currencyCode), child)).rightIor
       case _ =>
         mkErrorResult(s"Unexpected cursor focus type in countryCurrencyJoin")
     }

@@ -283,15 +283,7 @@ object DoobieMapping {
               loop(child, childTpe, filtered + tpe.underlyingObject).map(ec => s.copy(child = ec))
             }
 
-          case w@Wrap(fieldName, child)      =>
-            val childTpe = tpe.underlyingField(fieldName)
-            if(filtered(childTpe.underlyingObject)) {
-              val elaboratedSelect = loop(child, childTpe, Set.empty).map(ec => w.copy(child = ec))
-              elaboratedSelect.map(ec => Wrap(fieldName, Defer(stagingJoin, ec)))
-            } else {
-              loop(child, childTpe, filtered + tpe.underlyingObject).map(ec => w.copy(child = ec))
-            }
-
+          case w@Wrap(_, child)              => loop(child, tpe, filtered).map(ec => w.copy(child = ec))
           case g@Group(queries)              => queries.traverse(q => loop(q, tpe, filtered)).map(eqs => g.copy(queries = eqs))
           case u@Unique(_, child)            => loop(child, tpe.nonNull, filtered + tpe.underlyingObject).map(ec => u.copy(child = ec))
           case f@Filter(_, child)            => loop(child, tpe.item, filtered + tpe.underlyingObject).map(ec => f.copy(child = ec))
