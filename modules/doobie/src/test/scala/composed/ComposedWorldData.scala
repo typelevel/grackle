@@ -157,7 +157,7 @@ object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
     (c.attribute("code"), q) match {
       case (Ior.Right(countryCode: String), Select("currencies", _, child)) =>
         Select("currencies", Nil, Filter(FieldEquals("countryCode", countryCode), child)).rightIor
-      case _ => mkErrorResult(s"Expected 'code' attribute at ${c.tpe.shortString}")
+      case _ => mkErrorResult(s"Expected 'code' attribute at ${c.tpe}")
     }
 
   val componentElaborator = ComponentElaborator(

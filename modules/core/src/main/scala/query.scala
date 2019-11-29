@@ -206,7 +206,7 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
         siblings.flatTraverse(query => runFields(query, tpe, cursor))
 
       case _ =>
-        mkErrorResult(s"failed: { ${query.render} } ${tpe.shortString}")
+        mkErrorResult(s"failed: { ${query.render} } $tpe")
     }
   }
 

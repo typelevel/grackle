@@ -131,24 +131,28 @@ sealed trait Type {
     case _ => NoType
   }
 
-  def shortString: String = toString
-
   def isLeaf: Boolean = this match {
     case NullableType(tpe) => tpe.isLeaf
     case _: ScalarType => true
     case _: EnumType => true
     case _ => false
   }
+
+  def describe: String
+
+  override def toString: String = describe
 }
 
 sealed trait NamedType extends Type {
   def name: String
-  override def shortString: String = name
+  override def toString: String = name
 }
 
-case object NoType extends Type
+case object NoType extends Type {
+  def describe = "NoType"
+}
 case class TypeRef(schema: Schema, ref: String) extends Type {
-  override def toString: String = s"@$ref"
+  override def describe: String = s"@$ref"
 }
 
 /**
@@ -159,7 +163,7 @@ case class ScalarType(
   name:        String,
   description: Option[String]
 ) extends Type {
-  override def toString: String = name
+  override def describe: String = name
 }
 
 object ScalarType {
@@ -214,7 +218,9 @@ case class InterfaceType(
   name:        String,
   description: Option[String],
   fields:      List[Field]
-) extends Type with NamedType
+) extends Type with NamedType {
+  override def describe: String = s"$name ${fields.map(_.describe).mkString("{ ", ", ", " }")}"
+}
 
 /**
  * Object types represent concrete instantiations of sets of fields.
@@ -226,7 +232,7 @@ case class ObjectType(
   fields:      List[Field],
   interfaces:  List[TypeRef]
 ) extends Type with NamedType {
-  override def toString: String = s"$name ${fields.mkString("{", ", ", "}")}"
+  override def describe: String = s"$name ${fields.map(_.describe).mkString("{ ", ", ", " }")}"
 }
 
 /**
@@ -239,7 +245,10 @@ case class UnionType(
   name:        String,
   description: Option[String],
   members:     List[TypeRef]
-) extends Type
+) extends Type {
+  override def toString: String = members.mkString("|")
+  def describe: String = members.map(_.describe).mkString("|")
+}
 
 /**
  * Enums are special scalars that can only have a defined set of values.
@@ -249,7 +258,9 @@ case class EnumType(
   name:        String,
   description: Option[String],
   enumValues:  List[EnumValue]
-) extends Type with NamedType
+) extends Type with NamedType {
+  def describe: String = s"$name ${enumValues.mkString("{ ", ", ", " }")}"
+}
 
 /**
  * The `EnumValue` type represents one of possible values of an enum.
@@ -281,8 +292,8 @@ case class InputObjectType(
 case class ListType(
   ofType: Type
 ) extends Type {
-  override def shortString: String = s"[${ofType.shortString}]"
   override def toString: String = s"[$ofType]"
+  override def describe: String = s"[${ofType.describe}]"
 }
 
 /**
@@ -294,8 +305,8 @@ case class ListType(
 case class NullableType(
   ofType: Type
 ) extends Type {
-  override def shortString: String = s"${ofType.shortString}?"
   override def toString: String = s"$ofType?"
+  override def describe: String = s"${ofType.describe}?"
 }
 
 /**
@@ -310,7 +321,7 @@ case class Field private (
   isDeprecated:      Boolean,
   deprecationReason: Option[String]
 ) {
-  override def toString: String = s"$name: $tpe"
+  def describe: String = s"$name: $tpe"
 }
 
 /**

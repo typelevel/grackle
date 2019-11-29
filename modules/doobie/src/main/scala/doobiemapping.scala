@@ -266,7 +266,7 @@ object DoobieMapping {
         osj match {
           case Some(stagingJoin) => stagingJoin(c, q)
           case None =>
-            mkErrorResult(s"No staging join for field '$fieldName' of type ${obj.shortString}")
+            mkErrorResult(s"No staging join for field '$fieldName' of type $obj")
         }
       case _ => mkErrorResult(s"No staging join for non-Select $q")
     }

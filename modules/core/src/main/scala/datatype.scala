@@ -51,7 +51,7 @@ case class DataTypeCursor(
       }
     case (BooleanType, b: Boolean) => Json.fromBoolean(b).rightIor
     case (_: EnumType, e: Enumeration#Value) => Json.fromString(e.toString).rightIor
-    case _ => mkErrorResult(s"Expected Scalar type, found ${tpe.shortString} for focus ${focus}")
+    case _ => mkErrorResult(s"Expected Scalar type, found $tpe for focus ${focus}")
   }
 
   def isList: Boolean = (tpe, focus) match {
@@ -61,7 +61,7 @@ case class DataTypeCursor(
 
   def asList: Result[List[Cursor]] = (tpe, focus) match {
     case (ListType(tpe), it: List[_]) => it.map(f => copy(tpe = tpe, focus = f)).rightIor
-    case _ => mkErrorResult(s"Expected List type, found ${tpe.shortString}")
+    case _ => mkErrorResult(s"Expected List type, found $tpe")
   }
 
   def isNullable: Boolean = focus match {
@@ -71,7 +71,7 @@ case class DataTypeCursor(
 
   def asNullable: Result[Option[Cursor]] = (tpe, focus) match {
     case (NullableType(tpe), o: Option[_]) => o.map(f => copy(tpe = tpe, focus = f)).rightIor
-    case _ => mkErrorResult(s"Expected Nullable type, found ${tpe.shortString}")
+    case _ => mkErrorResult(s"Expected Nullable type, found $tpe")
   }
 
   def hasField(fieldName: String): Boolean =
@@ -81,7 +81,7 @@ case class DataTypeCursor(
     if (hasField(fieldName))
       copy(tpe = tpe.field(fieldName), focus = fields((focus, fieldName))).rightIor
     else
-      mkErrorResult(s"No field '$fieldName' for type ${tpe.shortString}")
+      mkErrorResult(s"No field '$fieldName' for type $tpe")
 
   def hasAttribute(attributeName: String): Boolean =
     attrs.isDefinedAt((focus, attributeName))
@@ -90,5 +90,5 @@ case class DataTypeCursor(
     if (hasAttribute(attributeName))
       attrs((focus, attributeName)).rightIor
     else
-      mkErrorResult(s"No attribute '$attributeName' for type ${tpe.shortString}")
+      mkErrorResult(s"No attribute '$attributeName' for type $tpe")
 }
