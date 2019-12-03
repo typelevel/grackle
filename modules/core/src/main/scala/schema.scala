@@ -63,6 +63,8 @@ sealed trait Type {
     case _ => NoType
   }
 
+  def prunePath(fns: List[String]): (Type, String) = (path(fns.init), fns.last)
+
   def pathIsList(fns: List[String]): Boolean = (fns, this) match {
     case (Nil, _) => false
     case (_, _: ListType) => true

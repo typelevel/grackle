@@ -53,81 +53,76 @@ object CurrencyQueryInterpreter {
 
 object WorldData extends DoobieMapping {
   import DoobieMapping._, FieldMapping._
-  import ScalarType._
-
-  val QueryType = WorldSchema.tpe("Query")
-  val CountryType = WorldSchema.tpe("Country")
-  val CityType = WorldSchema.tpe("City")
-  val LanguageType = WorldSchema.tpe("Language")
-
-  val queryMapping =
-    ObjectMapping(
-      tpe = QueryType,
-      key = Nil,
-      fieldMappings =
-        List(
-          "cities" -> Subobject(ListType(CityType), Nil),
-          "country" -> Subobject(CountryType, Nil),
-          "countries" -> Subobject(ListType(CountryType), Nil)
-        )
-    )
 
   val countryMapping =
     ObjectMapping(
-      tpe = CountryType,
-      key = List(ColumnRef("country", "code", StringType)),
+      tpe = "Country",
+      key = List(ColumnRef("country", "code")),
       fieldMappings =
         List(
-          "name" -> ColumnRef("country", "name", StringType),
-          "continent" -> ColumnRef("country", "continent", StringType),
-          "region" -> ColumnRef("country", "region", StringType),
-          "surfacearea" -> ColumnRef("country", "surfacearea", FloatType),
-          "indepyear" -> ColumnRef("country", "indepyear", IntType),
-          "population" -> ColumnRef("country", "population", IntType),
-          "lifeexpectancy" -> ColumnRef("country", "lifeexpectancy", FloatType),
-          "gnp" -> ColumnRef("country", "gnp", StringType),
-          "gnpold" -> ColumnRef("country", "gnpold", StringType),
-          "localname" -> ColumnRef("country", "localname", StringType),
-          "governmentform" -> ColumnRef("country", "governmentform", StringType),
-          "headofstate" -> ColumnRef("country", "headofstate", StringType),
-          "capitalId" -> ColumnRef("country", "capitalId", IntType),
-          "code2" -> ColumnRef("country", "code2", StringType),
-          "cities" -> Subobject(ListType(CityType),
-            List(Join(ColumnRef("country", "code", StringType), ColumnRef("city", "countrycode", StringType)))),
-          "languages" -> Subobject(ListType(LanguageType),
-            List(Join(ColumnRef("country", "code", StringType), ColumnRef("countryLanguage", "countrycode", StringType))))
+          "name" -> ColumnRef("country", "name"),
+          "continent" -> ColumnRef("country", "continent"),
+          "region" -> ColumnRef("country", "region"),
+          "surfacearea" -> ColumnRef("country", "surfacearea"),
+          "indepyear" -> ColumnRef("country", "indepyear"),
+          "population" -> ColumnRef("country", "population"),
+          "lifeexpectancy" -> ColumnRef("country", "lifeexpectancy"),
+          "gnp" -> ColumnRef("country", "gnp"),
+          "gnpold" -> ColumnRef("country", "gnpold"),
+          "localname" -> ColumnRef("country", "localname"),
+          "governmentform" -> ColumnRef("country", "governmentform"),
+          "headofstate" -> ColumnRef("country", "headofstate"),
+          "capitalId" -> ColumnRef("country", "capitalId"),
+          "code2" -> ColumnRef("country", "code2"),
+          "cities" -> Subobject(
+            List(Join(ColumnRef("country", "code"), ColumnRef("city", "countrycode")))),
+          "languages" -> Subobject(
+            List(Join(ColumnRef("country", "code"), ColumnRef("countryLanguage", "countrycode"))))
+        ),
+      attributeMappings =
+        List(
+          "code" -> Attr[String](ColumnRef("country", "code"))
         )
     )
 
   val cityMapping =
     ObjectMapping(
-      tpe = CityType,
-      key = List(ColumnRef("city", "id", IntType)),
+      tpe = "City",
+      key = List(ColumnRef("city", "id")),
       fieldMappings =
         List(
-          "name" -> ColumnRef("city", "name", StringType),
-          "country" -> Subobject(CountryType,
-            List(Join(ColumnRef("city", "countrycode", StringType), ColumnRef("country", "code", StringType)))),
-          "district" -> ColumnRef("city", "district", StringType),
-          "population" -> ColumnRef("city", "population", IntType)
+          "name" -> ColumnRef("city", "name"),
+          "country" -> Subobject(
+            List(Join(ColumnRef("city", "countrycode"), ColumnRef("country", "code")))),
+          "district" -> ColumnRef("city", "district"),
+          "population" -> ColumnRef("city", "population")
+        ),
+      attributeMappings =
+        List(
+          "id" -> Attr[Int](ColumnRef("city", "id")),
+          "countrycode" -> Attr[String](ColumnRef("city", "countycode")),
         )
     )
 
   val languageMapping =
     ObjectMapping(
-      tpe = LanguageType,
-      key = List(ColumnRef("countryLanguage", "language", StringType)),
+      tpe = "Language",
+      key = List(ColumnRef("countryLanguage", "language")),
       fieldMappings =
         List(
-          "language" -> ColumnRef("countryLanguage", "language", StringType),
-          "isOfficial" -> ColumnRef("countryLanguage", "isOfficial", BooleanType),
-          "percentage" -> ColumnRef("countryLanguage", "percentage", FloatType),
-          "countries" -> Subobject(ListType(CountryType),
-            List(Join(ColumnRef("countryLanguage", "countrycode", StringType), ColumnRef("country", "code", StringType))))
+          "language" -> ColumnRef("countryLanguage", "language"),
+          "isOfficial" -> ColumnRef("countryLanguage", "isOfficial"),
+          "percentage" -> ColumnRef("countryLanguage", "percentage"),
+          "countries" -> Subobject(
+            List(Join(ColumnRef("countryLanguage", "countrycode"), ColumnRef("country", "code"))))
+        ),
+      attributeMappings =
+        List(
+          "countrycode" -> Attr[String](ColumnRef("countryLanguage", "countrycode"))
         )
     )
 
-  val objectMappings = List(queryMapping, countryMapping, cityMapping, languageMapping)
+  val objectMappings = List(countryMapping, cityMapping, languageMapping)
 }
 
 object WorldQueryInterpreter {

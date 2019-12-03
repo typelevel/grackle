@@ -14,56 +14,40 @@ import QueryCompiler._
 import QueryInterpreter.mkErrorResult
 import DoobiePredicate._
 import DoobieMapping._, FieldMapping._
-import ScalarType._
 
 object WorldData extends DoobieMapping {
-  val QueryType = WorldSchema.tpe("Query")
-  val CountryType = WorldSchema.tpe("Country")
-  val CityType = WorldSchema.tpe("City")
-  val LanguageType = WorldSchema.tpe("Language")
-
-  val queryMapping =
-    ObjectMapping(
-      tpe = QueryType,
-      key = Nil,
-      fieldMappings =
-        List(
-          "cities" -> Subobject(ListType(CityType), Nil),
-          "country" -> Subobject(CountryType, Nil),
-          "countries" -> Subobject(ListType(CountryType), Nil),
-          "language" -> Subobject(LanguageType, Nil),
-          "languages" -> Subobject(ListType(LanguageType), Nil)
-        )
-    )
-
   val countryMapping =
     ObjectMapping(
-      tpe = CountryType,
-      key = List(ColumnRef("country", "code", StringType)),
+      tpe = "Country",
+      key = List(ColumnRef("country", "code")),
       fieldMappings =
         List(
-          "name" -> ColumnRef("country", "name", StringType),
-          "continent" -> ColumnRef("country", "continent", StringType),
-          "region" -> ColumnRef("country", "region", StringType),
-          "surfacearea" -> ColumnRef("country", "surfacearea", FloatType),
-          "indepyear" -> ColumnRef("country", "indepyear", IntType),
-          "population" -> ColumnRef("country", "population", IntType),
-          "lifeexpectancy" -> ColumnRef("country", "lifeexpectancy", FloatType),
-          "gnp" -> ColumnRef("country", "gnp", StringType),
-          "gnpold" -> ColumnRef("country", "gnpold", StringType),
-          "localname" -> ColumnRef("country", "localname", StringType),
-          "governmentform" -> ColumnRef("country", "governmentform", StringType),
-          "headofstate" -> ColumnRef("country", "headofstate", StringType),
-          "capitalId" -> ColumnRef("country", "capitalId", IntType),
-          "code2" -> ColumnRef("country", "code2", StringType),
-          "cities" -> Subobject(ListType(CityType),
-            List(Join(ColumnRef("country", "code", StringType), ColumnRef("city", "countrycode", StringType))),
+          "name" -> ColumnRef("country", "name"),
+          "continent" -> ColumnRef("country", "continent"),
+          "region" -> ColumnRef("country", "region"),
+          "surfacearea" -> ColumnRef("country", "surfacearea"),
+          "indepyear" -> ColumnRef("country", "indepyear"),
+          "population" -> ColumnRef("country", "population"),
+          "lifeexpectancy" -> ColumnRef("country", "lifeexpectancy"),
+          "gnp" -> ColumnRef("country", "gnp"),
+          "gnpold" -> ColumnRef("country", "gnpold"),
+          "localname" -> ColumnRef("country", "localname"),
+          "governmentform" -> ColumnRef("country", "governmentform"),
+          "headofstate" -> ColumnRef("country", "headofstate"),
+          "capitalId" -> ColumnRef("country", "capitalId"),
+          "code2" -> ColumnRef("country", "code2"),
+          "cities" -> Subobject(
+            List(Join(ColumnRef("country", "code"), ColumnRef("city", "countrycode"))),
             countryCityJoin
           ),
-          "languages" -> Subobject(ListType(LanguageType),
-            List(Join(ColumnRef("country", "code", StringType), ColumnRef("countryLanguage", "countrycode", StringType))),
+          "languages" -> Subobject(
+            List(Join(ColumnRef("country", "code"), ColumnRef("countryLanguage", "countrycode"))),
             countryLanguageJoin
           )
+        ),
+      attributeMappings =
+        List(
+          "code" -> Attr[String](ColumnRef("country", "code"))
         )
     )
 
@@ -78,27 +62,29 @@ object WorldData extends DoobieMapping {
   def countryLanguageJoin(c: Cursor, q: Query): Result[Query] = q match {
     case Select("languages", Nil, child) =>
       c.attribute("code").map { case (code: String) =>
-        Select("languages", Nil, Filter(FieldEquals("countrycode", code), child))
+        Select("languages", Nil, Filter(AttrEquals("countrycode", code), child))
       }
     case _ => mkErrorResult("Bad staging join")
   }
 
   val cityMapping =
     ObjectMapping(
-      tpe = CityType,
-      key = List(
-        ColumnRef("city", "id", IntType),
-        ColumnRef("city", "countrycode", IntType) // FIXME: should be a private non-key attribute
-      ),
+      tpe = "City",
+      key = List(ColumnRef("city", "id")),
       fieldMappings =
         List(
-          "name" -> ColumnRef("city", "name", StringType),
-          "country" -> Subobject(CountryType,
-            List(Join(ColumnRef("city", "countrycode", StringType), ColumnRef("country", "code", StringType))),
+          "name" -> ColumnRef("city", "name"),
+          "country" -> Subobject(
+            List(Join(ColumnRef("city", "countrycode"), ColumnRef("country", "code"))),
             cityCountryJoin
           ),
-          "district" -> ColumnRef("city", "district", StringType),
-          "population" -> ColumnRef("city", "population", IntType)
+          "district" -> ColumnRef("city", "district"),
+          "population" -> ColumnRef("city", "population")
+        ),
+      attributeMappings =
+        List(
+          "id" -> Attr[Int](ColumnRef("city", "id")),
+          "countrycode" -> Attr[String](ColumnRef("city", "countrycode")),
         )
     )
 
@@ -112,32 +98,36 @@ object WorldData extends DoobieMapping {
 
   val languageMapping =
     ObjectMapping(
-      tpe = LanguageType,
-      key = List(
-        ColumnRef("countryLanguage", "language", StringType),
-      ),
+      tpe = "Language",
+      key = List(ColumnRef("countryLanguage", "language")),
       fieldMappings =
         List(
-          "language" -> ColumnRef("countryLanguage", "language", StringType),
-          "isOfficial" -> ColumnRef("countryLanguage", "isOfficial", BooleanType),
-          "percentage" -> ColumnRef("countryLanguage", "percentage", FloatType),
-          "countrycode" -> ColumnRef("countryLanguage", "countrycode", StringType), // FIXME: should be a private non-key attribute
-          "countries" -> Subobject(ListType(CountryType),
-            List(Join(ColumnRef("countryLanguage", "countrycode", StringType), ColumnRef("country", "code", StringType))),
+          "language" -> ColumnRef("countryLanguage", "language"),
+          "isOfficial" -> ColumnRef("countryLanguage", "isOfficial"),
+          "percentage" -> ColumnRef("countryLanguage", "percentage"),
+          "countries" -> Subobject(
+            List(Join(ColumnRef("countryLanguage", "countrycode"), ColumnRef("country", "code"))),
             languageCountryJoin
           )
+        ),
+      attributeMappings =
+        List(
+          "countrycode" -> Attr[String](ColumnRef("countryLanguage", "countrycode"))
         )
     )
 
   def languageCountryJoin(c: Cursor, q: Query): Result[Query] = q match {
     case Select("countries", Nil, child) =>
-      c.attribute("language").map { case (language: String) =>
-        Select("countries", Nil, Filter(FieldContains(List("languages", "language"), language), child))
+      for {
+        f <- c.field("language", Map.empty)
+      } yield f.focus match {
+        case language: String =>
+          Select("countries", Nil, Filter(FieldContains(List("languages", "language"), language), child))
       }
     case _ => mkErrorResult("Bad staging join")
   }
 
-  val objectMappings = List(queryMapping, countryMapping, cityMapping, languageMapping)
+  val objectMappings = List(countryMapping, cityMapping, languageMapping)
 }
 
 object WorldQueryCompiler extends QueryCompiler(WorldSchema) {

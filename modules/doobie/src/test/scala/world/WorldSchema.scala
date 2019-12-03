@@ -43,7 +43,6 @@ object WorldSchema extends Schema {
         Field("language", None, Nil, StringType, false, None),
         Field("isOfficial", None, Nil, BooleanType, false, None),
         Field("percentage", None, Nil, FloatType, false, None),
-        Field("countrycode", None, Nil, StringType, false, None), // FIXME: should be a private non-key attribute
         Field("countries", None, Nil, ListType(TypeRef("Country")), false, None)
       ),
       interfaces = Nil

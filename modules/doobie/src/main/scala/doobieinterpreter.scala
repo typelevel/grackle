@@ -50,7 +50,7 @@ object DoobiePredicate {
     (if (caseInsensitive) s"(?i:$csr)" else csr).r
   }
 
-  case class FieldLike(fieldName: String, pattern: String, caseInsensitive: Boolean) extends Predicate {
+  case class FieldLike(fieldName: String, pattern: String, caseInsensitive: Boolean) extends FieldPredicate {
     lazy val r = likeToRegex(pattern, caseInsensitive)
 
     def path = List(fieldName)
@@ -61,7 +61,7 @@ object DoobiePredicate {
       }
   }
 
-  case class AttrLike(keyName: String, pattern: String, caseInsensitive: Boolean) extends Predicate {
+  case class AttrLike(keyName: String, pattern: String, caseInsensitive: Boolean) extends AttributePredicate {
     lazy val r = likeToRegex(pattern, caseInsensitive)
 
     def path = List(keyName)
@@ -138,8 +138,8 @@ case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) exte
   }
 
   def hasAttribute(attributeName: String): Boolean =
-    mapped.hasKey(tpe, attributeName)
+    mapped.hasAttribute(tpe, attributeName)
 
   def attribute(attributeName: String): Result[Any] =
-    asTable.map(table => mapped.selectKey(table.head, tpe, attributeName))
+    asTable.map(table => mapped.selectAttribute(table.head, tpe, attributeName))
 }

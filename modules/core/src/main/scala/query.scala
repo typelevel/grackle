@@ -83,7 +83,19 @@ object Query {
 trait Predicate extends Product with (Cursor => Boolean) {
   def path: List[String]
 
+  def prunePath(rootTpe: Type): (Type, String) = rootTpe.prunePath(path)
+
+  def isField: Boolean
+
   override def toString = ScalaRunTime._toString(this)
+}
+
+trait FieldPredicate extends Predicate {
+  def isField = true
+}
+
+trait AttributePredicate extends Predicate {
+  def isField = false
 }
 
 object Predicate {
@@ -95,7 +107,7 @@ object Predicate {
       }
   }
 
-  case class FieldEquals(fieldName: String, value: String) extends Predicate {
+  case class FieldEquals(fieldName: String, value: String) extends FieldPredicate {
     def path = List(fieldName)
     def apply(c: Cursor): Boolean =
       c.field(fieldName, Map.empty[String, Any]) match {
@@ -104,7 +116,7 @@ object Predicate {
       }
   }
 
-  case class FieldMatches(fieldName: String, r: Regex) extends Predicate {
+  case class FieldMatches(fieldName: String, r: Regex) extends FieldPredicate {
     def path = List(fieldName)
     def apply(c: Cursor): Boolean =
       c.field(fieldName, Map.empty[String, Any]) match {
@@ -113,7 +125,7 @@ object Predicate {
       }
   }
 
-  case class FieldContains(val path: List[String], value: String) extends Predicate {
+  case class FieldContains(val path: List[String], value: String) extends FieldPredicate {
     def apply(c: Cursor): Boolean =
       c.listPath(path) match {
         case Ior.Right(cs) =>
@@ -125,7 +137,7 @@ object Predicate {
       }
   }
 
-  case class AttrEquals(attrName: String, value: String) extends Predicate {
+  case class AttrEquals(attrName: String, value: String) extends AttributePredicate {
     def path = List(attrName)
     def apply(c: Cursor): Boolean =
       c.attribute(attrName) match {
@@ -134,7 +146,7 @@ object Predicate {
       }
   }
 
-  case class AttrMatches(attrName: String, r: Regex) extends Predicate {
+  case class AttrMatches(attrName: String, r: Regex) extends AttributePredicate {
     def path = List(attrName)
     def apply(c: Cursor): Boolean =
       c.attribute(attrName) match {
@@ -143,7 +155,7 @@ object Predicate {
       }
   }
 
-  case class AttrContains(val path: List[String], value: String) extends Predicate {
+  case class AttrContains(val path: List[String], value: String) extends AttributePredicate {
     def apply(c: Cursor): Boolean =
       c.attrListPath(path) match {
         case Ior.Right(attrs) => attrs.exists(_ == value)
