@@ -100,7 +100,7 @@ object WorldData extends DoobieMapping {
       attributeMappings =
         List(
           "id" -> Attr[Int](ColumnRef("city", "id")),
-          "countrycode" -> Attr[String](ColumnRef("city", "countycode")),
+          "countrycode" -> Attr[String](ColumnRef("city", "countrycode")),
         )
     )
 
