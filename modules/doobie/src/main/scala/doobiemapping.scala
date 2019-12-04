@@ -41,22 +41,6 @@ trait DoobieMapping {
       am <- om.attributeMapping(attrName)
     } yield am
 
-  def getForColumn(mappings: Map[ObjectMapping, Type], col: ColumnRef): Option[Get[_]] = {
-    object Target {
-      def unapply(om: ObjectMapping): Option[Get[_]] =
-        om.fieldMappings.collectFirst {
-          case (fieldName, `col`) if mappings.contains(om) => Row.typeToGet(mappings(om).field(fieldName))
-        } orElse {
-          om.attributeMappings.collectFirst {
-            case (_, AttributeMapping(`col`, get)) => get
-          }
-        }
-    }
-    objectMappings.collectFirst {
-      case Target(get) => get
-    }
-  }
-
   def columnsForField(tpe: Type, fieldName: String): List[ColumnRef] = {
     val obj = tpe.underlyingObject
     fieldMapping(obj, fieldName) match {
@@ -82,24 +66,12 @@ trait DoobieMapping {
     }
   }
 
-  def columnsJoinsForPredicate(tpe: Type, pred: Predicate): Option[(List[ColumnRef], List[Join], ColumnRef)] = {
-    def loop(tpe: Type, names: List[String], cols0: List[ColumnRef], joins0: List[Join]): Option[(List[ColumnRef], List[Join], ColumnRef)] = {
-      val obj = tpe.underlyingObject
-      val keyCols = keyColumnsForType(obj)
-      (names: @unchecked) match {
-        case name :: Nil =>
-          for {
-            col <- if (pred.isField) columnsForField(obj, name).headOption else columnForAttribute(obj, name)
-          } yield (col :: keyCols ++ cols0, joins0, col)
-        case fieldName :: tl =>
-          loop(obj.field(fieldName), tl,
-            columnsForField(obj, fieldName).toList ++ keyCols ++ cols0,
-            joinsForField(obj, fieldName) ++ joins0
-          )
-      }
+  def primaryColumnForField(tpe: Type, fieldName: String): Option[ColumnRef] = {
+    val obj = tpe.underlyingObject
+    fieldMapping(obj, fieldName) match {
+      case Some(cr: ColumnRef) => Some(cr)
+      case _ => None
     }
-
-    loop(tpe, pred.path, Nil, Nil)
   }
 
   def keyColumnsForType(tpe: Type): List[ColumnRef] = {
@@ -115,28 +87,51 @@ trait DoobieMapping {
   def mapQuery(q: Query, tpe: Type): MappedQuery = {
     type Acc = (List[ColumnRef], List[Join], List[(ColumnRef, Predicate)], List[(ObjectMapping, Type)])
     def loop(q: Query, tpe: Type, acc: Acc): Acc = {
-      val keyCols = keyColumnsForType(tpe)
-      val omt = objectMapping(tpe.underlyingObject).map(om => (om, tpe)).toList
+      val obj = tpe.underlyingObject
+
+      def loopPredicate(pred: Predicate): Acc = {
+        def mkSelects(path: List[String]): Query =
+          path.foldRight(Empty: Query) { (fieldName, child) => Select(fieldName, Nil, child) }
+
+        val prefix = pred.path.init
+        val parent = obj.path(prefix)
+        val name = pred.path.last
+
+        if (pred.isField) {
+          val pcol = primaryColumnForField(parent, name).getOrElse(sys.error(s"No field '$name' for type $parent"))
+          val (cols, joins, preds, omts) = loop(mkSelects(pred.path), obj, acc)
+          (cols, joins, (pcol, pred) :: preds, omts)
+        } else {
+          val pcol = columnForAttribute(parent, name).getOrElse(sys.error(s"No attribute '$name' for type $parent"))
+          val keyCols = keyColumnsForType(obj)
+          val omt = objectMapping(obj).map(om => (om, obj)).toList
+          val (cols, joins, preds, omts) = loop(mkSelects(prefix), obj, acc)
+          (pcol :: keyCols ++ cols, joins, (pcol, pred) :: preds, omt ++ omts)
+        }
+      }
+
       q match {
         case Select(fieldName, _, child) =>
-          val fieldTpe = tpe.underlyingField(fieldName)
+          val fieldTpe = obj.field(fieldName)
+          val omt = objectMapping(obj).map(om => (om, obj)).toList
+          val keyCols = keyColumnsForType(obj)
           loop(child, fieldTpe, (
-            columnsForField(tpe, fieldName).toList ++ keyCols ++ acc._1,
-            joinsForField(tpe, fieldName) ++ acc._2,
+            columnsForField(obj, fieldName).toList ++ keyCols ++ acc._1,
+            joinsForField(obj, fieldName) ++ acc._2,
             acc._3,
             omt ++ acc._4
           ))
         case Filter(pred, child) =>
-          val Some((cols, joins, col)) = columnsJoinsForPredicate(tpe, pred) // FIXME
-          loop(child, tpe, (cols ++ acc._1, joins ++ acc._2, (col, pred) :: acc._3, omt ++ acc._4))
+          val (cols, joins, preds, omts) = loopPredicate(pred)
+          loop(child, obj, (cols ++ acc._1, joins ++ acc._2, preds ++ acc._3, omts ++ acc._4))
         case Unique(pred, child) =>
-          val Some((cols, joins, col)) = columnsJoinsForPredicate(tpe, pred) // FIXME
-          loop(child, tpe, (cols ++ acc._1, joins ++ acc._2, (col, pred) :: acc._3, omt ++ acc._4))
+          val (cols, joins, preds, omts) = loopPredicate(pred)
+          loop(child, obj, (cols ++ acc._1, joins ++ acc._2, preds ++ acc._3, omts ++ acc._4))
         case Wrap(_, q) =>
-          loop(q, tpe, acc)
+          loop(q, obj, acc)
         case Group(queries) =>
           queries.foldLeft(acc) {
-            case (acc, sibling) => loop(sibling, tpe, acc)
+            case (acc, sibling) => loop(sibling, obj, acc)
           }
         case Empty | (_: Component) | (_: Defer) => acc
       }
@@ -145,12 +140,59 @@ trait DoobieMapping {
     val (columns0, joins0, predicates, mappings0) = loop(q, tpe, (Nil, Nil, Nil, Nil))
 
     val columns = columns0.distinct
-    val tables = columns.map(_.table).distinct
     val mappings = mappings0.toMap
-    val gets = columns.map(col => getForColumn(mappings, col).getOrElse(Get[String]))
     val joins = joins0.distinctBy(_.normalize)
 
-    new MappedQuery(tables, columns, gets, predicates, joins, this)
+    val tables = columns.map(_.table).distinct
+    val childTables = joins.map(_.child.table).toSet
+    val rootTable = tables.filterNot(childTables) match {
+      case List(rt) => rt
+      case otherwise => sys.error(s"Expected unique root table, found $otherwise")
+    }
+
+    val orderedJoins = {
+      def orderJoins(seen: Set[String], joins: List[Join], acc: List[Join]): List[Join] = {
+        if (joins.isEmpty) acc
+        else {
+          val (admissable, rest) = joins.partition(j => seen(j.parent.table))
+          if (admissable.isEmpty) sys.error(s"unable to order joins $joins given $seen")
+          val ats = admissable.map(_.child.table)
+          orderJoins(seen ++ ats, rest, admissable ++ acc)
+        }
+      }
+
+      orderJoins(Set(rootTable), joins, Nil).reverse
+    }
+
+    val gets = {
+      def getForColumn(col: ColumnRef): (Boolean, (Get[_], NullabilityKnown)) = {
+        // A column is the product of an outer join (and may therefore be null even if it's non-nullable
+        // in the schema) if its table introduced on the child side of a `Join`.
+        def isJoin(cr: ColumnRef): Boolean = childTables(cr.table)
+
+        object Target {
+          def unapply(om: ObjectMapping): Option[(Boolean, (Get[_], NullabilityKnown))] =
+            om.fieldMappings.collectFirst {
+              case (fieldName, `col`) if mappings.contains(om) =>
+                val get = Row.typeToGet(mappings(om).field(fieldName))
+                (isJoin(col), get)
+            } orElse {
+              om.attributeMappings.collectFirst {
+                case (_, AttributeMapping(`col`, get)) =>
+                  (isJoin(col), (get, NoNulls)) // support nullable attributes?
+              }
+            }
+        }
+
+        (objectMappings.collectFirst {
+          case Target(ij, get) => (ij, get)
+        }).getOrElse(sys.error(s"No Get for $col"))
+      }
+
+      columns.map(getForColumn)
+    }
+
+    new MappedQuery(rootTable, columns, gets, predicates, orderedJoins, this)
   }
 }
 
@@ -186,15 +228,16 @@ object DoobieMapping {
         else if (parent.table == child.table && parent.column >= child.column) this
         else Join(child, parent)
       }
+      def swap: Join = Join(child, parent)
 
-      def toSql: String = s"${parent.toSql} = ${child.toSql}"
+      def toSql: String = s"LEFT JOIN ${child.table} ON ${parent.toSql} = ${child.toSql}"
     }
   }
 
   case class MappedQuery(
-    tables: List[String],
+    table: String,
     columns: List[ColumnRef],
-    gets: List[Get[_]],
+    gets: List[(Boolean, (Get[_], NullabilityKnown))],
     predicates: List[(ColumnRef, Predicate)],
     joins: List[Join],
     mapping: DoobieMapping
@@ -280,35 +323,35 @@ object DoobieMapping {
       val cols = columns.map(_.toSql)
       val preds = predicates.map {
         case (col, FieldEquals(_, value)) =>
-          Fragment.const(s"${col.toSql} = ") ++ fr"$value"
+          Fragment.const(s"${col.toSql} =") ++ fr0"$value"
 
         case (col, FieldLike(_, pattern, caseInsensitive)) =>
           val op = if(caseInsensitive) "ILIKE" else "LIKE"
-          Fragment.const(s"${col.toSql} $op ") ++ fr"$pattern"
+          Fragment.const(s"${col.toSql} $op") ++ fr0"$pattern"
 
         case (col, AttrEquals(_, value)) =>
-          Fragment.const(s"${col.toSql} = ") ++ fr"$value"
+          Fragment.const(s"${col.toSql} =") ++ fr0"$value"
 
         case (col, AttrLike(_, pattern, caseInsensitive)) =>
           val op = if(caseInsensitive) "ILIKE" else "LIKE"
-          Fragment.const(s"${col.toSql} $op ") ++ fr"$pattern"
+          Fragment.const(s"${col.toSql} $op") ++ fr0"$pattern"
 
         case (col, FieldContains(_, value)) =>
-          Fragment.const(s"${col.toSql} = ") ++ fr"$value"
+          Fragment.const(s"${col.toSql} =") ++ fr0"$value"
 
         case (col, AttrContains(_, value)) =>
-          Fragment.const(s"${col.toSql} = ") ++ fr"$value"
+          Fragment.const(s"${col.toSql} =") ++ fr0"$value"
 
         case _ => Fragment.empty
       }
 
-      val where = Fragments.whereAnd(preds ++ joins.map(join => Fragment.const(join.toSql)): _*)
+      val where = Fragments.whereAnd(preds: _*)
 
       val select =
-        Fragment.const(
+        Fragment.const0(
           s"""
           |SELECT ${cols.mkString(", ")}
-          |FROM ${tables.mkString(", ")}
+          |FROM $table${if (joins.isEmpty) "" else joins.map(_.toSql).mkString("\n", "\n", "")}
           |""".stripMargin
         )
 
@@ -363,21 +406,29 @@ case class Row(elems: List[Any]) {
 }
 
 object Row {
-  def typeToGet(tpe: Type): Get[_] = tpe match {
-    case IntType => Get[Int]
-    case FloatType => Get[Double]
-    case StringType => Get[String]
-    case BooleanType => Get[Boolean]
-    case _ => Get[String]
+  // Placeholder for nulls read from non-nullable columns introduced via an outer join.
+  case object FailedJoin
+
+  def typeToGet(tpe: Type): (Get[_], NullabilityKnown) = tpe match {
+    case NullableType(tpe) => (typeToGet(tpe)._1, Nullable)
+    case IntType => (Get[Int], NoNulls)
+    case FloatType => (Get[Double], NoNulls)
+    case StringType => (Get[String], NoNulls)
+    case BooleanType => (Get[Boolean], NoNulls)
+    case _ => sys.error(s"no Get instance for schema type $tpe") // FIXME
   }
 
-  def mkRead(gets0: List[Get[_]]): Read[Row] = {
-    val gets = gets0.map(get => (get, NoNulls))
+  def mkRead(gets: List[(Boolean, (Get[_], NullabilityKnown))]): Read[Row] = {
+    def unsafeGet(rs: ResultSet, n: Int): Row =
+      Row {
+        gets.zipWithIndex.map {
+          case ((isJoin, (g, NoNulls)),  i) =>
+            if (isJoin) g.unsafeGetNullable(rs, n+i).getOrElse(FailedJoin)
+            else g.unsafeGetNonNullable(rs, n+i)
+          case ((_, (g, Nullable)), i) => g.unsafeGetNullable(rs, n+i)
+        }
+      }
 
-    def unsafeGet(rs: ResultSet, n: Int): Row = {
-      Row(gets.zipWithIndex.map { case (g, i) => g._1.unsafeGetNonNullable(rs, n+i) })
-    }
-
-    new Read(gets, unsafeGet)
+    new Read(gets.map(_._2), unsafeGet)
   }
 }

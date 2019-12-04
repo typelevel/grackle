@@ -75,7 +75,7 @@ object DoobiePredicate {
 
 case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) extends Cursor {
   def asTable: Result[Table] = focus match {
-    case table@((_: Row) :: _) => table.asInstanceOf[Table].rightIor
+    case table@((_: Row) :: _ | Nil) => table.asInstanceOf[Table].rightIor
     case _ => mkErrorResult(s"Not a table")
   }
 
@@ -90,6 +90,11 @@ case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) exte
           case None => mkErrorResult(s"Unrepresentable double %d")
         }
       case b: Boolean => Json.fromBoolean(b).rightIor
+
+      // This means we are looking at a column with no value because it's the result of a failed
+      // outer join. This is an implementation error.
+      case Row.FailedJoin => sys.error("Unhandled failed join.")
+
       case _ => mkErrorResult("Not a leaf")
     }
 
@@ -104,6 +109,29 @@ case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) exte
     else {
       val itemTpe = tpe.item.dealias
       asTable.map(table => mapped.group(table, itemTpe).map(table => copy(tpe = itemTpe, focus = table)))
+      asTable.map { table =>
+
+        // The object mapping for `tpe`.
+        val objectMapping: ObjectMapping =
+          mapped.mapping.objectMapping(itemTpe).getOrElse(sys.error(s"No ObjectMapping for $itemTpe"))
+
+        // If this mapping is a list of child objects then its fields came from an outer join. If
+        // there are no children then all keys defined in the mapping will have the `FailedJoin`
+        // value.
+        val isEmpty: Boolean =
+          objectMapping.key.forall { cr =>
+            val ix = mapped.index(cr)
+            table.forall(r => r(ix) == Row.FailedJoin)
+          }
+
+        // Sanity check: isEmpty implies that we had zero rows, or one row with failed joins.
+        if (isEmpty)
+          assert(table.length <= 1)
+
+        // Done!
+        if (isEmpty) Nil
+        else mapped.group(table, itemTpe).map(table => copy(tpe = itemTpe, focus = table))
+      }
     }
 
   def isNullable: Boolean =
@@ -116,8 +144,7 @@ case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) exte
     (tpe, focus) match {
       case (NullableType(_), None) => None.rightIor
       case (NullableType(tpe), Some(v)) => Some(copy(tpe = tpe, focus = v)).rightIor
-      case (NullableType(_), null) => None.rightIor
-      case (NullableType(tpe), _) => Some(copy(tpe = tpe)).rightIor
+      case (NullableType(tpe), _) => Some(copy(tpe = tpe)).rightIor // non-nullable column as nullable schema type (ok)
       case _ => mkErrorResult("Not nullable")
     }
 
