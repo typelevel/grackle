@@ -37,7 +37,7 @@ final class WorldSpec extends CatsSuite {
     val expected = 239
 
     val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
     //println(res)
 
     val resSize = root.data.countries.arr.getOption(res).map(_.size)
@@ -65,7 +65,7 @@ final class WorldSpec extends CatsSuite {
     """
 
     val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -139,7 +139,7 @@ final class WorldSpec extends CatsSuite {
     """
 
     val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -148,7 +148,7 @@ final class WorldSpec extends CatsSuite {
   test("recursive query (1)") {
     val query = """
       query {
-        cities(namePattern: "Tirana") {
+        cities(namePattern: "Monte-Carlo") {
           name
           country {
             name
@@ -170,38 +170,64 @@ final class WorldSpec extends CatsSuite {
     """
 
     val expected = json"""
-      {
-        "data": {
-          "cities": [
-            {
-              "name": "Tirana",
-              "country": {
-                "name": "Albania",
-                "cities": [
-                  {
-                    "name": "Tirana",
-                    "country": {
-                      "name": "Albania",
-                      "cities": [
-                        {
-                          "name": "Tirana",
-                          "country": {
-                            "name": "Albania"
-                          }
+    {
+      "data" : {
+        "cities" : [
+          {
+            "name" : "Monte-Carlo",
+            "country" : {
+              "name" : "Monaco",
+              "cities" : [
+                {
+                  "name" : "Monte-Carlo",
+                  "country" : {
+                    "name" : "Monaco",
+                    "cities" : [
+                      {
+                        "name" : "Monte-Carlo",
+                        "country" : {
+                          "name" : "Monaco"
                         }
-                      ]
-                    }
+                      },
+                      {
+                        "name" : "Monaco-Ville",
+                        "country" : {
+                          "name" : "Monaco"
+                        }
+                      }
+                    ]
                   }
-                ]
-              }
+                },
+                {
+                  "name" : "Monaco-Ville",
+                  "country" : {
+                    "name" : "Monaco",
+                    "cities" : [
+                      {
+                        "name" : "Monte-Carlo",
+                        "country" : {
+                          "name" : "Monaco"
+                        }
+                      },
+                      {
+                        "name" : "Monaco-Ville",
+                        "country" : {
+                          "name" : "Monaco"
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
             }
-          ]
-        }
+          }
+        ]
       }
+    }
     """
 
     val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -351,7 +377,7 @@ final class WorldSpec extends CatsSuite {
     """
 
     val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -405,7 +431,7 @@ final class WorldSpec extends CatsSuite {
     """
 
     val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -469,7 +495,7 @@ final class WorldSpec extends CatsSuite {
     """
 
     val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -543,9 +569,145 @@ final class WorldSpec extends CatsSuite {
     """
 
     val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery).unsafeRunSync
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
   }
+
+  test("country with no cities") {
+    val query = """
+      query {
+        country(code: "ATA") {
+          name
+          cities {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data": {
+          "country": {
+            "name": "Antarctica",
+            "cities": []
+          }
+        }
+      }
+    """
+
+    val compiledQuery = WorldQueryCompiler.compile(query).right.get
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  // Outer join in which some parents have children and others do not.
+  test("countries, some with no cities") {
+    val query = """
+      query {
+        countries {
+          name
+          cities {
+            name
+          }
+        }
+      }
+    """
+    val cquery    = WorldQueryCompiler.compile(query).right.get
+    val json      = WorldQueryInterpreter.fromTransactor(xa).run(cquery, WorldSchema.queryType).unsafeRunSync
+    val countries = root.data.countries.arr.getOption(json).get
+    val map       = countries.map(j => root.name.string.getOption(j).get -> root.cities.arr.getOption(j).get.length).toMap
+    assert(map("Kazakstan")  == 21)
+    assert(map("Antarctica") == 0)
+  }
+
+  test("no such country") {
+    val query = """
+      query {
+        country(code: "XXX") {
+          name
+          cities {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "No match"
+          }
+        ]
+      }
+    """
+
+    val compiledQuery = WorldQueryCompiler.compile(query).right.get
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("nullable column (null)") {
+    val query = """
+    query {
+        country(code: "ANT") {
+          name
+          indepyear
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "name" : "Netherlands Antilles",
+            "indepyear" : null
+          }
+        }
+      }
+    """
+
+    val compiledQuery = WorldQueryCompiler.compile(query).right.get
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("nullable column (non-null)") {
+    val query = """
+    query {
+        country(code: "USA") {
+          name
+          indepyear
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "name" : "United States",
+            "indepyear" : 1776
+          }
+        }
+      }
+    """
+
+    val compiledQuery = WorldQueryCompiler.compile(query).right.get
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
+
 }

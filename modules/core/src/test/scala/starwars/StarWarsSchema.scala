@@ -11,7 +11,7 @@ object StarWarsSchema extends Schema {
   val EpisodeArg = InputValue("episode", None, NullableType(TypeRef("Episode")), None)
   val IdArg = InputValue("id", None, StringType, None)
 
-  val QueryType: ObjectType =
+  val types = List(
     ObjectType(
       name = "Query",
       description = None,
@@ -21,9 +21,7 @@ object StarWarsSchema extends Schema {
         Field("human", None, List(IdArg), NullableType(TypeRef("Character")), false, None)
       ),
       interfaces = Nil
-    )
-
-  val EpisodeType: EnumType =
+    ),
     EnumType(
       name = "Episode",
       description = None,
@@ -32,9 +30,7 @@ object StarWarsSchema extends Schema {
         EnumValue("EMPIRE", None),
         EnumValue("JEDI", None)
       )
-    )
-
-  val CharacterType: InterfaceType =
+    ),
     InterfaceType(
       name = "Character",
       description = None,
@@ -44,9 +40,7 @@ object StarWarsSchema extends Schema {
         Field("friends", None, Nil, NullableType(ListType(TypeRef("Character"))), false, None),
         Field("appearsIn", None, Nil, NullableType(ListType(TypeRef("Episode"))), false, None)
       )
-    )
-
-  val HumanType: ObjectType =
+    ),
     ObjectType(
       name = "Human",
       description = None,
@@ -58,9 +52,7 @@ object StarWarsSchema extends Schema {
         Field("homePlanet", None, Nil, NullableType(StringType), false, None)
       ),
       interfaces = List(TypeRef("Character"))
-    )
-
-  val DroidType: ObjectType =
+    ),
     ObjectType(
       name = "Droid",
       description = None,
@@ -73,10 +65,7 @@ object StarWarsSchema extends Schema {
       ),
       interfaces = List(TypeRef("Character"))
     )
+  )
 
-  val types = List(QueryType, EpisodeType, CharacterType, HumanType, DroidType)
-  val queryType = TypeRef("Query")
-  val mutationType = None
-  val subscriptionType = None
   val directives = Nil
 }

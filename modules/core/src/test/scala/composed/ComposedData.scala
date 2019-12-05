@@ -11,70 +11,7 @@ import Query._, Binding._, Predicate._
 import QueryCompiler._, ComponentElaborator.Mapping
 import QueryInterpreter.mkErrorResult
 
-import ComposedSchema._
-
-object CurrencyQueryCompiler extends QueryCompiler(ComposedSchema) {
-  val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("currency", List(StringBinding("code", code)), child) =>
-        Wrap("currency", Unique(FieldEquals("code", code), child)).rightIor
-    }
-  ))
-
-  val phases = List(selectElaborator)
-}
-
-object CountryQueryCompiler extends QueryCompiler(ComposedSchema) {
-  val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("country", List(StringBinding("code", code)), child) =>
-        Wrap("country", Unique(FieldEquals("code", code), child)).rightIor
-      case Select("countries", _, child) =>
-        Wrap("countries", child).rightIor
-    }
-  ))
-
-  val phases = List(selectElaborator)
-}
-
-object CountryCurrencyQueryCompiler extends QueryCompiler(ComposedSchema) {
-  import CountryData._
-
-  val selectElaborator =  new SelectElaborator(Map(
-    QueryType -> {
-      case Select("currency", List(StringBinding("code", code)), child) =>
-        Wrap("currency", Unique(FieldEquals("code", code), child)).rightIor
-      case Select("country", List(StringBinding("code", code)), child) =>
-        Wrap("country", Unique(FieldEquals("code", code), child)).rightIor
-      case Select("countries", _, child) =>
-        Wrap("countries", child).rightIor
-    }
-  ))
-
-  val countryCurrencyJoin = (c: Cursor, q: Query) =>
-    c.focus match {
-      case c: Country =>
-        Wrap("currency", Unique(FieldEquals("code", c.currencyCode), q)).rightIor
-      case _ =>
-        mkErrorResult(s"Unexpected cursor focus type in countryCurrencyJoin")
-    }
-
-  val componentElaborator = ComponentElaborator(
-    Mapping(QueryType, "country", CountrySchema),
-    Mapping(QueryType, "countries", CountrySchema),
-    Mapping(CountryType, "currency", CurrencySchema, countryCurrencyJoin)
-  )
-
-  val phases = List(selectElaborator, componentElaborator)
-}
-
-object CountryCurrencyQueryInterpreter extends
-  ComposedQueryInterpreter[Id](ComposedSchema,
-    Map(
-      CountrySchema  -> CountryQueryInterpreter,
-      CurrencySchema -> CurrencyQueryInterpreter
-    )
-  )
+/* Currency component */
 
 object CurrencyData {
   case class Currency(
@@ -86,12 +23,13 @@ object CurrencyData {
   val GBP = Currency("GBP", 1.25)
 
   val currencies = List(EUR, GBP)
+
+  val CurrencyType = CurrencySchema.tpe("Currency")
 }
 
-import CurrencyData._
+import CurrencyData.{ Currency, CurrencyType, currencies }
 
 object CurrencyQueryInterpreter extends DataTypeQueryInterpreter[Id](
-  ComposedSchema,
   {
     case "currency" => (ListType(CurrencyType), currencies)
   },
@@ -100,6 +38,21 @@ object CurrencyQueryInterpreter extends DataTypeQueryInterpreter[Id](
     case (c: Currency, "exchangeRate") => c.exchangeRate
   }
 )
+
+object CurrencyQueryCompiler extends QueryCompiler(CurrencySchema) {
+  val QueryType = CurrencySchema.tpe("Query").dealias
+
+  val selectElaborator = new SelectElaborator(Map(
+    QueryType -> {
+      case Select("currency", List(StringBinding("code", code)), child) =>
+        Select("currency", Nil, Unique(FieldEquals("code", code), child)).rightIor
+    }
+  ))
+
+  val phases = List(selectElaborator)
+}
+
+/* Country component */
 
 object CountryData {
   case class Country(
@@ -113,17 +66,75 @@ object CountryData {
   val GBR = Country("GBR", "United Kingdom", "GBP")
 
   val countries = List(DEU, FRA, GBR)
+
+  val CountryType = CountrySchema.tpe("Country")
 }
 
-import CountryData._
+import CountryData.{ Country, CountryType, countries }
 
 object CountryQueryInterpreter extends DataTypeQueryInterpreter[Id](
-  ComposedSchema,
   {
-      case "country" | "countries"  => (ListType(CountryType), countries)
+    case "country" | "countries"  => (ListType(CountryType), countries)
   },
   {
     case (c: Country, "code") => c.code
     case (c: Country, "name") => c.name
   }
 )
+
+object CountryQueryCompiler extends QueryCompiler(CountrySchema) {
+  val QueryType = CountrySchema.tpe("Query").dealias
+
+  val selectElaborator = new SelectElaborator(Map(
+    QueryType -> {
+      case Select("country", List(StringBinding("code", code)), child) =>
+        Select("country", Nil, Unique(FieldEquals("code", code), child)).rightIor
+      case Select("countries", _, child) =>
+        Select("countries", Nil, child).rightIor
+    }
+  ))
+
+  val phases = List(selectElaborator)
+}
+
+/* Composition */
+
+object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
+  import CountryData._
+
+  val QueryType = ComposedSchema.tpe("Query").dealias
+  val CountryType = ComposedSchema.tpe("Country")
+
+  val selectElaborator =  new SelectElaborator(Map(
+    QueryType -> {
+      case Select("currency", List(StringBinding("code", code)), child) =>
+        Select("currency", Nil, Unique(FieldEquals("code", code), child)).rightIor
+      case Select("country", List(StringBinding("code", code)), child) =>
+        Select("country", Nil, Unique(FieldEquals("code", code), child)).rightIor
+      case Select("countries", _, child) =>
+        Select("countries", Nil, child).rightIor
+    }
+  ))
+
+  val countryCurrencyJoin = (c: Cursor, q: Query) =>
+    (c.focus, q) match {
+      case (c: Country, Select("currency", _, child)) =>
+        Select("currency", Nil, Unique(FieldEquals("code", c.currencyCode), child)).rightIor
+      case _ =>
+        mkErrorResult(s"Unexpected cursor focus type in countryCurrencyJoin")
+    }
+
+  val componentElaborator = ComponentElaborator(
+    Mapping(QueryType, "country", "CountryComponent"),
+    Mapping(QueryType, "countries", "CountryComponent"),
+    Mapping(CountryType, "currency", "CurrencyComponent", countryCurrencyJoin)
+  )
+
+  val phases = List(componentElaborator, selectElaborator)
+}
+
+object ComposedQueryInterpreter extends
+  ComposedQueryInterpreter[Id](Map(
+    "CountryComponent"  -> CountryQueryInterpreter,
+    "CurrencyComponent" -> CurrencyQueryInterpreter
+  ))

@@ -12,7 +12,7 @@ object WorldSchema extends Schema {
   val CodeArg = InputValue("code", None, NullableType(StringType), None)
   val LanguageArg = InputValue("language", None, NullableType(StringType), None)
 
-  val QueryType: ObjectType =
+  val types = List(
     ObjectType(
       name = "Query",
       description = None,
@@ -24,9 +24,7 @@ object WorldSchema extends Schema {
         Field("languages", None, Nil, NullableType(ListType(TypeRef("Language"))), false, None)
       ),
       interfaces = Nil
-    )
-
-  val CityType: ObjectType =
+    ),
     ObjectType(
       name = "City",
       description = None,
@@ -37,9 +35,7 @@ object WorldSchema extends Schema {
         Field("population", None, Nil, IntType, false, None)
       ),
       interfaces = Nil
-    )
-
-  val LanguageType: ObjectType =
+    ),
     ObjectType(
       name = "Language",
       description = None,
@@ -47,13 +43,10 @@ object WorldSchema extends Schema {
         Field("language", None, Nil, StringType, false, None),
         Field("isOfficial", None, Nil, BooleanType, false, None),
         Field("percentage", None, Nil, FloatType, false, None),
-        Field("countrycode", None, Nil, StringType, false, None), // FIXME: should be a private non-key attribute
         Field("countries", None, Nil, ListType(TypeRef("Country")), false, None)
       ),
       interfaces = Nil
-    )
-
-  val CountryType: ObjectType =
+    ),
     ObjectType(
       name = "Country",
       description = None,
@@ -77,10 +70,7 @@ object WorldSchema extends Schema {
       ),
       interfaces = Nil
     )
+  )
 
-  val types = List(QueryType, CityType, LanguageType, CountryType)
-  val queryType = TypeRef("Query")
-  val mutationType = None
-  val subscriptionType = None
   val directives = Nil
 }
