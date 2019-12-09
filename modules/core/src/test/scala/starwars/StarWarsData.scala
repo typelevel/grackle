@@ -96,14 +96,23 @@ object StarWarsData {
       friends = Some(List(LukeSkywalker, HanSolo, LeiaOrgana)),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
       primaryFunction = Some("Astromech"))
+
+  import Episode._
+
+  lazy val hero: Map[Value, Character] = Map(
+    NEWHOPE -> R2D2,
+    EMPIRE -> LukeSkywalker,
+    JEDI -> R2D2
+  )
 }
 
 object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
   val selectElaborator = new SelectElaborator(Map(
     StarWarsSchema.tpe("Query").dealias -> {
-      case Select("hero", _, child) =>
-        Select("hero", Nil, Unique(FieldEquals("id", R2D2.id), child)).rightIor
-      case Select(f@("character" | "human"), List(StringBinding("id", id)), child) =>
+      case Select("hero", List(EnumBinding("episode", e)), child) =>
+        val episode = Episode.values.find(_.toString == e.name).get
+        Select("hero", Nil, Unique(FieldEquals("id", hero(episode).id), child)).rightIor
+      case Select(f@("character" | "human"), List(IDBinding("id", id)), child) =>
         Select(f, Nil, Unique(FieldEquals("id", id), child)).rightIor
     }
   ))

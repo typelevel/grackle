@@ -69,10 +69,78 @@ object Query {
 
     def render: String
   }
+
   object Binding {
+    import ScalarType._
+    import QueryInterpreter.{ mkError, mkErrorResult }
+
+    def forArg(arg: Binding, info: InputValue): Result[Binding] =
+      (info.tpe.asLeaf, arg) match {
+        case (IntType, i: IntBinding) => i.rightIor
+        case (FloatType, f: FloatBinding) => f.rightIor
+        case (StringType, s: StringBinding) => s.rightIor
+        case (BooleanType, b: BooleanBinding) => b.rightIor
+        case (IDType, i: IntBinding) => IDBinding(i.name, i.value.toString).rightIor
+        case (IDType, s: StringBinding) => IDBinding(s.name, s.value).rightIor
+        case (e: EnumType, UntypedEnumBinding(name, value)) =>
+          e.value(value).toRightIor(
+            NonEmptyChain.one(mkError(s"Expected ${e.name} for argument '$name', found '$value'"))
+          ).map { ev => EnumBinding(name, ev) }
+        case (tpe, arg) =>
+          mkErrorResult(s"Expected $tpe for argument '${arg.name}', found '${arg.value}'")
+      }
+
+    def defaultForInputValue(iv: InputValue): Result[Binding] =
+      (iv.tpe.asLeaf, iv.defaultValue) match {
+        case (_, None) => NoBinding(iv.name, iv).rightIor
+        case (IntType, Some(i: Int)) => IntBinding(iv.name, i).rightIor
+        case (FloatType, Some(d: Double)) => FloatBinding(iv.name, d).rightIor
+        case (StringType, Some(s: String)) => StringBinding(iv.name, s).rightIor
+        case (BooleanType, Some(b: Boolean)) => BooleanBinding(iv.name, b).rightIor
+        case (IDType, Some(i: Int)) => IDBinding(iv.name, i.toString).rightIor
+        case (IDType, Some(s: String)) => IDBinding(iv.name, s).rightIor
+        case (_: EnumType, Some(e: EnumValue)) => EnumBinding(iv.name, e).rightIor
+        case _ => mkErrorResult(s"No argument and no default for $iv")
+      }
+
+    case class IntBinding(name: String, value: Int) extends Binding {
+      type T = Int
+      def render = s"""$name: $value"""
+    }
+
+    case class FloatBinding(name: String, value: Double) extends Binding {
+      type T = Double
+      def render = s"""$name: $value"""
+    }
+
     case class StringBinding(name: String, value: String) extends Binding {
       type T = String
       def render = s"""$name: "$value""""
+    }
+
+    case class BooleanBinding(name: String, value: Boolean) extends Binding {
+      type T = Boolean
+      def render = s"""$name: $value"""
+    }
+
+    case class IDBinding(name: String, value: String) extends Binding {
+      type T = String
+      def render = s"""$name: "$value""""
+    }
+
+    case class UntypedEnumBinding(name: String, value: String) extends Binding {
+      type T = String
+      def render = s"""$name: $value"""
+    }
+
+    case class EnumBinding(name: String, value: EnumValue) extends Binding {
+      type T = EnumValue
+      def render = s"""$name: ${value.name}"""
+    }
+
+    case class NoBinding(name: String, value: InputValue) extends Binding {
+      type T = InputValue
+      def render = s"""$name: <undefined>"""
     }
 
     def toMap(bindings: List[Binding]): Map[String, Any] =

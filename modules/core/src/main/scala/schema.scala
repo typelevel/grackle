@@ -135,9 +135,18 @@ sealed trait Type {
 
   def isLeaf: Boolean = this match {
     case NullableType(tpe) => tpe.isLeaf
+    case TypeRef(_, _) => dealias.isLeaf
     case _: ScalarType => true
     case _: EnumType => true
     case _ => false
+  }
+
+  def asLeaf: Type = this match {
+    case NullableType(tpe) => tpe.asLeaf
+    case TypeRef(_, _) => dealias.asLeaf
+    case _: ScalarType => this
+    case _: EnumType => this
+    case _ => NoType
   }
 
   def describe: String
@@ -209,6 +218,25 @@ object ScalarType {
         """.stripMargin.trim
       )
   )
+
+  val IDType = ScalarType(
+    name = "ID",
+    description =
+      Some(
+        """|The ID scalar type represents a unique identifier, often used to refetch an
+           |object or as the key for a cache. The ID type is serialized in the same way as a
+           |String; however, it is not intended to be human‐readable.
+        """.stripMargin.trim
+      )
+  )
+}
+
+trait TypeWithFields extends NamedType {
+  def fields: List[Field]
+
+  def fieldInfo(name: String): Option[Field] = fields.find(_.name == name)
+
+  override def describe: String = s"$name ${fields.map(_.describe).mkString("{ ", ", ", " }")}"
 }
 
 /**
@@ -220,9 +248,7 @@ case class InterfaceType(
   name:        String,
   description: Option[String],
   fields:      List[Field]
-) extends Type with NamedType {
-  override def describe: String = s"$name ${fields.map(_.describe).mkString("{ ", ", ", " }")}"
-}
+) extends Type with TypeWithFields
 
 /**
  * Object types represent concrete instantiations of sets of fields.
@@ -233,9 +259,7 @@ case class ObjectType(
   description: Option[String],
   fields:      List[Field],
   interfaces:  List[TypeRef]
-) extends Type with NamedType {
-  override def describe: String = s"$name ${fields.map(_.describe).mkString("{ ", ", ", " }")}"
-}
+) extends Type with TypeWithFields
 
 /**
  * Unions are an abstract type where no common fields are declared. The possible types of a union
@@ -261,6 +285,7 @@ case class EnumType(
   description: Option[String],
   enumValues:  List[EnumValue]
 ) extends Type with NamedType {
+  def value(name: String): Option[EnumValue] = enumValues.find(_.name == name)
   def describe: String = s"$name ${enumValues.mkString("{ ", ", ", " }")}"
 }
 
@@ -334,7 +359,7 @@ case class InputValue private (
   name:         String,
   description:  Option[String],
   tpe:          Type,
-  defaultValue: Option[String]
+  defaultValue: Option[Any]
 )
 
 /**

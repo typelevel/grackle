@@ -54,7 +54,11 @@ object QueryParser {
     args.traverse((compileArg _).tupled)
 
   def compileArg(name: Name, value: Value): Result[Binding] = value match {
+    case IntValue(i) => IntBinding(name.value, i).rightIor
+    case FloatValue(d) => FloatBinding(name.value, d).rightIor
     case StringValue(s) => StringBinding(name.value, s).rightIor
+    case BooleanValue(b) => BooleanBinding(name.value, b).rightIor
+    case EnumValue(e) => UntypedEnumBinding(name.value, e.value).rightIor
     case _ => mkErrorResult("Argument required")
   }
 }
@@ -79,13 +83,16 @@ object QueryCompiler {
       query match {
         case Select(fieldName, args, child) =>
           val childTpe = tpe.underlyingField(fieldName)
-          apply(child, childTpe).flatMap { elaboratedChild =>
-            val elaborated0 = Select(fieldName, args, elaboratedChild)
-            mapping.get(tpe.underlyingObject) match {
-              case Some(elaborator) if elaborator.isDefinedAt(elaborated0) => elaborator(elaborated0)
-              case _ => elaborated0.rightIor
-            }
+          val elaborator: Select => Result[Query] = mapping.get(tpe.underlyingObject) match {
+            case Some(e) => (s: Select) => if (e.isDefinedAt(s)) e(s) else s.rightIor
+            case _ => (s: Select) => s.rightIor
           }
+
+          for {
+            elaboratedChild <- apply(child, childTpe)
+            elaboratedArgs <- elaborateArgs(tpe, fieldName, args)
+            elaborated <- elaborator(Select(fieldName, elaboratedArgs, elaboratedChild))
+          } yield elaborated
 
         case w@Wrap(_, child)         => apply(child, tpe).map(ec => w.copy(child = ec))
         case g@Group(queries)         => queries.traverse(q => apply(q, tpe)).map(eqs => g.copy(queries = eqs))
@@ -94,6 +101,24 @@ object QueryCompiler {
         case c@Component(_, _, child) => apply(child, tpe).map(ec => c.copy(child = ec))
         case d@Defer(_, child)        => apply(child, tpe).map(ec => d.copy(child = ec))
         case Empty                    => Empty.rightIor
+      }
+
+    def elaborateArgs(tpe: Type, fieldName: String, args: List[Binding]): Result[List[Binding]] =
+      tpe.underlyingObject match {
+        case twf: TypeWithFields =>
+          twf.fieldInfo(fieldName) match {
+            case Some(field) =>
+              val infos = field.args
+              val argMap = args.groupMapReduce(_.name)(identity)((x, _) => x)
+              infos.traverse { info =>
+                argMap.get(info.name) match {
+                  case Some(arg) => Binding.forArg(arg, info)
+                  case None => Binding.defaultForInputValue(info)
+                }
+              }
+            case _ => mkErrorResult(s"No field '$fieldName' in type $tpe")
+          }
+        case _ => mkErrorResult(s"Type $tpe is not an object or interface type")
       }
   }
 

@@ -9,7 +9,7 @@ object StarWarsSchema extends Schema {
   import ScalarType._
 
   val EpisodeArg = InputValue("episode", None, NullableType(TypeRef("Episode")), None)
-  val IdArg = InputValue("id", None, StringType, None)
+  val IdArg = InputValue("id", None, IDType, None)
 
   val types = List(
     ObjectType(

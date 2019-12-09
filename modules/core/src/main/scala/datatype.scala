@@ -37,12 +37,12 @@ case class DataTypeCursor(
   fields: PartialFunction[(Any, String), Any],
   attrs:  PartialFunction[(Any, String), Any]
 ) extends Cursor {
-  def isLeaf: Boolean = (tpe, focus) match {
+  def isLeaf: Boolean = (tpe.dealias, focus) match {
     case (_: ScalarType, (_ : String | _ : Int | _ : Double | _ : Boolean | _ : Enumeration#Value)) => true
     case _ => false
   }
 
-  def asLeaf: Result[Json] = (tpe, focus) match {
+  def asLeaf: Result[Json] = (tpe.dealias, focus) match {
     case (StringType,  s: String)  => Json.fromString(s).rightIor
     case (IntType,     i: Int)     => Json.fromInt(i).rightIor
     case (FloatType,   d: Double)  => Json.fromDouble(d) match {
