@@ -24,12 +24,18 @@ object QueryParser {
 
   def compileDocument(doc: Document): Result[Query] = doc match {
     case List(Left(op: Operation)) => compileOperation(op)
+    case List(Left(qs: QueryShorthand)) => compileQueryShorthand(qs)
     case _ => mkErrorResult("Operation required")
   }
 
   def compileOperation(op: Operation): Result[Query] = op match {
     case Operation(Query, _, _, _, sels) =>
       compileSelections(sels)
+    case _ => mkErrorResult("Selection required")
+  }
+
+  def compileQueryShorthand(qs: QueryShorthand): Result[Query] = qs match {
+    case QueryShorthand(sels) => compileSelections(sels)
     case _ => mkErrorResult("Selection required")
   }
 

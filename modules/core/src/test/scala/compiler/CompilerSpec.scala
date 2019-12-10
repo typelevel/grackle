@@ -56,6 +56,37 @@ final class CompilerSuite extends CatsSuite {
     assert(res == Ior.Right(expected))
   }
 
+  test("shorthand query") {
+    val text = """
+      {
+        hero(episode: NEWHOPE) {
+          name
+          friends {
+            name
+            friends {
+              name
+            }
+          }
+        }
+      }
+    """
+
+    val expected =
+      Select(
+        "hero", List(UntypedEnumBinding("episode", "NEWHOPE")),
+        Select("name", Nil, Empty) ~
+        Select("friends", Nil,
+          Select("name", Nil, Empty) ~
+          Select("friends", Nil,
+            Select("name", Nil, Empty)
+          )
+        )
+      )
+
+    val res = QueryParser.compileText(text)
+    assert(res == Ior.Right(expected))
+  }
+
   test("simple selector elaborated query") {
     val text = """
       query {
