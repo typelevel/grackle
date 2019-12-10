@@ -87,6 +87,35 @@ final class CompilerSuite extends CatsSuite {
     assert(res == Ior.Right(expected))
   }
 
+  test("introspection query") {
+    val text = """
+      query IntrospectionQuery {
+        __schema {
+          queryType {
+            name
+          }
+          mutationType {
+            name
+          }
+          subscriptionType {
+            name
+          }
+        }
+      }
+    """
+
+    val expected =
+      Select(
+        "__schema", Nil,
+        Select("queryType", Nil, Select("name", Nil, Empty)) ~
+        Select("mutationType", Nil, Select("name", Nil, Empty)) ~
+        Select("subscriptionType", Nil, Select("name", Nil, Empty))
+      )
+
+    val res = QueryParser.compileText(text)
+    assert(res == Ior.Right(expected))
+  }
+
   test("simple selector elaborated query") {
     val text = """
       query {
