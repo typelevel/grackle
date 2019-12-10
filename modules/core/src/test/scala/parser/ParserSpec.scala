@@ -34,4 +34,92 @@ final class ParserSuite extends CatsSuite {
       case Some(List(Left(q))) => assert(q == expected)
     }
   }
+
+  test("introspection query") {
+    val text = """
+      query IntrospectionQuery {
+        __schema {
+          queryType {
+            name
+          }
+          mutationType {
+            name
+          }
+          subscriptionType {
+            name
+          }
+        }
+      }
+    """
+
+    val expected =
+      Operation(Query,Some(Name("IntrospectionQuery")),Nil,Nil,
+        List(
+          Field(None,Name("__schema"),Nil,Nil,
+            List(
+              Field(None,Name("queryType"),Nil,Nil,
+                List(
+                  Field(None,Name("name"),Nil,Nil,Nil)
+                )
+              ),
+              Field(None,Name("mutationType"),Nil,Nil,
+                List(
+                  Field(None,Name("name"),Nil,Nil,Nil)
+                )
+              ),
+              Field(None,Name("subscriptionType"),Nil,Nil,
+                List(
+                  Field(None,Name("name"),Nil,Nil,Nil)
+                )
+              )
+            )
+          )
+        )
+      )
+
+    Parser.Document.parseOnly(text).option match {
+      case Some(List(Left(q))) => assert(q == expected)
+    }
+  }
+
+  test("shorthand query") {
+    val text = """
+      {
+        hero(episode: NEWHOPE) {
+          name
+          friends {
+            name
+            friends {
+              name
+            }
+          }
+        }
+      }
+    """
+
+    val expected =
+      QueryShorthand(
+        List(
+          Field(None,Name("hero"),List((Name("episode"),EnumValue(Name("NEWHOPE")))),Nil,
+            List(
+              Field(None,Name("name"),Nil,Nil,Nil),
+              Field(None,Name("friends"),Nil,Nil,
+                List(
+                  Field(None,Name("name"),Nil,Nil,Nil),
+                  Field(None,Name("friends"),Nil,Nil,
+                    List(
+                      Field(None,Name("name"),Nil,Nil,Nil)
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+
+    Parser.Document.parseOnly(text).option match {
+      case Some(List(Left(q))) => assert(q == expected)
+    }
+  }
 }
