@@ -5,8 +5,10 @@ val catsTestkitScalaTestVersion = "1.0.0-M1"
 val circeVersion                = "0.12.1"
 val circeOpticsVersion          = "0.12.0"
 val doobieVersion               = "0.8.2"
+val http4sVersion               = "0.21.0-M6"
 val jawnVersion                 = "0.14.2"
 val kindProjectorVersion        = "0.10.3"
+val logbackVersion              = "1.2.3"
 val log4catsVersion             = "1.0.0"
 val slf4jVersion                = "1.7.28"
 
@@ -30,17 +32,20 @@ lazy val noPublishSettings = Seq(
 
 lazy val modules: List[ProjectReference] = List(
   core,
-  doobie
+  doobie,
+  demo
 )
 
 lazy val `gsp-graphql` = project.in(file("."))
   .settings(commonSettings)
   .settings(noPublishSettings)
   .aggregate(modules:_*)
+  .disablePlugins(RevolverPlugin)
 
 lazy val core = project
   .in(file("modules/core"))
   .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-core",
@@ -57,6 +62,7 @@ lazy val core = project
 lazy val doobie = project
   .in(file("modules/doobie"))
   .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
   .dependsOn(core)
   .settings(commonSettings)
   .settings(
@@ -64,9 +70,29 @@ lazy val doobie = project
     libraryDependencies ++= Seq(
       "org.typelevel"     %% "cats-effect"            % catsEffectVersion,
       "io.chrisdavenport" %% "log4cats-slf4j"         % log4catsVersion,
-      "org.slf4j"         %  "slf4j-simple"           % slf4jVersion,
       "org.tpolecat"      %% "doobie-core"            % doobieVersion,
 
-      "org.tpolecat"      %% "doobie-postgres"        % doobieVersion % "test"
+      "org.tpolecat"      %% "doobie-postgres"        % doobieVersion % "test",
+      "org.slf4j"         %  "slf4j-simple"           % slf4jVersion % "test"
+    )
+  )
+
+lazy val demo = project
+  .in(file("demo"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .dependsOn(core, doobie)
+  .settings(commonSettings)
+  .settings(
+    name := "gsp-graphql-demo",
+    libraryDependencies ++= Seq(
+      "org.typelevel"     %% "cats-effect"            % catsEffectVersion,
+      "io.chrisdavenport" %% "log4cats-slf4j"         % log4catsVersion,
+      "ch.qos.logback"    %  "logback-classic"        % logbackVersion,
+      "org.tpolecat"      %% "doobie-core"            % doobieVersion,
+      "org.tpolecat"      %% "doobie-postgres"        % doobieVersion,
+      "org.http4s"        %% "http4s-blaze-server"    % http4sVersion,
+      "org.http4s"        %% "http4s-blaze-client"    % http4sVersion,
+      "org.http4s"        %% "http4s-circe"           % http4sVersion,
+      "org.http4s"        %% "http4s-dsl"             % http4sVersion
     )
   )
