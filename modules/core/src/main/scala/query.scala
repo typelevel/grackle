@@ -485,6 +485,9 @@ object QueryInterpreter {
   def mkResponse(result: Result[Json]): Json =
     mkResponse(result.right, result.left.map(_.toList).getOrElse(Nil))
 
+  def mkInvalidResponse(result: Result[Query]): Json =
+    mkResponse(None, result.left.map(_.toList).getOrElse(Nil))
+
   def mkError(message: String, locations: List[(Int, Int)] = Nil, path: List[String] = Nil): Json = {
     val locationsField =
       if (locations.isEmpty) Nil
