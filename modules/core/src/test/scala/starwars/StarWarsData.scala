@@ -112,7 +112,7 @@ object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
       case Select("hero", List(EnumBinding("episode", e)), child) =>
         val episode = Episode.values.find(_.toString == e.name).get
         Select("hero", Nil, Unique(FieldEquals("id", hero(episode).id), child)).rightIor
-      case Select(f@("character" | "human"), List(IDBinding("id", id)), child) =>
+      case Select(f@("character" | "human" | "droid"), List(IDBinding("id", id)), child) =>
         Select(f, Nil, Unique(FieldEquals("id", id), child)).rightIor
     }
   ))
@@ -122,8 +122,9 @@ object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
 
 object StarWarsQueryInterpreter extends DataTypeQueryInterpreter[Id](
   {
-    case "hero"                        => (ListType(StarWarsSchema.tpe("Character")), characters)
-    case "character" | "human"         => (ListType(StarWarsSchema.tpe("Character")), characters)
+    case "hero" | "character" => (ListType(StarWarsSchema.tpe("Character")), characters)
+    case "human" => (ListType(StarWarsSchema.tpe("Human")), characters.collect { case h: Human => h })
+    case "droid" => (ListType(StarWarsSchema.tpe("Droid")), characters.collect { case d: Droid => d })
   },
   {
     case (c: Character, "id")          => c.id

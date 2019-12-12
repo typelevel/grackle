@@ -34,6 +34,34 @@ final class StarWarsSpec extends CatsSuite {
     assert(res == expected)
   }
 
+  test("subtype query") {
+    val query = """
+      query {
+        human(id: "1003") {
+          name
+          homePlanet
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "human" : {
+            "name" : "Leia Organa",
+            "homePlanet" : "Alderaan"
+          }
+        }
+      }
+    """
+
+    val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
+    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsSchema.queryType)
+    //println(res)
+
+    assert(res == expected)
+  }
+
   test("simple nested query (1)") {
     val query = """
       query {
