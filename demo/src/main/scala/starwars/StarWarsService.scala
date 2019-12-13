@@ -26,12 +26,14 @@ object StarWarsService {
     object QueryQueryParamMatcher extends QueryParamDecoderMatcher[String]("query")
 
     HttpRoutes.of[F] {
+      // GraphQL query is embedded in the URI query string when queried via GET
       case GET -> Root / "starwars" :? QueryQueryParamMatcher(query) =>
         for {
           result <- service.runQuery("Query", query)
           resp   <- Ok(result)
         } yield resp
 
+      // GraphQL query is embedded in a Json request body when queried via POST
       case req @ POST -> Root / "starwars" =>
         for {
           body   <- req.as[Json]
@@ -48,8 +50,10 @@ object StarWarsService {
     new StarWarsService[F]{
       def runQuery(op: String, query: String): F[Json] = {
         if (op == "IntrospectionQuery")
+          // Handle IntrospectionQuery for GraphQL Playground
           StarWarsIntrospection.introspectionResult.pure[F]
         else
+          // Handle GraphQL against the model
           StarWarsQueryCompiler.compile(query) match {
             case Ior.Right(compiledQuery) =>
               StarWarsQueryInterpreter.run(compiledQuery, StarWarsSchema.queryType).pure[F]

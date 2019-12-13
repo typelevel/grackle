@@ -13,6 +13,9 @@ import QueryCompiler._
 
 import StarWarsData._
 
+// The types and values for the in-memory Star Wars example.
+// These are all ordinary Scala types with no Grackle dependencies.
+//
 object StarWarsData {
   // #model_types
   object Episode extends Enumeration {
@@ -114,6 +117,7 @@ object StarWarsData {
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
       primaryFunction = Some("Astromech"))
 
+  // The character database ...
   val characters = List(
     LukeSkywalker, DarthVader, HanSolo, LeiaOrgana, WilhuffTarkin, C3PO, R2D2
   )
@@ -121,6 +125,7 @@ object StarWarsData {
 
   import Episode._
 
+  // Mapping from Episode to its hero Character
   lazy val hero: Map[Value, Character] = Map(
     NEWHOPE -> R2D2,
     EMPIRE -> LukeSkywalker,
@@ -132,9 +137,15 @@ object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
   // #elaborator
   val selectElaborator = new SelectElaborator(Map(
     StarWarsSchema.tpe("Query").dealias -> {
+      // The hero selector take an Episode argument and yields a single value. We use the
+      // Unique operator to pick out the target using the FieldEquals predicate.
       case Select("hero", List(EnumBinding("episode", e)), child) =>
         val episode = Episode.values.find(_.toString == e.name).get
         Select("hero", Nil, Unique(FieldEquals("id", hero(episode).id), child)).rightIor
+
+      // The character, human and droid selectors all take a single ID argument and yield a
+      // single value (if any) or null. We use the Unique operator to pick out the target
+      // using the FieldEquals predicate.
       case Select(f@("character" | "human" | "droid"), List(IDBinding("id", id)), child) =>
         Select(f, Nil, Unique(FieldEquals("id", id), child)).rightIor
     }
@@ -147,10 +158,13 @@ object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
 object StarWarsQueryInterpreter extends DataTypeQueryInterpreter[Id](
   // #root
   {
+    // here and character both start with [Character] and the full character database
     case "hero" | "character" =>
       (ListType(StarWarsSchema.tpe("Character")), characters)
+    // human starts with [Human] and just the characters of type Human
     case "human" =>
       (ListType(StarWarsSchema.tpe("Human")), characters.collect { case h: Human => h })
+    // droid starts with [Droid] and just the characters of type Droid
     case "droid" =>
       (ListType(StarWarsSchema.tpe("Droid")), characters.collect { case d: Droid => d })
   },

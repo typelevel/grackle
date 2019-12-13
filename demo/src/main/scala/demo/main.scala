@@ -28,12 +28,15 @@ object DemoServer {
     val starWarsService = StarWarsService.service[F]
 
     val httpApp0 = (
+      // Routes for static resources, ie. GraphQL Playground
       resourceService[F](ResourceService.Config("/assets", blocker)) <+>
+      // Routes for the Star Wars GraphQL service
       StarWarsService.routes[F](starWarsService)
     ).orNotFound
 
     val httpApp = Logger.httpApp(true, false)(httpApp0)
 
+    // Spin up the server ...
     for {
       exitCode <- BlazeServerBuilder[F]
         .bindHttp(8080, "0.0.0.0")
