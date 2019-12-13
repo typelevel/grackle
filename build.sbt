@@ -1,21 +1,21 @@
-val attoVersion                 = "0.7.0"
+val attoVersion                 = "0.7.2"
 val catsVersion                 = "2.0.0"
 val catsEffectVersion           = "2.0.0"
-val catsTestkitScalaTestVersion = "1.0.0-M1"
-val circeVersion                = "0.12.1"
+val catsTestkitScalaTestVersion = "1.0.0-RC1"
+val circeVersion                = "0.12.3"
 val circeOpticsVersion          = "0.12.0"
-val doobieVersion               = "0.8.2"
+val doobieVersion               = "0.8.6"
 val http4sVersion               = "0.21.0-M6"
-val jawnVersion                 = "0.14.2"
+val jawnVersion                 = "0.14.3"
 val kindProjectorVersion        = "0.10.3"
 val logbackVersion              = "1.2.3"
-val log4catsVersion             = "1.0.0"
-val slf4jVersion                = "1.7.28"
+val log4catsVersion             = "1.0.1"
+val slf4jVersion                = "1.7.29"
 
 inThisBuild(Seq(
   homepage := Some(url("https://github.com/gemini-hlsw/gsp-graphql")),
   addCompilerPlugin("org.typelevel" %% "kind-projector" % kindProjectorVersion),
-  scalaVersion := "2.13.0"
+  scalaVersion := "2.13.1"
 ) ++ gspPublishSettings)
 
 lazy val commonSettings = Seq(
