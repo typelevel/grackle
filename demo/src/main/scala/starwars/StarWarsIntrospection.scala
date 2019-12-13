@@ -787,6 +787,18 @@ object StarWarsIntrospection {
                   "deprecationReason": null
                 },
                 {
+                  "name": "homePlanet",
+                  "description": "This humans's home planet",
+                  "args": [],
+                  "type": {
+                    "kind": "SCALAR",
+                    "name": "String",
+                    "ofType": null
+                  },
+                  "isDeprecated": false,
+                  "deprecationReason": null
+                },
+                {
                   "name": "starships",
                   "description": "A list of starships this person has piloted, or an empty list if none",
                   "args": [],

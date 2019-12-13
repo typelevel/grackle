@@ -15,6 +15,7 @@ import org.http4s.server.staticcontent._
 
 import starwars.StarWarsService
 
+// #server
 object Main extends IOApp {
   def run(args: List[String]) =
     DemoServer.stream[IO].compile.drain.as(ExitCode.Success)
@@ -41,3 +42,4 @@ object DemoServer {
     } yield exitCode
   }.drain
 }
+// #server

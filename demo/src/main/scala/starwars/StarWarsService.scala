@@ -11,7 +11,9 @@ import io.circe.Json
 import org.http4s.HttpRoutes
 import org.http4s.circe._
 import org.http4s.dsl.Http4sDsl
+import edu.gemini.grackle.QueryInterpreter
 
+// #service
 trait StarWarsService[F[_]]{
   def runQuery(op: String, query: String): F[Json]
 }
@@ -51,9 +53,10 @@ object StarWarsService {
           StarWarsQueryCompiler.compile(query) match {
             case Ior.Right(compiledQuery) =>
               StarWarsQueryInterpreter.run(compiledQuery, StarWarsSchema.queryType).pure[F]
-            case _ =>
-              F.raiseError(new RuntimeException("Invalid GraphQL query"))
+            case invalid =>
+              QueryInterpreter.mkInvalidResponse(invalid).pure[F]
           }
       }
     }
 }
+// #service

@@ -18,7 +18,8 @@ object StarWarsSchema extends Schema {
       fields = List(
         Field("hero", None, List(EpisodeArg), TypeRef("Character"), false, None),
         Field("character", None, List(IdArg), NullableType(TypeRef("Character")), false, None),
-        Field("human", None, List(IdArg), NullableType(TypeRef("Character")), false, None)
+        Field("human", None, List(IdArg), NullableType(TypeRef("Human")), false, None),
+        Field("droid", None, List(IdArg), NullableType(TypeRef("Droid")), false, None)
       ),
       interfaces = Nil
     ),
