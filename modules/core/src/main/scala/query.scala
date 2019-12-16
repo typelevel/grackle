@@ -18,7 +18,9 @@ import io.circe.literal.JsonStringContext
 import Query._
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
+/** GraphQL query Algebra */
 sealed trait Query {
+  /** Groups this query with its argument, Groups on either side are merged */
   def ~(query: Query): Query = (this, query) match {
     case (Group(hd), Group(tl)) => Group(hd ++ tl)
     case (hd, Group(tl)) => Group(hd :: tl)
@@ -26,10 +28,12 @@ sealed trait Query {
     case (hd, tl) => Group(List(hd, tl))
   }
 
+  /** Yields a String representation of this query */
   def render: String
 }
 
 object Query {
+  /** Select field `name` given arguments `args` and continue with `child` */
   case class Select(name: String, args: List[Binding], child: Query = Empty) extends Query {
     def render = {
       val rargs = if(args.isEmpty) "" else s"(${args.map(_.render).mkString(", ")})"
@@ -37,31 +41,54 @@ object Query {
       s"$name$rargs$rchild"
     }
   }
+
+  /** A Group of sibling queries at the same level */
   case class Group(queries: List[Query]) extends Query {
     def render = queries.map(_.render).mkString(", ")
   }
+
+  /** Picks out the unique element satisfying `pred` and continues with `child` */
   case class Unique(pred: Predicate, child: Query) extends Query {
     def render = s"<unique: $pred ${child.render}>"
   }
+
+  /** Retains only elements satisfying `pred` and continuse with `child` */
   case class Filter(pred: Predicate, child: Query) extends Query {
     def render = s"<filter: $pred ${child.render}>"
   }
+
+  /** Identifies a component boundary.
+   *  `join` is applied to the current cursor and `child` yielding a continuation query which will be
+   *  evaluated by the interpreter identified by `componentId`.
+   */
   case class Component(componentId: String, join: (Cursor, Query) => Result[Query], child: Query) extends Query {
     def render = s"<component: $componentId ${child.render}>"
   }
+
+  /** A deferred query.
+   *  `join` is applied to the current cursor and `child` yielding a continuation query which will be
+   *  evaluated by the current interpreter in its next stage.
+   */
   case class Defer(join: (Cursor, Query) => Result[Query], child: Query) extends Query {
     def render = s"<defer: ${child.render}>"
   }
+
+  /**
+   * Wraps the result of `child` as a field named `name` of an enclosing object.
+   */
   case class Wrap(name: String, child: Query) extends Query {
     def render = {
       val rchild = if(child == Empty) "" else s" { ${child.render} }"
       s"$name$rchild"
     }
   }
+
+  /** The terminal query */
   case object Empty extends Query {
     def render = ""
   }
 
+  /** InputValue binding */
   sealed trait Binding {
     def name: String
     type T
@@ -74,6 +101,12 @@ object Query {
     import ScalarType._
     import QueryInterpreter.{ mkError, mkErrorResult }
 
+    /** Given an actual argument `arg` and schema InputValue `info` yield an
+     *  executable argument binding.
+     *
+     *  `Int`/`String`s will be resolved to `ID` if required by the schema.
+     *  Untyped enum labels will be checked and mapped to suitable EnumValues.
+     */
     def forArg(arg: Binding, info: InputValue): Result[Binding] =
       (info.tpe.asLeaf, arg) match {
         case (IntType, i: IntBinding) => i.rightIor
@@ -90,6 +123,9 @@ object Query {
           mkErrorResult(s"Expected $tpe for argument '${arg.name}', found '${arg.value}'")
       }
 
+    /** Given a schema InputValue `iv`, yield the default executable argument binding,
+     *  if any.
+     */
     def defaultForInputValue(iv: InputValue): Result[Binding] =
       (iv.tpe.asLeaf, iv.defaultValue) match {
         case (_, None) => NoBinding(iv.name, iv).rightIor
