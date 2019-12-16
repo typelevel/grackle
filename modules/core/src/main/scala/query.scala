@@ -187,8 +187,6 @@ object Query {
 trait Predicate extends Product with (Cursor => Boolean) {
   def path: List[String]
 
-  def prunePath(rootTpe: Type): (Type, String) = rootTpe.prunePath(path)
-
   def isField: Boolean
 
   override def toString = ScalaRunTime._toString(this)
