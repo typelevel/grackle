@@ -203,19 +203,17 @@ trait AttributePredicate extends Predicate {
 }
 
 object Predicate {
-  object StringScalarFocus {
-    def unapply(c: Cursor): Option[String] =
-      c.focus match {
-        case s: String => Some(s)
-        case _ => None
-      }
+  object ScalarFocus {
+    def unapply(c: Cursor): Option[Any] =
+      if (c.isLeaf) Some(c.focus)
+      else None
   }
 
-  case class FieldEquals(fieldName: String, value: String) extends FieldPredicate {
+  case class FieldEquals[T](fieldName: String, value: T) extends FieldPredicate {
     def path = List(fieldName)
     def apply(c: Cursor): Boolean =
       c.field(fieldName, Map.empty[String, Any]) match {
-        case Ior.Right(StringScalarFocus(`value`)) => true
+        case Ior.Right(ScalarFocus(focus)) => focus == value
         case _ => false
       }
   }
@@ -224,24 +222,20 @@ object Predicate {
     def path = List(fieldName)
     def apply(c: Cursor): Boolean =
       c.field(fieldName, Map.empty[String, Any]) match {
-        case Ior.Right(StringScalarFocus(value)) => r.matches(value)
+        case Ior.Right(ScalarFocus(focus: String)) => r.matches(focus)
         case _ => false
       }
   }
 
-  case class FieldContains(val path: List[String], value: String) extends FieldPredicate {
+  case class FieldContains[T](val path: List[String], value: T) extends FieldPredicate {
     def apply(c: Cursor): Boolean =
       c.listPath(path) match {
-        case Ior.Right(cs) =>
-          cs.exists {
-            case StringScalarFocus(`value`) => true
-            case _ => false
-          }
+        case Ior.Right(cs) => cs.exists(_.focus == value)
         case _ => false
       }
   }
 
-  case class AttrEquals(attrName: String, value: String) extends AttributePredicate {
+  case class AttrEquals[T](attrName: String, value: T) extends AttributePredicate {
     def path = List(attrName)
     def apply(c: Cursor): Boolean =
       c.attribute(attrName) match {
@@ -259,7 +253,7 @@ object Predicate {
       }
   }
 
-  case class AttrContains(val path: List[String], value: String) extends AttributePredicate {
+  case class AttrContains[T](val path: List[String], value: T) extends AttributePredicate {
     def apply(c: Cursor): Boolean =
       c.attrListPath(path) match {
         case Ior.Right(attrs) => attrs.exists(_ == value)

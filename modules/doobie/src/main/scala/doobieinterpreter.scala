@@ -56,7 +56,7 @@ object DoobiePredicate {
     def path = List(fieldName)
     def apply(c: Cursor): Boolean =
       c.field(fieldName, Map.empty[String, Any]) match {
-        case Ior.Right(StringScalarFocus(value)) => r.matches(value)
+        case Ior.Right(ScalarFocus(value: String)) => r.matches(value)
         case _ => false
       }
   }
