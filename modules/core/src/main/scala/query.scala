@@ -139,74 +139,102 @@ object Query {
         case _ => mkErrorResult(s"No argument and no default for $iv")
       }
 
+    /** Bind the `InputValue` named `name` to value `value` of type `Int`. */
     case class IntBinding(name: String, value: Int) extends Binding {
       type T = Int
       def render = s"""$name: $value"""
     }
 
+    /** Bind the `InputValue` named `name` to value `value` of type `Double`. */
     case class FloatBinding(name: String, value: Double) extends Binding {
       type T = Double
       def render = s"""$name: $value"""
     }
 
+    /** Bind the `InputValue` named `name` to value `value` of type `String`. */
     case class StringBinding(name: String, value: String) extends Binding {
       type T = String
       def render = s"""$name: "$value""""
     }
 
+    /** Bind the `InputValue` named `name` to value `value` of type `Boolean`. */
     case class BooleanBinding(name: String, value: Boolean) extends Binding {
       type T = Boolean
       def render = s"""$name: $value"""
     }
 
+    /** Bind the `InputValue` named `name` to ID `value`. */
     case class IDBinding(name: String, value: String) extends Binding {
       type T = String
       def render = s"""$name: "$value""""
     }
 
+    /** Bind the `InputValue` named `name` to the untyped `EnumValue` labelled `value`. */
     case class UntypedEnumBinding(name: String, value: String) extends Binding {
       type T = String
       def render = s"""$name: $value"""
     }
 
+    /** Bind the `InputValue` named `name` to the `EnumValue` value `value`. */
     case class EnumBinding(name: String, value: EnumValue) extends Binding {
       type T = EnumValue
       def render = s"""$name: ${value.name}"""
     }
 
+    /** Placeholder for an unbound `InputValue` */
     case class NoBinding(name: String, value: InputValue) extends Binding {
       type T = InputValue
       def render = s"""$name: <undefined>"""
     }
 
+    /** Convert a list of bindings to a map from binding name to binding value. */
     def toMap(bindings: List[Binding]): Map[String, Any] =
       bindings.map(b => (b.name, b.value)).toMap
   }
 }
 
+/**
+ * A reified predicate over a `Cursor`.
+ *
+ * Query interpreters will typically need to introspect predicates (eg. in the doobie module
+ * we need to be able to construct where clauses from predicates over fields/attributes), so
+ * these cannot be arbitrary functions `Cursor => Boolean`.
+ */
 trait Predicate extends Product with (Cursor => Boolean) {
+  /** The path from the current cursor position to predicated field/attribute. */
   def path: List[String]
 
+  /** `true` if this predicate applies to a field, false if it applies to an attribute. */
   def isField: Boolean
 
   override def toString = ScalaRunTime._toString(this)
 }
 
+/**
+ * A reified predicate over a `Cursor` focussed on a field.
+ */
 trait FieldPredicate extends Predicate {
+  /** `true` if this predicate applies to a field, false if it applies to an attribute. */
   def isField = true
 }
 
+/**
+ * A reified predicate over a `Cursor` focussed on an attribute.
+ */
 trait AttributePredicate extends Predicate {
+  /** `true` if this predicate applies to a field, false if it applies to an attribute. */
   def isField = false
 }
 
 object Predicate {
+  /** An extractor for scalar values */
   object ScalarFocus {
     def unapply(c: Cursor): Option[Any] =
       if (c.isLeaf) Some(c.focus)
       else None
   }
 
+  /** Equality predicate for scalar fields. */
   case class FieldEquals[T](fieldName: String, value: T) extends FieldPredicate {
     def path = List(fieldName)
     def apply(c: Cursor): Boolean =
@@ -216,6 +244,7 @@ object Predicate {
       }
   }
 
+  /** Regex predicate for String scalar fields. */
   case class FieldMatches(fieldName: String, r: Regex) extends FieldPredicate {
     def path = List(fieldName)
     def apply(c: Cursor): Boolean =
@@ -225,6 +254,12 @@ object Predicate {
       }
   }
 
+  /** A path predicate for scalar fields.
+   *
+   *  The path may pass through fields of List types, hence there might be multiple
+   *  occurrences of the final scalar fields. The predicate true iff it is satisfied for
+   *  at least one of those occurrences.
+   */
   case class FieldContains[T](val path: List[String], value: T) extends FieldPredicate {
     def apply(c: Cursor): Boolean =
       c.listPath(path) match {
@@ -233,6 +268,7 @@ object Predicate {
       }
   }
 
+  /** Equality predicate for attributes. */
   case class AttrEquals[T](attrName: String, value: T) extends AttributePredicate {
     def path = List(attrName)
     def apply(c: Cursor): Boolean =
@@ -242,6 +278,7 @@ object Predicate {
       }
   }
 
+  /** Regex predicate for String attributes. */
   case class AttrMatches(attrName: String, r: Regex) extends AttributePredicate {
     def path = List(attrName)
     def apply(c: Cursor): Boolean =
@@ -251,6 +288,12 @@ object Predicate {
       }
   }
 
+  /** A path predicate for attributes.
+   *
+   *  The path may pass through fields of List types, hence there might be multiple
+   *  occurrences of the final scalar fields. The predicate true iff it is satisfied for
+   *  at least one of those occurrences.
+   */
   case class AttrContains[T](val path: List[String], value: T) extends AttributePredicate {
     def apply(c: Cursor): Boolean =
       c.attrListPath(path) match {
