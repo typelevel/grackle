@@ -305,12 +305,24 @@ object Predicate {
 
 abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
 
+  /** Interpret `query` with expected type `rootTpe`.
+   *
+   *  The query is fully interpreted, including deferred or staged
+   *  components.
+   *
+   *  The resulting Json value should include standard GraphQL error
+   *  information in the case of failure.
+   */
   def run(query: Query, rootTpe: Type): F[Json] =
     runRoot(query, rootTpe).map(QueryInterpreter.mkResponse)
 
-  def complete(pj: ProtoJson): F[Result[Json]] =
-    QueryInterpreter.complete[F](pj, Map.empty)
-
+  /** Interpret `query` with expected type `rootTpe`.
+   *
+   *  The query is fully interpreted, including deferred or staged
+   *  components.
+   *
+   *  Errors are accumulated on the `Left` of the result.
+   */
   def runRoot(query: Query, rootTpe: Type): F[Result[Json]] = {
     (for {
       pvalue <- IorT(runRootValue(query, rootTpe))
@@ -318,8 +330,32 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
     } yield value).value
   }
 
+  /** Interpret `query` with expected type `rootTpe`.
+   *
+   *  At most one stage will be run and the result may contain deferred
+   *  components.
+   *
+   *  Errors are accumulated on the `Left` of the result.
+   */
   def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]]
 
+  /** Interpret multiple queries with respect to their expected types.
+   *
+   *  Each query is interpreted with respect to the expected type it is
+   *  paired with. The result list is aligned with the argument list
+   *  query list. For each query at most one stage will be run and the
+   *  corresponding result may contain deferred components.
+   *
+   *  Errors are aggregated across all the argument queries and are
+   *  accumulated on the `Left` of the result.
+   *
+   *  This method is typically called at the end of a stage to evaluate
+   *  deferred subqueries in the result of that stage. These will be
+   *  grouped by and passed jointly to the responsible interpreter in
+   *  the next stage using this method. Interpreters which are able
+   *  to benefit from combining queries may do so by overriding this
+   *  method to implementing their specific combinging logic.
+   */
   def runRootValues(queries: List[(Query, Type)]): F[(Chain[Json], List[ProtoJson])] =
     queries.traverse((runRootValue _).tupled).map { rs =>
       (rs.foldLeft((Chain.empty[Json], List.empty[ProtoJson])) {
@@ -332,6 +368,14 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
       }).map(_.reverse)
     }
 
+  /**
+   * Interpret `query` against `cursor`, yielding a collection of fields.
+   *
+   * If the query is valid, the field subqueries all be valid fields of
+   * the enclosing type `tpe` and the resulting fields may be used to
+   * build an Json object of type `tpe`. If the query is invalid errors
+   * will be returned on the left hand side of the result.
+   */
   def runFields(query: Query, tpe: Type, cursor: Cursor): Result[List[(String, ProtoJson)]] = {
     (query, tpe.dealias) match {
       case (sel@Select(fieldName, _, _), NullableType(tpe)) =>
@@ -361,6 +405,12 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
     }
   }
 
+  /**
+   * Interpret `query` against `cursor` with expected type `tpe`.
+   *
+   * If the query is invalide errors will be returned on teh left hand side
+   * of the result.
+   */
   def runValue(query: Query, tpe: Type, cursor: Cursor): Result[ProtoJson] = {
     (query, tpe.dealias) match {
       case (Wrap(fieldName, child), _) =>
@@ -416,38 +466,80 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
         mkErrorResult(s"Stuck at type $tpe for ${query.render}")
     }
   }
+
+  protected def complete(pj: ProtoJson): F[Result[Json]] =
+    QueryInterpreter.complete[F](pj, Map.empty)
 }
 
 object QueryInterpreter {
+  /**
+   * Opaque type of partially constructed query results.
+   *
+   * Values may be fully expanded Json values, objects or arrays which not
+   * yet fully evaluated subtrees, or subqueries which are deferred to the
+   * next stage or another component of a composite interpreter.
+   */
   type ProtoJson <: AnyRef
 
   object ProtoJson {
     private[QueryInterpreter] sealed trait DeferredJson
+    // A result which is delegated to another component of a composite interpreter.
     private[QueryInterpreter] case class ComponentJson(componentId: String, query: Query, rootTpe: Type) extends DeferredJson
+    // A result which is deferred to the next stage of this interpreter.
     private[QueryInterpreter] case class StagedJson[F[_]](interpreter: QueryInterpreter[F], query: Query, rootTpe: Type) extends DeferredJson
+    // A partially constructed object which has at least one deferred subtree.
     private[QueryInterpreter] case class ProtoObject(fields: List[(String, ProtoJson)])
+    // A partially constructed array which has at least one deferred element.
     private[QueryInterpreter] case class ProtoArray(elems: List[ProtoJson])
 
+    /**
+     * Delegate `query` to the componet interpreter idenitfied by
+     * `componentId`. When evaluated by that interpreter the query will
+     * have expected type `rootTpe`.
+     */
     def component(componentId: String, query: Query, rootTpe: Type): ProtoJson =
       wrap(ComponentJson(componentId, query, rootTpe))
 
+    /**
+     * Delegate `query` to the componet interpreter idenitfied by
+     * `componentId`. When evaluated by that interpreter the query will
+     * have expected type `rootTpe`.
+     */
     def staged[F[_]](interpreter: QueryInterpreter[F], query: Query, rootTpe: Type): ProtoJson =
       wrap(StagedJson(interpreter, query, rootTpe))
 
     def fromJson(value: Json): ProtoJson = wrap(value)
 
+    /**
+     * Combine possibly partial fields to create a possibly partial object.
+     *
+     * If all fields are complete then they will be combined as a complete
+     * Json object.
+     */
     def fromFields(fields: List[(String, ProtoJson)]): ProtoJson =
       if(fields.forall(_._2.isInstanceOf[Json]))
         wrap(Json.fromFields(fields.asInstanceOf[List[(String, Json)]]))
       else
         wrap(ProtoObject(fields))
 
+    /**
+     * Combine possibly partial values to create a possibly partial array.
+     *
+     * If all values are complete then they will be combined as a complete
+     * Json array.
+     */
     def fromValues(elems: List[ProtoJson]): ProtoJson =
       if(elems.forall(_.isInstanceOf[Json]))
         wrap(Json.fromValues(elems.asInstanceOf[List[Json]]))
       else
         wrap(ProtoArray(elems))
 
+    /**
+     * Test whether the argument contains any deferred.
+     *
+     * Yields `true` if the argument contains any deferred or staged
+     * subtrees, false otherwise.
+     */
     def isDeferred(p: ProtoJson): Boolean =
       p.isInstanceOf[DeferredJson]
 
@@ -456,6 +548,12 @@ object QueryInterpreter {
 
   import ProtoJson._
 
+  /**
+   * Complete a possibly partial result.
+   *
+   * Completes a single possibly partial result as described for
+   * `completeAll`.
+   */
   def complete[F[_]: Monad](pj: ProtoJson, mapping: Map[String, QueryInterpreter[F]]): F[Result[Json]] =
     completeAll(List(pj), mapping).map {
       case (errors, List(value)) =>
@@ -465,6 +563,22 @@ object QueryInterpreter {
         }
     }
 
+  /** Complete a collection of possibly deferred results.
+   *
+   *  Each result is completed by locating any subtrees which have been
+   *  deferred or delegated to some other component interpreter in an
+   *  overall composite interpreter. Deferred subtrees are gathered,
+   *  grouped by their associated interpreter and then evaluated in
+   *  batches. The results of these batch evaluations are then
+   *  completed in a subsequent stage recursively until the results are
+   *  fully evaluated or yield errors.
+   *
+   *  Complete results are substituted back into the corresponding
+   *  enclosing Json.
+   *
+   *  Errors are aggregated across all the results and are accumulated
+   *  on the `Left` of the result.
+   */
   def completeAll[F[_]: Monad](pjs: List[ProtoJson], mapping: Map[String, QueryInterpreter[F]]): F[(Chain[Json], List[Json])] = {
     def gatherDeferred(pj: ProtoJson): List[DeferredJson] = {
       @tailrec
@@ -547,18 +661,28 @@ object QueryInterpreter {
     }
   }
 
+  /**
+   * Construct a GraphQL response from the possibly absent result `data`
+   * and a collection of errors.
+   */
   def mkResponse(data: Option[Json], errors: List[Json]): Json = {
     val dataField = data.map { value => ("data", value) }.toList
     val errorField = if (errors.isEmpty) Nil else List(("errors", Json.fromValues(errors)))
     Json.fromFields(errorField ++ dataField)
   }
 
+  /** Construct a GraphQL response from a `Result`. */
   def mkResponse(result: Result[Json]): Json =
     mkResponse(result.right, result.left.map(_.toList).getOrElse(Nil))
 
+  /**
+   *  Construct a GraphQL error response from a `Result`, ignoring any
+   *  right hand side in `result`.
+   */
   def mkInvalidResponse(result: Result[Query]): Json =
     mkResponse(None, result.left.map(_.toList).getOrElse(Nil))
 
+  /** Construct a GraphQL error object */
   def mkError(message: String, locations: List[(Int, Int)] = Nil, path: List[String] = Nil): Json = {
     val locationsField =
       if (locations.isEmpty) Nil
@@ -574,10 +698,15 @@ object QueryInterpreter {
     Json.fromFields(("message", Json.fromString(message)) :: locationsField ++ pathField)
   }
 
+  /** Construct a GraphQL error object as the left hand side of a `Result` */
   def mkErrorResult[T](message: String, locations: List[(Int, Int)] = Nil, path: List[String] = Nil): Result[T] =
     Ior.leftNec(mkError(message, locations, path))
 }
 
+/**
+ * A query interpreter composed from the supplied `Map` of labelled
+ * component interpreters.
+ */
 class ComposedQueryInterpreter[F[_]: Monad](mapping: Map[String, QueryInterpreter[F]])
   extends QueryInterpreter[F] {
 
