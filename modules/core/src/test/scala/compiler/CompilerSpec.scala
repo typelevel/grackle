@@ -26,7 +26,7 @@ final class CompilerSuite extends CatsSuite {
         Select("name", Nil)
       )
 
-    val res = QueryParser.compileText(text)
+    val res = QueryParser.parseText(text)
     assert(res == Ior.Right(expected))
   }
 
@@ -52,7 +52,7 @@ final class CompilerSuite extends CatsSuite {
           )
       )
 
-    val res = QueryParser.compileText(text)
+    val res = QueryParser.parseText(text)
     assert(res == Ior.Right(expected))
   }
 
@@ -83,7 +83,7 @@ final class CompilerSuite extends CatsSuite {
         )
       )
 
-    val res = QueryParser.compileText(text)
+    val res = QueryParser.parseText(text)
     assert(res == Ior.Right(expected))
   }
 
@@ -112,7 +112,7 @@ final class CompilerSuite extends CatsSuite {
         Select("subscriptionType", Nil, Select("name", Nil, Empty))
       )
 
-    val res = QueryParser.compileText(text)
+    val res = QueryParser.parseText(text)
     assert(res == Ior.Right(expected))
   }
 

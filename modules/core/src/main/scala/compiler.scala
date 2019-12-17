@@ -16,39 +16,39 @@ object QueryParser {
   def toResult[T](pr: Either[String, T]): Result[T] =
     Ior.fromEither(pr).leftMap(msg => NonEmptyChain.one(mkError(msg)))
 
-  def compileText(text: String): Result[Query] =
+  def parseText(text: String): Result[Query] =
     for {
       doc   <- toResult(Parser.Document.parseOnly(text).either)
-      query <- compileDocument(doc)
+      query <- parseDocument(doc)
     } yield query
 
-  def compileDocument(doc: Document): Result[Query] = doc match {
-    case List(Left(op: Operation)) => compileOperation(op)
-    case List(Left(qs: QueryShorthand)) => compileQueryShorthand(qs)
+  def parseDocument(doc: Document): Result[Query] = doc match {
+    case List(Left(op: Operation)) => parseOperation(op)
+    case List(Left(qs: QueryShorthand)) => parseQueryShorthand(qs)
     case _ => mkErrorResult("Operation required")
   }
 
-  def compileOperation(op: Operation): Result[Query] = op match {
+  def parseOperation(op: Operation): Result[Query] = op match {
     case Operation(Query, _, _, _, sels) =>
-      compileSelections(sels)
+      parseSelections(sels)
     case _ => mkErrorResult("Selection required")
   }
 
-  def compileQueryShorthand(qs: QueryShorthand): Result[Query] = qs match {
-    case QueryShorthand(sels) => compileSelections(sels)
+  def parseQueryShorthand(qs: QueryShorthand): Result[Query] = qs match {
+    case QueryShorthand(sels) => parseSelections(sels)
     case _ => mkErrorResult("Selection required")
   }
 
-  def compileSelections(sels: List[Selection]): Result[Query] =
-    sels.traverse(compileSelection).map { sels0 =>
+  def parseSelections(sels: List[Selection]): Result[Query] =
+    sels.traverse(parseSelection).map { sels0 =>
       if (sels0.size == 1) sels0.head else Group(sels0)
     }
 
-  def compileSelection(sel: Selection): Result[Query] = sel match {
+  def parseSelection(sel: Selection): Result[Query] = sel match {
     case Field(_, name, args, _, sels) =>
       for {
-        args0 <- compileArgs(args)
-        sels0 <- compileSelections(sels)
+        args0 <- parseArgs(args)
+        sels0 <- parseSelections(sels)
       } yield {
         if (sels.isEmpty) Select(name.value, args0, Empty)
         else Select(name.value, args0, sels0)
@@ -56,10 +56,10 @@ object QueryParser {
     case _ => mkErrorResult("Field required")
   }
 
-  def compileArgs(args: List[(Name, Value)]): Result[List[Binding]] =
-    args.traverse((compileArg _).tupled)
+  def parseArgs(args: List[(Name, Value)]): Result[List[Binding]] =
+    args.traverse((parseArg _).tupled)
 
-  def compileArg(name: Name, value: Value): Result[Binding] = value match {
+  def parseArg(name: Name, value: Value): Result[Binding] = value match {
     case IntValue(i) => IntBinding(name.value, i).rightIor
     case FloatValue(d) => FloatBinding(name.value, d).rightIor
     case StringValue(s) => StringBinding(name.value, s).rightIor
@@ -73,7 +73,7 @@ abstract class QueryCompiler(schema: Schema) {
   val phases: List[Phase]
 
   def compile(text: String): Result[Query] = {
-    val query = QueryParser.compileText(text)
+    val query = QueryParser.parseText(text)
     val queryType = schema.queryType
     phases.foldLeft(query) { (acc, phase) => acc.flatMap(phase(_, queryType)) }
   }
