@@ -3,13 +3,41 @@
 
 package edu.gemini.grackle
 
+/**
+ * Representation of a GraphQL schema
+ *
+ * A `Schema` is a collection of type and directive declarations.
+ */
 trait Schema {
+  /** The types defined by this `Schema`. */
   val types: List[NamedType]
+  /** The directives defined by this `Schema`. */
   val directives: List[Directive]
 
+  /** A reference by name to a type defined by this `Schema`.
+   *
+   *  `TypeRef`s refer to types defined in this schema by name and hence
+   *  can be used as part of mutually recursive type definitions.
+   */
   def TypeRef(ref: String): TypeRef =
     new TypeRef(this, ref)
 
+  /**
+   * The default type of a GraphQL schema
+   *
+   * Unless a type named `"Schema"` is explicitly defined as part of
+   * this `Schema` a definition of the form,
+   *
+   * ```
+   * type Schema {
+   *   query: Query!
+   *   mutation: Mutation
+   *   subscription: Subscription
+   *  }
+   * ```
+   *
+   * is used.
+   */
   def defaultSchemaType =
     ObjectType(
       name = "Schema",
@@ -22,24 +50,54 @@ trait Schema {
       interfaces = Nil
     )
 
+  /**
+   * Look up by name a type defined in this `Schema`.
+   *
+   * Yields the type, if defined, `NoType` otherwise.
+   */
   def tpe(name: String): Type =
     types.find(_.name == name).getOrElse(NoType)
 
+  /**
+   * The schema type.
+   *
+   * Either the explicitly defined type named `"Schema"` or the default
+   * schema type if not defined.
+   */
   def schemaType = tpe("Schema") orElse defaultSchemaType
 
+  /** The type of queries defined by this `Schema` */
   def queryType: Type = schemaType.field("query")
+  /** The type of mutations defined by this `Schema` */
   def mutationType: Type = schemaType.field("mutation")
+  /** The type of subscriptions defined by this `Schema` */
   def subscriptionType: Type = schemaType.field("subscription")
 }
 
+/**
+ * A GraphQL type definition.
+ */
 sealed trait Type {
+  /**
+   * Is this type equivalent to `other`.
+   *
+   * Note that plain `==` will distinguish types from type aliases,
+   * which is typically not desirable, so `=:=` is usually the
+   * most appropriate comparison operator.
+   */
   def =:=(other: Type): Boolean = (this eq other) || (dealias == other.dealias)
 
+  /**
+   * This type if it isn't `NoType`, `other` otherwise. */
   def orElse(other: => Type): Type = this match {
     case NoType => other
     case _ => this
   }
 
+  /**
+   * Yield the type of the field of this type named `fieldName` or
+   * `NoType` if there is no such field.
+   */
   def field(fieldName: String): Type = this match {
     case NullableType(tpe) => tpe.field(fieldName)
     case TypeRef(_, _) => dealias.field(fieldName)
@@ -48,9 +106,14 @@ sealed trait Type {
     case _ => NoType
   }
 
+  /** `true` if this type has a field named `fieldName`, false otherwise. */
   def hasField(fieldName: String): Boolean =
     field(fieldName) != NoType
 
+  /**
+   * Yield the type of the field at the end of the path `fns` starting
+   * from this type, or `NoType` if there is no such field.
+   */
   def path(fns: List[String]): Type = (fns, this) match {
     case (Nil, _) => this
     case (_, ListType(tpe)) => tpe.path(fns)
@@ -63,6 +126,13 @@ sealed trait Type {
     case _ => NoType
   }
 
+  /**
+   * Does the path `fns` from this type specify multiple values.
+   *
+   * `true` if navigating through the path `fns` from this type
+   * might specify 0 or more values. This will be the case if the
+   * path passes through at least one field of a List type.
+   */
   def pathIsList(fns: List[String]): Boolean = (fns, this) match {
     case (Nil, _) => false
     case (_, _: ListType) => true
@@ -75,6 +145,13 @@ sealed trait Type {
     case _ => false
   }
 
+  /**
+   * Does the path `fns` from this type specify a nullable type.
+   *
+   * `true` if navigating through the path `fns` from this type
+   * might specify an optional value. This will be the case if the
+   * path passes through at least one field of a nullable type.
+   */
   def pathIsNullable(fns: List[String]): Boolean = (fns, this) match {
     case (Nil, _) => false
     case (_, ListType(tpe)) => tpe.pathIsNullable(fns)
@@ -87,32 +164,55 @@ sealed trait Type {
     case _ => false
   }
 
+  /** Strip off aliases */
   def dealias: Type = this match {
     case TypeRef(schema, tpnme) => schema.types.find(_.name == tpnme).getOrElse(NoType)
     case _ => this
   }
 
+  /** Is this type nullable? */
   def isNullable: Boolean = this match {
     case NullableType(_) => true
     case _ => false
   }
 
+  /**
+   * A non-nullable version of this type.
+   *
+   * If this type is nullable, yield the non-nullable underlying
+   * type. Otherwise yield this type.
+   */
   def nonNull: Type = this match {
     case NullableType(tpe) => tpe.nonNull
     case _ => this
   }
 
+  /** Is this type a list. */
   def isList: Boolean = this match {
     case ListType(_) => true
     case _ => false
   }
 
+  /**
+   * The element type of this type.
+   *
+   * If this type is is a list, yield the non-list underlying type.
+   * Otherwise yield `NoType`.
+   */
   def item: Type = this match {
     case NullableType(tpe) => tpe.item
     case ListType(tpe) => tpe
     case _ => NoType
   }
 
+  /**
+   * Yield the object type underlying this type.
+   *
+   * Strip off all aliases, nullability and enclosing list types until
+   * an underlying object type is reached, in which case yield it, or a
+   * non-object type which isn't further reducible is reached, in which
+   * case yield `NoType`.
+   */
   def underlyingObject: Type = this match {
     case NullableType(tpe) => tpe.underlyingObject
     case ListType(tpe) => tpe.underlyingObject
@@ -122,6 +222,15 @@ sealed trait Type {
     case _ => NoType
   }
 
+  /**
+   * Yield the type of the field named `fieldName` of the object type
+   * underlying this type.
+   *
+   * Strip off all aliases, nullability and enclosing list types until
+   * an underlying object type is reached which has a field named
+   * `fieldName`, in which case yield the type of that field; if there
+   * is no such field, yields `NoType`.
+   */
   def underlyingField(fieldName: String): Type = this match {
     case NullableType(tpe) => tpe.underlyingField(fieldName)
     case ListType(tpe) => tpe.underlyingField(fieldName)
@@ -131,6 +240,11 @@ sealed trait Type {
     case _ => NoType
   }
 
+  /** Is this type a leaf type?
+   *
+   * `true` if after stripping of aliases and nullability, is the underlying
+   * type a scalar or an enum, `false` otherwise.
+   */
   def isLeaf: Boolean = this match {
     case NullableType(tpe) => tpe.isLeaf
     case TypeRef(_, _) => dealias.isLeaf
@@ -139,6 +253,10 @@ sealed trait Type {
     case _ => false
   }
 
+  /**
+   * If the underlying type of this type is a scalar or an enum then yield it
+   * otherwise yield `NoType`.
+   */
   def asLeaf: Type = this match {
     case NullableType(tpe) => tpe.asLeaf
     case TypeRef(_, _) => dealias.asLeaf
@@ -147,19 +265,33 @@ sealed trait Type {
     case _ => NoType
   }
 
+  /** Yield a String representation of this type */
   def describe: String
 
+  /** Yield a short String representation of this type */
   override def toString: String = describe
 }
 
+/** A type with a schema-defined name.
+ *
+ * This includes object types, inferface types and enums.
+ */
 sealed trait NamedType extends Type {
+  /** The name of this type */
   def name: String
   override def toString: String = name
 }
 
+/**
+ * A sentinel value indicating the absence of a type.
+ */
 case object NoType extends Type {
   def describe = "NoType"
 }
+
+/**
+ * A by name reference to a type defined in `schema`.
+ */
 case class TypeRef(schema: Schema, ref: String) extends Type {
   override def describe: String = s"@$ref"
 }
@@ -229,6 +361,11 @@ object ScalarType {
   )
 }
 
+/**
+ * A type with fields.
+ *
+ * This includes object types and inferface types.
+ */
 trait TypeWithFields extends NamedType {
   def fields: List[Field]
 
