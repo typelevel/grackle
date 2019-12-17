@@ -9,17 +9,51 @@ import io.circe.Json
 
 import QueryInterpreter.mkErrorResult
 
+/**
+ * Indicates a position within an abstract data model during the
+ * interpretation of a GraphQL query.
+ */
 trait Cursor {
+  /** The value at the position represented by this `Cursor`. */
   def focus: Any
+  /** The GraphQL type of the value at the position represented by this `Cursor`. */
   def tpe: Type
+
+  /** Is the value at this `Cursor` of a scalar or enum type? */
   def isLeaf: Boolean
+
+  /**
+   * Yield the value at this `Cursor` rendered as Json if it is of a scalar or
+   * enum type, an error or the left hand side otherwise.
+   */
   def asLeaf: Result[Json]
+
+  /** Is the value at this `Cursor` of a list type? */
   def isList: Boolean
+
+  /**
+   * Yield a list of `Cursor`s corresponding to the elements of the value
+   * at this `Cursor` if it is of a list type, or an error or the left hand
+   * side otherwise.
+   */
   def asList: Result[List[Cursor]]
+
+  /** Is the value at this `Cursor` of a nullable type? */
   def isNullable: Boolean
+
+  /**
+   * Yield an optional `Cursor`s corresponding to the value at this `Cursor`
+   * if it is of a nullable type, or an error or the left hand side otherwise.
+   * The resulting `Cursor` will be present iff the current value is present
+   * in the model.
+   */
   def asNullable: Result[Option[Cursor]]
+
+  /** Does the value at this `Cursor` have a field named `fieldName`? */
   def hasField(fieldName: String): Boolean
+
   def field(fieldName: String, args: Map[String, Any]): Result[Cursor]
+
   def hasAttribute(attributeName: String): Boolean
   def attribute(attributeName: String): Result[Any]
 

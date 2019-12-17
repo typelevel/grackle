@@ -7,5 +7,11 @@ import cats.data.IorNec
 import io.circe.Json
 
 package object grackle {
+  /**
+   * A result value.
+   *
+   * A result of type `T`, a non-empty collection of errors encoded as
+   * Json, or both.
+   */
   type Result[T] = IorNec[Json, T]
 }
