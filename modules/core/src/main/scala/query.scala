@@ -667,8 +667,13 @@ object QueryInterpreter {
    */
   def mkResponse(data: Option[Json], errors: List[Json]): Json = {
     val dataField = data.map { value => ("data", value) }.toList
-    val errorField = if (errors.isEmpty) Nil else List(("errors", Json.fromValues(errors)))
-    Json.fromFields(errorField ++ dataField)
+    val fields =
+      (dataField, errors) match {
+        case (Nil, Nil)   => List(("errors", Json.fromValues(List(mkError("Invalid query")))))
+        case (data, Nil)  => data
+        case (data, errs) => ("errors", Json.fromValues(errs)) :: data
+      }
+    Json.fromFields(fields)
   }
 
   /** Construct a GraphQL response from a `Result`. */
