@@ -12,15 +12,24 @@ import QueryCompiler._
 import QueryInterpreter.{ mkError, mkErrorResult }
 import Ast.{ Type => _, _ }, OperationDefinition._, OperationType._, Selection._, Value._
 
+/**
+ * GraphQL query parser
+ */
 object QueryParser {
-  def toResult[T](pr: Either[String, T]): Result[T] =
-    Ior.fromEither(pr).leftMap(msg => NonEmptyChain.one(mkError(msg)))
+  /**
+   *  Parse a query String to a query algebra term.
+   *
+   *  Yields an AST value on the right and accumulates errors on the left.
+   */
+  def parseText(text: String): Result[Query] = {
+    def toResult[T](pr: Either[String, T]): Result[T] =
+      Ior.fromEither(pr).leftMap(msg => NonEmptyChain.one(mkError(msg)))
 
-  def parseText(text: String): Result[Query] =
     for {
       doc   <- toResult(Parser.Document.parseOnly(text).either)
       query <- parseDocument(doc)
     } yield query
+  }
 
   def parseDocument(doc: Document): Result[Query] = doc match {
     case List(Left(op: Operation)) => parseOperation(op)
@@ -69,9 +78,23 @@ object QueryParser {
   }
 }
 
+/**
+ * GraphQL query compiler.
+ *
+ * A QueryCompiler parses GraphQL queries to query algebra terms, then
+ * applies a collection of transformation phases in sequence, yielding a
+ * query algebra term which can be directly interpreted.
+ */
 abstract class QueryCompiler(schema: Schema) {
+  /** The phase of this compiler */
   val phases: List[Phase]
 
+  /**
+   * Compiles the GraphQL query `text` to a query algebra term which
+   * can be directly executed.
+   *
+   * Any errors are accumulated on the left.
+   */
   def compile(text: String): Result[Query] = {
     val query = QueryParser.parseText(text)
     val queryType = schema.queryType
@@ -80,10 +103,44 @@ abstract class QueryCompiler(schema: Schema) {
 }
 
 object QueryCompiler {
+  /** A QueryCompiler phase. */
   trait Phase {
+    /**
+     * Transform the supplied query algebra term `query` with expected type
+     * `tpe`.
+     */
     def apply(query: Query, tpe: Type): Result[Query]
   }
 
+  /**
+   * A compiler phase which translates `Select` nodes to be directly
+   * interpretable.
+   *
+   * This phase,
+   *
+   * 1. types bindings according to the schema:
+   *    i)   untyped enums are validated and typed according to their
+   *         declared type.
+   *    ii)  String and Int bindings are translated to ID bindings
+   *         where appropriate.
+   *    iii) default values are supplied for missing arguments.
+   *    iv)  arguments are permuted into the order declared in the
+   *         schema.
+   *
+   * 2. eliminates Select arguments by delegating to a model-specific
+   *    `PartialFunction` which is responsible for translating `Select`
+   *    nodes into a form which is directly interpretable, replacing
+   *    them with a `Filter` or `Unique` node with a `Predicate` which
+   *    is parameterized by the arguments, eg.
+   *
+   *    ```
+   *    Select("character", List(IDBinding("id", "1000")), child)
+   *    ```
+   *    might be translated to,
+   *    ```
+   *    Filter(FieldEquals("id", "1000"), child)
+   *    ```
+   */
   class SelectElaborator(mapping: Map[Type, PartialFunction[Select, Result[Query]]]) extends Phase {
     def apply(query: Query, tpe: Type): Result[Query] =
       query match {
@@ -128,6 +185,32 @@ object QueryCompiler {
       }
   }
 
+  /**
+   * A compiler phase which partitions a query for execution by multiple
+   * composed interpreters.
+   *
+   * This phase transforms the input query by assigning subtrees to component
+   * interpreters as specified by the supplied `mapping`.
+   *
+   * The mapping has `Type` and field name pairs as keys and component id and
+   * join function pairs as values. When the traversal of the input query
+   * visits a `Select` node with type `Type.field name` it will replace the
+   * `Select` with a `Component` node comprising,
+   *
+   * 1. the component id of the interpreter which will be responsible for
+   *    evaluating the subquery.
+   * 2. A join function which will be called during interpretation with,
+   *
+   *    i)  the cursor at that point in evaluation.
+   *    ii) The deferred subquery.
+   *
+   *    This join function is responsible for computing the continuation
+   *    query which will be evaluated by the responsible interpreter.
+   *
+   *    Because the join is provided with the cursor of the parent
+   *    interpreter the subquery can be parameterised with values derived
+   *    from the parent query.
+   */
   class ComponentElaborator private (mapping: Map[(Type, String), (String, (Cursor, Query) => Result[Query])]) extends Phase {
     def apply(query: Query, tpe: Type): Result[Query] =
       query match {
