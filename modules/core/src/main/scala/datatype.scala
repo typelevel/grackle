@@ -77,7 +77,7 @@ case class DataTypeCursor(
   def hasField(fieldName: String): Boolean =
     tpe.hasField(fieldName) && fields.isDefinedAt((focus, fieldName))
 
-  def field(fieldName: String, args: Map[String, Any]): Result[Cursor] =
+  def field(fieldName: String): Result[Cursor] =
     if (hasField(fieldName))
       copy(tpe = tpe.field(fieldName), focus = fields((focus, fieldName))).rightIor
     else

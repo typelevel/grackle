@@ -186,10 +186,6 @@ object Query {
       type T = InputValue
       def render = s"""$name: <undefined>"""
     }
-
-    /** Convert a list of bindings to a map from binding name to binding value. */
-    def toMap(bindings: List[Binding]): Map[String, Any] =
-      bindings.map(b => (b.name, b.value)).toMap
   }
 }
 
@@ -238,7 +234,7 @@ object Predicate {
   case class FieldEquals[T](fieldName: String, value: T) extends FieldPredicate {
     def path = List(fieldName)
     def apply(c: Cursor): Boolean =
-      c.field(fieldName, Map.empty[String, Any]) match {
+      c.field(fieldName) match {
         case Ior.Right(ScalarFocus(focus)) => focus == value
         case _ => false
       }
@@ -248,7 +244,7 @@ object Predicate {
   case class FieldMatches(fieldName: String, r: Regex) extends FieldPredicate {
     def path = List(fieldName)
     def apply(c: Cursor): Boolean =
-      c.field(fieldName, Map.empty[String, Any]) match {
+      c.field(fieldName) match {
         case Ior.Right(ScalarFocus(focus: String)) => r.matches(focus)
         case _ => false
       }
@@ -386,9 +382,9 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
           } yield fields
         }.getOrElse(List((fieldName, ProtoJson.fromJson(Json.Null))).rightIor)
 
-      case (Select(fieldName, bindings, child), tpe) =>
+      case (Select(fieldName, _, child), tpe) =>
         for {
-          c     <- cursor.field(fieldName, Binding.toMap(bindings))
+          c     <- cursor.field(fieldName)
           value <- runValue(child, tpe.field(fieldName), c)
         } yield List((fieldName, value))
 

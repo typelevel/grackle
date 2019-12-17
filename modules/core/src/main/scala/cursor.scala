@@ -52,7 +52,7 @@ trait Cursor {
   /** Does the value at this `Cursor` have a field named `fieldName`? */
   def hasField(fieldName: String): Boolean
 
-  def field(fieldName: String, args: Map[String, Any]): Result[Cursor]
+  def field(fieldName: String): Result[Cursor]
 
   def hasAttribute(attributeName: String): Boolean
   def attribute(attributeName: String): Result[Any]
@@ -65,21 +65,21 @@ trait Cursor {
       }
     else hasField(fieldName)
 
-  def nullableField(fieldName: String, args: Map[String, Any]): Result[Cursor] =
+  def nullableField(fieldName: String): Result[Cursor] =
     if (isNullable)
       asNullable match {
-        case Ior.Right(Some(c)) => c.nullableField(fieldName, args)
+        case Ior.Right(Some(c)) => c.nullableField(fieldName)
         case Ior.Right(None) => mkErrorResult(s"Expected non-null for field '$fieldName'")
         case Ior.Left(es) => es.leftIor
         case Ior.Both(es, _) => es.leftIor
       }
-    else field(fieldName, args)
+    else field(fieldName)
 
   def hasPath(fns: List[String]): Boolean = fns match {
     case Nil => true
     case fieldName :: rest =>
       nullableHasField(fieldName) && {
-        nullableField(fieldName, Map.empty) match {
+        nullableField(fieldName) match {
           case Ior.Right(c) =>
             !c.isList && c.hasPath(rest)
           case _ => false
@@ -90,7 +90,7 @@ trait Cursor {
   def path(fns: List[String]): Result[Cursor] = fns match {
     case Nil => this.rightIor
     case fieldName :: rest =>
-      nullableField(fieldName, Map.empty) match {
+      nullableField(fieldName) match {
         case Ior.Right(c) => c.path(rest)
         case _ => mkErrorResult(s"Bad path")
       }
@@ -101,7 +101,7 @@ trait Cursor {
       case Nil => seenList
       case fieldName :: rest =>
         c.nullableHasField(fieldName) && {
-          c.nullableField(fieldName, Map.empty) match {
+          c.nullableField(fieldName) match {
             case Ior.Right(c) =>
               loop(c, rest, c.isList)
             case _ => false
@@ -128,7 +128,7 @@ trait Cursor {
           case other => other
         }
       else
-        field(fieldName, Map.empty) match {
+        field(fieldName) match {
           case Ior.Right(c) => c.listPath(rest)
           case Ior.Left(es) => es.leftIor
           case Ior.Both(es, _) => es.leftIor
@@ -153,7 +153,7 @@ trait Cursor {
           case other => other
         }
       else
-        field(fieldName, Map.empty) match {
+        field(fieldName) match {
           case Ior.Right(c) => c.attrListPath(rest)
           case Ior.Left(es) => es.leftIor
           case Ior.Both(es, _) => es.leftIor
