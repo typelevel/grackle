@@ -10,6 +10,7 @@ import edu.gemini.grackle._
 
 import Query._, Binding._, Predicate._
 import QueryCompiler._
+import QueryInterpreter.mkErrorResult
 
 import StarWarsData._
 
@@ -140,8 +141,9 @@ object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
       // The hero selector take an Episode argument and yields a single value. We use the
       // Unique operator to pick out the target using the FieldEquals predicate.
       case Select("hero", List(EnumBinding("episode", e)), child) =>
-        val episode = Episode.values.find(_.toString == e.name).get
-        Select("hero", Nil, Unique(FieldEquals("id", hero(episode).id), child)).rightIor
+        Episode.values.find(_.toString == e.name).map { episode =>
+          Select("hero", Nil, Unique(FieldEquals("id", hero(episode).id), child)).rightIor
+        }.getOrElse(mkErrorResult(s"Unknown episode '${e.name}'"))
 
       // The character, human and droid selectors all take a single ID argument and yield a
       // single value (if any) or null. We use the Unique operator to pick out the target
