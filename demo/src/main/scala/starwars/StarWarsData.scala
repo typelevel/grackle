@@ -158,7 +158,7 @@ object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
 object StarWarsQueryInterpreter extends DataTypeQueryInterpreter[Id](
   // #root
   {
-    // here and character both start with [Character] and the full character database
+    // hero and character both start with [Character] and the full character database
     case "hero" | "character" =>
       (ListType(StarWarsSchema.tpe("Character")), characters)
     // human starts with [Human] and just the characters of type Human
