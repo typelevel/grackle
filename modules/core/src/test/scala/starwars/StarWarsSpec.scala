@@ -34,7 +34,35 @@ final class StarWarsSpec extends CatsSuite {
     assert(res == expected)
   }
 
-  test("simple nested query") {
+  test("subtype query") {
+    val query = """
+      query {
+        human(id: "1003") {
+          name
+          homePlanet
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "human" : {
+            "name" : "Leia Organa",
+            "homePlanet" : "Alderaan"
+          }
+        }
+      }
+    """
+
+    val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
+    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsSchema.queryType)
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("simple nested query (1)") {
     val query = """
       query {
         character(id: "1000") {
@@ -65,6 +93,101 @@ final class StarWarsSpec extends CatsSuite {
                 "name" : "R2-D2"
               }
             ]
+          }
+        }
+      }
+    """
+
+    val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
+    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsSchema.queryType)
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("simple nested query (2)") {
+    val query = """
+      query {
+        character(id: "1000") {
+          name
+          friends {
+            name
+            id
+            appearsIn
+          }
+        }
+      }}
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "character" : {
+            "name" : "Luke Skywalker",
+            "friends" : [
+              {
+                "name" : "Han Solo",
+                "id" : "1002",
+                "appearsIn" : [
+                  "NEWHOPE",
+                  "EMPIRE",
+                  "JEDI"
+                ]
+              },
+              {
+                "name" : "Leia Organa",
+                "id" : "1003",
+                "appearsIn" : [
+                  "NEWHOPE",
+                  "EMPIRE",
+                  "JEDI"
+                ]
+              },
+              {
+                "name" : "C-3PO",
+                "id" : "2000",
+                "appearsIn" : [
+                  "NEWHOPE",
+                  "EMPIRE",
+                  "JEDI"
+                ]
+              },
+              {
+                "name" : "R2-D2",
+                "id" : "2001",
+                "appearsIn" : [
+                  "NEWHOPE",
+                  "EMPIRE",
+                  "JEDI"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
+    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsSchema.queryType)
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("query with enum argument") {
+    val query = """
+      query {
+        hero(episode: EMPIRE) {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "hero" : {
+            "name" : "Luke Skywalker"
           }
         }
       }

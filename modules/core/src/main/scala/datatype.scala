@@ -11,6 +11,30 @@ import Query.{ Select, Wrap }
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
 import ScalarType._
 
+/**
+ * An interpreter of GraphQL queries relative to a model backed by an
+ * in-memory Scala data type.
+ *
+ * The interpreter is parameterized with,
+ *
+ * 1. `root`: a `PartialFunction` from the top-level field name of the
+ *    query to an initial GraphQL type and Scala value representing the
+ *    starting point in the model for a `Cursor`-based traversal of the
+ *    model to evaluate that query.
+ *
+ * 2. `fields`: a `PartialFunction` from a Scala value and a GraphQL
+ *    field name to a Scala value. The argument value is the focus
+ *    element in the model and corresponds to the GraphQL type at the
+ *    current `Cursor` position. The GraphQL field name represents an
+ *    edge out of that node, and the resulting Scala value corresponds
+ *    to the GraphQL value of the field.
+ *
+ * 3. `attrs`: a `PartialFunction` from a Scala value and an attribute
+ *    name to a Scala value. The argument value is the focus element in
+ *    the model and corresponds to the GraphQL type at the current
+ *    `Cursor` position. The attribute name selects an attribute value
+ *    from that node, which is returned as the result.
+ */
 class DataTypeQueryInterpreter[F[_]: Monad](
   root:   PartialFunction[String, (Type, Any)],
   fields: PartialFunction[(Any, String), Any],
@@ -31,18 +55,21 @@ class DataTypeQueryInterpreter[F[_]: Monad](
     }
 }
 
+/**
+ * A `Cursor` for a `DataTypeQueryInterpreter` backed by a Scala data type.
+ */
 case class DataTypeCursor(
   tpe:    Type,
   focus:  Any,
   fields: PartialFunction[(Any, String), Any],
   attrs:  PartialFunction[(Any, String), Any]
 ) extends Cursor {
-  def isLeaf: Boolean = (tpe, focus) match {
+  def isLeaf: Boolean = (tpe.dealias, focus) match {
     case (_: ScalarType, (_ : String | _ : Int | _ : Double | _ : Boolean | _ : Enumeration#Value)) => true
     case _ => false
   }
 
-  def asLeaf: Result[Json] = (tpe, focus) match {
+  def asLeaf: Result[Json] = (tpe.dealias, focus) match {
     case (StringType,  s: String)  => Json.fromString(s).rightIor
     case (IntType,     i: Int)     => Json.fromInt(i).rightIor
     case (FloatType,   d: Double)  => Json.fromDouble(d) match {
@@ -77,7 +104,7 @@ case class DataTypeCursor(
   def hasField(fieldName: String): Boolean =
     tpe.hasField(fieldName) && fields.isDefinedAt((focus, fieldName))
 
-  def field(fieldName: String, args: Map[String, Any]): Result[Cursor] =
+  def field(fieldName: String): Result[Cursor] =
     if (hasField(fieldName))
       copy(tpe = tpe.field(fieldName), focus = fields((focus, fieldName))).rightIor
     else

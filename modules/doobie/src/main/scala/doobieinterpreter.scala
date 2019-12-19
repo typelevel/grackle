@@ -55,8 +55,8 @@ object DoobiePredicate {
 
     def path = List(fieldName)
     def apply(c: Cursor): Boolean =
-      c.field(fieldName, Map.empty[String, Any]) match {
-        case Ior.Right(StringScalarFocus(value)) => r.matches(value)
+      c.field(fieldName) match {
+        case Ior.Right(ScalarFocus(value: String)) => r.matches(value)
         case _ => false
       }
   }
@@ -156,7 +156,7 @@ case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) exte
       mapped.hasSubobject(fieldTpe.underlyingObject)
   }
 
-  def field(fieldName: String, args: Map[String, Any]): Result[Cursor] = {
+  def field(fieldName: String): Result[Cursor] = {
     val fieldTpe = tpe.field(fieldName)
     if (fieldTpe.isLeaf)
       asTable.map(table => copy(tpe = fieldTpe, focus = mapped.selectField(table.head, tpe, fieldName)))

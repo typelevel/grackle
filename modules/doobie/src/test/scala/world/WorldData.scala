@@ -118,7 +118,7 @@ object WorldData extends DoobieMapping {
 
   def languageCountryJoin(c: Cursor, q: Query): Result[Query] = q match {
     case Select("countries", Nil, child) =>
-      c.field("language", Map.empty).map { case StringScalarFocus(language) =>
+      c.field("language").map { case ScalarFocus(language: String) =>
         Select("countries", Nil, Filter(FieldContains(List("languages", "language"), language), child))
       }
     case _ => mkErrorResult("Bad staging join")

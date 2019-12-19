@@ -26,7 +26,7 @@ final class CompilerSuite extends CatsSuite {
         Select("name", Nil)
       )
 
-    val res = QueryParser.compileText(text)
+    val res = QueryParser.parseText(text)
     assert(res == Ior.Right(expected))
   }
 
@@ -52,7 +52,67 @@ final class CompilerSuite extends CatsSuite {
           )
       )
 
-    val res = QueryParser.compileText(text)
+    val res = QueryParser.parseText(text)
+    assert(res == Ior.Right(expected))
+  }
+
+  test("shorthand query") {
+    val text = """
+      {
+        hero(episode: NEWHOPE) {
+          name
+          friends {
+            name
+            friends {
+              name
+            }
+          }
+        }
+      }
+    """
+
+    val expected =
+      Select(
+        "hero", List(UntypedEnumBinding("episode", "NEWHOPE")),
+        Select("name", Nil, Empty) ~
+        Select("friends", Nil,
+          Select("name", Nil, Empty) ~
+          Select("friends", Nil,
+            Select("name", Nil, Empty)
+          )
+        )
+      )
+
+    val res = QueryParser.parseText(text)
+    assert(res == Ior.Right(expected))
+  }
+
+  test("introspection query") {
+    val text = """
+      query IntrospectionQuery {
+        __schema {
+          queryType {
+            name
+          }
+          mutationType {
+            name
+          }
+          subscriptionType {
+            name
+          }
+        }
+      }
+    """
+
+    val expected =
+      Select(
+        "__schema", Nil,
+        Select("queryType", Nil, Select("name", Nil, Empty)) ~
+        Select("mutationType", Nil, Select("name", Nil, Empty)) ~
+        Select("subscriptionType", Nil, Select("name", Nil, Empty))
+      )
+
+    val res = QueryParser.parseText(text)
     assert(res == Ior.Right(expected))
   }
 

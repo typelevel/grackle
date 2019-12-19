@@ -319,28 +319,39 @@ object DoobieMapping {
     def fetch: ConnectionIO[Table] =
       fragment.query[Row](Row.mkRead(gets)).to[List]
 
+    def mkColEquality[T](col: ColumnRef, value: T): Fragment = {
+      def rhs = Fragment.const(s"${col.toSql} =")
+      value match {
+        case s: String => rhs ++ fr0"$s"
+        case i: Int => rhs ++ fr0"$i"
+        case d: Double => rhs ++ fr0"$d"
+        case b: Boolean => rhs ++ fr0"$b"
+        case _ => Fragment.empty
+      }
+    }
+
     lazy val fragment: Fragment = {
       val cols = columns.map(_.toSql)
       val preds = predicates.map {
         case (col, FieldEquals(_, value)) =>
-          Fragment.const(s"${col.toSql} =") ++ fr0"$value"
+          mkColEquality(col, value)
 
         case (col, FieldLike(_, pattern, caseInsensitive)) =>
           val op = if(caseInsensitive) "ILIKE" else "LIKE"
           Fragment.const(s"${col.toSql} $op") ++ fr0"$pattern"
 
         case (col, AttrEquals(_, value)) =>
-          Fragment.const(s"${col.toSql} =") ++ fr0"$value"
+          mkColEquality(col, value)
 
         case (col, AttrLike(_, pattern, caseInsensitive)) =>
           val op = if(caseInsensitive) "ILIKE" else "LIKE"
           Fragment.const(s"${col.toSql} $op") ++ fr0"$pattern"
 
         case (col, FieldContains(_, value)) =>
-          Fragment.const(s"${col.toSql} =") ++ fr0"$value"
+          mkColEquality(col, value)
 
         case (col, AttrContains(_, value)) =>
-          Fragment.const(s"${col.toSql} =") ++ fr0"$value"
+          mkColEquality(col, value)
 
         case _ => Fragment.empty
       }

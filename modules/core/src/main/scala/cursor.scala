@@ -9,20 +9,69 @@ import io.circe.Json
 
 import QueryInterpreter.mkErrorResult
 
+/**
+ * Indicates a position within an abstract data model during the interpretation
+ * of a GraphQL query.
+ */
 trait Cursor {
+  /** The value at the position represented by this `Cursor`. */
   def focus: Any
+  /** The GraphQL type of the value at the position represented by this `Cursor`. */
   def tpe: Type
+
+  /** Is the value at this `Cursor` of a scalar or enum type? */
   def isLeaf: Boolean
+
+  /**
+   * Yield the value at this `Cursor` rendered as Json if it is of a scalar or
+   * enum type, an error or the left hand side otherwise.
+   */
   def asLeaf: Result[Json]
+
+  /** Is the value at this `Cursor` of a list type? */
   def isList: Boolean
+
+  /**
+   * Yield a list of `Cursor`s corresponding to the elements of the value at
+   * this `Cursor` if it is of a list type, or an error or the left hand side
+   * otherwise.
+   */
   def asList: Result[List[Cursor]]
+
+  /** Is the value at this `Cursor` of a nullable type? */
   def isNullable: Boolean
+
+  /**
+   * Yield an optional `Cursor`s corresponding to the value at this `Cursor` if
+   * it is of a nullable type, or an error on the left hand side otherwise.  The
+   * resulting `Cursor` will be present iff the current value is present in the
+   * model.
+   */
   def asNullable: Result[Option[Cursor]]
+
+  /** Does the value at this `Cursor` have a field named `fieldName`? */
   def hasField(fieldName: String): Boolean
-  def field(fieldName: String, args: Map[String, Any]): Result[Cursor]
+
+  /**
+   * Yield a `Cursor` corresponding to the value of the field `fieldName` of the
+   * value at this `Cursor`, or an error on the left hand side if there is no
+   * such field.
+   */
+  def field(fieldName: String): Result[Cursor]
+
+  /** Does the value at this `Cursor` have an attribute named `attributeName`? */
   def hasAttribute(attributeName: String): Boolean
+
+  /**
+   * Yield the value of the attribute named `attributeName` of the value at this
+   * `Cursor`, or an error on the left hand side if there is no such attribute.
+   */
   def attribute(attributeName: String): Result[Any]
 
+  /**
+   * Does the possibly nullable value at this `Cursor` have an attributed named
+   * `attributeName`?
+   */
   def nullableHasField(fieldName: String): Boolean =
     if (isNullable)
       asNullable match {
@@ -31,21 +80,27 @@ trait Cursor {
       }
     else hasField(fieldName)
 
-  def nullableField(fieldName: String, args: Map[String, Any]): Result[Cursor] =
+  /**
+   * Yield a `Cursor` corresponding to the value of the possibly nullable field
+   * `fieldName` of the value at this `Cursor`, or an error on the left hand
+   * side if there is no such field.
+   */
+  def nullableField(fieldName: String): Result[Cursor] =
     if (isNullable)
       asNullable match {
-        case Ior.Right(Some(c)) => c.nullableField(fieldName, args)
+        case Ior.Right(Some(c)) => c.nullableField(fieldName)
         case Ior.Right(None) => mkErrorResult(s"Expected non-null for field '$fieldName'")
         case Ior.Left(es) => es.leftIor
         case Ior.Both(es, _) => es.leftIor
       }
-    else field(fieldName, args)
+    else field(fieldName)
 
+  /** Does the value at this `Cursor` have a field identified by the path `fns`? */
   def hasPath(fns: List[String]): Boolean = fns match {
     case Nil => true
     case fieldName :: rest =>
       nullableHasField(fieldName) && {
-        nullableField(fieldName, Map.empty) match {
+        nullableField(fieldName) match {
           case Ior.Right(c) =>
             !c.isList && c.hasPath(rest)
           case _ => false
@@ -53,21 +108,32 @@ trait Cursor {
       }
   }
 
+  /**
+   * Yield a `Cursor` corresponding to the value of the field identified by path
+   * `fns` starting from the value at this `Cursor`, or an error on the left
+   * hand side if there is no such field.
+   */
   def path(fns: List[String]): Result[Cursor] = fns match {
     case Nil => this.rightIor
     case fieldName :: rest =>
-      nullableField(fieldName, Map.empty) match {
+      nullableField(fieldName) match {
         case Ior.Right(c) => c.path(rest)
         case _ => mkErrorResult(s"Bad path")
       }
   }
 
+  /**
+   * Does the value at this `Cursor` generate a list along the path `fns`?
+   *
+   * `true` if `fns` is a valid path from the value at this `Cursor` and passes
+   * through at least one field with a list type.
+   */
   def hasListPath(fns: List[String]): Boolean = {
     def loop(c: Cursor, fns: List[String], seenList: Boolean): Boolean = fns match {
       case Nil => seenList
       case fieldName :: rest =>
         c.nullableHasField(fieldName) && {
-          c.nullableField(fieldName, Map.empty) match {
+          c.nullableField(fieldName) match {
             case Ior.Right(c) =>
               loop(c, rest, c.isList)
             case _ => false
@@ -78,6 +144,11 @@ trait Cursor {
     loop(this, fns, false)
   }
 
+  /**
+   * Yield a list of `Cursor`s corresponding to the values generated by
+   * following the path `fns` from the value at this `Cursor`, or an error on
+   * the left hand side if there is no such path.
+   */
   def listPath(fns: List[String]): Result[List[Cursor]] = fns match {
     case Nil => List(this).rightIor
     case fieldName :: rest =>
@@ -94,13 +165,18 @@ trait Cursor {
           case other => other
         }
       else
-        field(fieldName, Map.empty) match {
+        field(fieldName) match {
           case Ior.Right(c) => c.listPath(rest)
           case Ior.Left(es) => es.leftIor
           case Ior.Both(es, _) => es.leftIor
         }
   }
 
+  /**
+   * Yield the list of values of the attribute generated by following the path
+   * `fns` from the value at this `Cursor`, or an error on the left hand side if
+   * there is no such path.
+   */
   def attrListPath(fns: List[String]): Result[List[Any]] = fns match {
     case Nil => List(this).rightIor
     case List(attrName) if hasAttribute(attrName) =>
@@ -119,7 +195,7 @@ trait Cursor {
           case other => other
         }
       else
-        field(fieldName, Map.empty) match {
+        field(fieldName) match {
           case Ior.Right(c) => c.attrListPath(rest)
           case Ior.Left(es) => es.leftIor
           case Ior.Both(es, _) => es.leftIor
