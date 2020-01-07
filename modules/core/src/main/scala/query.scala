@@ -83,6 +83,14 @@ object Query {
     }
   }
 
+  case class UntypedNarrow(tpnme: String, child: Query) extends Query {
+    def render = s"<narrow: $tpnme ${child.render}>"
+  }
+
+  case class Narrow(subtpe: Type, child: Query) extends Query {
+    def render = s"<narrow: $subtpe ${child.render}>"
+  }
+
   /** The terminal query */
   case object Empty extends Query {
     def render = ""
@@ -367,13 +375,21 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
   /**
    * Interpret `query` against `cursor`, yielding a collection of fields.
    *
-   * If the query is valid, the field subqueries all be valid fields of
-   * the enclosing type `tpe` and the resulting fields may be used to
-   * build an Json object of type `tpe`. If the query is invalid errors
+   * If the query is valid, the field subqueries will all be valid fields
+   * of the enclosing type `tpe` and the resulting fields may be used to
+   * build a Json object of type `tpe`. If the query is invalid errors
    * will be returned on the left hand side of the result.
    */
   def runFields(query: Query, tpe: Type, cursor: Cursor): Result[List[(String, ProtoJson)]] = {
     (query, tpe.dealias) match {
+      case (Narrow(tp1, child), _) =>
+        if (!cursor.narrowsTo(tp1)) Nil.rightIor
+        else
+          for {
+            c      <- cursor.narrow(tp1)
+            fields <- runFields(child, tp1, c)
+          } yield fields
+
       case (sel@Select(fieldName, _, _), NullableType(tpe)) =>
         cursor.asNullable.sequence.map { rc =>
           for {

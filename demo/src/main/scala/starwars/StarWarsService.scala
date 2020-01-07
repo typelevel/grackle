@@ -15,7 +15,7 @@ import edu.gemini.grackle.QueryInterpreter
 
 // #service
 trait StarWarsService[F[_]]{
-  def runQuery(op: String, query: String): F[Json]
+  def runQuery(op: Option[String], query: String): F[Json]
 }
 
 object StarWarsService {
@@ -29,7 +29,7 @@ object StarWarsService {
       // GraphQL query is embedded in the URI query string when queried via GET
       case GET -> Root / "starwars" :? QueryQueryParamMatcher(query) =>
         for {
-          result <- service.runQuery("Query", query)
+          result <- service.runQuery(None, query)
           resp   <- Ok(result)
         } yield resp
 
@@ -38,7 +38,7 @@ object StarWarsService {
         for {
           body   <- req.as[Json]
           obj    <- body.asObject.liftTo[F](new RuntimeException("Invalid GraphQL query"))
-          op     =  obj("operationName").flatMap(_.asString).getOrElse("Query")
+          op     =  obj("operationName").flatMap(_.asString)
           query  <- obj("query").flatMap(_.asString).liftTo[F](new RuntimeException("Missing query field"))
           result <- service.runQuery(op, query)
           resp   <- Ok(result)
@@ -48,8 +48,8 @@ object StarWarsService {
 
   def service[F[_]](implicit F: ApplicativeError[F, Throwable]): StarWarsService[F] =
     new StarWarsService[F]{
-      def runQuery(op: String, query: String): F[Json] = {
-        if (op == "IntrospectionQuery")
+      def runQuery(op: Option[String], query: String): F[Json] = {
+        if (op == Some("IntrospectionQuery"))
           // Handle IntrospectionQuery for GraphQL Playground
           StarWarsIntrospection.introspectionResult.pure[F]
         else
