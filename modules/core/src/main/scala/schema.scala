@@ -87,6 +87,13 @@ sealed trait Type {
    */
   def =:=(other: Type): Boolean = (this eq other) || (dealias == other.dealias)
 
+  def <:<(other: Type): Boolean =
+    (this.dealias, other.dealias) match {
+      case (ObjectType(_, _, _, interfaces), tp2) => interfaces.exists(_.dealias == tp2)
+      case (tp1, UnionType(_, _, members))        => members.exists(tp1 <:< _)
+      case _ => false
+    }
+
   /**
    * This type if it isn't `NoType`, `other` otherwise. */
   def orElse(other: => Type): Type = this match {

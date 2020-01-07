@@ -148,6 +148,11 @@ case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) exte
       case _ => mkErrorResult("Not nullable")
     }
 
+  def narrowsTo(subtpe: Type): Boolean = false
+
+  def narrow(subtpe: Type): Result[Cursor] =
+    mkErrorResult(s"Cannot narrow $tpe to $subtpe")
+
   def hasField(fieldName: String): Boolean = {
     val fieldTpe = tpe.field(fieldName)
     if (fieldTpe.isLeaf)

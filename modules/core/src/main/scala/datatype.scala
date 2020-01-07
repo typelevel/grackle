@@ -36,9 +36,10 @@ import ScalarType._
  *    from that node, which is returned as the result.
  */
 class DataTypeQueryInterpreter[F[_]: Monad](
-  root:   PartialFunction[String, (Type, Any)],
-  fields: PartialFunction[(Any, String), Any],
-  attrs:  PartialFunction[(Any, String), Any] = PartialFunction.empty
+  root:    PartialFunction[String, (Type, Any)],
+  fields:  PartialFunction[(Any, String), Any],
+  attrs:   PartialFunction[(Any, String), Any] = PartialFunction.empty,
+  narrows: PartialFunction[(Any, Type), Any] = PartialFunction.empty
 ) extends QueryInterpreter[F] {
 
   def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]] =
@@ -46,7 +47,7 @@ class DataTypeQueryInterpreter[F[_]: Monad](
       case Select(fieldName, _, child) =>
         if (root.isDefinedAt(fieldName)) {
           val (tpe, focus) = root(fieldName)
-          val cursor = DataTypeCursor(tpe, focus, fields, attrs)
+          val cursor = DataTypeCursor(tpe, focus, fields, attrs, narrows)
           runValue(Wrap(fieldName, child), rootTpe.field(fieldName), cursor).pure[F]
         } else
           mkErrorResult(s"No root field '$fieldName'").pure[F]
@@ -59,10 +60,11 @@ class DataTypeQueryInterpreter[F[_]: Monad](
  * A `Cursor` for a `DataTypeQueryInterpreter` backed by a Scala data type.
  */
 case class DataTypeCursor(
-  tpe:    Type,
-  focus:  Any,
-  fields: PartialFunction[(Any, String), Any],
-  attrs:  PartialFunction[(Any, String), Any]
+  tpe:     Type,
+  focus:   Any,
+  fields:  PartialFunction[(Any, String), Any],
+  attrs:   PartialFunction[(Any, String), Any],
+  narrows: PartialFunction[(Any, Type), Any]
 ) extends Cursor {
   def isLeaf: Boolean = (tpe.dealias, focus) match {
     case (_: ScalarType, (_ : String | _ : Int | _ : Double | _ : Boolean | _ : Enumeration#Value)) => true
@@ -100,6 +102,15 @@ case class DataTypeCursor(
     case (NullableType(tpe), o: Option[_]) => o.map(f => copy(tpe = tpe, focus = f)).rightIor
     case _ => mkErrorResult(s"Expected Nullable type, found $tpe")
   }
+
+  def narrowsTo(subtpe: Type): Boolean =
+    subtpe <:< tpe && narrows.isDefinedAt((focus, subtpe.dealias))
+
+  def narrow(subtpe: Type): Result[Cursor] =
+    if (narrowsTo(subtpe))
+      copy(tpe = subtpe, focus = narrows((focus, subtpe.dealias))).rightIor
+    else
+      mkErrorResult(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
 
   def hasField(fieldName: String): Boolean =
     tpe.hasField(fieldName) && fields.isDefinedAt((focus, fieldName))

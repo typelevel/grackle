@@ -121,6 +121,8 @@ trait DoobieMapping {
             acc._3,
             omt ++ acc._4
           ))
+        case Narrow(subtpe, child) =>
+          loop(child, subtpe, acc)
         case Filter(pred, child) =>
           val (cols, joins, preds, omts) = loopPredicate(pred)
           loop(child, obj, (cols ++ acc._1, joins ++ acc._2, preds ++ acc._3, omts ++ acc._4))
@@ -133,7 +135,7 @@ trait DoobieMapping {
           queries.foldLeft(acc) {
             case (acc, sibling) => loop(sibling, obj, acc)
           }
-        case Empty | (_: Component) | (_: Defer) => acc
+        case Empty | (_: Component) | (_: Defer) | (_: UntypedNarrow) => acc
       }
     }
 
@@ -385,7 +387,7 @@ object DoobieMapping {
       case _ => mkErrorResult(s"No staging join for non-Select $q")
     }
 
-    def apply(query: Query, tpe: Type): Result[Query] = {
+    def apply(query: Query, schema: Schema, tpe: Type): Result[Query] = {
       def loop(query: Query, tpe: Type, filtered: Set[Type]): Result[Query] = {
         query match {
           case s@Select(fieldName, _, child) =>
@@ -397,13 +399,16 @@ object DoobieMapping {
               loop(child, childTpe, filtered + tpe.underlyingObject).map(ec => s.copy(child = ec))
             }
 
-          case w@Wrap(_, child)              => loop(child, tpe, filtered).map(ec => w.copy(child = ec))
-          case g@Group(queries)              => queries.traverse(q => loop(q, tpe, filtered)).map(eqs => g.copy(queries = eqs))
-          case u@Unique(_, child)            => loop(child, tpe.nonNull, filtered + tpe.underlyingObject).map(ec => u.copy(child = ec))
-          case f@Filter(_, child)            => loop(child, tpe.item, filtered + tpe.underlyingObject).map(ec => f.copy(child = ec))
-          case c: Component                  => c.rightIor
-          case d: Defer                      => d.rightIor
-          case Empty                         => Empty.rightIor
+          case n@Narrow(subtpe, child) => loop(child, subtpe, filtered).map(ec => n.copy(child = ec))
+          case w@Wrap(_, child)        => loop(child, tpe, filtered).map(ec => w.copy(child = ec))
+          case g@Group(queries)        => queries.traverse(q => loop(q, tpe, filtered)).map(eqs => g.copy(queries = eqs))
+          case u@Unique(_, child)      => loop(child, tpe.nonNull, filtered + tpe.underlyingObject).map(ec => u.copy(child = ec))
+          case f@Filter(_, child)      => loop(child, tpe.item, filtered + tpe.underlyingObject).map(ec => f.copy(child = ec))
+          case c: Component            => c.rightIor
+          case d: Defer                => d.rightIor
+          case Empty                   => Empty.rightIor
+
+          case n: UntypedNarrow        => mkErrorResult(s"Unexpected UntypeNarrow ${n.render}")
         }
       }
 
