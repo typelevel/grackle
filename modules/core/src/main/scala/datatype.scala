@@ -93,7 +93,7 @@ case class DataTypeCursor(
     case _ => mkErrorResult(s"Expected List type, found $tpe")
   }
 
-  def isNullable: Boolean = focus match {
+  def isNullable: Boolean = (tpe, focus) match {
     case (_: NullableType, _: Option[_]) => true
     case _ => false
   }
