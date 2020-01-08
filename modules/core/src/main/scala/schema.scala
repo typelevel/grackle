@@ -87,6 +87,7 @@ sealed trait Type {
    */
   def =:=(other: Type): Boolean = (this eq other) || (dealias == other.dealias)
 
+  /** `true` if this type equivalent is a subtype of `other`. */
   def <:<(other: Type): Boolean =
     (this.dealias, other.dealias) match {
       case (ObjectType(_, _, _, interfaces), tp2) => interfaces.exists(_.dealias == tp2)
@@ -286,6 +287,7 @@ sealed trait Type {
 sealed trait NamedType extends Type {
   /** The name of this type */
   def name: String
+  def description: Option[String]
   override def toString: String = name
 }
 
@@ -310,7 +312,7 @@ case class TypeRef(schema: Schema, ref: String) extends Type {
 case class ScalarType(
   name:        String,
   description: Option[String]
-) extends Type {
+) extends Type with NamedType {
   override def describe: String = name
 }
 
@@ -413,7 +415,7 @@ case class UnionType(
   name:        String,
   description: Option[String],
   members:     List[TypeRef]
-) extends Type {
+) extends Type with NamedType {
   override def toString: String = members.mkString("|")
   def describe: String = members.map(_.describe).mkString("|")
 }
