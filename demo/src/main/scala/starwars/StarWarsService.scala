@@ -11,7 +11,7 @@ import io.circe.Json
 import org.http4s.HttpRoutes
 import org.http4s.circe._
 import org.http4s.dsl.Http4sDsl
-import edu.gemini.grackle.QueryInterpreter
+import edu.gemini.grackle.{ IntrospectionQueryCompiler, IntrospectionQueryInterpreter, QueryInterpreter, SchemaSchema }
 
 // #service
 trait StarWarsService[F[_]]{
@@ -49,10 +49,15 @@ object StarWarsService {
   def service[F[_]](implicit F: ApplicativeError[F, Throwable]): StarWarsService[F] =
     new StarWarsService[F]{
       def runQuery(op: Option[String], query: String): F[Json] = {
-        if (op == Some("IntrospectionQuery"))
+        if (op == Some("IntrospectionQuery")) {
           // Handle IntrospectionQuery for GraphQL Playground
-          StarWarsIntrospection.introspectionResult.pure[F]
-        else
+          IntrospectionQueryCompiler.compile(query) match {
+            case Ior.Right(compiledQuery) =>
+              IntrospectionQueryInterpreter(StarWarsSchema).run(compiledQuery, SchemaSchema.queryType).pure[F]
+            case invalid =>
+              QueryInterpreter.mkInvalidResponse(invalid).pure[F]
+          }
+        } else
           // Handle GraphQL against the model
           StarWarsQueryCompiler.compile(query) match {
             case Ior.Right(compiledQuery) =>
