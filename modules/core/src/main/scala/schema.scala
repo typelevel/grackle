@@ -38,17 +38,21 @@ trait Schema {
    *
    * is used.
    */
-  def defaultSchemaType =
+  def defaultSchemaType = {
+    val defaultQueryType = tpe("Query")
+    val defaultMutationType = tpe("Mutation").nullable
+    val defaultSubscriptionType = tpe("Subscription").nullable
     ObjectType(
       name = "Schema",
       description = None,
       fields = List(
-        Field("query", None, Nil, TypeRef("Query"), false, None),
-        Field("mutation", None, Nil, NullableType(TypeRef("Mutation")), false, None),
-        Field("subscription", None, Nil, ListType(TypeRef("Subscription")), false, None)
+        Field("query", None, Nil, defaultQueryType, false, None),
+        Field("mutation", None, Nil, defaultMutationType, false, None),
+        Field("subscription", None, Nil, defaultSubscriptionType, false, None)
       ),
       interfaces = Nil
     )
+  }
 
   /**
    * Look up by name a type defined in this `Schema`.

@@ -795,12 +795,8 @@ final class IntrospectionSuite extends CatsSuite {
             "queryType" : {
               "name" : "Query"
             },
-            "mutationType" : {
-              "name" : null
-            },
-            "subscriptionType" : {
-              "name" : null
-            },
+            "mutationType" : null,
+            "subscriptionType" : null,
             "types" : [
               {
                 "name" : "Query"
@@ -942,12 +938,8 @@ final class IntrospectionSuite extends CatsSuite {
             "queryType" : {
               "name" : "Query"
             },
-            "mutationType" : {
-              "name" : null
-            },
-            "subscriptionType" : {
-              "name" : null
-            },
+            "mutationType" : null,
+            "subscriptionType" : null,
             "types" : [
               {
                 "kind" : "OBJECT",
