@@ -93,14 +93,15 @@ case class DataTypeCursor(
     case _ => mkErrorResult(s"Expected List type, found $tpe")
   }
 
-  def isNullable: Boolean = focus match {
+  def isNullable: Boolean = (tpe, focus) match {
     case (_: NullableType, _: Option[_]) => true
     case _ => false
   }
 
   def asNullable: Result[Option[Cursor]] = (tpe, focus) match {
     case (NullableType(tpe), o: Option[_]) => o.map(f => copy(tpe = tpe, focus = f)).rightIor
-    case _ => mkErrorResult(s"Expected Nullable type, found $tpe")
+    case (_: NullableType, _) => mkErrorResult(s"Found non-nullable $focus for $tpe")
+    case _ => mkErrorResult(s"Expected Nullable type, found $focus for $tpe")
   }
 
   def narrowsTo(subtpe: Type): Boolean =

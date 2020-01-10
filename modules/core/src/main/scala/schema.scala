@@ -38,17 +38,21 @@ trait Schema {
    *
    * is used.
    */
-  def defaultSchemaType =
+  def defaultSchemaType = {
+    val defaultQueryType = tpe("Query")
+    val defaultMutationType = tpe("Mutation").nullable
+    val defaultSubscriptionType = tpe("Subscription").nullable
     ObjectType(
       name = "Schema",
       description = None,
       fields = List(
-        Field("query", None, Nil, TypeRef("Query"), false, None),
-        Field("mutation", None, Nil, NullableType(TypeRef("Mutation")), false, None),
-        Field("subscription", None, Nil, ListType(TypeRef("Subscription")), false, None)
+        Field("query", None, Nil, defaultQueryType, false, None),
+        Field("mutation", None, Nil, defaultMutationType, false, None),
+        Field("subscription", None, Nil, defaultSubscriptionType, false, None)
       ),
       interfaces = Nil
     )
+  }
 
   /**
    * Look up by name a type defined in this `Schema`.
@@ -87,6 +91,7 @@ sealed trait Type {
    */
   def =:=(other: Type): Boolean = (this eq other) || (dealias == other.dealias)
 
+  /** `true` if this type equivalent is a subtype of `other`. */
   def <:<(other: Type): Boolean =
     (this.dealias, other.dealias) match {
       case (ObjectType(_, _, _, interfaces), tp2) => interfaces.exists(_.dealias == tp2)
@@ -95,10 +100,19 @@ sealed trait Type {
     }
 
   /**
-   * This type if it isn't `NoType`, `other` otherwise. */
+   * This type if it isn't `NoType`, `other` otherwise.
+   */
   def orElse(other: => Type): Type = this match {
     case NoType => other
     case _ => this
+  }
+
+  /**
+   * Some of this type if it isn't `NoType`, `None` otherwise.
+   */
+  def toOption: Option[Type] = this match {
+    case NoType => None
+    case _ => Some(this)
   }
 
   /**
@@ -181,6 +195,13 @@ sealed trait Type {
   def isNullable: Boolean = this match {
     case NullableType(_) => true
     case _ => false
+  }
+
+  /** This type if it is nullable, `Nullable(this)` otherwise. */
+  def nullable: Type = this match {
+    case NoType => NoType
+    case t: NullableType => t
+    case t => NullableType(t)
   }
 
   /**
@@ -286,6 +307,7 @@ sealed trait Type {
 sealed trait NamedType extends Type {
   /** The name of this type */
   def name: String
+  def description: Option[String]
   override def toString: String = name
 }
 
@@ -310,7 +332,7 @@ case class TypeRef(schema: Schema, ref: String) extends Type {
 case class ScalarType(
   name:        String,
   description: Option[String]
-) extends Type {
+) extends Type with NamedType {
   override def describe: String = name
 }
 
@@ -413,7 +435,7 @@ case class UnionType(
   name:        String,
   description: Option[String],
   members:     List[TypeRef]
-) extends Type {
+) extends Type with NamedType {
   override def toString: String = members.mkString("|")
   def describe: String = members.map(_.describe).mkString("|")
 }
@@ -451,7 +473,11 @@ case class InputObjectType(
   name:        String,
   description: Option[String],
   inputFields: List[InputValue]
-)
+) extends Type with NamedType {
+  def inputFieldInfo(name: String): Option[InputValue] = inputFields.find(_.name == name)
+
+  override def describe: String = s"$name ${inputFields.map(_.describe).mkString("{ ", ", ", " }")}"
+}
 
 /**
  * Lists represent sequences of values in GraphQL. A List type is a type modifier: it wraps
@@ -502,7 +528,9 @@ case class InputValue private (
   description:  Option[String],
   tpe:          Type,
   defaultValue: Option[Any]
-)
+) {
+  def describe: String = s"$name: $tpe"
+}
 
 /**
  * The `Directive` type represents a Directive that a server supports.

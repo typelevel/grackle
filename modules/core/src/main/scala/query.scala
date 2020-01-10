@@ -235,6 +235,11 @@ object Predicate {
   object ScalarFocus {
     def unapply(c: Cursor): Option[Any] =
       if (c.isLeaf) Some(c.focus)
+      else if (c.isNullable)
+        c.asNullable match {
+          case Ior.Right(Some(c)) => unapply(c)
+          case _ => None
+        }
       else None
   }
 
