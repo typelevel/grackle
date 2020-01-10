@@ -96,10 +96,19 @@ sealed trait Type {
     }
 
   /**
-   * This type if it isn't `NoType`, `other` otherwise. */
+   * This type if it isn't `NoType`, `other` otherwise.
+   */
   def orElse(other: => Type): Type = this match {
     case NoType => other
     case _ => this
+  }
+
+  /**
+   * Some of this type if it isn't `NoType`, `None` otherwise.
+   */
+  def toOption: Option[Type] = this match {
+    case NoType => None
+    case _ => Some(this)
   }
 
   /**
@@ -182,6 +191,13 @@ sealed trait Type {
   def isNullable: Boolean = this match {
     case NullableType(_) => true
     case _ => false
+  }
+
+  /** This type if it is nullable, `Nullable(this)` otherwise. */
+  def nullable: Type = this match {
+    case NoType => NoType
+    case t: NullableType => t
+    case t => NullableType(t)
   }
 
   /**
@@ -453,7 +469,11 @@ case class InputObjectType(
   name:        String,
   description: Option[String],
   inputFields: List[InputValue]
-)
+) extends Type with NamedType {
+  def inputFieldInfo(name: String): Option[InputValue] = inputFields.find(_.name == name)
+
+  override def describe: String = s"$name ${inputFields.map(_.describe).mkString("{ ", ", ", " }")}"
+}
 
 /**
  * Lists represent sequences of values in GraphQL. A List type is a type modifier: it wraps
@@ -504,7 +524,9 @@ case class InputValue private (
   description:  Option[String],
   tpe:          Type,
   defaultValue: Option[Any]
-)
+) {
+  def describe: String = s"$name: $tpe"
+}
 
 /**
  * The `Directive` type represents a Directive that a server supports.
