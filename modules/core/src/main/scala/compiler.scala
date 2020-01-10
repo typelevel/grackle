@@ -11,6 +11,7 @@ import Query._, Binding._
 import QueryCompiler._
 import QueryInterpreter.{ mkError, mkErrorResult }
 import Ast.{ Type => _, _ }, OperationDefinition._, OperationType._, Selection._, Value._
+import cats.Monoid
 
 /**
  * GraphQL query parser
@@ -115,9 +116,9 @@ object QueryParser {
  * applies a collection of transformation phases in sequence, yielding a
  * query algebra term which can be directly interpreted.
  */
-abstract class QueryCompiler(schema: Schema) {
-  /** The phase of this compiler */
-  val phases: List[Phase]
+abstract class QueryCompiler(schema: Schema) { outer =>
+  /** The query elaborator. */
+  def elaborator: Elaborator
 
   /**
    * Compiles the GraphQL query `text` to a query algebra term which
@@ -125,21 +126,37 @@ abstract class QueryCompiler(schema: Schema) {
    *
    * Any errors are accumulated on the left.
    */
-  def compile(text: String): Result[Query] = {
-    val query = QueryParser.parseText(text)
-    val queryType = schema.queryType
-    phases.foldLeft(query) { (acc, phase) => acc.flatMap(phase(_, schema, queryType)) }
-  }
+  def compile(text: String): Result[Query] =
+    QueryParser.parseText(text).flatMap(elaborator(_, schema, schema.queryType))
+
 }
 
 object QueryCompiler {
   /** A QueryCompiler phase. */
-  trait Phase {
+  trait Elaborator { outer =>
     /**
      * Transform the supplied query algebra term `query` with expected type
      * `tpe`.
      */
     def apply(query: Query, schema: Schema, tpe: Type): Result[Query]
+
+    def andThen(p: Elaborator): Elaborator = (q, s, t) =>
+      outer(q, s, t).flatMap(p(_, s, t))
+
+  }
+  object Elaborator {
+
+    /** The empty phase. */
+    val empty: Elaborator = (q, _, _) =>
+      q.rightIor
+
+    /** Elaborator forms a monoid with andThen. */
+    implicit val MonoidPhase: Monoid[Elaborator] =
+      new Monoid[Elaborator] {
+        def combine(x: Elaborator, y: Elaborator): Elaborator = x andThen y
+        def empty: Elaborator = Elaborator.empty
+      }
+
   }
 
   /**
@@ -174,7 +191,7 @@ object QueryCompiler {
    * 3. types narrowing coercions by resolving the target type
    *    against the schema.
    */
-  class SelectElaborator(mapping: Map[Type, PartialFunction[Select, Result[Query]]]) extends Phase {
+  class SelectElaborator(mapping: Map[Type, PartialFunction[Select, Result[Query]]]) extends Elaborator {
     def apply(query: Query, schema: Schema, tpe: Type): Result[Query] = {
       def loop(query: Query, tpe: Type): Result[Query] =
         query match {
@@ -258,7 +275,7 @@ object QueryCompiler {
    *    interpreter the subquery can be parameterised with values derived
    *    from the parent query.
    */
-  class ComponentElaborator private (mapping: Map[(Type, String), (String, (Cursor, Query) => Result[Query])]) extends Phase {
+  class ComponentElaborator private (mapping: Map[(Type, String), (String, (Cursor, Query) => Result[Query])]) extends Elaborator {
     def apply(query: Query, schema: Schema, tpe: Type): Result[Query] = {
       def loop(query: Query, tpe: Type): Result[Query] =
         query match {

@@ -219,14 +219,12 @@ object SimpleSchema extends Schema {
 }
 
 object SimpleCompiler extends QueryCompiler(SimpleSchema) {
-  val selectElaborator = new SelectElaborator(Map(
+  val elaborator = new SelectElaborator(Map(
     SimpleSchema.tpe("Query").dealias -> {
       case Select("character", List(StringBinding("id", id)), child) =>
         Unique(FieldEquals("id", id), child).rightIor
     }
   ))
-
-  val phases = List(selectElaborator)
 }
 
 object SchemaA extends Schema {
@@ -348,11 +346,9 @@ object ComposedSchema extends Schema {
 }
 
 object ComposedCompiler extends QueryCompiler(ComposedSchema) {
-  val componentElaborator = ComponentElaborator(
+  val elaborator = ComponentElaborator(
     Mapping(ComposedSchema.tpe("Query"), "componenta", "ComponentA"),
     Mapping(ComposedSchema.tpe("FieldA2"), "componentb", "ComponentB"),
     Mapping(ComposedSchema.tpe("FieldB2"), "componentc", "ComponentC")
   )
-
-  val phases = List(componentElaborator)
 }

@@ -374,7 +374,7 @@ object FragmentSchema extends Schema {
 }
 
 object FragmentCompiler extends QueryCompiler(FragmentSchema) {
-  val selectElaborator = new SelectElaborator(Map(
+  val elaborator = new SelectElaborator(Map(
     FragmentSchema.tpe("Query").dealias -> {
       case Select("user", List(IDBinding("id", id)), child) =>
         Select("user", Nil, Unique(FieldEquals("id", id), child)).rightIor
@@ -382,8 +382,6 @@ object FragmentCompiler extends QueryCompiler(FragmentSchema) {
         sel.rightIor
     }
   ))
-
-  val phases = List(selectElaborator)
 }
 
 object FragmentData {

@@ -136,7 +136,7 @@ object StarWarsData {
 
 object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
   // #elaborator
-  val selectElaborator = new SelectElaborator(Map(
+  val elaborator = new SelectElaborator(Map(
     StarWarsSchema.tpe("Query").dealias -> {
       // The hero selector take an Episode argument and yields a single value. We use the
       // Unique operator to pick out the target using the FieldEquals predicate.
@@ -153,8 +153,6 @@ object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
     }
   ))
   // #elaborator
-
-  val phases = List(selectElaborator)
 }
 
 object StarWarsQueryInterpreter extends DataTypeQueryInterpreter[Id](

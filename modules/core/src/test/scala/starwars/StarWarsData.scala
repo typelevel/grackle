@@ -107,7 +107,7 @@ object StarWarsData {
 }
 
 object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
-  val selectElaborator = new SelectElaborator(Map(
+  val elaborator = new SelectElaborator(Map(
     StarWarsSchema.tpe("Query").dealias -> {
       case Select("hero", List(EnumBinding("episode", e)), child) =>
         val episode = Episode.values.find(_.toString == e.name).get
@@ -116,8 +116,6 @@ object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
         Select(f, Nil, Unique(FieldEquals("id", id), child)).rightIor
     }
   ))
-
-  val phases = List(selectElaborator)
 }
 
 object StarWarsQueryInterpreter extends DataTypeQueryInterpreter[Id](

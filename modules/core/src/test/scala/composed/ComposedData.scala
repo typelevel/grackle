@@ -42,14 +42,13 @@ object CurrencyQueryInterpreter extends DataTypeQueryInterpreter[Id](
 object CurrencyQueryCompiler extends QueryCompiler(CurrencySchema) {
   val QueryType = CurrencySchema.tpe("Query").dealias
 
-  val selectElaborator = new SelectElaborator(Map(
+  val elaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("currency", List(StringBinding("code", code)), child) =>
         Select("currency", Nil, Unique(FieldEquals("code", code), child)).rightIor
     }
   ))
 
-  val phases = List(selectElaborator)
 }
 
 /* Country component */
@@ -85,7 +84,7 @@ object CountryQueryInterpreter extends DataTypeQueryInterpreter[Id](
 object CountryQueryCompiler extends QueryCompiler(CountrySchema) {
   val QueryType = CountrySchema.tpe("Query").dealias
 
-  val selectElaborator = new SelectElaborator(Map(
+  val elaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("country", List(StringBinding("code", code)), child) =>
         Select("country", Nil, Unique(FieldEquals("code", code), child)).rightIor
@@ -94,7 +93,6 @@ object CountryQueryCompiler extends QueryCompiler(CountrySchema) {
     }
   ))
 
-  val phases = List(selectElaborator)
 }
 
 /* Composition */
@@ -130,7 +128,7 @@ object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
     Mapping(CountryType, "currency", "CurrencyComponent", countryCurrencyJoin)
   )
 
-  val phases = List(componentElaborator, selectElaborator)
+  val elaborator = componentElaborator andThen selectElaborator
 }
 
 object ComposedQueryInterpreter extends

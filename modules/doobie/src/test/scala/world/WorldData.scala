@@ -147,7 +147,7 @@ object WorldQueryCompiler extends QueryCompiler(WorldSchema) {
 
   val stagingElaborator = new StagingElaborator(WorldData)
 
-  val phases = List(selectElaborator, stagingElaborator)
+  val elaborator = selectElaborator andThen stagingElaborator
 }
 
 object WorldQueryInterpreter {

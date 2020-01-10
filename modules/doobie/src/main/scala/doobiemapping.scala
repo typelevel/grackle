@@ -372,7 +372,7 @@ object DoobieMapping {
     }
   }
 
-  class StagingElaborator(mapping: DoobieMapping) extends Phase {
+  class StagingElaborator(mapping: DoobieMapping) extends Elaborator {
     val stagingJoin = (c: Cursor, q: Query) => q match {
       case Select(fieldName, _, _) =>
         val obj = c.tpe.underlyingObject

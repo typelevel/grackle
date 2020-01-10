@@ -10,7 +10,7 @@ import Query._, Binding._, Predicate._
 import QueryCompiler._
 
 object IntrospectionQueryCompiler extends QueryCompiler(SchemaSchema) {
-  val selectElaborator = new SelectElaborator(Map(
+  val elaborator = new SelectElaborator(Map(
     SchemaSchema.tpe("Query").dealias -> {
       case Select("__type", List(StringBinding("name", name)), child) =>
         Select("__type", Nil, Unique(FieldEquals("name", name), child)).rightIor
@@ -24,8 +24,6 @@ object IntrospectionQueryCompiler extends QueryCompiler(SchemaSchema) {
         Select("enumValues", Nil, filteredChild).rightIor
     }
   ))
-
-  val phases = List(selectElaborator)
 }
 
 object IntrospectionQueryInterpreter {

@@ -162,7 +162,7 @@ object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
     Mapping(CountryType, "currencies", "CurrencyComponent", countryCurrencyJoin)
   )
 
-  val phases = List(componentElaborator, selectElaborator)
+  val elaborator = componentElaborator andThen selectElaborator
 }
 
 object ComposedQueryInterpreter {
