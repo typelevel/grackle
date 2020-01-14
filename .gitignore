@@ -36,6 +36,9 @@ bin/
 
 # IntelliJ
 .idea/
+*.ipr
+*.iws
+*.iml
 
 # Mill
 out/
