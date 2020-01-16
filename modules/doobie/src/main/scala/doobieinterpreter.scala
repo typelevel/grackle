@@ -27,13 +27,13 @@ class DoobieQueryInterpreter[F[_]](
 
   def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]] =
     query match {
-      case Select(fieldName, _, child) =>
+      case PossiblyRenamedSelect(Select(fieldName, _, child), resultName) =>
         val fieldTpe = rootTpe.field(fieldName)
         val mapped = mapping.mapQuery(child, fieldTpe)
 
         for {
           table <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(xa)
-        } yield runValue(Wrap(fieldName, child), fieldTpe, DoobieCursor(mapped.rootCursorType(fieldTpe), table, mapped))
+        } yield runValue(Wrap(resultName, child), fieldTpe, DoobieCursor(mapped.rootCursorType(fieldTpe), table, mapped))
 
       case _ => mkErrorResult(s"Bad root query '${query.render}' in DoobieQueryInterpreter").pure[F]
     }

@@ -70,14 +70,18 @@ object QueryParser {
     }
 
   def parseSelection(sel: Selection, typeCondition: Option[String], fragments: Map[String, FragmentDefinition]): Result[Query] = sel match {
-    case Field(_, name, args, _, sels) =>
+    case Field(alias, name, args, _, sels) =>
       for {
         args0 <- parseArgs(args)
         sels0 <- parseSelections(sels, None, fragments)
       } yield {
-        val sel =
+        val sel0 =
           if (sels.isEmpty) Select(name.value, args0, Empty)
           else Select(name.value, args0, sels0)
+        val sel = alias match {
+          case Some(Name(nme)) => Rename(nme, sel0)
+          case None => sel0
+        }
         typeCondition match {
           case Some(tpnme) => UntypedNarrow(tpnme, sel)
           case _ => sel
@@ -202,6 +206,7 @@ object QueryCompiler {
 
           case n@Narrow(subtpe, child)  => loop(child, subtpe).map(ec => n.copy(child = ec))
           case w@Wrap(_, child)         => loop(child, tpe).map(ec => w.copy(child = ec))
+          case r@Rename(_, child)       => loop(child, tpe).map(ec => r.copy(child = ec))
           case g@Group(queries)         => queries.traverse(q => loop(q, tpe)).map(eqs => g.copy(queries = eqs))
           case u@Unique(_, child)       => loop(child, tpe.nonNull).map(ec => u.copy(child = ec))
           case f@Filter(_, child)       => loop(child, tpe.item).map(ec => f.copy(child = ec))
@@ -262,21 +267,22 @@ object QueryCompiler {
     def apply(query: Query, schema: Schema, tpe: Type): Result[Query] = {
       def loop(query: Query, tpe: Type): Result[Query] =
         query match {
-          case Select(fieldName, args, child) =>
+          case PossiblyRenamedSelect(Select(fieldName, args, child), resultName) =>
             val childTpe = tpe.underlyingField(fieldName)
             mapping.get((tpe.underlyingObject, fieldName)) match {
               case Some((cid, join)) =>
                 loop(child, childTpe).map { elaboratedChild =>
-                  Wrap(fieldName, Component(cid, join, Select(fieldName, args, elaboratedChild)))
+                  Wrap(resultName, Component(cid, join, PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)))
                 }
               case None =>
                 loop(child, childTpe).map { elaboratedChild =>
-                  Select(fieldName, args, elaboratedChild)
+                  PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)
                 }
             }
 
           case n@Narrow(subtpe, child)  => loop(child, subtpe).map(ec => n.copy(child = ec))
           case w@Wrap(_, child)         => loop(child, tpe).map(ec => w.copy(child = ec))
+          case r@Rename(_, child)       => loop(child, tpe).map(ec => r.copy(child = ec))
           case g@Group(queries)         => queries.traverse(q => loop(q, tpe)).map(eqs => g.copy(queries = eqs))
           case u@Unique(_, child)       => loop(child, tpe.nonNull).map(ec => u.copy(child = ec))
           case f@Filter(_, child)       => loop(child, tpe.item).map(ec => f.copy(child = ec))

@@ -131,6 +131,8 @@ trait DoobieMapping {
           loop(child, obj, (cols ++ acc._1, joins ++ acc._2, preds ++ acc._3, omts ++ acc._4))
         case Wrap(_, q) =>
           loop(q, obj, acc)
+        case Rename(_, q) =>
+          loop(q, obj, acc)
         case Group(queries) =>
           queries.foldLeft(acc) {
             case (acc, sibling) => loop(sibling, obj, acc)
@@ -401,6 +403,7 @@ object DoobieMapping {
 
           case n@Narrow(subtpe, child) => loop(child, subtpe, filtered).map(ec => n.copy(child = ec))
           case w@Wrap(_, child)        => loop(child, tpe, filtered).map(ec => w.copy(child = ec))
+          case r@Rename(_, child)      => loop(child, tpe, filtered).map(ec => r.copy(child = ec))
           case g@Group(queries)        => queries.traverse(q => loop(q, tpe, filtered)).map(eqs => g.copy(queries = eqs))
           case u@Unique(_, child)      => loop(child, tpe.nonNull, filtered + tpe.underlyingObject).map(ec => u.copy(child = ec))
           case f@Filter(_, child)      => loop(child, tpe.item, filtered + tpe.underlyingObject).map(ec => f.copy(child = ec))

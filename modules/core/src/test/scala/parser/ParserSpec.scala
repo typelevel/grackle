@@ -122,4 +122,66 @@ final class ParserSuite extends CatsSuite {
       case Some(List(Left(q))) => assert(q == expected)
     }
   }
+
+  test("field alias") {
+    val text = """
+      {
+        user(id: 4) {
+          id
+          name
+          smallPic: profilePic(size: 64)
+          bigPic: profilePic(size: 1024)
+        }
+      }
+    """
+
+    val expected =
+      QueryShorthand(
+        List(
+          Field(None, Name("user"), List((Name("id"), IntValue(4))), Nil,
+            List(
+              Field(None, Name("id"), Nil, Nil, Nil),
+              Field(None, Name("name"), Nil, Nil, Nil),
+              Field(Some(Name("smallPic")), Name("profilePic"), List((Name("size"), IntValue(64))), Nil, Nil),
+              Field(Some(Name("bigPic")), Name("profilePic"), List((Name("size"), IntValue(1024))), Nil, Nil)
+            )
+          )
+        )
+      )
+
+    Parser.Document.parseOnly(text).option match {
+      case Some(List(Left(q))) => assert(q == expected)
+    }
+  }
+
+  test("multiple root fields") {
+    val text = """
+      {
+        luke: character(id: "1000") {
+          name
+        }
+        darth: character(id: "1001") {
+          name
+        }
+      }
+    """
+
+    val expected =
+      QueryShorthand(
+        List(
+          Field(Some(Name("luke")), Name("character"), List((Name("id"), StringValue("1000"))), Nil,
+            List(
+              Field(None, Name("name"), Nil, Nil, Nil))),
+          Field(Some(Name("darth")), Name("character"), List((Name("id"), StringValue("1001"))), Nil,
+            List(
+              Field(None, Name("name"), Nil, Nil, Nil)
+            )
+          )
+        )
+      )
+
+    Parser.Document.parseOnly(text).option match {
+      case Some(List(Left(q))) => assert(q == expected)
+    }
+  }
 }

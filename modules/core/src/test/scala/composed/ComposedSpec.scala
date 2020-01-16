@@ -10,7 +10,7 @@ final class ComposedSpec extends CatsSuite {
   test("simple currency query") {
     val query = """
       query {
-        currency(code: "GBP") {
+        fx(code: "GBP") {
           code
           exchangeRate
         }
@@ -20,7 +20,7 @@ final class ComposedSpec extends CatsSuite {
     val expected = json"""
       {
         "data" : {
-          "currency": {
+          "fx": {
             "code": "GBP",
             "exchangeRate": 1.25
           }
@@ -134,6 +134,84 @@ final class ComposedSpec extends CatsSuite {
               }
             }
           ]
+        }
+      }
+    """
+
+    val compiledQuery = ComposedQueryCompiler.compile(query).right.get
+    val res = ComposedQueryInterpreter.run(compiledQuery, ComposedSchema.queryType)
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("multiple aliased root queries") {
+    val query = """
+      query {
+        gbr: country(code: "GBR") {
+          name
+          currency {
+            code
+          }
+        }
+        fra: country(code: "FRA") {
+          name
+          currency {
+            code
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "gbr" : {
+            "name" : "United Kingdom",
+            "currency" : {
+              "code" : "GBP"
+            }
+          },
+          "fra" : {
+            "name" : "France",
+            "currency" : {
+              "code" : "EUR"
+            }
+          }
+        }
+      }
+    """
+
+    val compiledQuery = ComposedQueryCompiler.compile(query).right.get
+    val res = ComposedQueryInterpreter.run(compiledQuery, ComposedSchema.queryType)
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("nested aliased query") {
+    val query = """
+      query {
+        country(code: "GBR") {
+          name
+          fx: currency {
+            code
+            exchangeRate
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "name" : "United Kingdom",
+            "fx": {
+              "code": "GBP",
+              "exchangeRate": 1.25
+            }
+          }
         }
       }
     """

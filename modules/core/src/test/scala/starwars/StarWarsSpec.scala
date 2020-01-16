@@ -199,4 +199,61 @@ final class StarWarsSpec extends CatsSuite {
 
     assert(res == expected)
   }
+
+  test("field alias") {
+    val query = """
+      query {
+        luke: character(id: "1000") {
+          handle: name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "luke" : {
+            "handle" : "Luke Skywalker"
+          }
+        }
+      }
+    """
+
+    val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
+    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsSchema.queryType)
+
+    assert(res == expected)
+  }
+
+  test("multiple root queries") {
+    val query = """
+      query {
+        luke: character(id: "1000") {
+          name
+        }
+        darth: character(id: "1001") {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "luke" : {
+            "name" : "Luke Skywalker"
+          },
+          "darth" : {
+            "name" : "Darth Vader"
+          }
+        }
+      }
+    """
+
+    val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
+    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsSchema.queryType)
+    //println(res)
+
+    assert(res == expected)
+  }
 }

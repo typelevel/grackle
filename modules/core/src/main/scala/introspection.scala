@@ -12,16 +12,14 @@ import QueryCompiler._
 object IntrospectionQueryCompiler extends QueryCompiler(SchemaSchema) {
   val selectElaborator = new SelectElaborator(Map(
     SchemaSchema.tpe("Query").dealias -> {
-      case Select("__type", List(StringBinding("name", name)), child) =>
-        Select("__type", Nil, Unique(FieldEquals("name", name), child)).rightIor
+      case sel@Select("__type", List(StringBinding("name", name)), _) =>
+        sel.eliminateArgs(child => Unique(FieldEquals("name", name), child)).rightIor
     },
     SchemaSchema.tpe("__Type").dealias -> {
-      case Select("fields", List(BooleanBinding("includeDeprecated", include)), child) =>
-        val filteredChild = if (include) child else Filter(FieldEquals("isDeprecated", false), child)
-        Select("fields", Nil, filteredChild).rightIor
-      case Select("enumValues", List(BooleanBinding("includeDeprecated", include)), child) =>
-        val filteredChild = if (include) child else Filter(FieldEquals("isDeprecated", false), child)
-        Select("enumValues", Nil, filteredChild).rightIor
+      case sel@Select("fields", List(BooleanBinding("includeDeprecated", include)), _) =>
+        sel.eliminateArgs(child => if (include) child else Filter(FieldEquals("isDeprecated", false), child)).rightIor
+      case sel@Select("enumValues", List(BooleanBinding("includeDeprecated", include)), _) =>
+        sel.eliminateArgs(child => if (include) child else Filter(FieldEquals("isDeprecated", false), child)).rightIor
     }
   ))
 

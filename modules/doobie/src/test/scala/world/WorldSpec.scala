@@ -145,6 +145,38 @@ final class WorldSpec extends CatsSuite {
     assert(res == expected)
   }
 
+  test("multiple aliased root queries") {
+    val query = """
+      query {
+        gbr: country(code: "GBR") {
+          name
+        }
+        fra: country(code: "FRA") {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "gbr" : {
+            "name" : "United Kingdom"
+          },
+          "fra" : {
+            "name" : "France"
+          }
+        }
+      }
+    """
+
+    val compiledQuery = WorldQueryCompiler.compile(query).right.get
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
+
   test("recursive query (1)") {
     val query = """
       query {
@@ -639,16 +671,42 @@ final class WorldSpec extends CatsSuite {
 
     val expected = json"""
       {
-        "errors" : [
-          {
-            "message" : "No match"
-          }
-        ]
+        "data" : {
+          "country" : null
+        }
       }
     """
 
     val compiledQuery = WorldQueryCompiler.compile(query).right.get
     val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("multiple missing countries") {
+    val query = """
+      query {
+        xxx: country(code: "xxx") {
+          name
+        }
+        yyy: country(code: "yyy") {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "xxx" : null,
+          "yyy" : null
+        }
+      }
+    """
+
+    val compiledQuery = WorldQueryCompiler.compile(query)
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery.right.get, WorldSchema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -709,5 +767,4 @@ final class WorldSpec extends CatsSuite {
 
     assert(res == expected)
   }
-
 }
