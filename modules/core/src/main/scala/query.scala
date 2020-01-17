@@ -35,6 +35,10 @@ sealed trait Query {
 object Query {
   /** Select field `name` given arguments `args` and continue with `child` */
   case class Select(name: String, args: List[Binding], child: Query = Empty) extends Query {
+    def eliminateArgs(elim: Query => Query): Query = copy(args = Nil, child = elim(child))
+
+    def transformChild(f: Query => Query): Query = copy(child = f(child))
+
     def render = {
       val rargs = if(args.isEmpty) "" else s"(${args.map(_.render).mkString(", ")})"
       val rchild = if(child == Empty) "" else s" { ${child.render} }"
@@ -83,10 +87,26 @@ object Query {
     }
   }
 
+  /**
+   * Rename the topmost field of `sel` to `name`.
+   */
+  case class Rename(name: String, child: Query) extends Query {
+    def render = s"<rename: $name ${child.render}>"
+  }
+
+  /**
+   * Untyped precursor of `Narrow`.
+   *
+   * Trees of this type will be replaced by a corresponding `Narrow` by
+   * `SelectElaborator`.
+   */
   case class UntypedNarrow(tpnme: String, child: Query) extends Query {
     def render = s"<narrow: $tpnme ${child.render}>"
   }
 
+  /**
+   * The result of `child` if the focus is of type `subtpe`, `Empty` otherwise.
+   */
   case class Narrow(subtpe: Type, child: Query) extends Query {
     def render = s"<narrow: $subtpe ${child.render}>"
   }
@@ -94,6 +114,38 @@ object Query {
   /** The terminal query */
   case object Empty extends Query {
     def render = ""
+  }
+
+  object PossiblyRenamedSelect {
+    def apply(sel: Select, resultName: String): Query = sel match {
+      case Select(`resultName`, _, _) => sel
+      case _ => Rename(resultName, sel)
+    }
+
+    def unapply(q: Query): Option[(Select, String)] =
+      q match {
+        case Rename(name, sel: Select) => Some((sel, name))
+        case sel: Select => Some((sel, sel.name))
+        case _ => None
+      }
+  }
+
+  def renameRoot(q: Query, rootName: String): Option[Query] = q match {
+    case Rename(_, sel@Select(`rootName`, _, _)) => Some(sel)
+    case r@Rename(`rootName`, _)                 => Some(r)
+    case Rename(_, sel: Select)                  => Some(Rename(rootName, sel))
+    case sel@Select(`rootName`, _, _)            => Some(sel)
+    case sel: Select                             => Some(Rename(rootName, sel))
+    case w@Wrap(`rootName`, _)                   => Some(w)
+    case w: Wrap                                 => Some(w.copy(name = rootName))
+    case _ => None
+  }
+
+  def rootName(q: Query): Option[String] = q match {
+    case Select(name, _, _)       => Some(name)
+    case Wrap(name, _)            => Some(name)
+    case Rename(name, _)          => Some(name)
+    case _                        => None
   }
 
   /** InputValue binding */
@@ -333,8 +385,24 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
    *  Errors are accumulated on the `Left` of the result.
    */
   def runRoot(query: Query, rootTpe: Type): F[Result[Json]] = {
+    val rootQueries =
+      query match {
+        case Group(queries) => queries
+        case query => List(query)
+      }
+
+    val rootResults = runRootValues(rootQueries.zip(Iterator.continually(rootTpe)))
+    val mergedResults: F[Result[ProtoJson]] =
+      rootResults.map {
+        case (errors, pvalues) =>
+          val merged = ProtoJson.mergeObjects(pvalues)
+          NonEmptyChain.fromChain(errors) match {
+            case Some(errs) => Ior.Both(errs, merged)
+            case None => Ior.Right(merged)
+          }
+      }
     (for {
-      pvalue <- IorT(runRootValue(query, rootTpe))
+      pvalue <- IorT(mergedResults)
       value  <- IorT(complete(pvalue))
     } yield value).value
   }
@@ -395,19 +463,19 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
             fields <- runFields(child, tp1, c)
           } yield fields
 
-      case (sel@Select(fieldName, _, _), NullableType(tpe)) =>
+      case (PossiblyRenamedSelect(sel, resultName), NullableType(tpe)) =>
         cursor.asNullable.sequence.map { rc =>
           for {
             c      <- rc
             fields <- runFields(sel, tpe, c)
           } yield fields
-        }.getOrElse(List((fieldName, ProtoJson.fromJson(Json.Null))).rightIor)
+        }.getOrElse(List((resultName, ProtoJson.fromJson(Json.Null))).rightIor)
 
-      case (Select(fieldName, _, child), tpe) =>
+      case (PossiblyRenamedSelect(Select(fieldName, _, child), resultName), tpe) =>
         for {
           c     <- cursor.field(fieldName)
           value <- runValue(child, tpe.field(fieldName), c)
-        } yield List((fieldName, value))
+        } yield List((resultName, value))
 
       case (Wrap(fieldName, child), tpe) =>
         for {
@@ -425,34 +493,57 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
   /**
    * Interpret `query` against `cursor` with expected type `tpe`.
    *
-   * If the query is invalide errors will be returned on teh left hand side
+   * If the query is invalid errors will be returned on teh left hand side
    * of the result.
    */
   def runValue(query: Query, tpe: Type, cursor: Cursor): Result[ProtoJson] = {
+    def joinType(localName: String, componentName: String, tpe: Type): Type =
+      ObjectType(s"Join-$localName-$componentName", None, List(Field(componentName, None, Nil, tpe, false, None)), Nil)
+
+    def mkResult[T](ot: Option[T]): Result[T] = ot match {
+      case Some(t) => t.rightIor
+      case None => mkErrorResult(s"Join continuation has unexpected shape")
+    }
+
     (query, tpe.dealias) match {
       case (Wrap(fieldName, child), _) =>
         for {
           pvalue <- runValue(child, tpe, cursor)
         } yield ProtoJson.fromFields(List((fieldName, pvalue)))
 
-      case (Component(cid, join, child), _) =>
+      case (Component(cid, join, PossiblyRenamedSelect(child, resultName)), _) =>
         for {
-          cont <- join(cursor, child)
-        } yield ProtoJson.component(cid, cont, tpe)
+          cont          <- join(cursor, child)
+          componentName <- mkResult(rootName(cont))
+          renamedCont   <- mkResult(renameRoot(cont, resultName))
+        } yield ProtoJson.component(cid, renamedCont, joinType(child.name, componentName, tpe.field(child.name)))
 
       case (Defer(join, child), _) =>
         for {
           cont <- join(cursor, child)
         } yield ProtoJson.staged(this, cont, tpe)
 
-      case (Unique(pred, child), _) if cursor.isList =>
-        cursor.asList.map(_.filter(pred)).flatMap(lc =>
+      case (Unique(pred, child), _) =>
+        val cursors =
+          if (cursor.isNullable)
+            cursor.asNullable.flatMap {
+              case None => Nil.rightIor
+              case Some(c) => c.asList
+            }
+          else cursor.asList
+
+        cursors.map(_.filter(pred)).flatMap(lc =>
           lc match {
             case List(c) => runValue(child, tpe.nonNull, c)
             case Nil if tpe.isNullable => ProtoJson.fromJson(Json.Null).rightIor
             case Nil => mkErrorResult(s"No match")
             case _ => mkErrorResult(s"Multiple matches")
           }
+        )
+
+      case (Filter(pred, child), ListType(tpe)) =>
+        cursor.asList.map(_.filter(pred)).flatMap(lc =>
+          lc.traverse(c => runValue(child, tpe, c)).map(ProtoJson.fromValues)
         )
 
       case (_, NullableType(tpe)) =>
@@ -462,11 +553,6 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
             value <- runValue(query, tpe, c)
           } yield value
         }.getOrElse(ProtoJson.fromJson(Json.Null).rightIor)
-
-      case (Filter(pred, child), ListType(tpe)) =>
-        cursor.asList.map(_.filter(pred)).flatMap(lc =>
-          lc.traverse(c => runValue(child, tpe, c)).map(ProtoJson.fromValues)
-        )
 
       case (_, ListType(tpe)) =>
         cursor.asList.flatMap(lc =>
@@ -552,13 +638,36 @@ object QueryInterpreter {
         wrap(ProtoArray(elems))
 
     /**
-     * Test whether the argument contains any deferred.
+     * Test whether the argument contains any deferred subtrees
      *
-     * Yields `true` if the argument contains any deferred or staged
+     * Yields `true` if the argument contains any component or staged
      * subtrees, false otherwise.
      */
     def isDeferred(p: ProtoJson): Boolean =
       p.isInstanceOf[DeferredJson]
+
+    def mergeObjects(elems: List[ProtoJson]): ProtoJson = {
+      def loop(elems: List[ProtoJson], acc: List[(String, ProtoJson)]): List[(String, ProtoJson)] = elems match {
+        case Nil                       => acc
+        case (j: Json) :: tl =>
+          j.asObject match {
+            case Some(obj)             => loop(tl, acc ++ obj.keys.zip(obj.values.map(fromJson)))
+            case None                  => loop(tl, acc)
+          }
+        case ProtoObject(fields) :: tl => loop(tl, acc ++ fields)
+        case _ :: tl                   => loop(tl, acc)
+      }
+
+      elems match {
+        case Nil        => wrap(Json.Null)
+        case hd :: Nil  => hd
+        case _          =>
+          loop(elems, Nil) match {
+            case Nil    => wrap(Json.Null)
+            case fields => fromFields(fields)
+          }
+      }
+    }
 
     private def wrap(j: AnyRef): ProtoJson = j.asInstanceOf[ProtoJson]
   }

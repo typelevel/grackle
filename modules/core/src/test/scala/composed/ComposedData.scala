@@ -31,7 +31,7 @@ import CurrencyData.{ Currency, CurrencyType, currencies }
 
 object CurrencyQueryInterpreter extends DataTypeQueryInterpreter[Id](
   {
-    case "currency" => (ListType(CurrencyType), currencies)
+    case "fx" => (ListType(CurrencyType), currencies)
   },
   {
     case (c: Currency, "code")         => c.code
@@ -44,8 +44,8 @@ object CurrencyQueryCompiler extends QueryCompiler(CurrencySchema) {
 
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
-      case Select("currency", List(StringBinding("code", code)), child) =>
-        Select("currency", Nil, Unique(FieldEquals("code", code), child)).rightIor
+      case Select("fx", List(StringBinding("code", code)), child) =>
+        Select("fx", Nil, Unique(FieldEquals("code", code), child)).rightIor
     }
   ))
 
@@ -107,8 +107,8 @@ object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
 
   val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {
-      case Select("currency", List(StringBinding("code", code)), child) =>
-        Select("currency", Nil, Unique(FieldEquals("code", code), child)).rightIor
+      case Select("fx", List(StringBinding("code", code)), child) =>
+        Select("fx", Nil, Unique(FieldEquals("code", code), child)).rightIor
       case Select("country", List(StringBinding("code", code)), child) =>
         Select("country", Nil, Unique(FieldEquals("code", code), child)).rightIor
       case Select("countries", _, child) =>
@@ -119,7 +119,7 @@ object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
   val countryCurrencyJoin = (c: Cursor, q: Query) =>
     (c.focus, q) match {
       case (c: Country, Select("currency", _, child)) =>
-        Select("currency", Nil, Unique(FieldEquals("code", c.currencyCode), child)).rightIor
+        Select("fx", Nil, Unique(FieldEquals("code", c.currencyCode), child)).rightIor
       case _ =>
         mkErrorResult(s"Unexpected cursor focus type in countryCurrencyJoin")
     }
@@ -127,6 +127,7 @@ object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
   val componentElaborator = ComponentElaborator(
     Mapping(QueryType, "country", "CountryComponent"),
     Mapping(QueryType, "countries", "CountryComponent"),
+    Mapping(QueryType, "fx", "CurrencyComponent"),
     Mapping(CountryType, "currency", "CurrencyComponent", countryCurrencyJoin)
   )
 

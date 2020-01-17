@@ -87,6 +87,32 @@ final class CompilerSuite extends CatsSuite {
     assert(res == Ior.Right(expected))
   }
 
+  test("field alias") {
+    val text = """
+      {
+        user(id: 4) {
+          id
+          name
+          smallPic: profilePic(size: 64)
+          bigPic: profilePic(size: 1024)
+        }
+      }
+    """
+
+    val expected =
+      Select("user", List(IntBinding("id", 4)),
+        Group(List(
+          Select("id", Nil, Empty),
+          Select("name", Nil, Empty),
+          Rename("smallPic", Select("profilePic", List(IntBinding("size", 64)), Empty)),
+          Rename("bigPic", Select("profilePic", List(IntBinding("size", 1024)), Empty))
+        ))
+      )
+
+    val res = QueryParser.parseText(text)
+    assert(res == Ior.Right(expected))
+  }
+
   test("introspection query") {
     val text = """
       query IntrospectionQuery {
