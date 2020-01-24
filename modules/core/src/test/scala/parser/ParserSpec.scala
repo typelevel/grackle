@@ -7,7 +7,7 @@ import atto.Atto._
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle.{ Ast, Parser }
-import Ast._, OperationType._, OperationDefinition._, Selection._, Value._
+import Ast._, OperationType._, OperationDefinition._, Selection._, Value._, Type.Named
 
 final class ParserSuite extends CatsSuite {
   val text = """
@@ -175,6 +175,37 @@ final class ParserSuite extends CatsSuite {
           Field(Some(Name("darth")), Name("character"), List((Name("id"), StringValue("1001"))), Nil,
             List(
               Field(None, Name("name"), Nil, Nil, Nil)
+            )
+          )
+        )
+      )
+
+    Parser.Document.parseOnly(text).option match {
+      case Some(List(Left(q))) => assert(q == expected)
+    }
+  }
+
+  test("variables") {
+    val text = """
+      query getZuckProfile($devicePicSize: Int) {
+        user(id: 4) {
+          id
+          name
+          profilePic(size: $devicePicSize)
+        }
+      }
+    """
+
+    val expected =
+      Operation(Query, Some(Name("getZuckProfile")),
+        List(VariableDefinition(Name("devicePicSize"), Named(Name("Int")), None, Nil)),
+        Nil,
+        List(
+          Field(None, Name("user"), List((Name("id"), IntValue(4))), Nil,
+            List(
+              Field(None, Name("id"), Nil, Nil, Nil),
+              Field(None, Name("name"), Nil, Nil, Nil),
+              Field(None, Name("profilePic"), List((Name("size"), Variable(Name("devicePicSize")))), Nil, Nil)
             )
           )
         )

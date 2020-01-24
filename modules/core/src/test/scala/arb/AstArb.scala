@@ -90,7 +90,7 @@ trait AstArb {
   implicit lazy val arbVariableDefinition: Arbitrary[VariableDefinition] =
     Arbitrary {
       for {
-        variable     <- arbitrary[Value.Variable]
+        variable     <- arbitrary[Name]
         tpe          <- arbitrary[Type]
         defaultValue <- option(genValueForType(tpe))
         directives   <- shortListOf(arbitrary[Directive])

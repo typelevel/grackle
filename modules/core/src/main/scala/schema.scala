@@ -60,7 +60,7 @@ trait Schema {
    * Yields the type, if defined, `NoType` otherwise.
    */
   def tpe(name: String): Type =
-    types.find(_.name == name).getOrElse(NoType)
+    types.find(_.name == name).getOrElse(Type.tpe(name))
 
   /**
    * The schema type.
@@ -299,6 +299,21 @@ sealed trait Type {
   /** Yield a short String representation of this type */
   override def toString: String = describe
 }
+
+object Type {
+  import ScalarType._
+
+  def tpe(tpnme: String): Type = tpnme match {
+    case "Int" => IntType
+    case "Float" => FloatType
+    case "String" => StringType
+    case "Boolean" => BooleanType
+    case "ID" => IDType
+    case _ => NoType
+  }
+}
+
+// Move all below into object Type?
 
 /** A type with a schema-defined name.
  *

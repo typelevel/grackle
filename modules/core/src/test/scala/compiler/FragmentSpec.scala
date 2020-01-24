@@ -10,7 +10,7 @@ import cats.tests.CatsSuite
 import io.circe.literal.JsonStringContext
 
 import edu.gemini.grackle._
-import Query._, Binding._, Predicate._
+import Query._, Predicate._, Value._
 import QueryCompiler._
 
 final class FragmentSuite extends CatsSuite {
@@ -376,7 +376,7 @@ object FragmentSchema extends Schema {
 object FragmentCompiler extends QueryCompiler(FragmentSchema) {
   val selectElaborator = new SelectElaborator(Map(
     FragmentSchema.tpe("Query").dealias -> {
-      case Select("user", List(IDBinding("id", id)), child) =>
+      case Select("user", List(Binding("id", IDValue(id))), child) =>
         Select("user", Nil, Unique(FieldEquals("id", id), child)).rightIor
       case sel@Select("profiles", _, _) =>
         sel.rightIor

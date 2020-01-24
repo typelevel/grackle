@@ -6,11 +6,13 @@ package edu.gemini.grackle
 import atto.Atto._
 import cats.data.{ Ior, NonEmptyChain }
 import cats.implicits._
+import io.circe.Json
 
-import Query._, Binding._
+import Query._, Value._
 import QueryCompiler._
-import QueryInterpreter.{ mkError, mkErrorResult }
-import Ast.{ Type => _, _ }, OperationDefinition._, OperationType._, Selection._, Value._
+import QueryInterpreter.{ mkError, mkOneError, mkErrorResult }
+import Ast.{ Type => _, Value => _, _ }, OperationDefinition._, OperationType._, Selection._
+import ScalarType._
 
 /**
  * GraphQL query parser
@@ -21,7 +23,7 @@ object QueryParser {
    *
    *  Yields a Query value on the right and accumulates errors on the left.
    */
-  def parseText(text: String, name: Option[String] = None): Result[Query] = {
+  def parseText(text: String, name: Option[String] = None): Result[(Query, UntypedVarDefs)] = {
     def toResult[T](pr: Either[String, T]): Result[T] =
       Ior.fromEither(pr).leftMap(msg => NonEmptyChain.one(mkError(msg)))
 
@@ -31,7 +33,7 @@ object QueryParser {
     } yield query
   }
 
-  def parseDocument(doc: Document, name: Option[String]): Result[Query] = {
+  def parseDocument(doc: Document, name: Option[String]): Result[(Query, UntypedVarDefs)] = {
     val ops = doc.collect { case Left(op) => op }
     val fragments = doc.collect { case Right(frag) => (frag.name.value, frag) }.toMap
 
@@ -53,14 +55,18 @@ object QueryParser {
     }
   }
 
-  def parseOperation(op: Operation, fragments: Map[String, FragmentDefinition]): Result[Query] = op match {
-    case Operation(Query, _, _, _, sels) =>
-      parseSelections(sels, None, fragments)
+  def parseOperation(op: Operation, fragments: Map[String, FragmentDefinition]): Result[(Query, UntypedVarDefs)] = op match {
+    case Operation(Query, _, vds, _, sels) =>
+      val q = parseSelections(sels, None, fragments)
+      val vs = vds.map {
+        case VariableDefinition(nme, tpe, _, _) => UntypedVarDef(nme.value, tpe, None)
+      }
+      q.map(q => (q, vs))
     case _ => mkErrorResult("Selection required")
   }
 
-  def parseQueryShorthand(qs: QueryShorthand, fragments: Map[String, FragmentDefinition]): Result[Query] = qs match {
-    case QueryShorthand(sels) => parseSelections(sels, None, fragments)
+  def parseQueryShorthand(qs: QueryShorthand, fragments: Map[String, FragmentDefinition]): Result[(Query, UntypedVarDefs)] = qs match {
+    case QueryShorthand(sels) => parseSelections(sels, None, fragments).map(q => (q, Nil))
     case _ => mkErrorResult("Selection required")
   }
 
@@ -99,16 +105,19 @@ object QueryParser {
       mkErrorResult("Field or fragment spread required")
   }
 
-  def parseArgs(args: List[(Name, Value)]): Result[List[Binding]] =
+  def parseArgs(args: List[(Name, Ast.Value)]): Result[List[Binding]] =
     args.traverse((parseArg _).tupled)
 
-  def parseArg(name: Name, value: Value): Result[Binding] = value match {
-    case IntValue(i) => IntBinding(name.value, i).rightIor
-    case FloatValue(d) => FloatBinding(name.value, d).rightIor
-    case StringValue(s) => StringBinding(name.value, s).rightIor
-    case BooleanValue(b) => BooleanBinding(name.value, b).rightIor
-    case EnumValue(e) => UntypedEnumBinding(name.value, e.value).rightIor
-    case _ => mkErrorResult("Argument required")
+  def parseArg(name: Name, value: Ast.Value): Result[Binding] = {
+    value match {
+      case Ast.Value.IntValue(i) => Binding(name.value, IntValue(i)).rightIor
+      case Ast.Value.FloatValue(d) => Binding(name.value, FloatValue(d)).rightIor
+      case Ast.Value.StringValue(s) => Binding(name.value, StringValue(s)).rightIor
+      case Ast.Value.BooleanValue(b) => Binding(name.value, BooleanValue(b)).rightIor
+      case Ast.Value.EnumValue(e) => Binding(name.value, UntypedEnumValue(e.value)).rightIor
+      case Ast.Value.Variable(v) => Binding(name.value, UntypedVariableValue(v.value)).rightIor
+      case _ => mkErrorResult("Argument required")
+    }
   }
 }
 
@@ -122,6 +131,7 @@ object QueryParser {
 abstract class QueryCompiler(schema: Schema) {
   /** The phase of this compiler */
   val phases: List[Phase]
+  val vfe = new VariablesAndFragmentsElaborator
 
   /**
    * Compiles the GraphQL query `text` to a query algebra term which
@@ -129,10 +139,82 @@ abstract class QueryCompiler(schema: Schema) {
    *
    * Any errors are accumulated on the left.
    */
-  def compile(text: String): Result[Query] = {
-    val query = QueryParser.parseText(text)
+  def compile(text: String, untypedEnv: Option[Json] = None): Result[Query] = {
     val queryType = schema.queryType
-    phases.foldLeft(query) { (acc, phase) => acc.flatMap(phase(_, schema, queryType)) }
+
+    val allPhases = vfe :: phases
+
+    for {
+      parsed  <- QueryParser.parseText(text)
+      varDefs <- compileVarDefs(parsed._2)
+      env     <- compileEnv(varDefs, untypedEnv)
+      query   <- allPhases.foldLeftM(parsed._1) { (acc, phase) => phase(acc, env, schema, queryType) }
+    } yield query
+  }
+
+  def compileVarDefs(untypedVarDefs: UntypedVarDefs): Result[VarDefs] =
+    untypedVarDefs.traverse {
+      case UntypedVarDef(name, untypedTpe, default) =>
+        compileType(untypedTpe).map(tpe => VarDef(name, tpe, default))
+    }
+
+  def compileEnv(varDefs: VarDefs, untypedEnv: Option[Json]): Result[Env] =
+    untypedEnv match {
+      case None => Map.empty.rightIor
+      case Some(untypedEnv) =>
+        untypedEnv.asObject match {
+          case None => mkErrorResult(s"Variables must be represented as a Json object")
+          case Some(obj) =>
+            (varDefs.traverse {
+              case VarDef(name, tpe, default) =>
+                (obj(name), default) match {
+                  case (None, None) if tpe.isNullable => (name -> ((tpe, NullValue))).rightIor
+                  case (None, None) => mkErrorResult(s"No value provided for variable '$name'")
+                  case (None, Some(value)) => (name -> ((tpe, value))).rightIor
+                  case (Some(value), _) => checkValue(tpe, value).map(value => name -> ((tpe, value)))
+                }
+            }).map(_.toMap)
+        }
+    }
+
+  def checkValue(tpe: Type, value: Json): Result[Value] =
+    tpe match {
+      case _: NullableType if value.isNull =>
+        NullValue.rightIor
+      case NullableType(tpe) =>
+        checkValue(tpe, value)
+      case IntType =>
+        value.asNumber.flatMap(_.toInt).map(IntValue).toRightIor(mkOneError(s"Expected Int found '$value'"))
+      case FloatType =>
+        value.asNumber.map(_.toDouble).map(FloatValue).toRightIor(mkOneError(s"Expected Float found '$value'"))
+      case StringType =>
+        value.asString.map(StringValue).toRightIor(mkOneError(s"Expected String found '$value'"))
+      case IDType if value.isNumber =>
+        value.asNumber.flatMap(_.toInt).map(i => IDValue(i.toString)).toRightIor(mkOneError(s"Expected ID found '$value'"))
+      case IDType =>
+        value.asString.map(IDValue).toRightIor(mkOneError(s"Expected ID found '$value'"))
+      case BooleanType =>
+        value.asString.flatMap { _ match {
+          case "true"  => Some(BooleanValue(true))
+          case "false" => Some(BooleanValue(false))
+          case _       => None
+        }}.toRightIor(mkOneError(s"Expected Boolean found '$value'"))
+      case e: EnumType =>
+        value.asString.flatMap(s => e.value(s)).map(TypedEnumValue).toRightIor(mkOneError(s"Expected $e found '$value'"))
+      case _ => mkErrorResult(s"Cannot use non-input type '$tpe' for input values")
+    }
+
+  def compileType(tpe: Ast.Type): Result[Type] = {
+    def loop(tpe: Ast.Type, nonNull: Boolean): Result[Type] = tpe match {
+      case Ast.Type.NonNull(Left(named)) => loop(named, true)
+      case Ast.Type.NonNull(Right(list)) => loop(list, true)
+      case Ast.Type.List(elem) => loop(elem, false).map(e => if (nonNull) ListType(e) else NullableType(ListType(e)))
+      case Ast.Type.Named(name) => schema.tpe(name.value) match {
+        case NoType => mkErrorResult(s"Undefine typed '${name.value}'")
+        case tpe => (if (nonNull) tpe else NullableType(tpe)).rightIor
+      }
+    }
+    loop(tpe, false)
   }
 }
 
@@ -143,7 +225,52 @@ object QueryCompiler {
      * Transform the supplied query algebra term `query` with expected type
      * `tpe`.
      */
-    def apply(query: Query, schema: Schema, tpe: Type): Result[Query]
+    def apply(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query]
+  }
+
+  class VariablesAndFragmentsElaborator extends Phase {
+    def apply(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] = {
+      def elaborateVariable(b: Binding): Result[Binding] = b match {
+        case Binding(name, UntypedVariableValue(varName)) =>
+          env.get(varName) match {
+            case Some((_, value)) => Binding(name, value).rightIor
+            case None => mkErrorResult(s"Undefined variable '$name'")
+          }
+        case other => other.rightIor
+      }
+
+      def loop(query: Query, tpe: Type): Result[Query] =
+        query match {
+          case Select(fieldName, args, child) =>
+            val childTpe = tpe.underlyingField(fieldName)
+
+            for {
+              elaboratedChild <- loop(child, childTpe)
+              elaboratedArgs  <- args.traverse(elaborateVariable)
+            } yield Select(fieldName, elaboratedArgs, elaboratedChild)
+
+          case UntypedNarrow(tpnme, child) =>
+            schema.tpe(tpnme) match {
+              case NoType => mkErrorResult(s"Unknown type '$tpnme' in type condition")
+              case subtpe =>
+                loop(child, subtpe).map { ec =>
+                  if (tpe.underlyingObject =:= subtpe) ec else Narrow(subtpe, ec)
+                }
+            }
+
+          case n@Narrow(subtpe, child)  => loop(child, subtpe).map(ec => n.copy(child = ec))
+          case w@Wrap(_, child)         => loop(child, tpe).map(ec => w.copy(child = ec))
+          case r@Rename(_, child)       => loop(child, tpe).map(ec => r.copy(child = ec))
+          case g@Group(queries)         => queries.traverse(q => loop(q, tpe)).map(eqs => g.copy(queries = eqs))
+          case u@Unique(_, child)       => loop(child, tpe.nonNull).map(ec => u.copy(child = ec))
+          case f@Filter(_, child)       => loop(child, tpe.item).map(ec => f.copy(child = ec))
+          case c@Component(_, _, child) => loop(child, tpe).map(ec => c.copy(child = ec))
+          case d@Defer(_, child)        => loop(child, tpe).map(ec => d.copy(child = ec))
+          case Empty                    => Empty.rightIor
+        }
+
+      loop(query, tpe)
+    }
   }
 
   /**
@@ -179,7 +306,7 @@ object QueryCompiler {
    *    against the schema.
    */
   class SelectElaborator(mapping: Map[Type, PartialFunction[Select, Result[Query]]]) extends Phase {
-    def apply(query: Query, schema: Schema, tpe: Type): Result[Query] = {
+    def apply(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] = {
       def loop(query: Query, tpe: Type): Result[Query] =
         query match {
           case Select(fieldName, args, child) =>
@@ -195,15 +322,6 @@ object QueryCompiler {
               elaborated <- elaborator(Select(fieldName, elaboratedArgs, elaboratedChild))
             } yield elaborated
 
-          case UntypedNarrow(tpnme, child) =>
-            schema.tpe(tpnme) match {
-              case NoType => mkErrorResult(s"Unknown type '$tpnme' in type condition")
-              case subtpe =>
-                loop(child, subtpe).map { ec =>
-                  if (tpe.underlyingObject =:= subtpe) ec else Narrow(subtpe, ec)
-                }
-            }
-
           case n@Narrow(subtpe, child)  => loop(child, subtpe).map(ec => n.copy(child = ec))
           case w@Wrap(_, child)         => loop(child, tpe).map(ec => w.copy(child = ec))
           case r@Rename(_, child)       => loop(child, tpe).map(ec => r.copy(child = ec))
@@ -213,6 +331,8 @@ object QueryCompiler {
           case c@Component(_, _, child) => loop(child, tpe).map(ec => c.copy(child = ec))
           case d@Defer(_, child)        => loop(child, tpe).map(ec => d.copy(child = ec))
           case Empty                    => Empty.rightIor
+
+          case n: UntypedNarrow         => mkErrorResult(s"Unexpected UntypeNarrow ${n.render}")
         }
 
       loop(query, tpe)
@@ -228,7 +348,7 @@ object QueryCompiler {
               infos.traverse { info =>
                 argMap.get(info.name) match {
                   case Some(arg) => Binding.forArg(arg, info)
-                  case None => Binding.defaultForInputValue(info)
+                  case None      => Binding.defaultForInputValue(info)
                 }
               }
             case _ => mkErrorResult(s"No field '$fieldName' in type $tpe")
@@ -264,7 +384,7 @@ object QueryCompiler {
    *    from the parent query.
    */
   class ComponentElaborator private (mapping: Map[(Type, String), (String, (Cursor, Query) => Result[Query])]) extends Phase {
-    def apply(query: Query, schema: Schema, tpe: Type): Result[Query] = {
+    def apply(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] = {
       def loop(query: Query, tpe: Type): Result[Query] =
         query match {
           case PossiblyRenamedSelect(Select(fieldName, args, child), resultName) =>

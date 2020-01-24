@@ -8,7 +8,7 @@ import cats.implicits._
 
 import edu.gemini.grackle._
 
-import Query._, Binding._, Predicate._
+import Query._, Predicate._, Value._
 import QueryCompiler._
 
 import StarWarsData._
@@ -109,10 +109,10 @@ object StarWarsData {
 object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
   val selectElaborator = new SelectElaborator(Map(
     StarWarsSchema.tpe("Query").dealias -> {
-      case Select("hero", List(EnumBinding("episode", e)), child) =>
+      case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
         val episode = Episode.values.find(_.toString == e.name).get
         Select("hero", Nil, Unique(FieldEquals("id", hero(episode).id), child)).rightIor
-      case Select(f@("character" | "human" | "droid"), List(IDBinding("id", id)), child) =>
+      case Select(f@("character" | "human" | "droid"), List(Binding("id", IDValue(id))), child) =>
         Select(f, Nil, Unique(FieldEquals("id", id), child)).rightIor
     }
   ))

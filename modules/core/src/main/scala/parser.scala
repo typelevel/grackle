@@ -146,7 +146,7 @@ object Parser {
       tpe  <- Type
       dv   <- opt(DefaultValue)
       dirs <- Directives
-    } yield Ast.VariableDefinition(v, tpe, dv, dirs)
+    } yield Ast.VariableDefinition(v.name, tpe, dv, dirs)
 
   lazy val Variable: Parser[Ast.Value.Variable] =
     keyword("$") ~> Name.map(Ast.Value.Variable)

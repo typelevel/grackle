@@ -7,7 +7,7 @@ import cats.Id
 import cats.implicits._
 
 import edu.gemini.grackle._
-import Query._, Binding._, Predicate._
+import Query._, Predicate._, Value._
 import QueryCompiler._, ComponentElaborator.Mapping
 import QueryInterpreter.mkErrorResult
 
@@ -44,7 +44,7 @@ object CurrencyQueryCompiler extends QueryCompiler(CurrencySchema) {
 
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
-      case Select("fx", List(StringBinding("code", code)), child) =>
+      case Select("fx", List(Binding("code", StringValue(code))), child) =>
         Select("fx", Nil, Unique(FieldEquals("code", code), child)).rightIor
     }
   ))
@@ -87,7 +87,7 @@ object CountryQueryCompiler extends QueryCompiler(CountrySchema) {
 
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
-      case Select("country", List(StringBinding("code", code)), child) =>
+      case Select("country", List(Binding("code", StringValue(code))), child) =>
         Select("country", Nil, Unique(FieldEquals("code", code), child)).rightIor
       case Select("countries", _, child) =>
         Select("countries", Nil, child).rightIor
@@ -107,9 +107,9 @@ object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
 
   val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {
-      case Select("fx", List(StringBinding("code", code)), child) =>
+      case Select("fx", List(Binding("code", StringValue(code))), child) =>
         Select("fx", Nil, Unique(FieldEquals("code", code), child)).rightIor
-      case Select("country", List(StringBinding("code", code)), child) =>
+      case Select("country", List(Binding("code", StringValue(code))), child) =>
         Select("country", Nil, Unique(FieldEquals("code", code), child)).rightIor
       case Select("countries", _, child) =>
         Select("countries", Nil, child).rightIor
