@@ -9,7 +9,7 @@ import doobie.Transactor
 import io.chrisdavenport.log4cats.Logger
 
 import edu.gemini.grackle._, doobie._
-import Query._, Binding._, Predicate._
+import Query._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.mkErrorResult
 import DoobiePredicate._
@@ -132,13 +132,13 @@ object WorldQueryCompiler extends QueryCompiler(WorldSchema) {
 
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
-      case Select("country", List(StringBinding("code", code)), child) =>
+      case Select("country", List(Binding("code", StringValue(code))), child) =>
         Select("country", Nil, Unique(AttrEquals("code", code), child)).rightIor
       case Select("countries", Nil, child) =>
         Select("countries", Nil, child).rightIor
-      case Select("cities", List(StringBinding("namePattern", namePattern)), child) =>
+      case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
         Select("cities", Nil, Filter(FieldLike("name", namePattern, true), child)).rightIor
-      case Select("language", List(StringBinding("language", language)), child) =>
+      case Select("language", List(Binding("language", StringValue(language))), child) =>
         Select("language", Nil, Unique(FieldEquals("language", language), child)).rightIor
       case Select("languages", Nil, child) =>
         Select("languages", Nil, child).rightIor

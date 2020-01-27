@@ -15,7 +15,7 @@ import edu.gemini.grackle.{ IntrospectionQueryCompiler, IntrospectionQueryInterp
 
 // #service
 trait StarWarsService[F[_]]{
-  def runQuery(op: Option[String], query: String): F[Json]
+  def runQuery(op: Option[String], vars: Option[Json], query: String): F[Json]
 }
 
 object StarWarsService {
@@ -29,7 +29,7 @@ object StarWarsService {
       // GraphQL query is embedded in the URI query string when queried via GET
       case GET -> Root / "starwars" :? QueryQueryParamMatcher(query) =>
         for {
-          result <- service.runQuery(None, query)
+          result <- service.runQuery(None, None, query)
           resp   <- Ok(result)
         } yield resp
 
@@ -39,8 +39,9 @@ object StarWarsService {
           body   <- req.as[Json]
           obj    <- body.asObject.liftTo[F](new RuntimeException("Invalid GraphQL query"))
           op     =  obj("operationName").flatMap(_.asString)
+          vars   =  obj("variables")
           query  <- obj("query").flatMap(_.asString).liftTo[F](new RuntimeException("Missing query field"))
-          result <- service.runQuery(op, query)
+          result <- service.runQuery(op, vars, query)
           resp   <- Ok(result)
         } yield resp
     }
@@ -48,10 +49,10 @@ object StarWarsService {
 
   def service[F[_]](implicit F: ApplicativeError[F, Throwable]): StarWarsService[F] =
     new StarWarsService[F]{
-      def runQuery(op: Option[String], query: String): F[Json] = {
+      def runQuery(op: Option[String], vars: Option[Json], query: String): F[Json] = {
         if (op == Some("IntrospectionQuery")) {
           // Handle IntrospectionQuery for GraphQL Playground
-          IntrospectionQueryCompiler.compile(query) match {
+          IntrospectionQueryCompiler.compile(query, vars) match {
             case Ior.Right(compiledQuery) =>
               IntrospectionQueryInterpreter(StarWarsSchema).run(compiledQuery, SchemaSchema.queryType).pure[F]
             case invalid =>
@@ -59,7 +60,7 @@ object StarWarsService {
           }
         } else
           // Handle GraphQL against the model
-          StarWarsQueryCompiler.compile(query) match {
+          StarWarsQueryCompiler.compile(query, vars) match {
             case Ior.Right(compiledQuery) =>
               StarWarsQueryInterpreter.run(compiledQuery, StarWarsSchema.queryType).pure[F]
             case invalid =>

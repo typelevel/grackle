@@ -6,19 +6,19 @@ package edu.gemini.grackle
 import cats.Id
 import cats.implicits._
 
-import Query._, Binding._, Predicate._
+import Query._, Predicate._, Value._
 import QueryCompiler._
 
 object IntrospectionQueryCompiler extends QueryCompiler(SchemaSchema) {
   val selectElaborator = new SelectElaborator(Map(
     SchemaSchema.tpe("Query").dealias -> {
-      case sel@Select("__type", List(StringBinding("name", name)), _) =>
+      case sel@Select("__type", List(Binding("name", StringValue(name))), _) =>
         sel.eliminateArgs(child => Unique(FieldEquals("name", name), child)).rightIor
     },
     SchemaSchema.tpe("__Type").dealias -> {
-      case sel@Select("fields", List(BooleanBinding("includeDeprecated", include)), _) =>
+      case sel@Select("fields", List(Binding("includeDeprecated", BooleanValue(include))), _) =>
         sel.eliminateArgs(child => if (include) child else Filter(FieldEquals("isDeprecated", false), child)).rightIor
-      case sel@Select("enumValues", List(BooleanBinding("includeDeprecated", include)), _) =>
+      case sel@Select("enumValues", List(Binding("includeDeprecated", BooleanValue(include))), _) =>
         sel.eliminateArgs(child => if (include) child else Filter(FieldEquals("isDeprecated", false), child)).rightIor
     }
   ))

@@ -67,7 +67,7 @@ object Ast {
   )
 
   case class VariableDefinition(
-    variable:     Value.Variable,
+    name:         Name,
     tpe:          Type,
     defaultValue: Option[Value],
     directives:   List[Directive]

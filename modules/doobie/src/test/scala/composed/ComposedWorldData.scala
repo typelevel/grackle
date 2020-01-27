@@ -11,7 +11,7 @@ import doobie.Transactor
 import edu.gemini.grackle._, doobie._
 import io.chrisdavenport.log4cats.Logger
 
-import Query._, Binding._, Predicate._
+import Query._, Predicate._, Value._
 import QueryCompiler._, ComponentElaborator.Mapping
 import QueryInterpreter.mkErrorResult
 import DoobiePredicate._
@@ -139,11 +139,11 @@ object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
 
   val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {
-      case Select("country", List(StringBinding("code", code)), child) =>
+      case Select("country", List(Binding("code", StringValue(code))), child) =>
         Select("country", Nil, Unique(AttrEquals("code", code), child)).rightIor
       case Select("countries", _, child) =>
         Select("countries", Nil, child).rightIor
-      case Select("cities", List(StringBinding("namePattern", namePattern)), child) =>
+      case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
         Select("cities", Nil, Filter(FieldLike("name", namePattern, true), child)).rightIor
     }
   ))

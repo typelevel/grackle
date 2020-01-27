@@ -148,17 +148,25 @@ object Query {
     case _                        => None
   }
 
-  /** InputValue binding */
-  sealed trait Binding {
-    def name: String
-    type T
-    val value: T
+  sealed trait Value
+  object Value {
+    case class IntValue(i: Int) extends Value
+    case class FloatValue(f: Double) extends Value
+    case class StringValue(s: String) extends Value
+    case class BooleanValue(b: Boolean) extends Value
+    case class IDValue(id: String) extends Value
+    case class UntypedEnumValue(name: String) extends Value
+    case class TypedEnumValue(e: EnumValue) extends Value
+    case class UntypedVariableValue(name: String) extends Value
+    case object NullValue extends Value
+  }
 
-    def render: String
+  case class Binding(name: String, value: Value) {
+    def render: String = s"$name: $value"
   }
 
   object Binding {
-    import ScalarType._
+    import ScalarType._, Value._
     import QueryInterpreter.{ mkError, mkErrorResult }
 
     /** Given an actual argument `arg` and schema InputValue `info` yield an
@@ -169,16 +177,20 @@ object Query {
      */
     def forArg(arg: Binding, info: InputValue): Result[Binding] =
       (info.tpe.asLeaf, arg) match {
-        case (IntType, i: IntBinding) => i.rightIor
-        case (FloatType, f: FloatBinding) => f.rightIor
-        case (StringType, s: StringBinding) => s.rightIor
-        case (BooleanType, b: BooleanBinding) => b.rightIor
-        case (IDType, i: IntBinding) => IDBinding(i.name, i.value.toString).rightIor
-        case (IDType, s: StringBinding) => IDBinding(s.name, s.value).rightIor
-        case (e: EnumType, UntypedEnumBinding(name, value)) =>
-          e.value(value).toRightIor(
-            NonEmptyChain.one(mkError(s"Expected ${e.name} for argument '$name', found '$value'"))
-          ).map { ev => EnumBinding(name, ev) }
+        case (_, b@Binding(_, NullValue)) => b.rightIor
+        case (_, b@Binding(_, _: UntypedVariableValue)) => b.rightIor
+        case (IntType, b@Binding(_, _: IntValue)) => b.rightIor
+        case (FloatType, b@Binding(_, _: FloatValue)) => b.rightIor
+        case (StringType, b@Binding(_, _: StringValue)) => b.rightIor
+        case (BooleanType, b@Binding(_, _: BooleanValue)) => b.rightIor
+        case (IDType, b@Binding(_, _: IDValue)) => b.rightIor
+        case (IDType, b@Binding(_, IntValue(i))) => b.copy(value = IDValue(i.toString)).rightIor
+        case (IDType, b@Binding(_, StringValue(s))) => b.copy(value = IDValue(s)).rightIor
+        case (e: EnumType, b@Binding(name, UntypedEnumValue(evname))) =>
+          e.value(evname).toRightIor(
+            NonEmptyChain.one(mkError(s"Expected ${e.name} for argument '$name', found '$evname'"))
+          ).map { ev => b.copy(value = TypedEnumValue(ev)) }
+        case (_: EnumType, b@Binding(_, _: TypedEnumValue)) => b.rightIor
         case (tpe, arg) =>
           mkErrorResult(s"Expected $tpe for argument '${arg.name}', found '${arg.value}'")
       }
@@ -188,65 +200,24 @@ object Query {
      */
     def defaultForInputValue(iv: InputValue): Result[Binding] =
       (iv.tpe.asLeaf, iv.defaultValue) match {
-        case (_, None) => NoBinding(iv.name, iv).rightIor
-        case (IntType, Some(i: Int)) => IntBinding(iv.name, i).rightIor
-        case (FloatType, Some(d: Double)) => FloatBinding(iv.name, d).rightIor
-        case (StringType, Some(s: String)) => StringBinding(iv.name, s).rightIor
-        case (BooleanType, Some(b: Boolean)) => BooleanBinding(iv.name, b).rightIor
-        case (IDType, Some(i: Int)) => IDBinding(iv.name, i.toString).rightIor
-        case (IDType, Some(s: String)) => IDBinding(iv.name, s).rightIor
-        case (_: EnumType, Some(e: EnumValue)) => EnumBinding(iv.name, e).rightIor
+        case (_, None) => Binding(iv.name, NullValue).rightIor
+        case (IntType, Some(i: Int)) => Binding(iv.name, IntValue(i)).rightIor
+        case (FloatType, Some(d: Double)) => Binding(iv.name, FloatValue(d)).rightIor
+        case (StringType, Some(s: String)) => Binding(iv.name, StringValue(s)).rightIor
+        case (BooleanType, Some(b: Boolean)) => Binding(iv.name, BooleanValue(b)).rightIor
+        case (IDType, Some(i: Int)) => Binding(iv.name, IDValue(i.toString)).rightIor
+        case (IDType, Some(s: String)) => Binding(iv.name, IDValue(s)).rightIor
+        case (_: EnumType, Some(e: EnumValue)) => Binding(iv.name, TypedEnumValue(e)).rightIor
         case _ => mkErrorResult(s"No argument and no default for $iv")
       }
-
-    /** Bind the `InputValue` named `name` to value `value` of type `Int`. */
-    case class IntBinding(name: String, value: Int) extends Binding {
-      type T = Int
-      def render = s"""$name: $value"""
-    }
-
-    /** Bind the `InputValue` named `name` to value `value` of type `Double`. */
-    case class FloatBinding(name: String, value: Double) extends Binding {
-      type T = Double
-      def render = s"""$name: $value"""
-    }
-
-    /** Bind the `InputValue` named `name` to value `value` of type `String`. */
-    case class StringBinding(name: String, value: String) extends Binding {
-      type T = String
-      def render = s"""$name: "$value""""
-    }
-
-    /** Bind the `InputValue` named `name` to value `value` of type `Boolean`. */
-    case class BooleanBinding(name: String, value: Boolean) extends Binding {
-      type T = Boolean
-      def render = s"""$name: $value"""
-    }
-
-    /** Bind the `InputValue` named `name` to ID `value`. */
-    case class IDBinding(name: String, value: String) extends Binding {
-      type T = String
-      def render = s"""$name: "$value""""
-    }
-
-    /** Bind the `InputValue` named `name` to the untyped `EnumValue` labelled `value`. */
-    case class UntypedEnumBinding(name: String, value: String) extends Binding {
-      type T = String
-      def render = s"""$name: $value"""
-    }
-
-    /** Bind the `InputValue` named `name` to the `EnumValue` value `value`. */
-    case class EnumBinding(name: String, value: EnumValue) extends Binding {
-      type T = EnumValue
-      def render = s"""$name: ${value.name}"""
-    }
-
-    /** Placeholder for an unbound `InputValue` */
-    case class NoBinding(name: String, value: InputValue) extends Binding {
-      type T = InputValue
-      def render = s"""$name: <undefined>"""
-    }
   }
+
+  type UntypedVarDefs = List[UntypedVarDef]
+  type VarDefs = List[VarDef]
+  type Env = Map[String, (Type, Value)]
+
+  case class UntypedVarDef(name: String, tpe: Ast.Type, default: Option[Value])
+  case class VarDef(name: String, tpe: Type, default: Option[Value])
 }
 
 /**
@@ -828,6 +799,9 @@ object QueryInterpreter {
 
     Json.fromFields(("message", Json.fromString(message)) :: locationsField ++ pathField)
   }
+
+  def mkOneError(message: String, locations: List[(Int, Int)] = Nil, path: List[String] = Nil): NonEmptyChain[Json] =
+    NonEmptyChain.one(mkError(message, locations, path))
 
   /** Construct a GraphQL error object as the left hand side of a `Result` */
   def mkErrorResult[T](message: String, locations: List[(Int, Int)] = Nil, path: List[String] = Nil): Result[T] =

@@ -8,7 +8,7 @@ import cats.implicits._
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle._
-import Query._, Binding._, Predicate._
+import Query._, Predicate._, Value._
 import QueryCompiler._, ComponentElaborator.{ Mapping, TrivialJoin }
 
 final class CompilerSuite extends CatsSuite {
@@ -22,12 +22,12 @@ final class CompilerSuite extends CatsSuite {
     """
 
     val expected =
-      Select("character", List(StringBinding("id", "1000")),
+      Select("character", List(Binding("id", StringValue("1000"))),
         Select("name", Nil)
       )
 
     val res = QueryParser.parseText(text)
-    assert(res == Ior.Right(expected))
+    assert(res == Ior.Right((expected, Nil)))
   }
 
   test("simple nested query") {
@@ -44,7 +44,7 @@ final class CompilerSuite extends CatsSuite {
 
     val expected =
       Select(
-        "character", List(StringBinding("id", "1000")),
+        "character", List(Binding("id", StringValue("1000"))),
         Select("name", Nil) ~
           Select(
             "friends", Nil,
@@ -53,7 +53,7 @@ final class CompilerSuite extends CatsSuite {
       )
 
     val res = QueryParser.parseText(text)
-    assert(res == Ior.Right(expected))
+    assert(res == Ior.Right((expected, Nil)))
   }
 
   test("shorthand query") {
@@ -73,7 +73,7 @@ final class CompilerSuite extends CatsSuite {
 
     val expected =
       Select(
-        "hero", List(UntypedEnumBinding("episode", "NEWHOPE")),
+        "hero", List(Binding("episode", UntypedEnumValue("NEWHOPE"))),
         Select("name", Nil, Empty) ~
         Select("friends", Nil,
           Select("name", Nil, Empty) ~
@@ -84,7 +84,7 @@ final class CompilerSuite extends CatsSuite {
       )
 
     val res = QueryParser.parseText(text)
-    assert(res == Ior.Right(expected))
+    assert(res == Ior.Right((expected, Nil)))
   }
 
   test("field alias") {
@@ -100,17 +100,17 @@ final class CompilerSuite extends CatsSuite {
     """
 
     val expected =
-      Select("user", List(IntBinding("id", 4)),
+      Select("user", List(Binding("id", IntValue(4))),
         Group(List(
           Select("id", Nil, Empty),
           Select("name", Nil, Empty),
-          Rename("smallPic", Select("profilePic", List(IntBinding("size", 64)), Empty)),
-          Rename("bigPic", Select("profilePic", List(IntBinding("size", 1024)), Empty))
+          Rename("smallPic", Select("profilePic", List(Binding("size", IntValue(64))), Empty)),
+          Rename("bigPic", Select("profilePic", List(Binding("size", IntValue(1024))), Empty))
         ))
       )
 
     val res = QueryParser.parseText(text)
-    assert(res == Ior.Right(expected))
+    assert(res == Ior.Right((expected, Nil)))
   }
 
   test("introspection query") {
@@ -139,7 +139,7 @@ final class CompilerSuite extends CatsSuite {
       )
 
     val res = QueryParser.parseText(text)
-    assert(res == Ior.Right(expected))
+    assert(res == Ior.Right((expected, Nil)))
   }
 
   test("simple selector elaborated query") {
@@ -247,7 +247,7 @@ object SimpleSchema extends Schema {
 object SimpleCompiler extends QueryCompiler(SimpleSchema) {
   val selectElaborator = new SelectElaborator(Map(
     SimpleSchema.tpe("Query").dealias -> {
-      case Select("character", List(StringBinding("id", id)), child) =>
+      case Select("character", List(Binding("id", StringValue(id))), child) =>
         Unique(FieldEquals("id", id), child).rightIor
     }
   ))

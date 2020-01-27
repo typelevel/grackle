@@ -8,7 +8,7 @@ import cats.implicits._
 
 import edu.gemini.grackle._
 
-import Query._, Binding._, Predicate._
+import Query._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.mkErrorResult
 
@@ -140,7 +140,7 @@ object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
     StarWarsSchema.tpe("Query").dealias -> {
       // The hero selector take an Episode argument and yields a single value. We use the
       // Unique operator to pick out the target using the FieldEquals predicate.
-      case Select("hero", List(EnumBinding("episode", e)), child) =>
+      case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
         Episode.values.find(_.toString == e.name).map { episode =>
           Select("hero", Nil, Unique(FieldEquals("id", hero(episode).id), child)).rightIor
         }.getOrElse(mkErrorResult(s"Unknown episode '${e.name}'"))
@@ -148,7 +148,7 @@ object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
       // The character, human and droid selectors all take a single ID argument and yield a
       // single value (if any) or null. We use the Unique operator to pick out the target
       // using the FieldEquals predicate.
-      case Select(f@("character" | "human" | "droid"), List(IDBinding("id", id)), child) =>
+      case Select(f@("character" | "human" | "droid"), List(Binding("id", IDValue(id))), child) =>
         Select(f, Nil, Unique(FieldEquals("id", id), child)).rightIor
     }
   ))

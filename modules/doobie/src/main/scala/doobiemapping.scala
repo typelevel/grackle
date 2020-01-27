@@ -389,7 +389,7 @@ object DoobieMapping {
       case _ => mkErrorResult(s"No staging join for non-Select $q")
     }
 
-    def apply(query: Query, schema: Schema, tpe: Type): Result[Query] = {
+    def apply(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] = {
       def loop(query: Query, tpe: Type, filtered: Set[Type]): Result[Query] = {
         query match {
           case s@Select(fieldName, _, child) =>
