@@ -10,9 +10,8 @@ import io.circe.Json
 
 import Query._, Value._
 import QueryCompiler._
-import QueryInterpreter.{ mkError, mkOneError, mkErrorResult }
+import QueryInterpreter.{ mkError, mkErrorResult }
 import Ast.{ Type => _, Value => _, _ }, OperationDefinition._, OperationType._, Selection._
-import ScalarType._
 
 /**
  * GraphQL query parser
@@ -108,15 +107,23 @@ object QueryParser {
   def parseArgs(args: List[(Name, Ast.Value)]): Result[List[Binding]] =
     args.traverse((parseArg _).tupled)
 
-  def parseArg(name: Name, value: Ast.Value): Result[Binding] = {
+  def parseArg(name: Name, value: Ast.Value): Result[Binding] =
+    parseValue(value).map(v => Binding(name.value, v))
+
+  def parseValue(value: Ast.Value): Result[Value] = {
     value match {
-      case Ast.Value.IntValue(i) => Binding(name.value, IntValue(i)).rightIor
-      case Ast.Value.FloatValue(d) => Binding(name.value, FloatValue(d)).rightIor
-      case Ast.Value.StringValue(s) => Binding(name.value, StringValue(s)).rightIor
-      case Ast.Value.BooleanValue(b) => Binding(name.value, BooleanValue(b)).rightIor
-      case Ast.Value.EnumValue(e) => Binding(name.value, UntypedEnumValue(e.value)).rightIor
-      case Ast.Value.Variable(v) => Binding(name.value, UntypedVariableValue(v.value)).rightIor
-      case _ => mkErrorResult("Argument required")
+      case Ast.Value.IntValue(i) => IntValue(i).rightIor
+      case Ast.Value.FloatValue(d) => FloatValue(d).rightIor
+      case Ast.Value.StringValue(s) => StringValue(s).rightIor
+      case Ast.Value.BooleanValue(b) => BooleanValue(b).rightIor
+      case Ast.Value.EnumValue(e) => UntypedEnumValue(e.value).rightIor
+      case Ast.Value.Variable(v) => UntypedVariableValue(v.value).rightIor
+      case Ast.Value.NullValue => NullValue.rightIor
+      case Ast.Value.ListValue(vs) => vs.traverse(parseValue).map(ListValue)
+      case Ast.Value.ObjectValue(fs) =>
+        fs.traverse { case (name, value) =>
+          parseValue(value).map(v => (name.value, v))
+        }.map(ObjectValue)
     }
   }
 }
@@ -155,7 +162,7 @@ abstract class QueryCompiler(schema: Schema) {
   def compileVarDefs(untypedVarDefs: UntypedVarDefs): Result[VarDefs] =
     untypedVarDefs.traverse {
       case UntypedVarDef(name, untypedTpe, default) =>
-        compileType(untypedTpe).map(tpe => VarDef(name, tpe, default))
+        compileType(untypedTpe).map(tpe => InputValue(name, None, tpe, default))
     }
 
   def compileEnv(varDefs: VarDefs, untypedEnv: Option[Json]): Result[Env] =
@@ -163,45 +170,11 @@ abstract class QueryCompiler(schema: Schema) {
       case None => Map.empty.rightIor
       case Some(untypedEnv) =>
         untypedEnv.asObject match {
-          case None => mkErrorResult(s"Variables must be represented as a Json object")
+          case None =>
+            mkErrorResult(s"Variables must be represented as a Json object")
           case Some(obj) =>
-            (varDefs.traverse {
-              case VarDef(name, tpe, default) =>
-                (obj(name), default) match {
-                  case (None, None) if tpe.isNullable => (name -> ((tpe, NullValue))).rightIor
-                  case (None, None) => mkErrorResult(s"No value provided for variable '$name'")
-                  case (None, Some(value)) => (name -> ((tpe, value))).rightIor
-                  case (Some(value), _) => checkValue(tpe, value).map(value => name -> ((tpe, value)))
-                }
-            }).map(_.toMap)
+            varDefs.traverse(iv => checkVarValue(iv, obj(iv.name)).map(v => (iv.name, (iv.tpe, v)))).map(_.toMap)
         }
-    }
-
-  def checkValue(tpe: Type, value: Json): Result[Value] =
-    tpe match {
-      case _: NullableType if value.isNull =>
-        NullValue.rightIor
-      case NullableType(tpe) =>
-        checkValue(tpe, value)
-      case IntType =>
-        value.asNumber.flatMap(_.toInt).map(IntValue).toRightIor(mkOneError(s"Expected Int found '$value'"))
-      case FloatType =>
-        value.asNumber.map(_.toDouble).map(FloatValue).toRightIor(mkOneError(s"Expected Float found '$value'"))
-      case StringType =>
-        value.asString.map(StringValue).toRightIor(mkOneError(s"Expected String found '$value'"))
-      case IDType if value.isNumber =>
-        value.asNumber.flatMap(_.toInt).map(i => IDValue(i.toString)).toRightIor(mkOneError(s"Expected ID found '$value'"))
-      case IDType =>
-        value.asString.map(IDValue).toRightIor(mkOneError(s"Expected ID found '$value'"))
-      case BooleanType =>
-        value.asString.flatMap { _ match {
-          case "true"  => Some(BooleanValue(true))
-          case "false" => Some(BooleanValue(false))
-          case _       => None
-        }}.toRightIor(mkOneError(s"Expected Boolean found '$value'"))
-      case e: EnumType =>
-        value.asString.flatMap(s => e.value(s)).map(TypedEnumValue).toRightIor(mkOneError(s"Expected $e found '$value'"))
-      case _ => mkErrorResult(s"Cannot use non-input type '$tpe' for input values")
     }
 
   def compileType(tpe: Ast.Type): Result[Type] = {
@@ -344,13 +317,8 @@ object QueryCompiler {
           twf.fieldInfo(fieldName) match {
             case Some(field) =>
               val infos = field.args
-              val argMap = args.groupMapReduce(_.name)(identity)((x, _) => x)
-              infos.traverse { info =>
-                argMap.get(info.name) match {
-                  case Some(arg) => Binding.forArg(arg, info)
-                  case None      => Binding.defaultForInputValue(info)
-                }
-              }
+              val argMap = args.groupMapReduce(_.name)(_.value)((x, _) => x)
+              infos.traverse(info => checkValue(info, argMap.get(info.name)).map(v => Binding(info.name, v)))
             case _ => mkErrorResult(s"No field '$fieldName' in type $tpe")
           }
         case _ => mkErrorResult(s"Type $tpe is not an object or interface type")

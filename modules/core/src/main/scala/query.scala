@@ -116,6 +116,16 @@ object Query {
     def render = ""
   }
 
+  case class Binding(name: String, value: Value) {
+    def render: String = s"$name: $value"
+  }
+
+  type UntypedVarDefs = List[UntypedVarDef]
+  type VarDefs = List[InputValue]
+  type Env = Map[String, (Type, Value)]
+
+  case class UntypedVarDef(name: String, tpe: Ast.Type, default: Option[Value])
+
   object PossiblyRenamedSelect {
     def apply(sel: Select, resultName: String): Query = sel match {
       case Select(`resultName`, _, _) => sel
@@ -148,76 +158,6 @@ object Query {
     case _                        => None
   }
 
-  sealed trait Value
-  object Value {
-    case class IntValue(i: Int) extends Value
-    case class FloatValue(f: Double) extends Value
-    case class StringValue(s: String) extends Value
-    case class BooleanValue(b: Boolean) extends Value
-    case class IDValue(id: String) extends Value
-    case class UntypedEnumValue(name: String) extends Value
-    case class TypedEnumValue(e: EnumValue) extends Value
-    case class UntypedVariableValue(name: String) extends Value
-    case object NullValue extends Value
-  }
-
-  case class Binding(name: String, value: Value) {
-    def render: String = s"$name: $value"
-  }
-
-  object Binding {
-    import ScalarType._, Value._
-    import QueryInterpreter.{ mkError, mkErrorResult }
-
-    /** Given an actual argument `arg` and schema InputValue `info` yield an
-     *  executable argument binding.
-     *
-     *  `Int`/`String`s will be resolved to `ID` if required by the schema.
-     *  Untyped enum labels will be checked and mapped to suitable EnumValues.
-     */
-    def forArg(arg: Binding, info: InputValue): Result[Binding] =
-      (info.tpe.asLeaf, arg) match {
-        case (_, b@Binding(_, NullValue)) => b.rightIor
-        case (_, b@Binding(_, _: UntypedVariableValue)) => b.rightIor
-        case (IntType, b@Binding(_, _: IntValue)) => b.rightIor
-        case (FloatType, b@Binding(_, _: FloatValue)) => b.rightIor
-        case (StringType, b@Binding(_, _: StringValue)) => b.rightIor
-        case (BooleanType, b@Binding(_, _: BooleanValue)) => b.rightIor
-        case (IDType, b@Binding(_, _: IDValue)) => b.rightIor
-        case (IDType, b@Binding(_, IntValue(i))) => b.copy(value = IDValue(i.toString)).rightIor
-        case (IDType, b@Binding(_, StringValue(s))) => b.copy(value = IDValue(s)).rightIor
-        case (e: EnumType, b@Binding(name, UntypedEnumValue(evname))) =>
-          e.value(evname).toRightIor(
-            NonEmptyChain.one(mkError(s"Expected ${e.name} for argument '$name', found '$evname'"))
-          ).map { ev => b.copy(value = TypedEnumValue(ev)) }
-        case (_: EnumType, b@Binding(_, _: TypedEnumValue)) => b.rightIor
-        case (tpe, arg) =>
-          mkErrorResult(s"Expected $tpe for argument '${arg.name}', found '${arg.value}'")
-      }
-
-    /** Given a schema InputValue `iv`, yield the default executable argument binding,
-     *  if any.
-     */
-    def defaultForInputValue(iv: InputValue): Result[Binding] =
-      (iv.tpe.asLeaf, iv.defaultValue) match {
-        case (_, None) => Binding(iv.name, NullValue).rightIor
-        case (IntType, Some(i: Int)) => Binding(iv.name, IntValue(i)).rightIor
-        case (FloatType, Some(d: Double)) => Binding(iv.name, FloatValue(d)).rightIor
-        case (StringType, Some(s: String)) => Binding(iv.name, StringValue(s)).rightIor
-        case (BooleanType, Some(b: Boolean)) => Binding(iv.name, BooleanValue(b)).rightIor
-        case (IDType, Some(i: Int)) => Binding(iv.name, IDValue(i.toString)).rightIor
-        case (IDType, Some(s: String)) => Binding(iv.name, IDValue(s)).rightIor
-        case (_: EnumType, Some(e: EnumValue)) => Binding(iv.name, TypedEnumValue(e)).rightIor
-        case _ => mkErrorResult(s"No argument and no default for $iv")
-      }
-  }
-
-  type UntypedVarDefs = List[UntypedVarDef]
-  type VarDefs = List[VarDef]
-  type Env = Map[String, (Type, Value)]
-
-  case class UntypedVarDef(name: String, tpe: Ast.Type, default: Option[Value])
-  case class VarDef(name: String, tpe: Type, default: Option[Value])
 }
 
 /**

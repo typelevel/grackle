@@ -3,6 +3,12 @@
 
 package edu.gemini.grackle
 
+import cats.implicits._
+import io.circe.Json
+
+import QueryInterpreter.mkErrorResult
+import ScalarType._
+
 /**
  * Representation of a GraphQL schema
  *
@@ -464,6 +470,7 @@ case class EnumType(
   description: Option[String],
   enumValues:  List[EnumValue]
 ) extends Type with NamedType {
+  def hasValue(name: String): Boolean = enumValues.exists(_.name == name)
   def value(name: String): Option[EnumValue] = enumValues.find(_.name == name)
   def describe: String = s"$name ${enumValues.mkString("{ ", ", ", " }")}"
 }
@@ -542,9 +549,101 @@ case class InputValue private (
   name:         String,
   description:  Option[String],
   tpe:          Type,
-  defaultValue: Option[Any]
+  defaultValue: Option[Value]
 ) {
   def describe: String = s"$name: $tpe"
+}
+
+sealed trait Value
+object Value {
+  case class IntValue(i: Int) extends Value
+  case class FloatValue(f: Double) extends Value
+  case class StringValue(s: String) extends Value
+  case class BooleanValue(b: Boolean) extends Value
+  case class IDValue(id: String) extends Value
+  case class UntypedEnumValue(name: String) extends Value
+  case class TypedEnumValue(e: EnumValue) extends Value
+  case class UntypedVariableValue(name: String) extends Value
+  case class ListValue(elems: List[Value]) extends Value
+  case class ObjectValue(fields: List[(String, Value)]) extends Value
+  case object NullValue extends Value
+  case object AbsentValue extends Value
+
+  def checkValue(iv: InputValue, value: Option[Value]): Result[Value] =
+    (iv.tpe.dealias, value) match {
+      case (_, None) if iv.defaultValue.isDefined =>
+        iv.defaultValue.get.rightIor
+      case (_: NullableType, None) =>
+        AbsentValue.rightIor
+      case (_: NullableType, Some(NullValue)) =>
+        NullValue.rightIor
+      case (NullableType(tpe), Some(_)) =>
+        checkValue(iv.copy(tpe = tpe), value)
+      case (IntType, Some(value: IntValue)) =>
+        value.rightIor
+      case (FloatType, Some(value: FloatValue)) =>
+        value.rightIor
+      case (StringType, Some(value: StringValue)) =>
+        value.rightIor
+      case (BooleanType, Some(value: BooleanValue)) =>
+        value.rightIor
+      case (IDType, Some(value: IDValue)) =>
+        value.rightIor
+      case (IDType, Some(StringValue(s))) =>
+        IDValue(s).rightIor
+      case (IDType, Some(IntValue(i))) =>
+        IDValue(i.toString).rightIor
+      case (_: EnumType, Some(value: TypedEnumValue)) =>
+        value.rightIor
+      case (e: EnumType, Some(UntypedEnumValue(name))) if e.hasValue(name) =>
+        TypedEnumValue(e.value(name).get).rightIor
+      case (ListType(tpe), Some(ListValue(arr))) =>
+        arr.traverse { elem =>
+          checkValue(iv.copy(tpe = tpe, defaultValue = None), Some(elem))
+        }.map(ListValue)
+      case (InputObjectType(_, _, ivs), Some(ObjectValue(fs))) =>
+        val obj = fs.toMap
+        ivs.traverse(iv => checkValue(iv, obj.get(iv.name)).map(v => (iv.name, v))).map(ObjectValue)
+      case (_, Some(value)) => mkErrorResult(s"Expected ${iv.tpe} found '$value' for '${iv.name}")
+      case (_, None) => mkErrorResult(s"Value of type ${iv.tpe} required for '${iv.name}")
+    }
+
+  def checkVarValue(iv: InputValue, value: Option[Json]): Result[Value] = {
+    import io.circe.optics.all._
+
+    (iv.tpe.dealias, value) match {
+      case (_, None) if iv.defaultValue.isDefined =>
+        iv.defaultValue.get.rightIor
+      case (_: NullableType, None) =>
+        AbsentValue.rightIor
+      case (_: NullableType, Some(jsonNull(_))) =>
+        NullValue.rightIor
+      case (NullableType(tpe), Some(_)) =>
+        checkVarValue(iv.copy(tpe = tpe), value)
+      case (IntType, Some(jsonInt(value))) =>
+        IntValue(value).rightIor
+      case (FloatType, Some(jsonDouble(value))) =>
+        FloatValue(value).rightIor
+      case (StringType, Some(jsonString(value))) =>
+        StringValue(value).rightIor
+      case (BooleanType, Some(jsonBoolean(value))) =>
+        BooleanValue(value).rightIor
+      case (IDType, Some(jsonInt(value))) =>
+        IDValue(value.toString).rightIor
+      case (IDType, Some(jsonString(value))) =>
+        IDValue(value).rightIor
+      case (e: EnumType, Some(jsonString(name))) if e.hasValue(name) =>
+        TypedEnumValue(e.value(name).get).rightIor
+      case (ListType(tpe), Some(jsonArray(arr))) =>
+        arr.traverse { elem =>
+          checkVarValue(iv.copy(tpe = tpe, defaultValue = None), Some(elem))
+        }.map(vs => ListValue(vs.toList))
+      case (InputObjectType(_, _, ivs), Some(jsonObject(obj))) =>
+        ivs.traverse(iv => checkVarValue(iv, obj(iv.name)).map(v => (iv.name, v))).map(ObjectValue)
+      case (_, Some(value)) => mkErrorResult(s"Expected ${iv.tpe} found '$value' for '${iv.name}")
+      case (_, None) => mkErrorResult(s"Value of type ${iv.tpe} required for '${iv.name}")
+    }
+  }
 }
 
 /**
