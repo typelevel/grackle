@@ -389,16 +389,17 @@ object DoobieMapping {
       case _ => mkErrorResult(s"No staging join for non-Select $q")
     }
 
-    def apply(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] = {
+    override def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] = {
       def loop(query: Query, tpe: Type, filtered: Set[Type]): Result[Query] = {
         query match {
           case s@Select(fieldName, _, child) =>
-            val childTpe = tpe.underlyingField(fieldName)
-            if(filtered(childTpe.underlyingObject)) {
-              val elaboratedSelect = loop(child, childTpe, Set.empty).map(ec => s.copy(child = ec))
-              elaboratedSelect.map(ec => Wrap(fieldName, Defer(stagingJoin, ec)))
-            } else {
-              loop(child, childTpe, filtered + tpe.underlyingObject).map(ec => s.copy(child = ec))
+            tpe.withUnderlyingField(fieldName) { childTpe =>
+              if(filtered(childTpe.underlyingObject)) {
+                val elaboratedSelect = loop(child, childTpe, Set.empty).map(ec => s.copy(child = ec))
+                elaboratedSelect.map(ec => Wrap(fieldName, Defer(stagingJoin, ec)))
+              } else {
+                loop(child, childTpe, filtered + tpe.underlyingObject).map(ec => s.copy(child = ec))
+              }
             }
 
           case n@Narrow(subtpe, child) => loop(child, subtpe, filtered).map(ec => n.copy(child = ec))

@@ -155,7 +155,7 @@ abstract class QueryCompiler(schema: Schema) {
       parsed  <- QueryParser.parseText(text)
       varDefs <- compileVarDefs(parsed._2)
       env     <- compileEnv(varDefs, untypedEnv)
-      query   <- allPhases.foldLeftM(parsed._1) { (acc, phase) => phase(acc, env, schema, queryType) }
+      query   <- allPhases.foldLeftM(parsed._1) { (acc, phase) => phase.transform(acc, env, schema, queryType) }
     } yield query
   }
 
@@ -198,51 +198,55 @@ object QueryCompiler {
      * Transform the supplied query algebra term `query` with expected type
      * `tpe`.
      */
-    def apply(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query]
+    def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] =
+      query match {
+        case s@Select(fieldName, _, child)    =>
+          val childTpe = tpe.underlyingField(fieldName)
+          if (childTpe =:= NoType) mkErrorResult(s"Unknown field '$fieldName' in select")
+          else transform(child, env, schema, childTpe).map(ec => s.copy(child = ec))
+
+        case UntypedNarrow(tpnme, child) =>
+          schema.tpe(tpnme) match {
+            case NoType => mkErrorResult(s"Unknown type '$tpnme' in type condition")
+            case subtpe =>
+              transform(child, env, schema, subtpe).map { ec =>
+                if (tpe.underlyingObject =:= subtpe) ec else Narrow(subtpe, ec)
+              }
+          }
+
+        case n@Narrow(subtpe, child)  => transform(child, env, schema, subtpe).map(ec => n.copy(child = ec))
+        case w@Wrap(_, child)         => transform(child, env, schema, tpe).map(ec => w.copy(child = ec))
+        case r@Rename(_, child)       => transform(child, env, schema, tpe).map(ec => r.copy(child = ec))
+        case g@Group(children)        => children.traverse(q => transform(q, env, schema, tpe)).map(eqs => g.copy(queries = eqs))
+        case u@Unique(_, child)       => transform(child, env, schema, tpe.nonNull).map(ec => u.copy(child = ec))
+        case f@Filter(_, child)       => transform(child, env, schema, tpe.item).map(ec => f.copy(child = ec))
+        case c@Component(_, _, child) => transform(child, env, schema, tpe).map(ec => c.copy(child = ec))
+        case d@Defer(_, child)        => transform(child, env, schema, tpe).map(ec => d.copy(child = ec))
+        case Empty                    => Empty.rightIor
+      }
   }
 
   class VariablesAndFragmentsElaborator extends Phase {
-    def apply(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] = {
-      def elaborateVariable(b: Binding): Result[Binding] = b match {
-        case Binding(name, UntypedVariableValue(varName)) =>
-          env.get(varName) match {
-            case Some((_, value)) => Binding(name, value).rightIor
-            case None => mkErrorResult(s"Undefined variable '$name'")
+    override def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] =
+      query match {
+        case Select(fieldName, args, child) =>
+          tpe.withUnderlyingField(fieldName) { childTpe =>
+            for {
+              elaboratedChild <- transform(child, env, schema, childTpe)
+              elaboratedArgs  <- args.traverse(elaborateVariable(env))
+            } yield Select(fieldName, elaboratedArgs, elaboratedChild)
           }
-        case other => other.rightIor
+
+        case _ => super.transform(query, env, schema, tpe)
       }
 
-      def loop(query: Query, tpe: Type): Result[Query] =
-        query match {
-          case Select(fieldName, args, child) =>
-            val childTpe = tpe.underlyingField(fieldName)
-
-            for {
-              elaboratedChild <- loop(child, childTpe)
-              elaboratedArgs  <- args.traverse(elaborateVariable)
-            } yield Select(fieldName, elaboratedArgs, elaboratedChild)
-
-          case UntypedNarrow(tpnme, child) =>
-            schema.tpe(tpnme) match {
-              case NoType => mkErrorResult(s"Unknown type '$tpnme' in type condition")
-              case subtpe =>
-                loop(child, subtpe).map { ec =>
-                  if (tpe.underlyingObject =:= subtpe) ec else Narrow(subtpe, ec)
-                }
-            }
-
-          case n@Narrow(subtpe, child)  => loop(child, subtpe).map(ec => n.copy(child = ec))
-          case w@Wrap(_, child)         => loop(child, tpe).map(ec => w.copy(child = ec))
-          case r@Rename(_, child)       => loop(child, tpe).map(ec => r.copy(child = ec))
-          case g@Group(queries)         => queries.traverse(q => loop(q, tpe)).map(eqs => g.copy(queries = eqs))
-          case u@Unique(_, child)       => loop(child, tpe.nonNull).map(ec => u.copy(child = ec))
-          case f@Filter(_, child)       => loop(child, tpe.item).map(ec => f.copy(child = ec))
-          case c@Component(_, _, child) => loop(child, tpe).map(ec => c.copy(child = ec))
-          case d@Defer(_, child)        => loop(child, tpe).map(ec => d.copy(child = ec))
-          case Empty                    => Empty.rightIor
+    def elaborateVariable(env: Env)(b: Binding): Result[Binding] = b match {
+      case Binding(name, UntypedVariableValue(varName)) =>
+        env.get(varName) match {
+          case Some((_, value)) => Binding(name, value).rightIor
+          case None => mkErrorResult(s"Undefined variable '$name'")
         }
-
-      loop(query, tpe)
+      case other => other.rightIor
     }
   }
 
@@ -279,37 +283,24 @@ object QueryCompiler {
    *    against the schema.
    */
   class SelectElaborator(mapping: Map[Type, PartialFunction[Select, Result[Query]]]) extends Phase {
-    def apply(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] = {
-      def loop(query: Query, tpe: Type): Result[Query] =
-        query match {
-          case Select(fieldName, args, child) =>
-            val childTpe = tpe.underlyingField(fieldName)
+    override def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] =
+      query match {
+        case Select(fieldName, args, child) =>
+          tpe.withUnderlyingField(fieldName) { childTpe =>
             val elaborator: Select => Result[Query] = mapping.get(tpe.underlyingObject) match {
               case Some(e) => (s: Select) => if (e.isDefinedAt(s)) e(s) else s.rightIor
               case _ => (s: Select) => s.rightIor
             }
 
             for {
-              elaboratedChild <- loop(child, childTpe)
+              elaboratedChild <- transform(child, env, schema, childTpe)
               elaboratedArgs <- elaborateArgs(tpe, fieldName, args)
               elaborated <- elaborator(Select(fieldName, elaboratedArgs, elaboratedChild))
             } yield elaborated
+          }
 
-          case n@Narrow(subtpe, child)  => loop(child, subtpe).map(ec => n.copy(child = ec))
-          case w@Wrap(_, child)         => loop(child, tpe).map(ec => w.copy(child = ec))
-          case r@Rename(_, child)       => loop(child, tpe).map(ec => r.copy(child = ec))
-          case g@Group(queries)         => queries.traverse(q => loop(q, tpe)).map(eqs => g.copy(queries = eqs))
-          case u@Unique(_, child)       => loop(child, tpe.nonNull).map(ec => u.copy(child = ec))
-          case f@Filter(_, child)       => loop(child, tpe.item).map(ec => f.copy(child = ec))
-          case c@Component(_, _, child) => loop(child, tpe).map(ec => c.copy(child = ec))
-          case d@Defer(_, child)        => loop(child, tpe).map(ec => d.copy(child = ec))
-          case Empty                    => Empty.rightIor
-
-          case n: UntypedNarrow         => mkErrorResult(s"Unexpected UntypeNarrow ${n.render}")
-        }
-
-      loop(query, tpe)
-    }
+        case _ => super.transform(query, env, schema, tpe)
+      }
 
     def elaborateArgs(tpe: Type, fieldName: String, args: List[Binding]): Result[List[Binding]] =
       tpe.underlyingObject match {
@@ -352,37 +343,24 @@ object QueryCompiler {
    *    from the parent query.
    */
   class ComponentElaborator private (mapping: Map[(Type, String), (String, (Cursor, Query) => Result[Query])]) extends Phase {
-    def apply(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] = {
-      def loop(query: Query, tpe: Type): Result[Query] =
-        query match {
-          case PossiblyRenamedSelect(Select(fieldName, args, child), resultName) =>
-            val childTpe = tpe.underlyingField(fieldName)
+    override def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] =
+      query match {
+        case PossiblyRenamedSelect(Select(fieldName, args, child), resultName) =>
+          tpe.withUnderlyingField(fieldName) { childTpe =>
             mapping.get((tpe.underlyingObject, fieldName)) match {
               case Some((cid, join)) =>
-                loop(child, childTpe).map { elaboratedChild =>
+                transform(child, env, schema, childTpe).map { elaboratedChild =>
                   Wrap(resultName, Component(cid, join, PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)))
                 }
               case None =>
-                loop(child, childTpe).map { elaboratedChild =>
+                transform(child, env, schema, childTpe).map { elaboratedChild =>
                   PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)
                 }
             }
+          }
 
-          case n@Narrow(subtpe, child)  => loop(child, subtpe).map(ec => n.copy(child = ec))
-          case w@Wrap(_, child)         => loop(child, tpe).map(ec => w.copy(child = ec))
-          case r@Rename(_, child)       => loop(child, tpe).map(ec => r.copy(child = ec))
-          case g@Group(queries)         => queries.traverse(q => loop(q, tpe)).map(eqs => g.copy(queries = eqs))
-          case u@Unique(_, child)       => loop(child, tpe.nonNull).map(ec => u.copy(child = ec))
-          case f@Filter(_, child)       => loop(child, tpe.item).map(ec => f.copy(child = ec))
-          case c@Component(_, _, child) => loop(child, tpe).map(ec => c.copy(child = ec))
-          case d@Defer(_, child)        => loop(child, tpe).map(ec => d.copy(child = ec))
-          case Empty                    => Empty.rightIor
-
-          case n: UntypedNarrow         => mkErrorResult(s"Unexpected UntypeNarrow ${n.render}")
-        }
-
-      loop(query, tpe)
-    }
+        case _ => super.transform(query, env, schema, tpe)
+      }
   }
 
   object ComponentElaborator {

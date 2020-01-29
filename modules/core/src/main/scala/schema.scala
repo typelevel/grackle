@@ -137,6 +137,12 @@ sealed trait Type {
   def hasField(fieldName: String): Boolean =
     field(fieldName) != NoType
 
+  def withField[T](fieldName: String)(body: Type => Result[T]): Result[T] = {
+    val childTpe = field(fieldName)
+    if (childTpe =:= NoType) mkErrorResult(s"Unknown field '$fieldName' in '$this'")
+    else body(childTpe)
+  }
+
   /**
    * Yield the type of the field at the end of the path `fns` starting
    * from this type, or `NoType` if there is no such field.
@@ -272,6 +278,12 @@ sealed trait Type {
     case ObjectType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
     case InterfaceType(_, _, fields) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
     case _ => NoType
+  }
+
+  def withUnderlyingField[T](fieldName: String)(body: Type => Result[T]): Result[T] = {
+    val childTpe = underlyingField(fieldName)
+    if (childTpe =:= NoType) mkErrorResult(s"Unknown field '$fieldName' in '$this'")
+    else body(childTpe)
   }
 
   /** Is this type a leaf type?
