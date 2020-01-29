@@ -128,7 +128,7 @@ object SchemaSchema extends Schema {
   import ScalarType._
 
   val NameArg = InputValue("name", None, StringType, None)
-  val IncludeDeprecatedArg = InputValue("includeDeprecated", None, BooleanType, Some(false))
+  val IncludeDeprecatedArg = InputValue("includeDeprecated", None, BooleanType, Some(BooleanValue(false)))
 
   val types = List(
     ObjectType(

@@ -80,7 +80,7 @@ object Parser {
 
   lazy val FragmentDefinition =
     for {
-      _    <- string("fragment").token
+      _    <- keyword("fragment")
       name <- FragmentName
       cond <- TypeCondition
       dirs <- Directives
@@ -116,7 +116,7 @@ object Parser {
     } .map(Ast.Value.EnumValue)
 
   lazy val ListValue: Parser[Ast.Value.ListValue] =
-    squareBrackets(many(Value)).map(Ast.Value.ListValue).token
+    squareBrackets(many(Value <~ opt(keyword(",")))).map(Ast.Value.ListValue).token
 
   lazy val IntValue: Parser[Ast.Value.IntValue] =
     bigDecimal.token.filter(_.isValidInt).map(a => Ast.Value.IntValue(a.toInt))
@@ -131,7 +131,7 @@ object Parser {
     (keyword("true").as(true) | keyword("false").as(false)).map(Ast.Value.BooleanValue)
 
   lazy val ObjectValue: Parser[Ast.Value.ObjectValue] =
-    braces(many(ObjectField)).map(Ast.Value.ObjectValue).token
+    braces(many(ObjectField <~ opt(keyword(",")))).map(Ast.Value.ObjectValue).token
 
   lazy val ObjectField: Parser[(Ast.Name, Ast.Value)] =
     (Name <~ keyword(":")) ~ Value

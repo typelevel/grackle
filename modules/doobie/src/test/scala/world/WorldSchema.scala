@@ -3,12 +3,12 @@
 
 package world
 
-import edu.gemini.grackle._
+import edu.gemini.grackle._, Value._
 
 object WorldSchema extends Schema {
   import ScalarType._
 
-  val NamePatternArg = InputValue("namePattern", None, NullableType(StringType), Some("%"))
+  val NamePatternArg = InputValue("namePattern", None, NullableType(StringType), Some(StringValue("%")))
   val CodeArg = InputValue("code", None, NullableType(StringType), None)
   val LanguageArg = InputValue("language", None, NullableType(StringType), None)
 

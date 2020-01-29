@@ -3,12 +3,12 @@
 
 package composed
 
-import edu.gemini.grackle._
+import edu.gemini.grackle._, Value._
 
 object ComposedSchema extends Schema {
   import ScalarType._
 
-  val NamePatternArg = InputValue("namePattern", None, NullableType(StringType), Some("%"))
+  val NamePatternArg = InputValue("namePattern", None, NullableType(StringType), Some(StringValue("%")))
   val CodeArg = InputValue("code", None, NullableType(StringType), None)
 
   val types = List(
@@ -87,7 +87,7 @@ object ComposedSchema extends Schema {
 object WorldSchema extends Schema {
   import ScalarType._
 
-  val NamePatternArg = InputValue("namePattern", None, NullableType(StringType), Some("%"))
+  val NamePatternArg = InputValue("namePattern", None, NullableType(StringType), Some(StringValue("%")))
   val CodeArg = InputValue("code", None, NullableType(StringType), None)
 
   val types = List(
