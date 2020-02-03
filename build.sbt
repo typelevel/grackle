@@ -58,6 +58,7 @@ lazy val core = project
       "io.circe"          %% "circe-core"             % circeVersion,
       "io.circe"          %% "circe-literal"          % circeVersion,
       "io.circe"          %% "circe-optics"           % circeOpticsVersion,
+      "io.circe"          %% "circe-parser"           % circeVersion,
       "org.typelevel"     %% "jawn-parser"            % jawnVersion,
     )
   )

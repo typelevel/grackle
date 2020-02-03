@@ -3,12 +3,29 @@
 
 package introspection
 
+import cats.Id
 import cats.tests.CatsSuite
+import io.circe.Json
 import io.circe.literal.JsonStringContext
+import io.circe.optics.JsonPath.root
 
 import edu.gemini.grackle._
+import QueryCompiler._
 
 final class IntrospectionSuite extends CatsSuite {
+  def standardTypeName(name: String): Boolean = name match {
+    case "Int" | "Float" | "Boolean" | "String" | "ID" => true
+    case _ => name.startsWith("__")
+  }
+
+  def stripStandardTypes(result: Json): Json = {
+    val types = root.data.__schema.types.each.filter(
+      root.name.string.exist(!standardTypeName(_))
+    ).obj.getAll(result).map(Json.fromJsonObject).toVector
+
+    root.data.__schema.types.arr.set(types)(result)
+  }
+
   test("simple type query") {
     val text = """
       {
@@ -48,8 +65,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = IntrospectionQueryCompiler.compile(text)
-    val res = IntrospectionQueryInterpreter(TestSchema).run(compiled.right.get, SchemaSchema.queryType)
+    val compiled = TestQueryCompiler.compile(text)
+    val res = TestQueryInterpreter.run(compiled.right.get, TestSchema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -205,8 +222,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = IntrospectionQueryCompiler.compile(text)
-    val res = IntrospectionQueryInterpreter(TestSchema).run(compiled.right.get, SchemaSchema.queryType)
+    val compiled = TestQueryCompiler.compile(text)
+    val res = TestQueryInterpreter.run(compiled.right.get, TestSchema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -326,8 +343,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = IntrospectionQueryCompiler.compile(text)
-    val res = IntrospectionQueryInterpreter(TestSchema).run(compiled.right.get, SchemaSchema.queryType)
+    val compiled = TestQueryCompiler.compile(text)
+    val res = TestQueryInterpreter.run(compiled.right.get, TestSchema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -413,8 +430,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = IntrospectionQueryCompiler.compile(text)
-    val res = IntrospectionQueryInterpreter(TestSchema).run(compiled.right.get, SchemaSchema.queryType)
+    val compiled = TestQueryCompiler.compile(text)
+    val res = TestQueryInterpreter.run(compiled.right.get, TestSchema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -507,8 +524,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = IntrospectionQueryCompiler.compile(text)
-    val res = IntrospectionQueryInterpreter(TestSchema).run(compiled.right.get, SchemaSchema.queryType)
+    val compiled = TestQueryCompiler.compile(text)
+    val res = TestQueryInterpreter.run(compiled.right.get, TestSchema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -597,8 +614,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = IntrospectionQueryCompiler.compile(text)
-    val res = IntrospectionQueryInterpreter(TestSchema).run(compiled.right.get, SchemaSchema.queryType)
+    val compiled = TestQueryCompiler.compile(text)
+    val res = TestQueryInterpreter.run(compiled.right.get, TestSchema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -678,8 +695,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = IntrospectionQueryCompiler.compile(text)
-    val res = IntrospectionQueryInterpreter(TestSchema).run(compiled.right.get, SchemaSchema.queryType)
+    val compiled = TestQueryCompiler.compile(text)
+    val res = TestQueryInterpreter.run(compiled.right.get, TestSchema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -769,8 +786,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = IntrospectionQueryCompiler.compile(text)
-    val res = IntrospectionQueryInterpreter(TestSchema).run(compiled.right.get, SchemaSchema.queryType)
+    val compiled = TestQueryCompiler.compile(text)
+    val res = TestQueryInterpreter.run(compiled.right.get, TestSchema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -830,8 +847,9 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = IntrospectionQueryCompiler.compile(text)
-    val res = IntrospectionQueryInterpreter(TestSchema).run(compiled.right.get, SchemaSchema.queryType)
+    val compiled = TestQueryCompiler.compile(text)
+    val res0 = TestQueryInterpreter.run(compiled.right.get, TestSchema.queryType)
+    val res = stripStandardTypes(res0)
     //println(res)
     assert(res == expected)
   }
@@ -1037,8 +1055,87 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = IntrospectionQueryCompiler.compile(text)
-    val res = IntrospectionQueryInterpreter(SmallSchema).run(compiled.right.get, SchemaSchema.queryType)
+    val compiled = SmallQueryCompiler.compile(text)
+    val res0 = SmallQueryInterpreter.run(compiled.right.get, SmallSchema.queryType)
+    val res = stripStandardTypes(res0)
+    //println(res)
+    assert(res == expected)
+  }
+
+  test("typename query") {
+    val text = """
+      {
+        users {
+          __typename
+          renamed: __typename
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "users" : [
+            {
+              "__typename" : "User",
+              "renamed" : "User",
+              "name" : "Luke Skywalker"
+            }
+          ]
+        }
+      }
+    """
+
+    val compiled = SmallQueryCompiler.compile(text)
+    val res = SmallQueryInterpreter.run(compiled.right.get, SmallSchema.queryType)
+    //println(res)
+    assert(res == expected)
+  }
+
+  test("mixed query") {
+    val text = """
+      {
+        users {
+          name
+        }
+        __type(name: "User") {
+          name
+          fields {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "users" : [
+            {
+              "name" : "Luke Skywalker"
+            }
+          ],
+          "__type" : {
+            "name": "User",
+            "fields" : [
+              {
+                "name" : "id"
+              },
+              {
+                "name" : "name"
+              },
+              {
+                "name" : "age"
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val compiled = SmallQueryCompiler.compile(text)
+    val res = SmallQueryInterpreter.run(compiled.right.get, SmallSchema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -1127,6 +1224,13 @@ object TestSchema extends Schema {
   val directives = Nil
 }
 
+object TestQueryCompiler extends QueryCompiler(TestSchema) {
+  val phases = List(new SelectElaborator(Map.empty))
+}
+
+object TestQueryInterpreter extends
+  DataTypeQueryInterpreter[Id](PartialFunction.empty, PartialFunction.empty)
+
 object SmallSchema extends Schema {
   import ScalarType._
 
@@ -1153,3 +1257,27 @@ object SmallSchema extends Schema {
 
   val directives = Nil
 }
+
+object SmallQueryCompiler extends QueryCompiler(SmallSchema) {
+  val phases = List(new SelectElaborator(Map.empty))
+}
+
+object SmallData {
+  case class User(id: Option[String], name: Option[String], age: Option[Int])
+  val users = List(
+    User(Some("1000"), Some("Luke Skywalker"), Some(30))
+  )
+}
+
+import SmallData._
+
+object SmallQueryInterpreter extends DataTypeQueryInterpreter[Id](
+  {
+    case "users" => (ListType(SmallSchema.tpe("User")), users)
+  },
+  {
+    case (u: User, "id")   => u.id
+    case (u: User, "name") => u.name
+    case (u: User, "age")  => u.age
+  }
+)

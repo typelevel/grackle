@@ -97,11 +97,12 @@ sealed trait Type {
    */
   def =:=(other: Type): Boolean = (this eq other) || (dealias == other.dealias)
 
-  /** `true` if this type equivalent is a subtype of `other`. */
+  /** `true` if this type is a subtype of `other`. */
   def <:<(other: Type): Boolean =
     (this.dealias, other.dealias) match {
+      case (tp1, tp2) if tp1 == tp2               => true
+      case (tp1, UnionType(_, _, members))        => members.exists(tp1 <:< _.dealias)
       case (ObjectType(_, _, _, interfaces), tp2) => interfaces.exists(_.dealias == tp2)
-      case (tp1, UnionType(_, _, members))        => members.exists(tp1 <:< _)
       case _ => false
     }
 
@@ -280,11 +281,8 @@ sealed trait Type {
     case _ => NoType
   }
 
-  def withUnderlyingField[T](fieldName: String)(body: Type => Result[T]): Result[T] = {
-    val childTpe = underlyingField(fieldName)
-    if (childTpe =:= NoType) mkErrorResult(s"Unknown field '$fieldName' in '$this'")
-    else body(childTpe)
-  }
+  def withUnderlyingField[T](fieldName: String)(body: Type => Result[T]): Result[T] =
+    underlyingObject.withField(fieldName)(body)
 
   /** Is this type a leaf type?
    *
@@ -566,20 +564,50 @@ case class InputValue private (
   def describe: String = s"$name: $tpe"
 }
 
-sealed trait Value
+sealed trait Value {
+  def toGraphQL: Option[String]
+}
+
 object Value {
-  case class IntValue(i: Int) extends Value
-  case class FloatValue(f: Double) extends Value
-  case class StringValue(s: String) extends Value
-  case class BooleanValue(b: Boolean) extends Value
-  case class IDValue(id: String) extends Value
-  case class UntypedEnumValue(name: String) extends Value
-  case class TypedEnumValue(e: EnumValue) extends Value
-  case class UntypedVariableValue(name: String) extends Value
-  case class ListValue(elems: List[Value]) extends Value
-  case class ObjectValue(fields: List[(String, Value)]) extends Value
-  case object NullValue extends Value
-  case object AbsentValue extends Value
+  case class IntValue(value: Int) extends Value {
+    def toGraphQL: Option[String] = Some(value.toString)
+  }
+  case class FloatValue(value: Double) extends Value {
+    def toGraphQL: Option[String] = Some(value.toString)
+  }
+  case class StringValue(value: String) extends Value {
+    def toGraphQL: Option[String] = Some(s""""$value"""")
+  }
+  case class BooleanValue(value: Boolean) extends Value {
+    def toGraphQL: Option[String] = Some(value.toString)
+  }
+  case class IDValue(value: String) extends Value {
+    def toGraphQL: Option[String] = Some(s""""$value"""")
+  }
+  case class UntypedEnumValue(name: String) extends Value {
+    def toGraphQL: Option[String] = None
+  }
+  case class TypedEnumValue(value: EnumValue) extends Value {
+    def toGraphQL: Option[String] = Some(value.name)
+  }
+  case class UntypedVariableValue(name: String) extends Value {
+    def toGraphQL: Option[String] = None
+  }
+  case class ListValue(elems: List[Value]) extends Value {
+    def toGraphQL: Option[String] = Some(elems.map(_.toGraphQL).mkString("[", ", ", "]"))
+  }
+  case class ObjectValue(fields: List[(String, Value)]) extends Value {
+    def toGraphQL: Option[String] =
+      Some(fields.map {
+        case (name, value) => s"$name : ${value.toGraphQL}"
+      }.mkString("{", ", ", "}"))
+  }
+  case object NullValue extends Value {
+    def toGraphQL: Option[String] = Some("null")
+  }
+  case object AbsentValue extends Value {
+    def toGraphQL: Option[String] = None
+  }
 
   def checkValue(iv: InputValue, value: Option[Value]): Result[Value] =
     (iv.tpe.dealias, value) match {

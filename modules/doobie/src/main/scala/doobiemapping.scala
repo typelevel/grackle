@@ -137,7 +137,7 @@ trait DoobieMapping {
           queries.foldLeft(acc) {
             case (acc, sibling) => loop(sibling, obj, acc)
           }
-        case Empty | (_: Component) | (_: Defer) | (_: UntypedNarrow) => acc
+        case Empty | (_: Component) | (_: Introspection) | (_: Defer) | (_: UntypedNarrow) => acc
       }
     }
 
@@ -409,6 +409,7 @@ object DoobieMapping {
           case u@Unique(_, child)      => loop(child, tpe.nonNull, filtered + tpe.underlyingObject).map(ec => u.copy(child = ec))
           case f@Filter(_, child)      => loop(child, tpe.item, filtered + tpe.underlyingObject).map(ec => f.copy(child = ec))
           case c: Component            => c.rightIor
+          case i: Introspection        => i.rightIor
           case d: Defer                => d.rightIor
           case Empty                   => Empty.rightIor
 
