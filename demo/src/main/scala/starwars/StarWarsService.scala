@@ -3,15 +3,15 @@
 
 package starwars
 
-import cats.ApplicativeError
+import cats.{ Applicative }
 import cats.data.Ior
 import cats.effect.Sync
 import cats.implicits._
-import io.circe.Json
-import org.http4s.HttpRoutes
+import io.circe.{ Json, ParsingFailure, parser }
+import org.http4s.{ HttpRoutes, InvalidMessageBodyFailure, ParseFailure, QueryParamDecoder }
 import org.http4s.circe._
 import org.http4s.dsl.Http4sDsl
-import edu.gemini.grackle.{ IntrospectionQueryCompiler, IntrospectionQueryInterpreter, QueryInterpreter, SchemaSchema }
+import edu.gemini.grackle.QueryInterpreter
 
 // #service
 trait StarWarsService[F[_]]{
@@ -23,50 +23,49 @@ object StarWarsService {
     val dsl = new Http4sDsl[F]{}
     import dsl._
 
-    object QueryQueryParamMatcher extends QueryParamDecoderMatcher[String]("query")
+    implicit val jsonQPDecoder: QueryParamDecoder[Json] = QueryParamDecoder[String].emap { s =>
+      parser.parse(s).leftMap { case ParsingFailure(msg, _) => ParseFailure("Invalid variables", msg) }
+    }
+
+    object QueryMatcher extends QueryParamDecoderMatcher[String]("query")
+    object OperationNameMatcher extends OptionalQueryParamDecoderMatcher[String]("operationName")
+    object VariablesMatcher extends OptionalValidatingQueryParamDecoderMatcher[Json]("variables")
 
     HttpRoutes.of[F] {
       // GraphQL query is embedded in the URI query string when queried via GET
-      case GET -> Root / "starwars" :? QueryQueryParamMatcher(query) =>
-        for {
-          result <- service.runQuery(None, None, query)
-          resp   <- Ok(result)
-        } yield resp
+      case GET -> Root / "starwars" :?  QueryMatcher(query) +& OperationNameMatcher(op) +& VariablesMatcher(vars0) =>
+        vars0.sequence.fold(
+          errors => BadRequest(errors.map(_.sanitized).mkString_("", ",", "")),
+          vars =>
+            for {
+              result <- service.runQuery(op, vars, query)
+              resp   <- Ok(result)
+            } yield resp
+          )
 
       // GraphQL query is embedded in a Json request body when queried via POST
       case req @ POST -> Root / "starwars" =>
         for {
           body   <- req.as[Json]
-          obj    <- body.asObject.liftTo[F](new RuntimeException("Invalid GraphQL query"))
+          obj    <- body.asObject.liftTo[F](InvalidMessageBodyFailure("Invalid GraphQL query"))
+          query  <- obj("query").flatMap(_.asString).liftTo[F](InvalidMessageBodyFailure("Missing query field"))
           op     =  obj("operationName").flatMap(_.asString)
           vars   =  obj("variables")
-          query  <- obj("query").flatMap(_.asString).liftTo[F](new RuntimeException("Missing query field"))
           result <- service.runQuery(op, vars, query)
           resp   <- Ok(result)
         } yield resp
     }
   }
 
-  def service[F[_]](implicit F: ApplicativeError[F, Throwable]): StarWarsService[F] =
+  def service[F[_]](implicit F: Applicative[F]): StarWarsService[F] =
     new StarWarsService[F]{
-      def runQuery(op: Option[String], vars: Option[Json], query: String): F[Json] = {
-        if (op == Some("IntrospectionQuery")) {
-          // Handle IntrospectionQuery for GraphQL Playground
-          IntrospectionQueryCompiler.compile(query, vars) match {
-            case Ior.Right(compiledQuery) =>
-              IntrospectionQueryInterpreter(StarWarsSchema).run(compiledQuery, SchemaSchema.queryType).pure[F]
-            case invalid =>
-              QueryInterpreter.mkInvalidResponse(invalid).pure[F]
-          }
-        } else
-          // Handle GraphQL against the model
-          StarWarsQueryCompiler.compile(query, vars) match {
-            case Ior.Right(compiledQuery) =>
-              StarWarsQueryInterpreter.run(compiledQuery, StarWarsSchema.queryType).pure[F]
-            case invalid =>
-              QueryInterpreter.mkInvalidResponse(invalid).pure[F]
-          }
-      }
+      def runQuery(op: Option[String], vars: Option[Json], query: String): F[Json] =
+        StarWarsQueryCompiler.compile(query, vars) match {
+          case Ior.Right(compiledQuery) =>
+            StarWarsQueryInterpreter.run(compiledQuery, StarWarsSchema.queryType).pure[F]
+          case invalid =>
+            QueryInterpreter.mkInvalidResponse(invalid).pure[F]
+        }
     }
 }
 // #service

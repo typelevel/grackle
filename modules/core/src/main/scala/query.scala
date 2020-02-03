@@ -69,6 +69,10 @@ object Query {
     def render = s"<component: $componentId ${child.render}>"
   }
 
+  case class Introspection(schema: Schema, child: Query) extends Query {
+    def render = s"<introspection: ${child.render}>"
+  }
+
   /** A deferred query.
    *  `join` is applied to the current cursor and `child` yielding a continuation query which will be
    *  evaluated by the current interpreter in its next stage.
@@ -302,14 +306,47 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
         case query => List(query)
       }
 
-    val rootResults = runRootValues(rootQueries.zip(Iterator.continually(rootTpe)))
+    val introQueries = rootQueries.collect { case i: Introspection => i }
+    val introResults =
+      introQueries.map {
+        case Introspection(schema, query) =>
+          val interp = IntrospectionQueryInterpreter(schema)
+          interp.runRootValue(query, SchemaSchema.queryType)
+      }
+
+    val nonIntroQueries = rootQueries.filter { case _: Introspection => false ; case _ => true }
+    val nonIntroResults = runRootValues(nonIntroQueries.zip(Iterator.continually(rootTpe)))
+
     val mergedResults: F[Result[ProtoJson]] =
-      rootResults.map {
-        case (errors, pvalues) =>
-          val merged = ProtoJson.mergeObjects(pvalues)
-          NonEmptyChain.fromChain(errors) match {
-            case Some(errs) => Ior.Both(errs, merged)
-            case None => Ior.Right(merged)
+      nonIntroResults.map {
+        case (nonIntroErrors, nonIntroValues) =>
+
+          val mergedErrors = introResults.foldLeft(nonIntroErrors) {
+            case (acc, res) => res.left match {
+              case Some(errs) => acc ++ errs.toChain
+              case None => acc
+            }
+          }
+
+          @tailrec
+          def merge(qs: List[Query], is: List[Result[ProtoJson]], nis: List[ProtoJson], acc: List[ProtoJson]): List[ProtoJson] =
+            ((qs, is, nis): @unchecked) match {
+              case (Nil, _, _) => acc
+              case ((_: Introspection) :: qs, i :: is, nis) =>
+                val acc0 = i.right match {
+                  case Some(r) => r :: acc
+                  case None => acc
+                }
+                merge(qs, is, nis, acc0)
+              case (_ :: qs, is, ni :: nis) =>
+                merge(qs, is, nis, ni :: acc)
+            }
+
+          val mergedValues = ProtoJson.mergeObjects(merge(rootQueries, introResults, nonIntroValues, Nil).reverse)
+
+          NonEmptyChain.fromChain(mergedErrors) match {
+            case Some(errs) => Ior.Both(errs, mergedValues)
+            case None => Ior.Right(mergedValues)
           }
       }
     (for {
@@ -342,7 +379,7 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
    *  grouped by and passed jointly to the responsible interpreter in
    *  the next stage using this method. Interpreters which are able
    *  to benefit from combining queries may do so by overriding this
-   *  method to implementing their specific combinging logic.
+   *  method to implement their specific combinging logic.
    */
   def runRootValues(queries: List[(Query, Type)]): F[(Chain[Json], List[ProtoJson])] =
     queries.traverse((runRootValue _).tupled).map { rs =>
@@ -373,6 +410,25 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
             c      <- cursor.narrow(tp1)
             fields <- runFields(child, tp1, c)
           } yield fields
+
+      case (Introspection(schema, PossiblyRenamedSelect(Select("__typename", Nil, Empty), resultName)), tpe: NamedType) =>
+        (tpe match {
+          case o: ObjectType => Some(o.name)
+          case i: InterfaceType =>
+            (schema.types.collectFirst {
+              case o: ObjectType if o.interfaces.map(_.dealias).contains(i) && cursor.narrowsTo(o) => o.name
+            })
+          case u: UnionType =>
+            (u.members.map(_.dealias).collectFirst {
+              case nt: NamedType if cursor.narrowsTo(nt) => nt.name
+            })
+          case _ => None
+        }) match {
+          case Some(name) =>
+            List((resultName, ProtoJson.fromJson(Json.fromString(name)))).rightIor
+          case None =>
+            mkErrorResult(s"'__typename' cannot be applied to non-selectable type '$tpe'")
+        }
 
       case (PossiblyRenamedSelect(sel, resultName), NullableType(tpe)) =>
         cursor.asNullable.sequence.map { rc =>
@@ -473,7 +529,7 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
       case (_, (_: ScalarType) | (_: EnumType)) =>
         cursor.asLeaf.map(ProtoJson.fromJson)
 
-      case (_, (_: ObjectType) | (_: InterfaceType)) =>
+      case (_, (_: ObjectType) | (_: InterfaceType) | (_: UnionType)) =>
         runFields(query, tpe, cursor).map(ProtoJson.fromFields)
 
       case _ =>

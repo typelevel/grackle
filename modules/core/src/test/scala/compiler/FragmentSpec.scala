@@ -191,6 +191,7 @@ final class FragmentSuite extends CatsSuite {
       query FragmentTyping {
         profiles {
           id
+          __typename
           ...userFragment
           ...pageFragment
         }
@@ -209,9 +210,11 @@ final class FragmentSuite extends CatsSuite {
     val Page = FragmentSchema.tpe("Page")
 
     val expected =
-      Select("profiles", Nil,
+      Select("profiles",
+        Nil,
         Group(List(
           Select("id", Nil, Empty),
+          Introspection(FragmentSchema, Select("__typename", Nil, Empty)),
           Narrow(User, Select("name", Nil, Empty)),
           Narrow(Page, Select("title", Nil, Empty))
         ))
@@ -223,22 +226,27 @@ final class FragmentSuite extends CatsSuite {
           "profiles" : [
             {
               "id" : "1",
+              "__typename" : "User",
               "name" : "Alice"
             },
             {
               "id" : "2",
+              "__typename" : "User",
               "name" : "Bob"
             },
             {
               "id" : "3",
+              "__typename" : "User",
               "name" : "Carol"
             },
             {
               "id" : "4",
+              "__typename" : "Page",
               "title" : "GraphQL"
             },
             {
               "id" : "5",
+              "__typename" : "Page",
               "title" : "Scala"
             }
           ]
@@ -319,6 +327,106 @@ final class FragmentSuite extends CatsSuite {
     //println(res)
     assert(res == expectedResult)
   }
+
+  test("typed union fragment query") {
+    val text = """
+      query FragmentUnionTyping {
+        user: user(id: "1") {
+          favourite {
+            __typename
+            ...userFragment
+            ...pageFragment
+          }
+        }
+        page: user(id: "2") {
+          favourite {
+            __typename
+            ...userFragment
+            ...pageFragment
+          }
+        }
+      }
+
+      fragment userFragment on User {
+        id
+        name
+      }
+
+      fragment pageFragment on Page {
+        id
+        title
+      }
+    """
+
+    val User = FragmentSchema.tpe("User")
+    val Page = FragmentSchema.tpe("Page")
+
+    val expected =
+      Group(List(
+        Rename("user", Select("user", Nil,
+          Unique(FieldEquals("id", "1"),
+            Select("favourite", Nil,
+              Group(List(
+                Introspection(FragmentSchema, Select("__typename", Nil, Empty)),
+                Group(List(
+                  Narrow(User, Select("id", Nil, Empty)),
+                  Narrow(User, Select("name", Nil, Empty)))),
+                Group(List(
+                  Narrow(Page, Select("id", Nil, Empty)),
+                  Narrow(Page, Select("title", Nil, Empty))
+                ))
+              ))
+            )
+          )
+        )),
+        Rename("page", Select("user", Nil,
+          Unique(FieldEquals("id", "2"),
+            Select("favourite", Nil,
+              Group(List(
+                Introspection(FragmentSchema, Select("__typename", Nil, Empty)),
+                Group(List(
+                  Narrow(User, Select("id", Nil, Empty)),
+                  Narrow(User, Select("name", Nil, Empty))
+                )),
+                Group(List(
+                  Narrow(Page, Select("id", Nil, Empty)),
+                  Narrow(Page, Select("title", Nil, Empty))
+                ))
+              ))
+            )
+          )
+        ))
+      ))
+
+    val expectedResult = json"""
+      {
+        "data" : {
+          "user" : {
+            "favourite" : {
+              "__typename" : "User",
+              "id" : "2",
+              "name" : "Bob"
+            }
+          },
+          "page" : {
+            "favourite" : {
+              "__typename" : "Page",
+              "id" : "4",
+              "title" : "GraphQL"
+            }
+          }
+        }
+      }
+    """
+
+    val compiled = FragmentCompiler.compile(text)
+
+    assert(compiled == Ior.Right(expected))
+
+    val res = FragmentQueryInterpreter.run(compiled.right.get, FragmentSchema.queryType)
+    //println(res)
+    assert(res == expectedResult)
+  }
 }
 
 object FragmentSchema extends Schema {
@@ -345,6 +453,7 @@ object FragmentSchema extends Schema {
         Field("profilePic", None, Nil, StringType, false, None),
         Field("friends", None, Nil, ListType(TypeRef("User")), false, None),
         Field("mutualFriends", None, Nil, ListType(TypeRef("User")), false, None),
+        Field("favourite", None, Nil, NullableType(TypeRef("UserOrPage")), false, None)
       ),
       interfaces = List(TypeRef("Profile"))
     ),
@@ -357,6 +466,14 @@ object FragmentSchema extends Schema {
         Field("likers", None, Nil, ListType(TypeRef("User")), false, None),
       ),
       interfaces = List(TypeRef("Profile"))
+    ),
+    UnionType(
+      name = "UserOrPage",
+      description = None,
+      members = List(
+        TypeRef("User"),
+        TypeRef("Page")
+      )
     ),
     InterfaceType(
       name = "Profile",
@@ -390,11 +507,13 @@ object FragmentData {
   sealed trait Profile {
     def id: String
   }
-  case class User(id: String, name: String, profilePic: String, friendIds: List[String]) extends Profile {
+  case class User(id: String, name: String, profilePic: String, friendIds: List[String], favouriteId: Option[String]) extends Profile {
     def friends: List[User] =
       friendIds.flatMap(fid => profiles.collect { case u: User if u.id == fid => u })
     def mutualFriends: List[User] =
       friendIds.flatMap(fid => profiles.collect { case u: User if u.id == fid && u.friendIds.contains(id) => u })
+    def favourite: Option[Profile] =
+      favouriteId.flatMap(id => profiles.find(_.id == id))
   }
   case class Page(id: String, title: String, likerIds: List[String]) extends Profile {
     def likers: List[User] =
@@ -402,9 +521,9 @@ object FragmentData {
   }
 
   val profiles = List(
-    User("1", "Alice", "A", List("2", "3")),
-    User("2", "Bob", "B", List("1")),
-    User("3", "Carol", "C", List("1", "2")),
+    User("1", "Alice", "A", List("2", "3"), Some("2")),
+    User("2", "Bob", "B", List("1"), Some("4")),
+    User("3", "Carol", "C", List("1", "2"), None),
     Page("4", "GraphQL", List("1", "3")),
     Page("5", "Scala", List("2"))
   )
@@ -425,6 +544,7 @@ object FragmentQueryInterpreter extends DataTypeQueryInterpreter[Id](
     case (u: User, "profilePic")    => u.profilePic
     case (u: User, "friends")       => u.friends
     case (u: User, "mutualFriends") => u.mutualFriends
+    case (u: User, "favourite")     => u.favourite
     case (p: Page, "title")         => p.title
     case (p: Page, "likers")        => p.likers
   },

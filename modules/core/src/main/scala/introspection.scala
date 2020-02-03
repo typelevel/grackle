@@ -4,27 +4,9 @@
 package edu.gemini.grackle
 
 import cats.Id
-import cats.implicits._
 
-import Query._, Predicate._, Value._
-import QueryCompiler._
-
-object IntrospectionQueryCompiler extends QueryCompiler(SchemaSchema) {
-  val selectElaborator = new SelectElaborator(Map(
-    SchemaSchema.tpe("Query").dealias -> {
-      case sel@Select("__type", List(Binding("name", StringValue(name))), _) =>
-        sel.eliminateArgs(child => Unique(FieldEquals("name", name), child)).rightIor
-    },
-    SchemaSchema.tpe("__Type").dealias -> {
-      case sel@Select("fields", List(Binding("includeDeprecated", BooleanValue(include))), _) =>
-        sel.eliminateArgs(child => if (include) child else Filter(FieldEquals("isDeprecated", false), child)).rightIor
-      case sel@Select("enumValues", List(Binding("includeDeprecated", BooleanValue(include))), _) =>
-        sel.eliminateArgs(child => if (include) child else Filter(FieldEquals("isDeprecated", false), child)).rightIor
-    }
-  ))
-
-  val phases = List(selectElaborator)
-}
+import Value._
+import ScalarType._
 
 object IntrospectionQueryInterpreter {
 
@@ -40,16 +22,22 @@ object IntrospectionQueryInterpreter {
     case (other, field)             => (other, field)
   }
 
-  def apply(schema: Schema): QueryInterpreter[Id] =
+  val defaultTypes =
+    SchemaSchema.types.filterNot(_ == SchemaSchema.queryType) ++
+    List(BooleanType, IntType, FloatType, StringType, IDType)
+
+  def apply(schema: Schema): QueryInterpreter[Id] = {
+    val allTypes = schema.types ++ defaultTypes
+
     new DataTypeQueryInterpreter[Id](
       {
         case "__schema" =>
           (SchemaSchema.tpe("__Schema"), schema)
         case "__type" =>
-          (ListType(SchemaSchema.tpe("__Type")), schema.types.map(_.nullable))
+          (ListType(SchemaSchema.tpe("__Type")), allTypes.map(_.nullable))
       },
       flipNullityDealias andThen {
-        case (_: Schema, "types")                => schema.types.map(_.nullable)
+        case (_: Schema, "types")                => allTypes.map(_.nullable)
         case (_: Schema, "queryType")            => schema.queryType.dealias.nullable
         case (_: Schema, "mutationType")         => schema.mutationType.toOption.map(_.dealias.nullable)
         case (_: Schema, "subscriptionType")     => schema.mutationType.toOption.map(_.dealias.nullable)
@@ -82,7 +70,7 @@ object IntrospectionQueryInterpreter {
 
         case (u: UnionType, "possibleTypes")     => Some(u.members.map(_.nullable))
         case (u: InterfaceType, "possibleTypes") =>
-          Some(schema.types.collect {
+          Some(allTypes.collect {
             case o: ObjectType if o.interfaces.exists(_ =:= u) => NullableType(o)
           })
         case (_: NonNullType, "possibleTypes")   => None
@@ -109,7 +97,7 @@ object IntrospectionQueryInterpreter {
         case (i: InputValue, "name")             => i.name
         case (i: InputValue, "description")      => i.description
         case (i: InputValue, "type")             => i.tpe.dealias
-        case (i: InputValue, "defaultValue")     => i.defaultValue
+        case (i: InputValue, "defaultValue")     => i.defaultValue.flatMap(_.toGraphQL)
 
         case (e: EnumValue, "name")              => e.name
         case (e: EnumValue, "description")       => e.description
@@ -122,6 +110,7 @@ object IntrospectionQueryInterpreter {
         case (d: Directive, "args")              => d.args
       }
     )
+  }
 }
 
 object SchemaSchema extends Schema {

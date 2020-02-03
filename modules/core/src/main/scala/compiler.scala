@@ -8,15 +8,17 @@ import cats.data.{ Ior, NonEmptyChain }
 import cats.implicits._
 import io.circe.Json
 
-import Query._, Value._
+import Query._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.{ mkError, mkErrorResult }
-import Ast.{ Type => _, Value => _, _ }, OperationDefinition._, OperationType._, Selection._
+import ScalarType._
 
 /**
  * GraphQL query parser
  */
 object QueryParser {
+  import Ast.{ Type => _, Value => _, _ }, OperationDefinition._, OperationType._, Selection._
+
   /**
    *  Parse a query String to a query algebra term.
    *
@@ -138,7 +140,6 @@ object QueryParser {
 abstract class QueryCompiler(schema: Schema) {
   /** The phase of this compiler */
   val phases: List[Phase]
-  val vfe = new VariablesAndFragmentsElaborator
 
   /**
    * Compiles the GraphQL query `text` to a query algebra term which
@@ -149,7 +150,7 @@ abstract class QueryCompiler(schema: Schema) {
   def compile(text: String, untypedEnv: Option[Json] = None): Result[Query] = {
     val queryType = schema.queryType
 
-    val allPhases = vfe :: phases
+    val allPhases = IntrospectionElaborator :: VariablesAndFragmentsElaborator :: phases
 
     for {
       parsed  <- QueryParser.parseText(text)
@@ -214,6 +215,13 @@ object QueryCompiler {
               }
           }
 
+        case i@Introspection(_, child) if tpe =:= schema.queryType =>
+          transform(child, env, SchemaSchema, SchemaSchema.queryType).map(ec => i.copy(child = ec))
+
+        case i@Introspection(_, child) =>
+          val typenameTpe = ObjectType(s"__Typename", None, List(Field("__typename", None, Nil, StringType, false, None)), Nil)
+          transform(child, env, SchemaSchema, typenameTpe).map(ec => i.copy(child = ec))
+
         case n@Narrow(subtpe, child)  => transform(child, env, schema, subtpe).map(ec => n.copy(child = ec))
         case w@Wrap(_, child)         => transform(child, env, schema, tpe).map(ec => w.copy(child = ec))
         case r@Rename(_, child)       => transform(child, env, schema, tpe).map(ec => r.copy(child = ec))
@@ -226,7 +234,16 @@ object QueryCompiler {
       }
   }
 
-  class VariablesAndFragmentsElaborator extends Phase {
+  object IntrospectionElaborator extends Phase {
+    override def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] =
+      query match {
+        case s@PossiblyRenamedSelect(Select("__typename" | "__schema" | "__type", _, _), _) =>
+          Introspection(schema, s).rightIor
+        case _ => super.transform(query, env, schema, tpe)
+      }
+  }
+
+  object VariablesAndFragmentsElaborator extends Phase {
     override def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] =
       query match {
         case Select(fieldName, args, child) =>
@@ -287,7 +304,8 @@ object QueryCompiler {
       query match {
         case Select(fieldName, args, child) =>
           tpe.withUnderlyingField(fieldName) { childTpe =>
-            val elaborator: Select => Result[Query] = mapping.get(tpe.underlyingObject) match {
+            val mapping0 = if (schema eq SchemaSchema) introspectionMapping else mapping
+            val elaborator: Select => Result[Query] = mapping0.get(tpe.underlyingObject) match {
               case Some(e) => (s: Select) => if (e.isDefinedAt(s)) e(s) else s.rightIor
               case _ => (s: Select) => s.rightIor
             }
@@ -315,6 +333,19 @@ object QueryCompiler {
         case _ => mkErrorResult(s"Type $tpe is not an object or interface type")
       }
   }
+
+  val introspectionMapping: Map[Type, PartialFunction[Select, Result[Query]]] = Map(
+    SchemaSchema.tpe("Query").dealias -> {
+      case sel@Select("__type", List(Binding("name", StringValue(name))), _) =>
+        sel.eliminateArgs(child => Unique(FieldEquals("name", name), child)).rightIor
+    },
+    SchemaSchema.tpe("__Type").dealias -> {
+      case sel@Select("fields", List(Binding("includeDeprecated", BooleanValue(include))), _) =>
+        sel.eliminateArgs(child => if (include) child else Filter(FieldEquals("isDeprecated", false), child)).rightIor
+      case sel@Select("enumValues", List(Binding("includeDeprecated", BooleanValue(include))), _) =>
+        sel.eliminateArgs(child => if (include) child else Filter(FieldEquals("isDeprecated", false), child)).rightIor
+    }
+  )
 
   /**
    * A compiler phase which partitions a query for execution by multiple

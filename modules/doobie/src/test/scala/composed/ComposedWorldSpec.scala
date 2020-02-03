@@ -115,4 +115,44 @@ final class ComposedWorldSpec extends CatsSuite {
 
     assert(res == expected)
   }
+
+  test("composed query with introspection") {
+    val query = """
+      query {
+        country(code: "GBR") {
+          __typename
+          name
+          currencies {
+            __typename
+            code
+            exchangeRate
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "__typename" : "Country",
+            "name" : "United Kingdom",
+            "currencies" : [
+              {
+                "__typename" : "Currency",
+                "code" : "GBP",
+                "exchangeRate" : 1.25
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val compiledQuery = ComposedQueryCompiler.compile(query).right.get
+    val res = ComposedQueryInterpreter.fromTransactor(xa).run(compiledQuery, ComposedSchema.queryType).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
 }

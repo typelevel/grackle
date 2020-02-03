@@ -767,4 +767,32 @@ final class WorldSpec extends CatsSuite {
 
     assert(res == expected)
   }
+
+  test("query with introspection") {
+    val query = """
+      query {
+        country(code: "GBR") {
+          __typename
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "__typename" : "Country",
+            "name" : "United Kingdom"
+          }
+        }
+      }
+    """
+
+    val compiledQuery = WorldQueryCompiler.compile(query).right.get
+    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, WorldSchema.queryType).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
 }
