@@ -137,7 +137,7 @@ object Parser {
     (Name <~ keyword(":")) ~ Value
 
   lazy val VariableDefinitions =
-    parens(many(VariableDefinition)).token
+    parens(many(VariableDefinition <~ opt(keyword(",")))).token
 
   lazy val VariableDefinition: Parser[Ast.VariableDefinition] =
     for {

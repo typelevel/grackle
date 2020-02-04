@@ -137,7 +137,7 @@ trait DoobieMapping {
           queries.foldLeft(acc) {
             case (acc, sibling) => loop(sibling, obj, acc)
           }
-        case Empty | (_: Component) | (_: Introspection) | (_: Defer) | (_: UntypedNarrow) => acc
+        case Empty | (_: Component) | (_: Introspection) | (_: Defer) | (_: UntypedNarrow) | (_: Skip) => acc
       }
     }
 
@@ -413,6 +413,7 @@ object DoobieMapping {
           case d: Defer                => d.rightIor
           case Empty                   => Empty.rightIor
 
+          case s: Skip                 => mkErrorResult(s"Unexpected Skip ${s.render}")
           case n: UntypedNarrow        => mkErrorResult(s"Unexpected UntypeNarrow ${n.render}")
         }
       }

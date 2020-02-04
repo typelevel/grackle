@@ -115,6 +115,10 @@ object Query {
     def render = s"<narrow: $subtpe ${child.render}>"
   }
 
+  case class Skip(sense: Boolean, cond: Value, child: Query) extends Query {
+    def render = s"<skip: $sense $cond ${child.render}>"
+  }
+
   /** The terminal query */
   case object Empty extends Query {
     def render = ""
