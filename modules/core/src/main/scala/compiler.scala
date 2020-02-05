@@ -10,7 +10,7 @@ import io.circe.Json
 
 import Query._, Predicate._, Value._
 import QueryCompiler._
-import QueryInterpreter.{ mkError, mkErrorResult }
+import QueryInterpreter.{ mkError, mkErrorResult, mkOneError }
 import ScalarType._
 
 /**
@@ -77,34 +77,66 @@ object QueryParser {
     }
 
   def parseSelection(sel: Selection, typeCondition: Option[String], fragments: Map[String, FragmentDefinition]): Result[Query] = sel match {
-    case Field(alias, name, args, _, sels) =>
+    case Field(alias, name, args, directives, sels) =>
       for {
         args0 <- parseArgs(args)
         sels0 <- parseSelections(sels, None, fragments)
+        skip  <- parseSkipInclude(directives)
       } yield {
         val sel0 =
           if (sels.isEmpty) Select(name.value, args0, Empty)
           else Select(name.value, args0, sels0)
-        val sel = alias match {
+        val sel1 = alias match {
           case Some(Name(nme)) => Rename(nme, sel0)
           case None => sel0
         }
-        typeCondition match {
-          case Some(tpnme) => UntypedNarrow(tpnme, sel)
-          case _ => sel
+        val sel2 = typeCondition match {
+          case Some(tpnme) => UntypedNarrow(tpnme, sel1)
+          case _ => sel1
         }
+        val sel3 = skip match {
+          case Some((si, value)) => Skip(si, value, sel2)
+          case _ => sel2
+        }
+        sel3
       }
-    case FragmentSpread(Name(name), _) =>
-      fragments.get(name) match {
-        case Some(frag) => parseSelections(frag.selectionSet, Some(frag.typeCondition.name), fragments)
-        case None => mkErrorResult(s"Undefined fragment '$name'")
+
+    case FragmentSpread(Name(name), directives) =>
+      for {
+        frag  <- fragments.get(name).toRightIor(mkOneError(s"Undefined fragment '$name'"))
+        skip  <- parseSkipInclude(directives)
+        sels0 <- parseSelections(frag.selectionSet, Some(frag.typeCondition.name), fragments)
+      } yield {
+        val sels = skip match {
+          case Some((si, value)) => Skip(si, value, sels0)
+          case _ => sels0
+        }
+        sels
       }
-    case InlineFragment(Some(Ast.Type.Named(Name(tpnme))), _, sels) =>
-      parseSelections(sels, Some(tpnme), fragments)
+
+    case InlineFragment(Some(Ast.Type.Named(Name(tpnme))), directives, sels) =>
+      for {
+        skip  <- parseSkipInclude(directives)
+        sels0 <- parseSelections(sels, Some(tpnme), fragments)
+      } yield {
+        val sels = skip match {
+          case Some((si, value)) => Skip(si, value, sels0)
+          case _ => sels0
+        }
+        sels
+      }
 
     case _ =>
       mkErrorResult("Field or fragment spread required")
   }
+
+  def parseSkipInclude(directives: List[Directive]): Result[Option[(Boolean, Value)]] =
+    directives.collect { case dir@Directive(Name("skip"|"include"), _) => dir } match {
+      case Nil => None.rightIor
+      case Directive(Name(si), List((Name("if"), value))) :: Nil => parseValue(value).map(v => Some((si == "skip", v)))
+      case Directive(Name(si), _) :: Nil => mkErrorResult(s"$si must have a single Boolean 'if' argument")
+      case _ => mkErrorResult(s"Only a single skip/include allowed at a given location")
+    }
 
   def parseArgs(args: List[(Name, Ast.Value)]): Result[List[Binding]] =
     args.traverse((parseArg _).tupled)
@@ -150,7 +182,7 @@ abstract class QueryCompiler(schema: Schema) {
   def compile(text: String, untypedEnv: Option[Json] = None): Result[Query] = {
     val queryType = schema.queryType
 
-    val allPhases = IntrospectionElaborator :: VariablesAndFragmentsElaborator :: phases
+    val allPhases = IntrospectionElaborator :: VariablesAndSkipElaborator :: phases
 
     for {
       parsed  <- QueryParser.parseText(text)
@@ -230,6 +262,7 @@ object QueryCompiler {
         case f@Filter(_, child)       => transform(child, env, schema, tpe.item).map(ec => f.copy(child = ec))
         case c@Component(_, _, child) => transform(child, env, schema, tpe).map(ec => c.copy(child = ec))
         case d@Defer(_, child)        => transform(child, env, schema, tpe).map(ec => d.copy(child = ec))
+        case s@Skip(_, _, child)      => transform(child, env, schema, tpe).map(ec => s.copy(child = ec))
         case Empty                    => Empty.rightIor
       }
   }
@@ -243,9 +276,17 @@ object QueryCompiler {
       }
   }
 
-  object VariablesAndFragmentsElaborator extends Phase {
+  object VariablesAndSkipElaborator extends Phase {
     override def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] =
       query match {
+        case Group(children) =>
+          children.traverse(q => transform(q, env, schema, tpe)).map { eqs =>
+            eqs.filterNot(_ == Empty) match {
+              case Nil => Empty
+              case eq :: Nil => eq
+              case eqs => Group(eqs)
+            }
+          }
         case Select(fieldName, args, child) =>
           tpe.withUnderlyingField(fieldName) { childTpe =>
             for {
@@ -253,6 +294,11 @@ object QueryCompiler {
               elaboratedArgs  <- args.traverse(elaborateVariable(env))
             } yield Select(fieldName, elaboratedArgs, elaboratedChild)
           }
+        case Skip(skip, cond, child) =>
+          for {
+            c  <- extractCond(env, cond)
+            elaboratedChild <- if(c == skip) Empty.rightIor else transform(child, env, schema, tpe)
+          } yield elaboratedChild
 
         case _ => super.transform(query, env, schema, tpe)
       }
@@ -261,10 +307,22 @@ object QueryCompiler {
       case Binding(name, UntypedVariableValue(varName)) =>
         env.get(varName) match {
           case Some((_, value)) => Binding(name, value).rightIor
-          case None => mkErrorResult(s"Undefined variable '$name'")
+          case None => mkErrorResult(s"Undefined variable '$varName'")
         }
       case other => other.rightIor
     }
+
+    def extractCond(env: Env, value: Value): Result[Boolean] =
+      value match {
+        case UntypedVariableValue(varName) =>
+          env.get(varName) match {
+            case Some((tpe, BooleanValue(value))) if tpe.nonNull =:= BooleanType => value.rightIor
+            case Some((_, _)) => mkErrorResult(s"Argument of skip/include must be boolean")
+            case None => mkErrorResult(s"Undefined variable '$varName'")
+          }
+        case BooleanValue(value) => value.rightIor
+        case _ => mkErrorResult(s"Argument of skip/include must be boolean")
+      }
   }
 
   /**
