@@ -4,13 +4,13 @@
 package edu.gemini.grackle
 
 import atto.Atto._
-import cats.data.{ Ior, NonEmptyChain }
+import cats.data.Ior
 import cats.implicits._
 import io.circe.Json
 
 import Query._, Predicate._, Value._
 import QueryCompiler._
-import QueryInterpreter.{ mkError, mkErrorResult, mkOneError }
+import QueryInterpreter.{ mkErrorResult, mkOneError }
 import ScalarType._
 
 /**
@@ -26,17 +26,17 @@ object QueryParser {
    */
   def parseText(text: String, name: Option[String] = None): Result[(Query, UntypedVarDefs)] = {
     def toResult[T](pr: Either[String, T]): Result[T] =
-      Ior.fromEither(pr).leftMap(msg => NonEmptyChain.one(mkError(msg)))
+      Ior.fromEither(pr).leftMap(mkOneError(_))
 
     for {
-      doc   <- toResult(Parser.Document.parseOnly(text).either)
+      doc   <- toResult(GraphQLParser.Document.parseOnly(text).either)
       query <- parseDocument(doc, name)
     } yield query
   }
 
   def parseDocument(doc: Document, name: Option[String]): Result[(Query, UntypedVarDefs)] = {
-    val ops = doc.collect { case Left(op) => op }
-    val fragments = doc.collect { case Right(frag) => (frag.name.value, frag) }.toMap
+    val ops = doc.collect { case op: OperationDefinition => op }
+    val fragments = doc.collect { case frag: FragmentDefinition => (frag.name.value, frag) }.toMap
 
     (ops, name) match {
       case (List(op: Operation), None) => parseOperation(op, fragments)
@@ -215,9 +215,9 @@ abstract class QueryCompiler(schema: Schema) {
       case Ast.Type.NonNull(Left(named)) => loop(named, true)
       case Ast.Type.NonNull(Right(list)) => loop(list, true)
       case Ast.Type.List(elem) => loop(elem, false).map(e => if (nonNull) ListType(e) else NullableType(ListType(e)))
-      case Ast.Type.Named(name) => schema.tpe(name.value) match {
-        case NoType => mkErrorResult(s"Undefine typed '${name.value}'")
-        case tpe => (if (nonNull) tpe else NullableType(tpe)).rightIor
+      case Ast.Type.Named(name) => schema.definition(name.value) match {
+        case None => mkErrorResult(s"Undefine typed '${name.value}'")
+        case Some(tpe) => (if (nonNull) tpe else NullableType(tpe)).rightIor
       }
     }
     loop(tpe, false)
@@ -239,11 +239,11 @@ object QueryCompiler {
           else transform(child, env, schema, childTpe).map(ec => s.copy(child = ec))
 
         case UntypedNarrow(tpnme, child) =>
-          schema.tpe(tpnme) match {
-            case NoType => mkErrorResult(s"Unknown type '$tpnme' in type condition")
-            case subtpe =>
+          schema.definition(tpnme) match {
+            case None => mkErrorResult(s"Unknown type '$tpnme' in type condition")
+            case Some(subtpe) =>
               transform(child, env, schema, subtpe).map { ec =>
-                if (tpe.underlyingObject =:= subtpe) ec else Narrow(subtpe, ec)
+                if (tpe.underlyingObject =:= subtpe) ec else Narrow(schema.ref(tpnme), ec)
               }
           }
 
@@ -357,13 +357,14 @@ object QueryCompiler {
    * 3. types narrowing coercions by resolving the target type
    *    against the schema.
    */
-  class SelectElaborator(mapping: Map[Type, PartialFunction[Select, Result[Query]]]) extends Phase {
+  class SelectElaborator(mapping: Map[TypeRef, PartialFunction[Select, Result[Query]]]) extends Phase {
     override def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] =
       query match {
         case Select(fieldName, args, child) =>
           tpe.withUnderlyingField(fieldName) { childTpe =>
             val mapping0 = if (schema eq SchemaSchema) introspectionMapping else mapping
-            val elaborator: Select => Result[Query] = mapping0.get(tpe.underlyingObject) match {
+            val elaborator: Select => Result[Query] =
+              schema.ref(tpe.underlyingObject).flatMap(mapping0.get) match {
               case Some(e) => (s: Select) => if (e.isDefinedAt(s)) e(s) else s.rightIor
               case _ => (s: Select) => s.rightIor
             }
@@ -392,12 +393,12 @@ object QueryCompiler {
       }
   }
 
-  val introspectionMapping: Map[Type, PartialFunction[Select, Result[Query]]] = Map(
-    SchemaSchema.tpe("Query").dealias -> {
+  val introspectionMapping: Map[TypeRef, PartialFunction[Select, Result[Query]]] = Map(
+    SchemaSchema.ref("Query") -> {
       case sel@Select("__type", List(Binding("name", StringValue(name))), _) =>
         sel.eliminateArgs(child => Unique(FieldEquals("name", name), child)).rightIor
     },
-    SchemaSchema.tpe("__Type").dealias -> {
+    SchemaSchema.ref("__Type") -> {
       case sel@Select("fields", List(Binding("includeDeprecated", BooleanValue(include))), _) =>
         sel.eliminateArgs(child => if (include) child else Filter(FieldEquals("isDeprecated", false), child)).rightIor
       case sel@Select("enumValues", List(Binding("includeDeprecated", BooleanValue(include))), _) =>
@@ -436,7 +437,7 @@ object QueryCompiler {
       query match {
         case PossiblyRenamedSelect(Select(fieldName, args, child), resultName) =>
           tpe.withUnderlyingField(fieldName) { childTpe =>
-            mapping.get((tpe.underlyingObject, fieldName)) match {
+            schema.ref(tpe.underlyingObject).flatMap(ref => mapping.get((ref, fieldName))) match {
               case Some((cid, join)) =>
                 transform(child, env, schema, childTpe).map { elaboratedChild =>
                   Wrap(resultName, Component(cid, join, PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)))
@@ -455,7 +456,7 @@ object QueryCompiler {
   object ComponentElaborator {
     val TrivialJoin = (_: Cursor, q: Query) => q.rightIor
 
-    case class Mapping(tpe: Type, fieldName: String, componentId: String, join: (Cursor, Query) => Result[Query] = TrivialJoin)
+    case class Mapping(tpe: TypeRef, fieldName: String, componentId: String, join: (Cursor, Query) => Result[Query] = TrivialJoin)
 
     def apply(mappings: Mapping*): ComponentElaborator =
       new ComponentElaborator(mappings.map(m => ((m.tpe, m.fieldName), (m.componentId, m.join))).toMap)

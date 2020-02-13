@@ -108,7 +108,7 @@ object StarWarsData {
 
 object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
   val selectElaborator = new SelectElaborator(Map(
-    StarWarsSchema.tpe("Query").dealias -> {
+    StarWarsSchema.ref("Query") -> {
       case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
         val episode = Episode.values.find(_.toString == e.name).get
         Select("hero", Nil, Unique(FieldEquals("id", hero(episode).id), child)).rightIor
@@ -122,9 +122,9 @@ object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
 
 object StarWarsQueryInterpreter extends DataTypeQueryInterpreter[Id](
   {
-    case "hero" | "character" => (ListType(StarWarsSchema.tpe("Character")), characters)
-    case "human" => (ListType(StarWarsSchema.tpe("Human")), characters.collect { case h: Human => h })
-    case "droid" => (ListType(StarWarsSchema.tpe("Droid")), characters.collect { case d: Droid => d })
+    case "hero" | "character" => (ListType(StarWarsSchema.ref("Character")), characters)
+    case "human" => (ListType(StarWarsSchema.ref("Human")), characters.collect { case h: Human => h })
+    case "droid" => (ListType(StarWarsSchema.ref("Droid")), characters.collect { case d: Droid => d })
   },
   {
     case (c: Character, "id")          => c.id

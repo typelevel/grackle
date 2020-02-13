@@ -32,15 +32,15 @@ object IntrospectionQueryInterpreter {
     new DataTypeQueryInterpreter[Id](
       {
         case "__schema" =>
-          (SchemaSchema.tpe("__Schema"), schema)
+          (SchemaSchema.ref("__Schema"), schema)
         case "__type" =>
-          (ListType(SchemaSchema.tpe("__Type")), allTypes.map(_.nullable))
+          (ListType(SchemaSchema.ref("__Type")), allTypes.map(_.nullable))
       },
       flipNullityDealias andThen {
         case (_: Schema, "types")                => allTypes.map(_.nullable)
         case (_: Schema, "queryType")            => schema.queryType.dealias.nullable
-        case (_: Schema, "mutationType")         => schema.mutationType.toOption.map(_.dealias.nullable)
-        case (_: Schema, "subscriptionType")     => schema.mutationType.toOption.map(_.dealias.nullable)
+        case (_: Schema, "mutationType")         => schema.mutationType.map(_.dealias.nullable)
+        case (_: Schema, "subscriptionType")     => schema.mutationType.map(_.dealias.nullable)
         case (_: Schema, "directives")           => schema.directives
 
         case (_: ScalarType, "kind")             => TypeKind.SCALAR
@@ -97,7 +97,7 @@ object IntrospectionQueryInterpreter {
         case (i: InputValue, "name")             => i.name
         case (i: InputValue, "description")      => i.description
         case (i: InputValue, "type")             => i.tpe.dealias
-        case (i: InputValue, "defaultValue")     => i.defaultValue.flatMap(_.toGraphQL)
+        case (i: InputValue, "defaultValue")     => i.defaultValue.map(SchemaRenderer.renderValue)
 
         case (e: EnumValue, "name")              => e.name
         case (e: EnumValue, "description")       => e.description

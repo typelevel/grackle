@@ -39,7 +39,7 @@ class DataTypeQueryInterpreter[F[_]: Monad](
   root:    PartialFunction[String, (Type, Any)],
   fields:  PartialFunction[(Any, String), Any],
   attrs:   PartialFunction[(Any, String), Any] = PartialFunction.empty,
-  narrows: PartialFunction[(Any, Type), Any] = PartialFunction.empty
+  narrows: PartialFunction[(Any, TypeRef), Any] = PartialFunction.empty
 ) extends QueryInterpreter[F] {
 
   def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]] =
@@ -64,7 +64,7 @@ case class DataTypeCursor(
   focus:   Any,
   fields:  PartialFunction[(Any, String), Any],
   attrs:   PartialFunction[(Any, String), Any],
-  narrows: PartialFunction[(Any, Type), Any]
+  narrows: PartialFunction[(Any, TypeRef), Any]
 ) extends Cursor {
   def isLeaf: Boolean = (tpe.dealias, focus) match {
     case (_: ScalarType, (_ : String | _ : Int | _ : Double | _ : Boolean | _ : Enumeration#Value)) => true
@@ -104,12 +104,12 @@ case class DataTypeCursor(
     case _ => mkErrorResult(s"Expected Nullable type, found $focus for $tpe")
   }
 
-  def narrowsTo(subtpe: Type): Boolean =
-    subtpe <:< tpe && narrows.isDefinedAt((focus, subtpe.dealias))
+  def narrowsTo(subtpe: TypeRef): Boolean =
+    subtpe <:< tpe && narrows.isDefinedAt((focus, subtpe))
 
-  def narrow(subtpe: Type): Result[Cursor] =
+  def narrow(subtpe: TypeRef): Result[Cursor] =
     if (narrowsTo(subtpe))
-      copy(tpe = subtpe, focus = narrows((focus, subtpe.dealias))).rightIor
+      copy(tpe = subtpe, focus = narrows((focus, subtpe))).rightIor
     else
       mkErrorResult(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
 

@@ -111,7 +111,7 @@ object Query {
   /**
    * The result of `child` if the focus is of type `subtpe`, `Empty` otherwise.
    */
-  case class Narrow(subtpe: Type, child: Query) extends Query {
+  case class Narrow(subtpe: TypeRef, child: Query) extends Query {
     def render = s"<narrow: $subtpe ${child.render}>"
   }
 
@@ -420,11 +420,11 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
           case o: ObjectType => Some(o.name)
           case i: InterfaceType =>
             (schema.types.collectFirst {
-              case o: ObjectType if o.interfaces.map(_.dealias).contains(i) && cursor.narrowsTo(o) => o.name
+              case o: ObjectType if o <:< i && cursor.narrowsTo(schema.ref(o.name)) => o.name
             })
           case u: UnionType =>
             (u.members.map(_.dealias).collectFirst {
-              case nt: NamedType if cursor.narrowsTo(nt) => nt.name
+              case nt: NamedType if cursor.narrowsTo(schema.ref(nt.name)) => nt.name
             })
           case _ => None
         }) match {

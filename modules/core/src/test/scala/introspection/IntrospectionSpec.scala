@@ -988,6 +988,31 @@ final class IntrospectionSuite extends CatsSuite {
                     },
                     "isDeprecated" : false,
                     "deprecationReason" : null
+                  },
+                  {
+                    "name" : "profiles",
+                    "description" : null,
+                    "args" : [
+                    ],
+                    "type" : {
+                      "kind" : "NON_NULL",
+                      "name" : null,
+                      "ofType" : {
+                        "kind" : "LIST",
+                        "name" : null,
+                        "ofType" : {
+                          "kind" : "NON_NULL",
+                          "name" : null,
+                          "ofType" : {
+                            "kind" : "INTERFACE",
+                            "name" : "Profile",
+                            "ofType" : null
+                          }
+                        }
+                      }
+                    },
+                    "isDeprecated" : false,
+                    "deprecationReason" : null
                   }
                 ],
                 "inputFields" : null,
@@ -995,6 +1020,36 @@ final class IntrospectionSuite extends CatsSuite {
                 ],
                 "enumValues" : null,
                 "possibleTypes" : null
+              },
+              {
+                "kind" : "INTERFACE",
+                "name" : "Profile",
+                "description" : "Profile interface type",
+                "fields" : [
+                  {
+                    "name" : "id",
+                    "description" : null,
+                    "args" : [
+                    ],
+                    "type" : {
+                      "kind" : "SCALAR",
+                      "name" : "String",
+                      "ofType" : null
+                    },
+                    "isDeprecated" : false,
+                    "deprecationReason" : null
+                  }
+                ],
+                "inputFields" : null,
+                "interfaces" : null,
+                "enumValues" : null,
+                "possibleTypes" : [
+                  {
+                    "kind" : "OBJECT",
+                    "name" : "User",
+                    "ofType" : null
+                  }
+                ]
               },
               {
                 "kind" : "OBJECT",
@@ -1043,6 +1098,11 @@ final class IntrospectionSuite extends CatsSuite {
                 ],
                 "inputFields" : null,
                 "interfaces" : [
+                  {
+                    "kind" : "INTERFACE",
+                    "name" : "Profile",
+                    "ofType" : null
+                  }
                 ],
                 "enumValues" : null,
                 "possibleTypes" : null
@@ -1081,6 +1141,35 @@ final class IntrospectionSuite extends CatsSuite {
               "__typename" : "User",
               "renamed" : "User",
               "name" : "Luke Skywalker"
+            }
+          ]
+        }
+      }
+    """
+
+    val compiled = SmallQueryCompiler.compile(text)
+    val res = SmallQueryInterpreter.run(compiled.right.get, SmallSchema.queryType)
+    //println(res)
+    assert(res == expected)
+  }
+
+  test("typename query with narrowing") {
+    val text = """
+      {
+        profiles {
+          __typename
+          id
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "profiles" : [
+            {
+              "__typename" : "User",
+              "id" : "1000"
             }
           ]
         }
@@ -1169,7 +1258,8 @@ object TestSchema extends Schema {
       description = Some("Profile interface type"),
       fields = List(
         Field("id", None, Nil, NullableType(StringType), false, None)
-      )
+      ),
+      interfaces = Nil
     ),
     ObjectType(
       name = "Date",
@@ -1239,7 +1329,16 @@ object SmallSchema extends Schema {
       name = "Query",
       description = None,
       fields = List(
-        Field("users", None, Nil, ListType(TypeRef("User")), false, None)
+        Field("users", None, Nil, ListType(TypeRef("User")), false, None),
+        Field("profiles", None, Nil, ListType(TypeRef("Profile")), false, None)
+      ),
+      interfaces = Nil
+    ),
+    InterfaceType(
+      name = "Profile",
+      description = Some("Profile interface type"),
+      fields = List(
+        Field("id", None, Nil, NullableType(StringType), false, None),
       ),
       interfaces = Nil
     ),
@@ -1251,11 +1350,13 @@ object SmallSchema extends Schema {
         Field("name", None, Nil, NullableType(StringType), false, None),
         Field("age", None, Nil, NullableType(IntType), false, None)
       ),
-      interfaces = Nil
+      interfaces = List(TypeRef("Profile"))
     )
   )
 
   val directives = Nil
+
+  val User = ref("User")
 }
 
 object SmallQueryCompiler extends QueryCompiler(SmallSchema) {
@@ -1263,7 +1364,10 @@ object SmallQueryCompiler extends QueryCompiler(SmallSchema) {
 }
 
 object SmallData {
-  case class User(id: Option[String], name: Option[String], age: Option[Int])
+  trait Profile {
+    def id: Option[String]
+  }
+  case class User(id: Option[String], name: Option[String], age: Option[Int]) extends Profile
   val users = List(
     User(Some("1000"), Some("Luke Skywalker"), Some(30))
   )
@@ -1273,11 +1377,16 @@ import SmallData._
 
 object SmallQueryInterpreter extends DataTypeQueryInterpreter[Id](
   {
-    case "users" => (ListType(SmallSchema.tpe("User")), users)
+    case "users" => (ListType(SmallSchema.ref("User")), users)
+    case "profiles" => (ListType(SmallSchema.ref("Profile")), users: List[Profile])
   },
   {
-    case (u: User, "id")   => u.id
-    case (u: User, "name") => u.name
-    case (u: User, "age")  => u.age
+    case (u: User, "id")    => u.id
+    case (u: User, "name")  => u.name
+    case (u: User, "age")   => u.age
+    case (p: Profile, "id") => p.id
+  },
+  narrows = {
+    case (u: User, SmallSchema.User) => u
   }
 )
