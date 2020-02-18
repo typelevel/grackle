@@ -50,14 +50,14 @@ trait Cursor {
   def asNullable: Result[Option[Cursor]]
 
   /** Is the value at this `Cursor` narrowable to `subtpe`? */
-  def narrowsTo(subtpe: Type): Boolean
+  def narrowsTo(subtpe: TypeRef): Boolean
 
   /**
    * Yield a `Cursor` corresponding to the value at this `Cursor` narrowed to
    * type `subtpe`, or an error on the left hand side if such a narrowing is not
    * possible.
    */
-  def narrow(subtpe: Type): Result[Cursor]
+  def narrow(subtpe: TypeRef): Result[Cursor]
 
   /** Does the value at this `Cursor` have a field named `fieldName`? */
   def hasField(fieldName: String): Boolean

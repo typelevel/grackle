@@ -138,7 +138,7 @@ object InputValuesSchema extends Schema {
 
 object InputValuesCompiler extends QueryCompiler(InputValuesSchema) {
   val selectElaborator = new SelectElaborator(Map(
-    InputValuesSchema.tpe("Query").dealias -> PartialFunction.empty
+    InputValuesSchema.ref("Query") -> PartialFunction.empty
   ))
 
   val phases = List(selectElaborator)

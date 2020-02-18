@@ -24,7 +24,7 @@ object CurrencyData {
 
   val currencies = List(EUR, GBP)
 
-  val CurrencyType = CurrencySchema.tpe("Currency")
+  val CurrencyType = CurrencySchema.ref("Currency")
 }
 
 import CurrencyData.{ Currency, CurrencyType, currencies }
@@ -40,7 +40,7 @@ object CurrencyQueryInterpreter extends DataTypeQueryInterpreter[Id](
 )
 
 object CurrencyQueryCompiler extends QueryCompiler(CurrencySchema) {
-  val QueryType = CurrencySchema.tpe("Query").dealias
+  val QueryType = CurrencySchema.ref("Query")
 
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
@@ -67,7 +67,7 @@ object CountryData {
 
   val countries = List(DEU, FRA, GBR)
 
-  val CountryType = CountrySchema.tpe("Country")
+  val CountryType = CountrySchema.ref("Country")
 }
 
 import CountryData.{ Country, CountryType, countries }
@@ -83,7 +83,7 @@ object CountryQueryInterpreter extends DataTypeQueryInterpreter[Id](
 )
 
 object CountryQueryCompiler extends QueryCompiler(CountrySchema) {
-  val QueryType = CountrySchema.tpe("Query").dealias
+  val QueryType = CountrySchema.ref("Query")
 
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
@@ -102,8 +102,8 @@ object CountryQueryCompiler extends QueryCompiler(CountrySchema) {
 object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
   import CountryData._
 
-  val QueryType = ComposedSchema.tpe("Query").dealias
-  val CountryType = ComposedSchema.tpe("Country")
+  val QueryType = ComposedSchema.ref("Query")
+  val CountryType = ComposedSchema.ref("Country")
 
   val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {

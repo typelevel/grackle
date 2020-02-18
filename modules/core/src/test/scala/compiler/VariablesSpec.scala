@@ -155,7 +155,7 @@ object VariablesSchema extends Schema {
 
 object VariablesCompiler extends QueryCompiler(VariablesSchema) {
   val selectElaborator = new SelectElaborator(Map(
-    VariablesSchema.tpe("Query").dealias -> PartialFunction.empty
+    VariablesSchema.ref("Query") -> PartialFunction.empty
   ))
 
   val phases = List(selectElaborator)

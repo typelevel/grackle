@@ -8,7 +8,7 @@ import edu.gemini.grackle._
 object StarWarsSchema extends Schema {
   import ScalarType._
 
-  val EpisodeArg = InputValue("episode", None, NullableType(TypeRef("Episode")), None)
+  val EpisodeArg = InputValue("episode", None, TypeRef("Episode"), None)
   val IdArg = InputValue("id", None, IDType, None)
 
   val types = List(
@@ -40,7 +40,8 @@ object StarWarsSchema extends Schema {
         Field("name", None, Nil, NullableType(StringType), false, None),
         Field("friends", None, Nil, NullableType(ListType(TypeRef("Character"))), false, None),
         Field("appearsIn", None, Nil, NullableType(ListType(TypeRef("Episode"))), false, None)
-      )
+      ),
+      interfaces = Nil
     ),
     ObjectType(
       name = "Human",

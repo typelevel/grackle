@@ -237,7 +237,8 @@ object SimpleSchema extends Schema {
         Field("id", None, Nil, StringType, false, None),
         Field("name", None, Nil, NullableType(StringType), false, None),
         Field("friends", None, Nil, NullableType(ListType(TypeRef("Character"))), false, None),
-      )
+      ),
+      interfaces = Nil
     )
   )
 
@@ -246,7 +247,7 @@ object SimpleSchema extends Schema {
 
 object SimpleCompiler extends QueryCompiler(SimpleSchema) {
   val selectElaborator = new SelectElaborator(Map(
-    SimpleSchema.tpe("Query").dealias -> {
+    SimpleSchema.ref("Query") -> {
       case Select("character", List(Binding("id", StringValue(id))), child) =>
         Unique(FieldEquals("id", id), child).rightIor
     }
@@ -375,9 +376,9 @@ object ComposedSchema extends Schema {
 
 object ComposedCompiler extends QueryCompiler(ComposedSchema) {
   val componentElaborator = ComponentElaborator(
-    Mapping(ComposedSchema.tpe("Query"), "componenta", "ComponentA"),
-    Mapping(ComposedSchema.tpe("FieldA2"), "componentb", "ComponentB"),
-    Mapping(ComposedSchema.tpe("FieldB2"), "componentc", "ComponentC")
+    Mapping(ComposedSchema.ref("Query"), "componenta", "ComponentA"),
+    Mapping(ComposedSchema.ref("FieldA2"), "componentb", "ComponentB"),
+    Mapping(ComposedSchema.ref("FieldB2"), "componentc", "ComponentC")
   )
 
   val phases = List(componentElaborator)

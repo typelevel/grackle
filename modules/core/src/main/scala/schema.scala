@@ -3,11 +3,13 @@
 
 package edu.gemini.grackle
 
+import atto.Atto._
+import cats.data.Ior
 import cats.implicits._
 import io.circe.Json
 
-import QueryInterpreter.mkErrorResult
-import ScalarType._
+import QueryInterpreter.{ mkErrorResult, mkOneError }
+import ScalarType._, Value._
 
 /**
  * Representation of a GraphQL schema
@@ -16,17 +18,22 @@ import ScalarType._
  */
 trait Schema {
   /** The types defined by this `Schema`. */
-  val types: List[NamedType]
+  def types: List[NamedType]
   /** The directives defined by this `Schema`. */
-  val directives: List[Directive]
+  def directives: List[Directive]
 
   /** A reference by name to a type defined by this `Schema`.
    *
    *  `TypeRef`s refer to types defined in this schema by name and hence
    *  can be used as part of mutually recursive type definitions.
    */
-  def TypeRef(ref: String): TypeRef =
-    new TypeRef(this, ref)
+  def ref(tpnme: String): TypeRef = new TypeRef(this, tpnme)
+
+  /**
+   * Alias for `ref` for use within constructors of concrete
+   * `Schema` values.
+   */
+  protected def TypeRef(tpnme: String): TypeRef = ref(tpnme)
 
   /**
    * The default type of a GraphQL schema
@@ -44,18 +51,19 @@ trait Schema {
    *
    * is used.
    */
-  def defaultSchemaType = {
-    val defaultQueryType = tpe("Query")
-    val defaultMutationType = tpe("Mutation").nullable
-    val defaultSubscriptionType = tpe("Subscription").nullable
+  def defaultSchemaType: NamedType = {
+    def mkRootDef(fieldName: String)(tpe: NamedType): Field =
+      Field(fieldName, None, Nil, tpe, false, None)
+
     ObjectType(
       name = "Schema",
       description = None,
-      fields = List(
-        Field("query", None, Nil, defaultQueryType, false, None),
-        Field("mutation", None, Nil, defaultMutationType, false, None),
-        Field("subscription", None, Nil, defaultSubscriptionType, false, None)
-      ),
+      fields =
+        List(
+          definition("Query").map(mkRootDef("query")),
+          definition("Mutation").map(mkRootDef("mutation")),
+          definition("Subscription").map(mkRootDef("subscription"))
+        ).flatten,
       interfaces = Nil
     )
   }
@@ -65,8 +73,13 @@ trait Schema {
    *
    * Yields the type, if defined, `NoType` otherwise.
    */
-  def tpe(name: String): Type =
-    types.find(_.name == name).getOrElse(Type.tpe(name))
+  def definition(name: String): Option[NamedType] =
+    types.find(_.name == name).orElse(Type.tpe(name)).map(_.dealias)
+
+  def ref(tp: Type): Option[TypeRef] = tp match {
+    case nt: NamedType if types.exists(_.name == nt.name) => Some(ref(nt.name))
+    case _ => None
+  }
 
   /**
    * The schema type.
@@ -74,14 +87,21 @@ trait Schema {
    * Either the explicitly defined type named `"Schema"` or the default
    * schema type if not defined.
    */
-  def schemaType = tpe("Schema") orElse defaultSchemaType
+  def schemaType: NamedType = definition("Schema").getOrElse(defaultSchemaType)
 
   /** The type of queries defined by this `Schema` */
-  def queryType: Type = schemaType.field("query")
+  def queryType: NamedType = schemaType.field("query").asNamed.get
   /** The type of mutations defined by this `Schema` */
-  def mutationType: Type = schemaType.field("mutation")
+  def mutationType: Option[NamedType] = schemaType.field("mutation").asNamed
   /** The type of subscriptions defined by this `Schema` */
-  def subscriptionType: Type = schemaType.field("subscription")
+  def subscriptionType: Option[NamedType] = schemaType.field("subscription").asNamed
+
+  override def toString = SchemaRenderer.renderSchema(this)
+}
+
+object Schema {
+  def apply(schemaText: String): Result[Schema] =
+    SchemaParser.parseText(schemaText)
 }
 
 /**
@@ -130,7 +150,7 @@ sealed trait Type {
     case NullableType(tpe) => tpe.field(fieldName)
     case TypeRef(_, _) => dealias.field(fieldName)
     case ObjectType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
-    case InterfaceType(_, _, fields) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
+    case InterfaceType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
     case _ => NoType
   }
 
@@ -155,7 +175,7 @@ sealed trait Type {
     case (_, TypeRef(_, _)) => dealias.path(fns)
     case (fieldName :: rest, ObjectType(_, _, fields, _)) =>
       fields.find(_.name == fieldName).map(_.tpe.path(rest)).getOrElse(NoType)
-    case (fieldName :: rest, InterfaceType(_, _, fields)) =>
+    case (fieldName :: rest, InterfaceType(_, _, fields, _)) =>
       fields.find(_.name == fieldName).map(_.tpe.path(rest)).getOrElse(NoType)
     case _ => NoType
   }
@@ -174,7 +194,7 @@ sealed trait Type {
     case (_, TypeRef(_, _)) => dealias.pathIsList(fns)
     case (fieldName :: rest, ObjectType(_, _, fields, _)) =>
       fields.find(_.name == fieldName).map(_.tpe.pathIsList(rest)).getOrElse(false)
-    case (fieldName :: rest, InterfaceType(_, _, fields)) =>
+    case (fieldName :: rest, InterfaceType(_, _, fields, _)) =>
       fields.find(_.name == fieldName).map(_.tpe.pathIsList(rest)).getOrElse(false)
     case _ => false
   }
@@ -193,16 +213,13 @@ sealed trait Type {
     case (_, TypeRef(_, _)) => dealias.pathIsNullable(fns)
     case (fieldName :: rest, ObjectType(_, _, fields, _)) =>
       fields.find(_.name == fieldName).map(_.tpe.pathIsNullable(rest)).getOrElse(false)
-    case (fieldName :: rest, InterfaceType(_, _, fields)) =>
+    case (fieldName :: rest, InterfaceType(_, _, fields, _)) =>
       fields.find(_.name == fieldName).map(_.tpe.pathIsNullable(rest)).getOrElse(false)
     case _ => false
   }
 
   /** Strip off aliases */
-  def dealias: Type = this match {
-    case TypeRef(schema, tpnme) => schema.types.find(_.name == tpnme).getOrElse(NoType)
-    case _ => this
-  }
+  def dealias: Type = this
 
   /** Is this type nullable? */
   def isNullable: Boolean = this match {
@@ -277,7 +294,7 @@ sealed trait Type {
     case ListType(tpe) => tpe.underlyingField(fieldName)
     case TypeRef(_, _) => dealias.underlyingField(fieldName)
     case ObjectType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
-    case InterfaceType(_, _, fields) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
+    case InterfaceType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
     case _ => NoType
   }
 
@@ -309,23 +326,21 @@ sealed trait Type {
     case _ => NoType
   }
 
-  /** Yield a String representation of this type */
-  def describe: String
+  def isNamed: Boolean = false
 
-  /** Yield a short String representation of this type */
-  override def toString: String = describe
+  def asNamed: Option[NamedType] = None
 }
 
 object Type {
   import ScalarType._
 
-  def tpe(tpnme: String): Type = tpnme match {
-    case "Int" => IntType
-    case "Float" => FloatType
-    case "String" => StringType
-    case "Boolean" => BooleanType
-    case "ID" => IDType
-    case _ => NoType
+  def tpe(tpnme: String): Option[NamedType] = tpnme match {
+    case "Int" => Some(IntType)
+    case "Float" => Some(FloatType)
+    case "String" => Some(StringType)
+    case "Boolean" => Some(BooleanType)
+    case "ID" => Some(IDType)
+    case _ => None
   }
 }
 
@@ -338,6 +353,9 @@ object Type {
 sealed trait NamedType extends Type {
   /** The name of this type */
   def name: String
+  override def dealias: NamedType = this
+  override def isNamed: Boolean = true
+  override def asNamed: Option[NamedType] = Some(this)
   def description: Option[String]
   override def toString: String = name
 }
@@ -345,15 +363,14 @@ sealed trait NamedType extends Type {
 /**
  * A sentinel value indicating the absence of a type.
  */
-case object NoType extends Type {
-  def describe = "NoType"
-}
+case object NoType extends Type
 
 /**
  * A by name reference to a type defined in `schema`.
  */
-case class TypeRef(schema: Schema, ref: String) extends Type {
-  override def describe: String = s"@$ref"
+case class TypeRef(schema: Schema, name: String) extends NamedType {
+  override def dealias: NamedType = schema.definition(name).getOrElse(this)
+  def description: Option[String] = dealias.description
 }
 
 /**
@@ -363,9 +380,7 @@ case class TypeRef(schema: Schema, ref: String) extends Type {
 case class ScalarType(
   name:        String,
   description: Option[String]
-) extends Type with NamedType {
-  override def describe: String = name
-}
+) extends Type with NamedType
 
 object ScalarType {
   val IntType = ScalarType(
@@ -426,12 +441,10 @@ object ScalarType {
  *
  * This includes object types and inferface types.
  */
-trait TypeWithFields extends NamedType {
+sealed trait TypeWithFields extends NamedType {
   def fields: List[Field]
 
   def fieldInfo(name: String): Option[Field] = fields.find(_.name == name)
-
-  override def describe: String = s"$name ${fields.map(_.describe).mkString("{ ", ", ", " }")}"
 }
 
 /**
@@ -442,7 +455,8 @@ trait TypeWithFields extends NamedType {
 case class InterfaceType(
   name:        String,
   description: Option[String],
-  fields:      List[Field]
+  fields:      List[Field],
+  interfaces:  List[NamedType]
 ) extends Type with TypeWithFields
 
 /**
@@ -453,7 +467,7 @@ case class ObjectType(
   name:        String,
   description: Option[String],
   fields:      List[Field],
-  interfaces:  List[TypeRef]
+  interfaces:  List[NamedType]
 ) extends Type with TypeWithFields
 
 /**
@@ -465,10 +479,9 @@ case class ObjectType(
 case class UnionType(
   name:        String,
   description: Option[String],
-  members:     List[TypeRef]
+  members:     List[NamedType]
 ) extends Type with NamedType {
   override def toString: String = members.mkString("|")
-  def describe: String = members.map(_.describe).mkString("|")
 }
 
 /**
@@ -482,7 +495,6 @@ case class EnumType(
 ) extends Type with NamedType {
   def hasValue(name: String): Boolean = enumValues.exists(_.name == name)
   def value(name: String): Option[EnumValue] = enumValues.find(_.name == name)
-  def describe: String = s"$name ${enumValues.mkString("{ ", ", ", " }")}"
 }
 
 /**
@@ -507,8 +519,6 @@ case class InputObjectType(
   inputFields: List[InputValue]
 ) extends Type with NamedType {
   def inputFieldInfo(name: String): Option[InputValue] = inputFields.find(_.name == name)
-
-  override def describe: String = s"$name ${inputFields.map(_.describe).mkString("{ ", ", ", " }")}"
 }
 
 /**
@@ -520,7 +530,6 @@ case class ListType(
   ofType: Type
 ) extends Type {
   override def toString: String = s"[$ofType]"
-  override def describe: String = s"[${ofType.describe}]"
 }
 
 /**
@@ -533,7 +542,6 @@ case class NullableType(
   ofType: Type
 ) extends Type {
   override def toString: String = s"$ofType?"
-  override def describe: String = s"${ofType.describe}?"
 }
 
 /**
@@ -547,9 +555,7 @@ case class Field private (
   tpe:               Type,
   isDeprecated:      Boolean,
   deprecationReason: Option[String]
-) {
-  def describe: String = s"$name: $tpe"
-}
+)
 
 /**
  * @param defaultValue  a String encoding (using the GraphQL language) of the default value used by
@@ -560,54 +566,22 @@ case class InputValue private (
   description:  Option[String],
   tpe:          Type,
   defaultValue: Option[Value]
-) {
-  def describe: String = s"$name: $tpe"
-}
+)
 
-sealed trait Value {
-  def toGraphQL: Option[String]
-}
-
+sealed trait Value
 object Value {
-  case class IntValue(value: Int) extends Value {
-    def toGraphQL: Option[String] = Some(value.toString)
-  }
-  case class FloatValue(value: Double) extends Value {
-    def toGraphQL: Option[String] = Some(value.toString)
-  }
-  case class StringValue(value: String) extends Value {
-    def toGraphQL: Option[String] = Some(s""""$value"""")
-  }
-  case class BooleanValue(value: Boolean) extends Value {
-    def toGraphQL: Option[String] = Some(value.toString)
-  }
-  case class IDValue(value: String) extends Value {
-    def toGraphQL: Option[String] = Some(s""""$value"""")
-  }
-  case class UntypedEnumValue(name: String) extends Value {
-    def toGraphQL: Option[String] = None
-  }
-  case class TypedEnumValue(value: EnumValue) extends Value {
-    def toGraphQL: Option[String] = Some(value.name)
-  }
-  case class UntypedVariableValue(name: String) extends Value {
-    def toGraphQL: Option[String] = None
-  }
-  case class ListValue(elems: List[Value]) extends Value {
-    def toGraphQL: Option[String] = Some(elems.map(_.toGraphQL).mkString("[", ", ", "]"))
-  }
-  case class ObjectValue(fields: List[(String, Value)]) extends Value {
-    def toGraphQL: Option[String] =
-      Some(fields.map {
-        case (name, value) => s"$name : ${value.toGraphQL}"
-      }.mkString("{", ", ", "}"))
-  }
-  case object NullValue extends Value {
-    def toGraphQL: Option[String] = Some("null")
-  }
-  case object AbsentValue extends Value {
-    def toGraphQL: Option[String] = None
-  }
+  case class IntValue(value: Int) extends Value
+  case class FloatValue(value: Double) extends Value
+  case class StringValue(value: String) extends Value
+  case class BooleanValue(value: Boolean) extends Value
+  case class IDValue(value: String) extends Value
+  case class UntypedEnumValue(name: String) extends Value
+  case class TypedEnumValue(value: EnumValue) extends Value
+  case class UntypedVariableValue(name: String) extends Value
+  case class ListValue(elems: List[Value]) extends Value
+  case class ObjectValue(fields: List[(String, Value)]) extends Value
+  case object NullValue extends Value
+  case object AbsentValue extends Value
 
   def checkValue(iv: InputValue, value: Option[Value]): Result[Value] =
     (iv.tpe.dealias, value) match {
@@ -644,8 +618,8 @@ object Value {
       case (InputObjectType(_, _, ivs), Some(ObjectValue(fs))) =>
         val obj = fs.toMap
         ivs.traverse(iv => checkValue(iv, obj.get(iv.name)).map(v => (iv.name, v))).map(ObjectValue)
-      case (_, Some(value)) => mkErrorResult(s"Expected ${iv.tpe} found '$value' for '${iv.name}")
-      case (_, None) => mkErrorResult(s"Value of type ${iv.tpe} required for '${iv.name}")
+      case (tpe, Some(value)) => mkErrorResult(s"Expected $tpe found '$value' for '${iv.name}")
+      case (tpe, None) => mkErrorResult(s"Value of type $tpe required for '${iv.name}")
     }
 
   def checkVarValue(iv: InputValue, value: Option[Json]): Result[Value] = {
@@ -680,8 +654,8 @@ object Value {
         }.map(vs => ListValue(vs.toList))
       case (InputObjectType(_, _, ivs), Some(jsonObject(obj))) =>
         ivs.traverse(iv => checkVarValue(iv, obj(iv.name)).map(v => (iv.name, v))).map(ObjectValue)
-      case (_, Some(value)) => mkErrorResult(s"Expected ${iv.tpe} found '$value' for '${iv.name}")
-      case (_, None) => mkErrorResult(s"Value of type ${iv.tpe} required for '${iv.name}")
+      case (tpe, Some(value)) => mkErrorResult(s"Expected $tpe found '$value' for '${iv.name}")
+      case (tpe, None) => mkErrorResult(s"Value of type $tpe required for '${iv.name}")
     }
   }
 }
@@ -693,28 +667,283 @@ object Value {
 case class Directive(
   name:        String,
   description: Option[String],
-  locations:   List[DirectiveLocation],
+  locations:   List[Ast.DirectiveLocation],
   args:        List[InputValue]
 )
 
-sealed trait DirectiveLocation
-object DirectiveLocation {
-  case object QUERY                  extends DirectiveLocation
-  case object MUTATION               extends DirectiveLocation
-  case object SUBSCRIPTION           extends DirectiveLocation
-  case object FIELD                  extends DirectiveLocation
-  case object FRAGMENT_DEFINITION    extends DirectiveLocation
-  case object FRAGMENT_SPREAD        extends DirectiveLocation
-  case object INLINE_FRAGMENT        extends DirectiveLocation
-  case object SCHEMA                 extends DirectiveLocation
-  case object SCALAR                 extends DirectiveLocation
-  case object OBJECT                 extends DirectiveLocation
-  case object FIELD_DEFINITION       extends DirectiveLocation
-  case object ARGUMENT_DEFINITION    extends DirectiveLocation
-  case object INTERFACE              extends DirectiveLocation
-  case object UNION                  extends DirectiveLocation
-  case object ENUM                   extends DirectiveLocation
-  case object ENUM_VALUE             extends DirectiveLocation
-  case object INPUT_OBJECT           extends DirectiveLocation
-  case object INPUT_FIELD_DEFINITION extends DirectiveLocation
+/**
+ * GraphQL schema parser
+ */
+object SchemaParser {
+  import Ast.{ Type => _, Value => _, Directive => _, _ }, OperationType._
+
+  /**
+   *  Parse a query String to a query algebra term.
+   *
+   *  Yields a Query value on the right and accumulates errors on the left.
+   */
+  def parseText(text: String): Result[Schema] = {
+    def toResult[T](pr: Either[String, T]): Result[T] =
+      Ior.fromEither(pr).leftMap(mkOneError(_))
+
+    for {
+      doc   <- toResult(GraphQLParser.Document.parseOnly(text).either)
+      query <- parseDocument(doc)
+    } yield query
+  }
+
+  def parseDocument(doc: Document): Result[Schema] = {
+    def mkSchemaType(schema: Schema): Result[NamedType] = {
+      def mkRootOperationType(rootTpe: RootOperationTypeDefinition): Result[(OperationType, NamedType)] = {
+        val RootOperationTypeDefinition(optype, tpe) = rootTpe
+        mkType(schema)(tpe).flatMap {
+          case nt: NamedType => (optype, nt).rightIor
+          case _ => mkErrorResult("Root operation types must be named types")
+        }
+      }
+
+      def build(query: NamedType, mutation: Option[NamedType], subscription: Option[NamedType]): NamedType = {
+        def mkRootDef(fieldName: String)(tpe: NamedType): Field =
+          Field(fieldName, None, Nil, tpe, false, None)
+
+        ObjectType(
+          name = "Schema",
+          description = None,
+          fields =
+            mkRootDef("query")(query) ::
+            List(
+              mutation.map(mkRootDef("mutation")),
+              subscription.map(mkRootDef("subscription"))
+            ).flatten,
+          interfaces = Nil
+        )
+      }
+
+      def defaultQueryType = schema.ref("Query")
+
+      val defns = doc.collect { case schema: SchemaDefinition => schema }
+      defns match {
+        case Nil => build(defaultQueryType, None, None).rightIor
+        case SchemaDefinition(rootTpes, _) :: Nil =>
+          rootTpes.traverse(mkRootOperationType).map { ops0 =>
+            val ops = ops0.toMap
+            build(ops.get(Query).getOrElse(defaultQueryType), ops.get(Mutation), ops.get(Subscription))
+          }
+
+        case _ => mkErrorResult("At most one schema definition permitted")
+      }
+    }
+
+    def mkTypeDefs(schema: Schema): Result[List[NamedType]] = {
+      val defns = doc.collect { case tpe: TypeDefinition => tpe }
+      defns.traverse(mkTypeDef(schema))
+    }
+
+    def mkTypeDef(schema: Schema)(td: TypeDefinition): Result[NamedType] = td match {
+      case ScalarTypeDefinition(Name("Int"), _, _) => IntType.rightIor
+      case ScalarTypeDefinition(Name("Float"), _, _) => FloatType.rightIor
+      case ScalarTypeDefinition(Name("String"), _, _) => StringType.rightIor
+      case ScalarTypeDefinition(Name("Boolean"), _, _) => BooleanType.rightIor
+      case ScalarTypeDefinition(Name("ID"), _, _) => IDType.rightIor
+      case ScalarTypeDefinition(Name(nme), desc, _) => ScalarType(nme, desc).rightIor
+      case ObjectTypeDefinition(Name(nme), desc, fields0, ifs0, _) =>
+        for {
+          fields <- fields0.traverse(mkField(schema))
+          ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+        } yield ObjectType(nme, desc, fields, ifs)
+      case InterfaceTypeDefinition(Name(nme), desc, fields0, ifs0, _) =>
+        for {
+          fields <- fields0.traverse(mkField(schema))
+          ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+        } yield InterfaceType(nme, desc, fields, ifs)
+      case UnionTypeDefinition(Name(nme), desc, _, members0) =>
+        val members = members0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+        UnionType(nme, desc, members).rightIor
+      case EnumTypeDefinition(Name(nme), desc, _, values0) =>
+        for {
+          values <- values0.traverse(mkEnumValue)
+        } yield EnumType(nme, desc, values)
+      case InputObjectTypeDefinition(Name(nme), desc, fields0, _) =>
+        for {
+          fields <- fields0.traverse(mkInputValue(schema))
+        } yield InputObjectType(nme, desc, fields)
+    }
+
+    def mkField(schema: Schema)(f: FieldDefinition): Result[Field] = {
+      val FieldDefinition(Name(nme), desc, args0, tpe0, _) = f
+      for {
+        args <- args0.traverse(mkInputValue(schema))
+        tpe  <- mkType(schema)(tpe0)
+      } yield Field(nme, desc, args, tpe, false, None)
+    }
+
+    def mkType(schema: Schema)(tpe: Ast.Type): Result[Type] = {
+      def loop(tpe: Ast.Type, nullable: Boolean): Result[Type] = {
+        def wrap(tpe: Type): Type = if (nullable) NullableType(tpe) else tpe
+        tpe match {
+          case Ast.Type.List(tpe) => loop(tpe, true).map(tpe => wrap(ListType(tpe)))
+          case Ast.Type.NonNull(Left(tpe)) => loop(tpe, false)
+          case Ast.Type.NonNull(Right(tpe)) => loop(tpe, false)
+          case Ast.Type.Named(Name(nme)) => wrap(schema.ref(nme)).rightIor
+        }
+      }
+      loop(tpe, true)
+    }
+
+    def mkInputValue(schema: Schema)(f: InputValueDefinition): Result[InputValue] = {
+      val InputValueDefinition(Name(nme), desc, tpe0, default0, _) = f
+      for {
+        tpe  <- mkType(schema)(tpe0)
+        dflt <- default0.traverse(parseValue)
+      } yield InputValue(nme, desc, tpe, dflt)
+    }
+
+    def mkEnumValue(e: EnumValueDefinition): Result[EnumValue] = {
+      val EnumValueDefinition(Name(nme), desc, _) = e
+      EnumValue(nme, desc).rightIor
+    }
+
+    // Share with Query parser
+    def parseValue(value: Ast.Value): Result[Value] = {
+      value match {
+        case Ast.Value.IntValue(i) => IntValue(i).rightIor
+        case Ast.Value.FloatValue(d) => FloatValue(d).rightIor
+        case Ast.Value.StringValue(s) => StringValue(s).rightIor
+        case Ast.Value.BooleanValue(b) => BooleanValue(b).rightIor
+        case Ast.Value.EnumValue(e) => UntypedEnumValue(e.value).rightIor
+        case Ast.Value.Variable(v) => UntypedVariableValue(v.value).rightIor
+        case Ast.Value.NullValue => NullValue.rightIor
+        case Ast.Value.ListValue(vs) => vs.traverse(parseValue).map(ListValue)
+        case Ast.Value.ObjectValue(fs) =>
+          fs.traverse { case (name, value) =>
+            parseValue(value).map(v => (name.value, v))
+          }.map(ObjectValue)
+      }
+    }
+
+    object schema extends Schema {
+      var types: List[NamedType] = Nil
+      var schemaType1: NamedType = null
+      override def schemaType: NamedType = schemaType1
+      var directives: List[Directive] = Nil
+
+      def complete(types0: List[NamedType], schemaType0: NamedType, directives0: List[Directive]): this.type = {
+        types = types0
+        schemaType1 = schemaType0
+        directives = directives0
+        this
+      }
+    }
+
+    for {
+      types      <- mkTypeDefs(schema)
+      schemaType <- mkSchemaType(schema)
+    } yield schema.complete(types, schemaType, Nil)
+  }
+}
+
+object SchemaRenderer {
+  def renderSchema(schema: Schema): String = {
+    def mkRootDef(fieldName: String)(tpe: NamedType): String =
+      s"$fieldName: ${tpe.name}"
+
+    val fields =
+      mkRootDef("query")(schema.queryType) ::
+      List(
+        schema.mutationType.map(mkRootDef("mutation")),
+        schema.subscriptionType.map(mkRootDef("subscription"))
+      ).flatten
+
+    val schemaDefn =
+      if (fields.size == 1 && schema.queryType =:= schema.ref("Query")) ""
+      else fields.mkString("schema {\n  ", "\n  ", "\n}\n")
+
+    schemaDefn ++
+    schema.types.map(renderTypeDefn).mkString("\n")
+  }
+
+  def renderTypeDefn(tpe: NamedType): String = {
+    def renderField(f: Field): String = {
+      val Field(nme, _, args, tpe, _, _) = f
+      if (args.isEmpty)
+        s"$nme: ${renderType(tpe)}"
+      else
+        s"$nme(${args.map(renderInputValue).mkString(", ")}): ${renderType(tpe)}"
+    }
+
+    tpe match {
+      case tr: TypeRef => renderTypeDefn(tr.dealias)
+
+      case ScalarType(nme, _) =>
+        s"""scalar $nme"""
+
+      case ObjectType(nme, _, fields, ifs0) =>
+        val ifs = if(ifs0.isEmpty) "" else " implements "+ifs0.map(_.name).mkString("&")
+
+        s"""|type $nme$ifs {
+            |  ${fields.map(renderField).mkString("\n  ")}
+            |}""".stripMargin
+
+      case InterfaceType(nme, _, fields, ifs0) =>
+        val ifs = if(ifs0.isEmpty) "" else " implements "+ifs0.map(_.name).mkString("&")
+
+        s"""|interface $nme$ifs {
+            |  ${fields.map(renderField).mkString("\n  ")}
+            |}""".stripMargin
+
+      case UnionType(nme, _, members) =>
+        s"""union $nme = ${members.map(_.name).mkString(" | ")}"""
+
+      case EnumType(nme, _, values) =>
+        s"""|enum $nme {
+            |  ${values.map(renderEnumValue).mkString("\n  ")}
+            |}""".stripMargin
+
+      case InputObjectType(nme, _, fields) =>
+        s"""|input $nme {
+            |  ${fields.map(renderInputValue).mkString("\n  ")}
+            |}""".stripMargin
+    }
+  }
+
+  def renderType(tpe: Type): String = {
+    def loop(tpe: Type, nullable: Boolean): String = {
+      def wrap(tpe: String) = if (nullable) tpe else s"$tpe!"
+
+      tpe match {
+        case NullableType(tpe) => loop(tpe, true)
+        case ListType(tpe)     => wrap(s"[${loop(tpe, false)}]")
+        case nt: NamedType     => wrap(nt.name)
+        case NoType            => "NoType"
+      }
+    }
+
+    loop(tpe, false)
+  }
+
+  def renderEnumValue(v: EnumValue): String = {
+    val EnumValue(nme, _, _, _) = v
+    s"$nme"
+  }
+
+  def renderInputValue(iv: InputValue): String = {
+    val InputValue(nme, _, tpe, default) = iv
+    val df = default.map(v => s" = ${renderValue(v)}").getOrElse("")
+    s"$nme: ${renderType(tpe)}$df"
+  }
+
+  def renderValue(value: Value): String = value match {
+    case IntValue(i) => i.toString
+    case FloatValue(f) => f.toString
+    case StringValue(s) => s""""$s""""
+    case BooleanValue(b) => b.toString
+    case IDValue(i) => s""""$i""""
+    case TypedEnumValue(e) => e.name
+    case ListValue(elems) => elems.map(renderValue).mkString("[", ", ", "]")
+    case ObjectValue(fields) =>
+        fields.map {
+          case (name, value) => s"$name : ${renderValue(value)}"
+        }.mkString("{", ", ", "}")
+    case _ => "null"
+  }
 }

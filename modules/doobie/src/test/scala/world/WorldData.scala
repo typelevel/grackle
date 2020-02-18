@@ -128,7 +128,7 @@ object WorldData extends DoobieMapping {
 }
 
 object WorldQueryCompiler extends QueryCompiler(WorldSchema) {
-  val QueryType = WorldSchema.tpe("Query")
+  val QueryType = WorldSchema.ref("Query")
 
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {

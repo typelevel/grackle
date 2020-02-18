@@ -62,7 +62,7 @@ object StarWarsService {
       def runQuery(op: Option[String], vars: Option[Json], query: String): F[Json] =
         StarWarsQueryCompiler.compile(query, vars) match {
           case Ior.Right(compiledQuery) =>
-            StarWarsQueryInterpreter.run(compiledQuery, StarWarsSchema.queryType).pure[F]
+            StarWarsQueryInterpreter.run(compiledQuery, StarWarsData.QueryType).pure[F]
           case invalid =>
             QueryInterpreter.mkInvalidResponse(invalid).pure[F]
         }

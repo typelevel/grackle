@@ -6,19 +6,19 @@ package parser
 import atto.Atto._
 import cats.tests.CatsSuite
 
-import edu.gemini.grackle.{ Ast, Parser }
+import edu.gemini.grackle.{ Ast, GraphQLParser }
 import Ast._, OperationType._, OperationDefinition._, Selection._, Value._, Type.Named
 
 final class ParserSuite extends CatsSuite {
-  val text = """
-    query {
-      character(id: 1000) {
-        name
-      }
-    }
-  """
-
   test("simple query") {
+    val text = """
+      query {
+        character(id: 1000) {
+          name
+        }
+      }
+    """
+
     val expected =
       Operation(Query, None, Nil, Nil,
         List(
@@ -30,8 +30,8 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    Parser.Document.parseOnly(text).option match {
-      case Some(List(Left(q))) => assert(q == expected)
+    GraphQLParser.Document.parseOnly(text).option match {
+      case Some(List(q)) => assert(q == expected)
     }
   }
 
@@ -77,8 +77,8 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    Parser.Document.parseOnly(text).option match {
-      case Some(List(Left(q))) => assert(q == expected)
+    GraphQLParser.Document.parseOnly(text).option match {
+      case Some(List(q)) => assert(q == expected)
     }
   }
 
@@ -118,8 +118,8 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    Parser.Document.parseOnly(text).option match {
-      case Some(List(Left(q))) => assert(q == expected)
+    GraphQLParser.Document.parseOnly(text).option match {
+      case Some(List(q)) => assert(q == expected)
     }
   }
 
@@ -149,8 +149,8 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    Parser.Document.parseOnly(text).option match {
-      case Some(List(Left(q))) => assert(q == expected)
+    GraphQLParser.Document.parseOnly(text).option match {
+      case Some(List(q)) => assert(q == expected)
     }
   }
 
@@ -180,8 +180,8 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    Parser.Document.parseOnly(text).option match {
-      case Some(List(Left(q))) => assert(q == expected)
+    GraphQLParser.Document.parseOnly(text).option match {
+      case Some(List(q)) => assert(q == expected)
     }
   }
 
@@ -211,8 +211,8 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    Parser.Document.parseOnly(text).option match {
-      case Some(List(Left(q))) => assert(q == expected)
+    GraphQLParser.Document.parseOnly(text).option match {
+      case Some(List(q)) => assert(q == expected)
     }
   }
 }

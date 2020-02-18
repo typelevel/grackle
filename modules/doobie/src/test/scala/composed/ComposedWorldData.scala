@@ -35,7 +35,7 @@ object CurrencyData {
 object CurrencyQueryInterpreter {
   import CurrencyData._
 
-  val CurrencyType = CurrencySchema.tpe("Currency")
+  val CurrencyType = CurrencySchema.ref("Currency")
 
   def apply[F[_]: Monad] = new DataTypeQueryInterpreter[F](
     {
@@ -134,8 +134,8 @@ object WorldQueryInterpreter {
 /* Composition */
 
 object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
-  val QueryType = ComposedSchema.tpe("Query")
-  val CountryType = ComposedSchema.tpe("Country")
+  val QueryType = ComposedSchema.ref("Query")
+  val CountryType = ComposedSchema.ref("Country")
 
   val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {

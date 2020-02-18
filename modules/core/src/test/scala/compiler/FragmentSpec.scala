@@ -206,8 +206,8 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val User = FragmentSchema.tpe("User")
-    val Page = FragmentSchema.tpe("Page")
+    val User = FragmentSchema.ref("User")
+    val Page = FragmentSchema.ref("Page")
 
     val expected =
       Select("profiles",
@@ -278,8 +278,8 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val User = FragmentSchema.tpe("User")
-    val Page = FragmentSchema.tpe("Page")
+    val User = FragmentSchema.ref("User")
+    val Page = FragmentSchema.ref("Page")
 
     val expected =
       Select("profiles", Nil,
@@ -358,8 +358,8 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val User = FragmentSchema.tpe("User")
-    val Page = FragmentSchema.tpe("Page")
+    val User = FragmentSchema.ref("User")
+    val Page = FragmentSchema.ref("Page")
 
     val expected =
       Group(List(
@@ -480,19 +480,20 @@ object FragmentSchema extends Schema {
       description = None,
       fields = List(
         Field("id", None, Nil, StringType, false, None),
-      )
+      ),
+      interfaces = Nil
     )
   )
 
   val directives = Nil
 
-  val User = tpe("User")
-  val Page = tpe("Page")
+  val User = ref("User")
+  val Page = ref("Page")
 }
 
 object FragmentCompiler extends QueryCompiler(FragmentSchema) {
   val selectElaborator = new SelectElaborator(Map(
-    FragmentSchema.tpe("Query").dealias -> {
+    FragmentSchema.ref("Query") -> {
       case Select("user", List(Binding("id", IDValue(id))), child) =>
         Select("user", Nil, Unique(FieldEquals("id", id), child)).rightIor
       case sel@Select("profiles", _, _) =>
@@ -534,9 +535,9 @@ import FragmentData._
 object FragmentQueryInterpreter extends DataTypeQueryInterpreter[Id](
   {
     case "user" =>
-      (ListType(FragmentSchema.tpe("User")), profiles.collect { case u: User => u })
+      (ListType(FragmentSchema.ref("User")), profiles.collect { case u: User => u })
     case "profiles" =>
-      (ListType(FragmentSchema.tpe("Profile")), profiles)
+      (ListType(FragmentSchema.ref("Profile")), profiles)
   },
   {
     case (p: Profile, "id")         => p.id

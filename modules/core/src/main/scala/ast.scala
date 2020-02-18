@@ -5,7 +5,12 @@ package edu.gemini.grackle
 
 object Ast {
 
-  type Document = List[Either[OperationDefinition, FragmentDefinition]]
+  type Document = List[Definition]
+
+  sealed trait Definition
+
+  sealed trait ExecutableDefinition extends Definition
+  sealed trait TypeSystemDefinition extends Definition
 
   sealed trait OperationType
   object OperationType {
@@ -14,7 +19,7 @@ object Ast {
     case object Subscription extends OperationType
   }
 
-  sealed trait OperationDefinition
+  sealed trait OperationDefinition extends ExecutableDefinition
   object OperationDefinition {
 
     case class QueryShorthand(
@@ -64,7 +69,7 @@ object Ast {
     typeCondition: Type,
     directives:    List[Directive],
     selectionSet:  List[Selection]
-  )
+  ) extends ExecutableDefinition
 
   case class VariableDefinition(
     name:         Name,
@@ -93,4 +98,112 @@ object Ast {
     case class NonNull(of: Either[Named, List]) extends Type(s"${of.merge.name}!")
   }
 
+  case class SchemaDefinition(
+    rootOperationTypes: List[RootOperationTypeDefinition],
+    directives:         List[Directive]
+  ) extends TypeSystemDefinition
+
+  case class RootOperationTypeDefinition(
+    operationType: OperationType,
+    tpe:           Type.Named
+  )
+
+  sealed trait TypeDefinition extends TypeSystemDefinition
+
+  case class ScalarTypeDefinition(
+    name: Name,
+    description: Option[String],
+    directives: List[Directive]
+  ) extends TypeDefinition
+
+  case class ObjectTypeDefinition(
+    name: Name,
+    description: Option[String],
+    fields: List[FieldDefinition],
+    interfaces: List[Type.Named],
+    directives: List[Directive]
+  ) extends TypeDefinition
+
+  case class InterfaceTypeDefinition(
+    name: Name,
+    description: Option[String],
+    fields: List[FieldDefinition],
+    interfaces: List[Type.Named],
+    directives: List[Directive]
+  ) extends TypeDefinition
+
+  case class UnionTypeDefinition(
+    name: Name,
+    description: Option[String],
+    directives: List[Directive],
+    members: List[Type.Named]
+  ) extends TypeDefinition
+
+  case class EnumTypeDefinition(
+    name: Name,
+    description: Option[String],
+    directives: List[Directive],
+    values: List[EnumValueDefinition]
+  ) extends TypeDefinition
+
+  case class FieldDefinition(
+    name: Name,
+    description: Option[String],
+    args: List[InputValueDefinition],
+    tpe: Type,
+    directives: List[Directive]
+  )
+
+  case class EnumValueDefinition(
+    name: Name,
+    description: Option[String],
+    directives: List[Directive],
+  )
+
+  case class InputValueDefinition(
+    name: Name,
+    description: Option[String],
+    tpe: Type,
+    defaultValue: Option[Value],
+    directives: List[Directive]
+  )
+
+  case class InputObjectTypeDefinition(
+    name: Name,
+    description: Option[String],
+    fields: List[InputValueDefinition],
+    directives: List[Directive]
+  ) extends TypeDefinition
+
+  case class DirectiveDefinition(
+    name: Name,
+    description: Option[String],
+    args: List[InputValueDefinition],
+    repeatable: Boolean,
+    locations: List[DirectiveLocation]
+  ) extends TypeSystemDefinition
+
+  sealed trait DirectiveLocation
+  object DirectiveLocation {
+    case object QUERY                  extends DirectiveLocation
+    case object MUTATION               extends DirectiveLocation
+    case object SUBSCRIPTION           extends DirectiveLocation
+    case object FIELD                  extends DirectiveLocation
+    case object FRAGMENT_DEFINITION    extends DirectiveLocation
+    case object FRAGMENT_SPREAD        extends DirectiveLocation
+    case object INLINE_FRAGMENT        extends DirectiveLocation
+    case object VARIABLE_DEFINITION    extends DirectiveLocation
+
+    case object SCHEMA                 extends DirectiveLocation
+    case object SCALAR                 extends DirectiveLocation
+    case object OBJECT                 extends DirectiveLocation
+    case object FIELD_DEFINITION       extends DirectiveLocation
+    case object ARGUMENT_DEFINITION    extends DirectiveLocation
+    case object INTERFACE              extends DirectiveLocation
+    case object UNION                  extends DirectiveLocation
+    case object ENUM                   extends DirectiveLocation
+    case object ENUM_VALUE             extends DirectiveLocation
+    case object INPUT_OBJECT           extends DirectiveLocation
+    case object INPUT_FIELD_DEFINITION extends DirectiveLocation
+  }
 }
