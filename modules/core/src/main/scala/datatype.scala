@@ -8,7 +8,7 @@ import cats.implicits._
 import io.circe.Json
 
 import Query.{ PossiblyRenamedSelect, Select, Wrap }
-import QueryInterpreter.{ mkErrorResult, ProtoJson }
+import QueryInterpreter.{ mkOneError, mkErrorResult, ProtoJson }
 import ScalarType._
 
 /**
@@ -74,10 +74,9 @@ case class DataTypeCursor(
   def asLeaf: Result[Json] = (tpe.dealias, focus) match {
     case (StringType,  s: String)  => Json.fromString(s).rightIor
     case (IntType,     i: Int)     => Json.fromInt(i).rightIor
-    case (FloatType,   d: Double)  => Json.fromDouble(d) match {
-        case Some(j) => j.rightIor
-        case None => mkErrorResult(s"Unrepresentable double %d")
-      }
+    case (IntType,     l: Long)    => Json.fromLong(l).rightIor
+    case (FloatType,   f: Float)   => Json.fromFloat(f).toRightIor(mkOneError(s"Unrepresentable float %d"))
+    case (FloatType,   d: Double)  => Json.fromDouble(d).toRightIor(mkOneError(s"Unrepresentable double %d"))
     case (BooleanType, b: Boolean) => Json.fromBoolean(b).rightIor
     case (_: EnumType, e: Enumeration#Value) => Json.fromString(e.toString).rightIor
     case _ => mkErrorResult(s"Expected Scalar type, found $tpe for focus ${focus}")
