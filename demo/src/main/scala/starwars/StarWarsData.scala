@@ -10,7 +10,8 @@ import edu.gemini.grackle._
 
 import Query._, Predicate._, Value._
 import QueryCompiler._
-import QueryInterpreter.mkErrorResult
+import QueryInterpreter.{ mkErrorResult, mkOneError }
+import generic._, semiauto._
 
 import StarWarsData._
 
@@ -65,114 +66,118 @@ object StarWarsData {
     val NEWHOPE, EMPIRE, JEDI = Value
   }
 
-  trait Character {
+  sealed trait Character {
     def id: String
     def name: Option[String]
     def appearsIn: Option[List[Episode.Value]]
-    def friends: Option[List[Character]]
+    def friends: Option[List[String]]
   }
 
-  case class Human private (
+  object Character {
+    implicit val cursorBuilder: CursorBuilder[Character] =
+      deriveInterfaceCursorBuilder[Character]
+  }
+
+  case class Human(
     id: String,
     name: Option[String],
     appearsIn: Option[List[Episode.Value]],
+    friends: Option[List[String]],
     homePlanet: Option[String]
-  ) (friends0: => Option[List[Character]]) extends Character {
-    lazy val friends = friends0
-  }
+  ) extends Character
+
   object Human {
-    def apply(
-      id: String,
-      name: Option[String],
-      appearsIn: Option[List[Episode.Value]],
-      friends: => Option[List[Character]],
-      homePlanet: Option[String]
-    ) = new Human(id, name, appearsIn, homePlanet)(friends)
+    implicit val cursorBuilder: CursorBuilder[Human] =
+      deriveObjectCursorBuilder[Human].transformField("friends")(resolveFriends)
   }
 
-  case class Droid private (
+  case class Droid(
     id: String,
     name: Option[String],
     appearsIn: Option[List[Episode.Value]],
+    friends: Option[List[String]],
     primaryFunction: Option[String]
-  ) (friends0: => Option[List[Character]]) extends Character {
-    lazy val friends = friends0
-  }
+  ) extends Character
+
   object Droid {
-    def apply(
-      id: String,
-      name: Option[String],
-      appearsIn: Option[List[Episode.Value]],
-      friends: => Option[List[Character]],
-      primaryFunction: Option[String]
-    ) = new Droid(id, name, appearsIn, primaryFunction)(friends)
+    implicit val cursorBuilder: CursorBuilder[Droid] =
+      deriveObjectCursorBuilder[Droid].transformField("friends")(resolveFriends)
   }
+
+  def resolveFriends(c: Character): Result[Option[List[Character]]] =
+    c.friends match {
+      case None => None.rightIor
+      case Some(ids) =>
+        ids.traverse(id => characters.find(_.id == id).toRightIor(mkOneError(s"Bad id '$id'"))).map(_.some)
+    }
+
   // #model_types
 
   // #model_values
-  lazy val LukeSkywalker: Character =
+  // The character database ...
+  val characters: List[Character] = List(
     Human(
       id = "1000",
       name = Some("Luke Skywalker"),
-      friends = Some(List(HanSolo, LeiaOrgana, C3PO, R2D2)),
+      friends = Some(List("1002", "1003", "2000", "2001")),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
-      homePlanet = Some("Tatooine"))
-  lazy val DarthVader: Character =
+      homePlanet = Some("Tatooine")
+    ),
     Human(
       id = "1001",
       name = Some("Darth Vader"),
-      friends = Some(List(WilhuffTarkin)),
+      friends = Some(List("1004")),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
-      homePlanet = Some("Tatooine"))
-  lazy val HanSolo: Character =
+      homePlanet = Some("Tatooine")
+    ),
     Human(
       id = "1002",
       name = Some("Han Solo"),
-      friends = Some(List(LukeSkywalker, LeiaOrgana, R2D2)),
+      friends = Some(List("1000", "1003", "2001")),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
-      homePlanet = None)
-  lazy val LeiaOrgana: Character =
+      homePlanet = None
+    ),
     Human(
       id = "1003",
       name = Some("Leia Organa"),
-      friends = Some(List(LukeSkywalker, HanSolo, C3PO, R2D2)),
+      friends = Some(List("1000", "1002", "2000", "2001")),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
-      homePlanet = Some("Alderaan"))
-  lazy val WilhuffTarkin: Character =
+      homePlanet = Some("Alderaan")
+    ),
     Human(
       id = "1004",
       name = Some("Wilhuff Tarkin"),
-      friends = Some(List(DarthVader)),
+      friends = Some(List("1001")),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
-      homePlanet = None)
-  lazy val C3PO: Character =
+      homePlanet = None
+    ),
     Droid(
       id = "2000",
       name = Some("C-3PO"),
-      friends = Some(List(LukeSkywalker, HanSolo, LeiaOrgana, R2D2)),
+      friends = Some(List("1000", "1002", "1003", "2001")),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
-      primaryFunction = Some("Protocol"))
-  lazy val R2D2: Character =
+      primaryFunction = Some("Protocol")
+    ),
     Droid(
       id = "2001",
       name = Some("R2-D2"),
-      friends = Some(List(LukeSkywalker, HanSolo, LeiaOrgana)),
+      friends = Some(List("1000", "1002", "1003")),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
-      primaryFunction = Some("Astromech"))
-
-  // The character database ...
-  val characters = List(
-    LukeSkywalker, DarthVader, HanSolo, LeiaOrgana, WilhuffTarkin, C3PO, R2D2
+      primaryFunction = Some("Astromech")
+    )
   )
   // #model_values
 
   import Episode._
 
+  val Some(lukeSkywalker) = characters.find(_.id == "1000")
+  val Some(r2d2) = characters.find(_.id == "2001")
+
   // Mapping from Episode to its hero Character
   lazy val hero: Map[Value, Character] = Map(
-    NEWHOPE -> R2D2,
-    EMPIRE -> LukeSkywalker,
-    JEDI -> R2D2
+    NEWHOPE -> r2d2,
+    EMPIRE -> lukeSkywalker,
+    JEDI -> r2d2
   )
 }
 
@@ -199,32 +204,18 @@ object StarWarsQueryCompiler extends QueryCompiler(schema) {
   val phases = List(selectElaborator)
 }
 
-object StarWarsQueryInterpreter extends DataTypeQueryInterpreter[Id](
+object StarWarsQueryInterpreter extends GenericQueryInterpreter[Id](
   // #root
   {
     // hero and character both start with [Character] and the full character database
     case "hero" | "character" =>
-      (ListType(CharacterType), characters)
+      CursorBuilder[List[Character]].build(characters, ListType(CharacterType))
     // human starts with [Human] and just the characters of type Human
     case "human" =>
-      (ListType(HumanType), characters.collect { case h: Human => h })
+      CursorBuilder[List[Human]].build(characters.collect { case h: Human => h }, ListType(HumanType))
     // droid starts with [Droid] and just the characters of type Droid
     case "droid" =>
-      (ListType(DroidType), characters.collect { case d: Droid => d })
+      CursorBuilder[List[Droid]].build(characters.collect { case d: Droid => d }, ListType(DroidType))
   },
   // #root
-  // #cursor
-  {
-    case (c: Character, "id")          => c.id
-    case (c: Character, "name")        => c.name
-    case (c: Character, "appearsIn")   => c.appearsIn
-    case (c: Character, "friends")     => c.friends
-    case (h: Human, "homePlanet")      => h.homePlanet
-    case (d: Droid, "primaryFunction") => d.primaryFunction
-  },
-  // #cursor
-  narrows = {
-    case (h: Human, HumanType) => h
-    case (d: Droid, DroidType) => d
-  }
 )
