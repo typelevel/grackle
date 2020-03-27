@@ -10,6 +10,7 @@ val jawnVersion                 = "0.14.3"
 val kindProjectorVersion        = "0.10.3"
 val logbackVersion              = "1.2.3"
 val log4catsVersion             = "1.0.1"
+val shapelessVersion            = "2.3.3"
 val slf4jVersion                = "1.7.29"
 
 inThisBuild(Seq(
@@ -19,7 +20,7 @@ inThisBuild(Seq(
 ) ++ gspPublishSettings)
 
 lazy val commonSettings = Seq(
-  //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates"),
+  //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
   libraryDependencies ++= Seq(
     "org.typelevel"     %% "cats-testkit"           % catsVersion % "test",
     "org.typelevel"     %% "cats-testkit-scalatest" % catsTestkitScalaTestVersion % "test"
@@ -33,6 +34,7 @@ lazy val noPublishSettings = Seq(
 lazy val modules: List[ProjectReference] = List(
   core,
   doobie,
+  generic,
   demo
 )
 
@@ -81,10 +83,30 @@ lazy val doobie = project
     )
   )
 
+lazy val generic = project
+  .in(file("modules/generic"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(core)
+  .settings(commonSettings)
+  .settings(
+    name := "gsp-graphql-generic",
+    libraryDependencies ++= Seq(
+      "org.tpolecat"      %% "atto-core"              % attoVersion,
+      "org.typelevel"     %% "cats-core"              % catsVersion,
+      "io.circe"          %% "circe-core"             % circeVersion,
+      "io.circe"          %% "circe-literal"          % circeVersion,
+      "io.circe"          %% "circe-optics"           % circeOpticsVersion,
+      "io.circe"          %% "circe-parser"           % circeVersion,
+      "org.typelevel"     %% "jawn-parser"            % jawnVersion,
+      "com.chuusai"       %% "shapeless"              % shapelessVersion,
+    )
+  )
+
 lazy val demo = project
   .in(file("demo"))
   .enablePlugins(AutomateHeaderPlugin)
-  .dependsOn(core, doobie)
+  .dependsOn(core, doobie, generic)
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-demo",
