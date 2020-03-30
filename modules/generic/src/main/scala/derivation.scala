@@ -28,7 +28,7 @@ trait ObjectCursorBuilder[T] extends CursorBuilder[T] {
   def ref(nme: String): CursorBuilder[T]
   def renamedField(from: String, to: String): CursorBuilder[T]
   def transformFieldNames(f: String => String): CursorBuilder[T]
-  def transformField[U](fieldName: String)(f: T => Result[U])(implicit cb: CursorBuilder[U]): CursorBuilder[T]
+  def transformField[U](fieldName: String)(f: T => Result[U])(implicit cb: => CursorBuilder[U]): CursorBuilder[T]
 }
 
 trait DerivedLeafCursorBuilder[T] extends CursorBuilder[T]
@@ -86,7 +86,7 @@ object DerivedObjectCursorBuilder {
       transformFieldNames { case `from` => to ; case other => other }
     def transformFieldNames(f: String => String): CursorBuilder[T] =
       new Impl(nme, fieldMap0.map { case (k, v) => (f(k), v) })
-    def transformField[U](fieldName: String)(f: T => Result[U])(implicit cb: CursorBuilder[U]): CursorBuilder[T] =
+    def transformField[U](fieldName: String)(f: T => Result[U])(implicit cb: => CursorBuilder[U]): CursorBuilder[T] =
       new Impl(nme, fieldMap0.updated(fieldName, (focus: T, tpe: Type) => f(focus).flatMap(f => cb.build(f, tpe))))
   }
 
