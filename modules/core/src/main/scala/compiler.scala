@@ -258,6 +258,7 @@ object QueryCompiler {
         case w@Wrap(_, child)         => transform(child, env, schema, tpe).map(ec => w.copy(child = ec))
         case r@Rename(_, child)       => transform(child, env, schema, tpe).map(ec => r.copy(child = ec))
         case g@Group(children)        => children.traverse(q => transform(q, env, schema, tpe)).map(eqs => g.copy(queries = eqs))
+        case g@GroupList(children)    => children.traverse(q => transform(q, env, schema, tpe)).map(eqs => g.copy(queries = eqs))
         case u@Unique(_, child)       => transform(child, env, schema, tpe.nonNull).map(ec => u.copy(child = ec))
         case f@Filter(_, child)       => transform(child, env, schema, tpe.item).map(ec => f.copy(child = ec))
         case c@Component(_, _, child) => transform(child, env, schema, tpe).map(ec => c.copy(child = ec))
