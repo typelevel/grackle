@@ -137,6 +137,10 @@ trait DoobieMapping {
           queries.foldLeft(acc) {
             case (acc, sibling) => loop(sibling, obj, acc)
           }
+        case GroupList(queries) =>
+          queries.foldLeft(acc) {
+            case (acc, sibling) => loop(sibling, obj, acc)
+          }
         case Empty | (_: Component) | (_: Introspection) | (_: Defer) | (_: UntypedNarrow) | (_: Skip) => acc
       }
     }
@@ -406,6 +410,7 @@ object DoobieMapping {
           case w@Wrap(_, child)        => loop(child, tpe, filtered).map(ec => w.copy(child = ec))
           case r@Rename(_, child)      => loop(child, tpe, filtered).map(ec => r.copy(child = ec))
           case g@Group(queries)        => queries.traverse(q => loop(q, tpe, filtered)).map(eqs => g.copy(queries = eqs))
+          case g@GroupList(queries)    => queries.traverse(q => loop(q, tpe, filtered)).map(eqs => g.copy(queries = eqs))
           case u@Unique(_, child)      => loop(child, tpe.nonNull, filtered + tpe.underlyingObject).map(ec => u.copy(child = ec))
           case f@Filter(_, child)      => loop(child, tpe.item, filtered + tpe.underlyingObject).map(ec => f.copy(child = ec))
           case c: Component            => c.rightIor

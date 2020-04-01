@@ -48,7 +48,12 @@ object Query {
 
   /** A Group of sibling queries at the same level */
   case class Group(queries: List[Query]) extends Query {
-    def render = queries.map(_.render).mkString(", ")
+    def render = queries.map(_.render).mkString("{", ", ", "}")
+  }
+
+  /** A Group of sibling queries as a list */
+  case class GroupList(queries: List[Query]) extends Query {
+    def render = queries.map(_.render).mkString("[", ", ", "]")
   }
 
   /** Picks out the unique element satisfying `pred` and continues with `child` */
@@ -483,11 +488,24 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
         } yield ProtoJson.fromFields(List((fieldName, pvalue)))
 
       case (Component(cid, join, PossiblyRenamedSelect(child, resultName)), _) =>
-        for {
-          cont          <- join(cursor, child)
-          componentName <- mkResult(rootName(cont))
-          renamedCont   <- mkResult(renameRoot(cont, resultName))
-        } yield ProtoJson.component(cid, renamedCont, joinType(child.name, componentName, tpe.field(child.name)))
+        join(cursor, child).flatMap {
+          case GroupList(conts) =>
+            conts.traverse { case cont =>
+              for {
+                componentName <- mkResult(rootName(cont))
+              } yield
+                ProtoJson.select(
+                  ProtoJson.component(cid, cont, joinType(child.name, componentName, tpe.field(child.name).item)),
+                  componentName
+                )
+            }.map(ProtoJson.fromValues)
+
+          case cont =>
+            for {
+              componentName <- mkResult(rootName(cont))
+              renamedCont   <- mkResult(renameRoot(cont, resultName))
+            } yield ProtoJson.component(cid, renamedCont, joinType(child.name, componentName, tpe.field(child.name)))
+        }
 
       case (Defer(join, child), _) =>
         for {
@@ -565,6 +583,8 @@ object QueryInterpreter {
     private[QueryInterpreter] case class ProtoObject(fields: List[(String, ProtoJson)])
     // A partially constructed array which has at least one deferred element.
     private[QueryInterpreter] case class ProtoArray(elems: List[ProtoJson])
+    // A result which will yield a selection from its child
+    private[QueryInterpreter] case class ProtoSelect(elem: ProtoJson, fieldName: String)
 
     /**
      * Delegate `query` to the componet interpreter idenitfied by
@@ -607,6 +627,20 @@ object QueryInterpreter {
         wrap(Json.fromValues(elems.asInstanceOf[List[Json]]))
       else
         wrap(ProtoArray(elems))
+
+    /**
+     * Select a value from a possibly partial object.
+     *
+     * If the object is complete the selection will be a complete
+     * Json value.
+     */
+    def select(elem: ProtoJson, fieldName: String): ProtoJson =
+      elem match {
+        case j: Json =>
+          wrap(j.asObject.flatMap(_(fieldName)).getOrElse(Json.Null))
+        case _ =>
+          wrap(ProtoSelect(elem, fieldName))
+      }
 
     /**
      * Test whether the argument contains any deferred subtrees
@@ -683,10 +717,11 @@ object QueryInterpreter {
         pending.uncons match {
           case None => acc
           case Some((hd, tl)) => hd match {
-            case _: Json             => loop(tl, acc)
-            case d: DeferredJson     => loop(tl, d :: acc)
-            case ProtoObject(fields) => loop(Chain.fromSeq(fields.map(_._2)) ++ tl, acc)
-            case ProtoArray(elems)   => loop(Chain.fromSeq(elems) ++ tl, acc)
+            case _: Json              => loop(tl, acc)
+            case d: DeferredJson      => loop(tl, d :: acc)
+            case ProtoObject(fields)  => loop(Chain.fromSeq(fields.map(_._2)) ++ tl, acc)
+            case ProtoArray(elems)    => loop(Chain.fromSeq(elems) ++ tl, acc)
+            case ProtoSelect(elem, _) => loop(elem +: tl, acc)
           }
         }
 
@@ -713,6 +748,8 @@ object QueryInterpreter {
           case ProtoArray(elems) =>
             val elems0 = elems.map(loop)
             Json.fromValues(elems0)
+          case ProtoSelect(elem, fieldName) =>
+            loop(elem).asObject.flatMap(_(fieldName)).getOrElse(Json.Null)
         }
 
       loop(pj)
