@@ -242,7 +242,7 @@ object Predicate {
    */
   case class FieldContains[T](val path: List[String], value: T) extends FieldPredicate {
     def apply(c: Cursor): Boolean =
-      c.listPath(path) match {
+      c.flatListPath(path) match {
         case Ior.Right(cs) => cs.exists(_.focus == value)
         case _ => false
       }
