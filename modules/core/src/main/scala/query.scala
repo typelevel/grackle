@@ -631,7 +631,7 @@ object QueryInterpreter {
     /**
      * Select a value from a possibly partial object.
      *
-     * If the object is complete the selection will be a coplete
+     * If the object is complete the selection will be a complete
      * Json value.
      */
     def select(elem: ProtoJson, fieldName: String): ProtoJson =
