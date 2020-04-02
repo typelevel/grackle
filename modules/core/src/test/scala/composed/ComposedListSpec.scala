@@ -21,8 +21,11 @@ object ComposedListData {
       """
         type Query {
           collection: Collection!
+          collections: [Collection!]!
+          collectionByName(name: String!): Collection
         }
         type Collection {
+          name: String!
           itemIds: [String!]!
         }
       """
@@ -46,9 +49,12 @@ object ComposedListData {
       """
         type Query {
           collection: Collection!
+          collections: [Collection!]!
+          collectionByName(name: String!): Collection
           itemById(id: ID!): Item
         }
         type Collection {
+          name: String!
           itemIds: [String!]!
           items: [Item!]!
         }
@@ -59,8 +65,12 @@ object ComposedListData {
       """
     ).right.get
 
-  case class Collection(itemIds: List[String])
-  val collection = Collection(List("A", "B", "C"))
+  case class Collection(name: String, itemIds: List[String])
+  val collections =
+    List(
+      Collection("AB", List("A", "B")),
+      Collection("BC", List("B", "C"))
+    )
 
   case class Item(id: String, name: String)
   val items = List(Item("A", "foo"), Item("B", "bar"), Item("C", "baz"))
@@ -69,14 +79,26 @@ object ComposedListData {
 import ComposedListData._
 
 object CollectionQueryCompiler extends QueryCompiler(collectionSchema) {
-  val phases = Nil
+  val QueryType = collectionSchema.ref("Query")
+
+  val selectElaborator = new SelectElaborator(Map(
+    QueryType -> {
+      case Select("collectionByName", List(Binding("name", StringValue(name))), child) =>
+        Select("collectionByName", Nil, Unique(FieldEquals("name", name), child)).rightIor
+    }
+  ))
+
+  val phases = List(selectElaborator)
 }
 
 object CollectionQueryInterpreter extends DataTypeQueryInterpreter[Id](
   {
-    case "collection" => (collectionSchema.ref("Collection"), collection)
+    case "collection" => (collectionSchema.ref("Collection"), collections.head)
+    case "collections" => (ListType(collectionSchema.ref("Collection")), collections)
+    case "collectionByName" => (ListType(collectionSchema.ref("Collection")), collections)
   },
   {
+    case (c: Collection, "name") => c.name
     case (c: Collection, "itemIds") => c.itemIds
   }
 )
@@ -112,6 +134,8 @@ object ComposedListQueryCompiler extends QueryCompiler(composedSchema) {
     QueryType -> {
       case Select("itemById", List(Binding("id", IDValue(id))), child) =>
         Select("itemById", Nil, Unique(FieldEquals("id", id), child)).rightIor
+      case Select("collectionByName", List(Binding("name", StringValue(name))), child) =>
+        Select("collectionByName", Nil, Unique(FieldEquals("name", name), child)).rightIor
     }
   ))
 
@@ -125,6 +149,8 @@ object ComposedListQueryCompiler extends QueryCompiler(composedSchema) {
 
   val componentElaborator = ComponentElaborator(
     Mapping(QueryType, "collection", "CollectionComponent"),
+    Mapping(QueryType, "collections", "CollectionComponent"),
+    Mapping(QueryType, "collectionByName", "CollectionComponent"),
     Mapping(QueryType, "itemById", "ItemComponent"),
     Mapping(CollectionType, "items", "ItemComponent", collectionItemJoin)
   )
@@ -154,8 +180,7 @@ final class ComposedListSpec extends CatsSuite {
           "collection" : {
             "itemIds" : [
               "A",
-              "B",
-              "C"
+              "B"
             ]
           }
         }
@@ -197,7 +222,7 @@ final class ComposedListSpec extends CatsSuite {
     assert(res == expected)
   }
 
-  test("composed query") {
+  test("composed query (1)") {
     val query = """
       query {
         collection {
@@ -216,14 +241,47 @@ final class ComposedListSpec extends CatsSuite {
           "collection" : {
             "itemIds" : [
               "A",
-              "B",
-              "C"
+              "B"
             ],
             "items" : [
               {
                 "id" : "A",
                 "name" : "foo"
               },
+              {
+                "id" : "B",
+                "name" : "bar"
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val compiledQuery = ComposedListQueryCompiler.compile(query).right.get
+    val res = ComposedListQueryInterpreter.run(compiledQuery, composedSchema.queryType)
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("composed query (2)") {
+    val query = """
+      query {
+        collectionByName(name: "BC") {
+          items {
+            id
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "collectionByName" : {
+            "items" : [
               {
                 "id" : "B",
                 "name" : "bar"
@@ -234,6 +292,103 @@ final class ComposedListSpec extends CatsSuite {
               }
             ]
           }
+        }
+      }
+    """
+
+    val compiledQuery = ComposedListQueryCompiler.compile(query).right.get
+    val res = ComposedListQueryInterpreter.run(compiledQuery, composedSchema.queryType)
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("composed query (3)") {
+    val query = """
+      query {
+        collections {
+          name
+          items {
+            id
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "collections" : [
+            {
+              "name" : "AB",
+              "items" : [
+                {
+                  "id" : "A"
+                },
+                {
+                  "id" : "B"
+                }
+              ]
+            },
+            {
+              "name" : "BC",
+              "items" : [
+                {
+                  "id" : "B"
+                },
+                {
+                  "id" : "C"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    val compiledQuery = ComposedListQueryCompiler.compile(query).right.get
+    val res = ComposedListQueryInterpreter.run(compiledQuery, composedSchema.queryType)
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("composed query (4)") {
+    val query = """
+      query {
+        collections {
+          items {
+            id
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "collections" : [
+            {
+              "items" : [
+                {
+                  "id" : "A"
+                },
+                {
+                  "id" : "B"
+                }
+              ]
+            },
+            {
+              "items" : [
+                {
+                  "id" : "B"
+                },
+                {
+                  "id" : "C"
+                }
+              ]
+            }
+          ]
         }
       }
     """
