@@ -482,12 +482,18 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
     }
 
     (query, tpe.dealias) match {
+      case (Wrap(_, _: Component), ListType(tpe)) =>
+        // Keep the wrapper with the component when going under the list
+        cursor.asList.flatMap(lc =>
+          lc.traverse(c => runValue(query, tpe, c)).map(ProtoJson.fromValues)
+        )
+
       case (Wrap(fieldName, child), _) =>
         for {
           pvalue <- runValue(child, tpe, cursor)
         } yield ProtoJson.fromFields(List((fieldName, pvalue)))
 
-      case (Component(cid, join, PossiblyRenamedSelect(child, resultName)), _) =>
+      case (Component(cid, join, PossiblyRenamedSelect(child, resultName)), tpe) =>
         join(cursor, child).flatMap {
           case GroupList(conts) =>
             conts.traverse { case cont =>
