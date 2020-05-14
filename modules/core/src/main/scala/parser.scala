@@ -3,14 +3,17 @@
 
 package edu.gemini.grackle
 
-import atto._, Atto._
+import atto._
+import Atto.{token => _, braces => _, parens => _, squareBrackets => _, _}
+import atto.parser.character.char
 import cats.implicits._
+import CommentedText._
 
 object GraphQLParser {
 
   // TODO: .token needs to also absorb commas, as do all the paren combinators
 
-  def keyword(s: String) = string(s).token
+  def keyword(s: String) = token(string(s))
 
   lazy val Document: Parser[Ast.Document] =
     many(whitespace) ~> many(Definition)
@@ -25,7 +28,7 @@ object GraphQLParser {
     for {
       _        <- keyword("schema")
       dirs     <- opt(Directives)
-      rootdefs <- braces(many(RootOperationTypeDefinition)).token
+      rootdefs <- braces(many(RootOperationTypeDefinition))
     } yield Ast.SchemaDefinition(rootdefs, dirs.getOrElse(Nil))
 
   lazy val RootOperationTypeDefinition =
@@ -104,7 +107,7 @@ object GraphQLParser {
     (keyword("implements") ~ opt(keyword("&"))) ~> sepBy(NamedType, keyword("&"))
 
   lazy val FieldsDefinition =
-    braces(many(FieldDefinition)).token
+    braces(many(FieldDefinition))
 
   lazy val FieldDefinition =
     for {
@@ -117,10 +120,10 @@ object GraphQLParser {
     } yield Ast.FieldDefinition(name, desc.map(_.value), args.getOrElse(Nil), tpe, dirs.getOrElse(Nil))
 
   lazy val ArgumentsDefinition =
-    parens(many(InputValueDefinition <~ opt(keyword(",")))).token
+    parens(many(InputValueDefinition <~ opt(keyword(","))))
 
   lazy val InputFieldsDefinition =
-    braces(many(InputValueDefinition)).token
+    braces(many(InputValueDefinition))
 
   lazy val InputValueDefinition =
     for {
@@ -136,7 +139,7 @@ object GraphQLParser {
     (keyword("=") ~ opt(keyword("|"))) ~> sepBy(NamedType, keyword("|"))
 
   lazy val EnumValuesDefinition =
-    braces(many(EnumValueDefinition <~ opt(keyword(",")))).token
+    braces(many(EnumValueDefinition <~ opt(keyword(","))))
 
   lazy val EnumValueDefinition =
     for {
@@ -205,7 +208,7 @@ object GraphQLParser {
     keyword("subscription").as(Ast.OperationType.Subscription).widen
 
   lazy val SelectionSet: Parser[List[Ast.Selection]] =
-    braces(many(Selection)).token
+    braces(many(Selection))
 
   lazy val Selection: Parser[Ast.Selection] =
     Field.widen[Ast.Selection] |
@@ -225,7 +228,7 @@ object GraphQLParser {
     Name <~ keyword(":")
 
   lazy val Arguments: Parser[List[(Ast.Name, Ast.Value)]] =
-    parens(many(Argument)).token
+    parens(many(Argument))
 
   lazy val Argument: Parser[(Ast.Name, Ast.Value)] =
     (Name <~ keyword(":")) ~ Value
@@ -279,28 +282,28 @@ object GraphQLParser {
     } .map(Ast.Value.EnumValue)
 
   lazy val ListValue: Parser[Ast.Value.ListValue] =
-    squareBrackets(many(Value <~ opt(keyword(",")))).map(Ast.Value.ListValue).token
+    token(squareBrackets(many(Value <~ opt(keyword(",")))).map(Ast.Value.ListValue))
 
   lazy val IntValue: Parser[Ast.Value.IntValue] =
-    bigDecimal.token.filter(_.isValidInt).map(a => Ast.Value.IntValue(a.toInt))
+    token(bigDecimal).filter(_.isValidInt).map(a => Ast.Value.IntValue(a.toInt))
 
   lazy val FloatValue: Parser[Ast.Value.FloatValue] =
-    bigDecimal.token.filter(_.isDecimalDouble).map(a => Ast.Value.FloatValue(a.toDouble))
+    token(bigDecimal).filter(_.isDecimalDouble).map(a => Ast.Value.FloatValue(a.toDouble))
 
   lazy val StringValue: Parser[Ast.Value.StringValue] =
-    stringLiteral.token.map(Ast.Value.StringValue)
+    token(stringLiteral).map(Ast.Value.StringValue)
 
   lazy val BooleanValue: Parser[Ast.Value.BooleanValue] =
     (keyword("true").as(true) | keyword("false").as(false)).map(Ast.Value.BooleanValue)
 
   lazy val ObjectValue: Parser[Ast.Value.ObjectValue] =
-    braces(many(ObjectField <~ opt(keyword(",")))).map(Ast.Value.ObjectValue).token
+    braces(many(ObjectField <~ opt(keyword(",")))).map(Ast.Value.ObjectValue)
 
   lazy val ObjectField: Parser[(Ast.Name, Ast.Value)] =
     (Name <~ keyword(":")) ~ Value
 
   lazy val VariableDefinitions =
-    parens(many(VariableDefinition <~ opt(keyword(",")))).token
+    parens(many(VariableDefinition <~ opt(keyword(","))))
 
   lazy val VariableDefinition: Parser[Ast.VariableDefinition] =
     for {
@@ -324,7 +327,7 @@ object GraphQLParser {
     Name.map(Ast.Type.Named)
 
   lazy val ListType: Parser[Ast.Type.List] =
-    squareBrackets(Type).map(Ast.Type.List).token
+    squareBrackets(Type).map(Ast.Type.List)
 
   lazy val NonNullType: Parser[Ast.Type.NonNull] =
     (NamedType <~ keyword("!")).map(a => Ast.Type.NonNull(Left(a))).widen |
@@ -339,7 +342,41 @@ object GraphQLParser {
   lazy val Name: Parser[Ast.Name] = {
     val initial    = ('A' to 'Z').toSet ++ ('a' to 'z').toSet + '_'
     val subsequent = initial ++ ('0' to '9').toSet
-    (satisfy(initial), many(satisfy(subsequent))).mapN((h, t) => Ast.Name((h :: t).mkString)).token
+    token((satisfy(initial), many(satisfy(subsequent))).mapN((h, t) => Ast.Name((h :: t).mkString)))
+  }
+}
+
+object CommentedText {
+
+  /** Parser that consumes a comment */
+  private def comment: Parser[Unit] = {
+    (char('#') ~> many(noneOf("\n\r")) <~ oneOf("\n\r") <~ skipWhitespace).void
   }
 
+  /** Turns a parser into one that skips trailing whitespace and comments */
+  def token[A](p: Parser[A]): Parser[A] =
+    p <~ skipWhitespace <~ opt(comment)
+
+  /**
+   * Consumes `left` and `right`, including the trailing and preceding whitespace,
+   * respectively, and returns the value of `p`.
+   */
+  private def _bracket[A,B,C](left: Parser[B], p: => Parser[A], right: => Parser[C]): Parser[A] =
+    token(left) ~> token(p) <~ token(right)
+
+  /** Turns a parser into one that consumes surrounding parentheses `()` */
+  def parens[A](p: => Parser[A]): Parser[A] =
+    _bracket(char('('), p, char(')')).named(s"parens(${p.toString})")
+
+  /** Turns a parser into one that consumes surrounding curly braces `{}` */
+  def braces[A](p: => Parser[A]): Parser[A] = {
+    lazy val q = p
+    _bracket(char('{'), q, char('}')).named(s"braces(${q.toString})")
+  }
+
+  /** Turns a parser into one that consumes surrounding square brackets `[]` */
+  def squareBrackets[A](p: => Parser[A]): Parser[A] = {
+    lazy val q = p
+    _bracket(char('['), q, char(']')).named(s"squareBrackets(${q.toString})")
+  }
 }

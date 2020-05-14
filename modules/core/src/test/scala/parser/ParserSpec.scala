@@ -215,4 +215,51 @@ final class ParserSuite extends CatsSuite {
       case Some(List(q)) => assert(q == expected)
     }
   }
+
+  test("comments") {
+    val text = """
+      query IntrospectionQuery { #comment number 1
+        __schema {
+          queryType {#comment number 2
+            name
+          }
+          mutationType {
+            name#comment number 3
+          }
+          subscriptionType {
+            name
+          }
+        } #comment number 4
+      }
+    """
+
+    val expected =
+      Operation(Query,Some(Name("IntrospectionQuery")),Nil,Nil,
+        List(
+          Field(None,Name("__schema"),Nil,Nil,
+            List(
+              Field(None,Name("queryType"),Nil,Nil,
+                List(
+                  Field(None,Name("name"),Nil,Nil,Nil)
+                )
+              ),
+              Field(None,Name("mutationType"),Nil,Nil,
+                List(
+                  Field(None,Name("name"),Nil,Nil,Nil)
+                )
+              ),
+              Field(None,Name("subscriptionType"),Nil,Nil,
+                List(
+                  Field(None,Name("name"),Nil,Nil,Nil)
+                )
+              )
+            )
+          )
+        )
+      )
+
+    GraphQLParser.Document.parseOnly(text).option match {
+      case Some(List(q)) => assert(q == expected)
+    }
+  }
 }
