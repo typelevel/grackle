@@ -16,7 +16,7 @@ object GraphQLParser {
   def keyword(s: String) = token(string(s))
 
   lazy val Document: Parser[Ast.Document] =
-    many(whitespace) ~> many(Definition)
+    many(whitespace | comment) ~> many(Definition)
 
   lazy val Definition =
     ExecutableDefinition | TypeSystemDefinition // | TypeSystemExtension
@@ -349,13 +349,13 @@ object GraphQLParser {
 object CommentedText {
 
   /** Parser that consumes a comment */
-  private def comment: Parser[Unit] = {
+  def comment: Parser[Unit] = {
     (char('#') ~> many(noneOf("\n\r")) <~ oneOf("\n\r") <~ skipWhitespace).void
   }
 
   /** Turns a parser into one that skips trailing whitespace and comments */
   def token[A](p: Parser[A]): Parser[A] =
-    p <~ skipWhitespace <~ opt(comment)
+    p <~ skipWhitespace <~ many(comment)
 
   /**
    * Consumes `left` and `right`, including the trailing and preceding whitespace,

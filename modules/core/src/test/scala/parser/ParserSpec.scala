@@ -218,19 +218,23 @@ final class ParserSuite extends CatsSuite {
 
   test("comments") {
     val text = """
-      query IntrospectionQuery { #comment number 1
+      #comment at start of document
+      query IntrospectionQuery { #comment at end of line
         __schema {
-          queryType {#comment number 2
-            name
+          queryType {
+            name#comment eol no space
           }
           mutationType {
-            name#comment number 3
+            name
+            #several comments
+            #one after another
           }
           subscriptionType {
             name
           }
-        } #comment number 4
+        }
       }
+      #comment at end of document
     """
 
     val expected =
