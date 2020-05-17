@@ -252,6 +252,7 @@ final class SDLSuite extends CatsSuite {
        |  droid(id: ID!): Droid
        |}
        |enum Episode {
+       |  ROGUEONE @deprecated(reason: "use NEWHOPE instead")
        |  NEWHOPE
        |  EMPIRE
        |  JEDI
@@ -259,6 +260,7 @@ final class SDLSuite extends CatsSuite {
        |interface Character {
        |  id: String!
        |  name: String
+       |  fullname: String @deprecated(reason: "use 'name' instead")
        |  friends: [Character!]
        |  appearsIn: [Episode!]
        |}

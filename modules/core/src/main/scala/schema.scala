@@ -675,7 +675,7 @@ case class Directive(
  * GraphQL schema parser
  */
 object SchemaParser {
-  import Ast.{ Type => _, Value => _, Directive => _, _ }, OperationType._
+  import Ast.{ Type => _, Value => _, Directive => DefinedDirective, _ }, OperationType._
 
   /**
    *  Parse a query String to a query algebra term.
@@ -770,11 +770,13 @@ object SchemaParser {
     }
 
     def mkField(schema: Schema)(f: FieldDefinition): Result[Field] = {
-      val FieldDefinition(Name(nme), desc, args0, tpe0, _) = f
+      val FieldDefinition(Name(nme), desc, args0, tpe0, dirs) = f
       for {
         args <- args0.traverse(mkInputValue(schema))
         tpe  <- mkType(schema)(tpe0)
-      } yield Field(nme, desc, args, tpe, false, None)
+        deprecation <- parseDeprecated(dirs)
+        (isDeprecated, reason) = deprecation
+      } yield Field(nme, desc, args, tpe, isDeprecated, reason)
     }
 
     def mkType(schema: Schema)(tpe: Ast.Type): Result[Type] = {
@@ -799,9 +801,21 @@ object SchemaParser {
     }
 
     def mkEnumValue(e: EnumValueDefinition): Result[EnumValue] = {
-      val EnumValueDefinition(Name(nme), desc, _) = e
-      EnumValue(nme, desc).rightIor
+      val EnumValueDefinition(Name(nme), desc, dirs) = e
+      for {
+        deprecation <- parseDeprecated(dirs)
+        (isDeprecated, reason) = deprecation
+      } yield EnumValue(nme, desc, isDeprecated, reason)
     }
+
+    def parseDeprecated(directives: List[DefinedDirective]): Result[(Boolean, Option[String])] =
+      directives.collect { case dir@DefinedDirective(Name("deprecated"), _) => dir } match {
+        case Nil => (false, None).rightIor
+        case DefinedDirective(_, List((Name("reason"), Ast.Value.StringValue(reason)))) :: Nil => (true, Some(reason)).rightIor
+        case DefinedDirective(_, Nil) :: Nil => (true, Some("No longer supported")).rightIor
+        case DefinedDirective(_, _) :: Nil => mkErrorResult(s"deprecated must have a single String 'reason' argument, or no arguments")
+        case _ => mkErrorResult(s"Only a single deprecated allowed at a given location")
+      }
 
     // Share with Query parser
     def parseValue(value: Ast.Value): Result[Value] = {
@@ -864,11 +878,12 @@ object SchemaRenderer {
 
   def renderTypeDefn(tpe: NamedType): String = {
     def renderField(f: Field): String = {
-      val Field(nme, _, args, tpe, _, _) = f
+      val Field(nme, _, args, tpe, isDeprecated, reason) = f
+      val dep = renderDeprecation(isDeprecated, reason)
       if (args.isEmpty)
-        s"$nme: ${renderType(tpe)}"
+        s"$nme: ${renderType(tpe)}" + dep
       else
-        s"$nme(${args.map(renderInputValue).mkString(", ")}): ${renderType(tpe)}"
+        s"$nme(${args.map(renderInputValue).mkString(", ")}): ${renderType(tpe)}" + dep
     }
 
     tpe match {
@@ -922,8 +937,8 @@ object SchemaRenderer {
   }
 
   def renderEnumValue(v: EnumValue): String = {
-    val EnumValue(nme, _, _, _) = v
-    s"$nme"
+    val EnumValue(nme, _, isDeprecated, reason) = v
+    s"$nme" + renderDeprecation(isDeprecated, reason)
   }
 
   def renderInputValue(iv: InputValue): String = {
@@ -946,4 +961,7 @@ object SchemaRenderer {
         }.mkString("{", ", ", "}")
     case _ => "null"
   }
+
+  def renderDeprecation(isDeprecated: Boolean, reason: Option[String]): String =
+    if (isDeprecated) " @deprecated" + reason.fold("")(r => "(reason: \"" + r + "\")") else ""
 }
