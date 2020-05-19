@@ -228,7 +228,7 @@ object GraphQLParser {
     Name <~ keyword(":")
 
   lazy val Arguments: Parser[List[(Ast.Name, Ast.Value)]] =
-    parens(many(Argument))
+    parens(many(Argument <~ opt(keyword(","))))
 
   lazy val Argument: Parser[(Ast.Name, Ast.Value)] =
     (Name <~ keyword(":")) ~ Value

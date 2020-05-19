@@ -35,6 +35,68 @@ final class ParserSuite extends CatsSuite {
     }
   }
 
+  test("multiple parameters (commas)") {
+    val text = """
+      query {
+        wibble(foo: "a", bar: "b", baz: 3) {
+          quux
+        }
+      }
+    """
+
+    val expected =
+      Operation(
+        Query,None,Nil,Nil,
+        List(
+          Field(None,Name("wibble"),
+            List(
+              (Name("foo"),StringValue("a")),
+              (Name("bar"),StringValue("b")),
+              (Name("baz"),IntValue(3))
+            ), Nil,
+            List(
+              Field(None,Name("quux"),Nil,Nil,Nil)
+            )
+          )
+        )
+      )
+
+    GraphQLParser.Document.parseOnly(text).option match {
+      case Some(List(q)) => assert(q == expected)
+    }
+  }
+
+  test("multiple parameters (no commas)") {
+    val text = """
+      query {
+        wibble(foo: "a" bar: "b" baz: 3) {
+          quux
+        }
+      }
+    """
+
+    val expected =
+      Operation(
+        Query,None,Nil,Nil,
+        List(
+          Field(None,Name("wibble"),
+            List(
+              (Name("foo"),StringValue("a")),
+              (Name("bar"),StringValue("b")),
+              (Name("baz"),IntValue(3))
+            ), Nil,
+            List(
+              Field(None,Name("quux"),Nil,Nil,Nil)
+            )
+          )
+        )
+      )
+
+    GraphQLParser.Document.parseOnly(text).option match {
+      case Some(List(q)) => assert(q == expected)
+    }
+  }
+
   test("introspection query") {
     val text = """
       query IntrospectionQuery {

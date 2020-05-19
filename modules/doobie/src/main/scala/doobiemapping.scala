@@ -442,6 +442,7 @@ object Row {
     case FloatType => (Get[Double], NoNulls)
     case StringType => (Get[String], NoNulls)
     case BooleanType => (Get[Boolean], NoNulls)
+    case IDType => (Get[String], NoNulls)
     case _ => sys.error(s"no Get instance for schema type $tpe") // FIXME
   }
 

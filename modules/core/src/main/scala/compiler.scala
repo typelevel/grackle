@@ -39,6 +39,7 @@ object QueryParser {
     val fragments = doc.collect { case frag: FragmentDefinition => (frag.name.value, frag) }.toMap
 
     (ops, name) match {
+      case (Nil, _) => mkErrorResult("At least one operation required")
       case (List(op: Operation), None) => parseOperation(op, fragments)
       case (List(qs: QueryShorthand), None) => parseQueryShorthand(qs, fragments)
       case (_, None) =>

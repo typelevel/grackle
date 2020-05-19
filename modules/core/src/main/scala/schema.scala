@@ -74,7 +74,7 @@ trait Schema {
    * Yields the type, if defined, `NoType` otherwise.
    */
   def definition(name: String): Option[NamedType] =
-    types.find(_.name == name).orElse(Type.tpe(name)).map(_.dealias)
+    types.find(_.name == name).orElse(ScalarType(name)).map(_.dealias)
 
   def ref(tp: Type): Option[TypeRef] = tp match {
     case nt: NamedType if types.exists(_.name == nt.name) => Some(ref(nt.name))
@@ -331,19 +331,6 @@ sealed trait Type {
   def asNamed: Option[NamedType] = None
 }
 
-object Type {
-  import ScalarType._
-
-  def tpe(tpnme: String): Option[NamedType] = tpnme match {
-    case "Int" => Some(IntType)
-    case "Float" => Some(FloatType)
-    case "String" => Some(StringType)
-    case "Boolean" => Some(BooleanType)
-    case "ID" => Some(IDType)
-    case _ => None
-  }
-}
-
 // Move all below into object Type?
 
 /** A type with a schema-defined name.
@@ -383,6 +370,15 @@ case class ScalarType(
 ) extends Type with NamedType
 
 object ScalarType {
+  def apply(tpnme: String): Option[ScalarType] = tpnme match {
+    case "Int" => Some(IntType)
+    case "Float" => Some(FloatType)
+    case "String" => Some(StringType)
+    case "Boolean" => Some(BooleanType)
+    case "ID" => Some(IDType)
+    case _ => None
+  }
+
   val IntType = ScalarType(
     name = "Int",
     description =
@@ -786,7 +782,7 @@ object SchemaParser {
           case Ast.Type.List(tpe) => loop(tpe, true).map(tpe => wrap(ListType(tpe)))
           case Ast.Type.NonNull(Left(tpe)) => loop(tpe, false)
           case Ast.Type.NonNull(Right(tpe)) => loop(tpe, false)
-          case Ast.Type.Named(Name(nme)) => wrap(schema.ref(nme)).rightIor
+          case Ast.Type.Named(Name(nme)) => wrap(ScalarType(nme).getOrElse(schema.ref(nme))).rightIor
         }
       }
       loop(tpe, true)
