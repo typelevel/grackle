@@ -11,7 +11,6 @@ val kindProjectorVersion        = "0.10.3"
 val logbackVersion              = "1.2.3"
 val log4catsVersion             = "1.0.1"
 val shapelessVersion            = "2.3.3"
-val slf4jVersion                = "1.7.29"
 
 inThisBuild(Seq(
   homepage := Some(url("https://github.com/gemini-hlsw/gsp-graphql")),
@@ -79,7 +78,7 @@ lazy val doobie = project
       "org.tpolecat"      %% "doobie-core"            % doobieVersion,
 
       "org.tpolecat"      %% "doobie-postgres"        % doobieVersion % "test",
-      "org.slf4j"         %  "slf4j-simple"           % slf4jVersion % "test"
+      "ch.qos.logback"    %  "logback-classic"        % logbackVersion % "test"
     )
   )
 
