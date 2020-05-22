@@ -45,7 +45,7 @@ object ItemQueryCompiler extends QueryCompiler(schema) {
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("itemByTag", List(Binding("tag", IDValue(tag))), child) =>
-        Select("itemByTag", Nil, Filter(FieldContains(List("tags"), tag), child)).rightIor
+        Select("itemByTag", Nil, Filter(Contains(FieldPath(List("tags")), Const(tag)), child)).rightIor
     }
   ))
 

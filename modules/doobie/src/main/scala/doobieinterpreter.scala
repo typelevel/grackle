@@ -6,7 +6,7 @@ package doobie
 
 import scala.util.matching.Regex
 
-import cats.data.{ Chain, Ior }
+import cats.data.Chain
 import cats.effect.Bracket
 import cats.implicits._
 import _root_.doobie.Transactor
@@ -45,29 +45,42 @@ class DoobieQueryInterpreter[F[_]](
 }
 
 object DoobiePredicate {
+  def paths(pred: Predicate): List[Path] = {
+    def path[T](term: Term[T]): List[Path] =
+      term match {
+        case p: Path => List(p)
+        case _ => Nil
+      }
+    pred match {
+      case And(x, y) => paths(x) ++ paths(y)
+      case Or(x, y) => paths(x) ++ paths(y)
+      case Not(x) => paths(x)
+      case Eql(x, y) => path(x) ++ path(y)
+      case Contains(x, y) => path(x) ++ path(y)
+      case Lt(x, y) => path(x) ++ path(y)
+      case Matches(x, _) => path(x)
+      case Like(x, _, _) => path(x)
+      case _ => Nil
+    }
+  }
+
+  def isField(p: Path): Boolean =
+    p match {
+      case FieldPath(_) => true
+      case _ => false
+    }
+
   def likeToRegex(pattern: String, caseInsensitive: Boolean): Regex = {
     val csr = ("^"+pattern.replace("%", ".*").replace("_", ".")+"$")
     (if (caseInsensitive) s"(?i:$csr)" else csr).r
   }
 
-  case class FieldLike(fieldName: String, pattern: String, caseInsensitive: Boolean) extends FieldPredicate {
+  case class Like(x: Term[String], pattern: String, caseInsensitive: Boolean) extends Prop {
     lazy val r = likeToRegex(pattern, caseInsensitive)
 
-    def path = List(fieldName)
     def apply(c: Cursor): Boolean =
-      c.field(fieldName) match {
-        case Ior.Right(ScalarFocus(value: String)) => r.matches(value)
-        case _ => false
-      }
-  }
-
-  case class AttrLike(keyName: String, pattern: String, caseInsensitive: Boolean) extends AttributePredicate {
-    lazy val r = likeToRegex(pattern, caseInsensitive)
-
-    def path = List(keyName)
-    def apply(c: Cursor): Boolean =
-      c.attribute(keyName) match {
-        case Ior.Right(value: String) => r.matches(value)
+      x(c) match {
+        case List(x0) => r.matches(x0)
         case _ => false
       }
   }
@@ -78,6 +91,16 @@ case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) exte
     case table@((_: Row) :: _ | Nil) => table.asInstanceOf[Table].rightIor
     case _ => mkErrorResult(s"Not a table")
   }
+
+  def isUnstructured(tpe: Type): Boolean =
+    tpe match {
+      case NullableType(tpe) => isUnstructured(tpe)
+      case ListType(tpe) => isUnstructured(tpe)
+      case TypeRef(_, _) => tpe.dealias.isLeaf
+      case _: ScalarType => true
+      case _: EnumType => true
+      case _ => false
+    }
 
   def isLeaf: Boolean = tpe.isLeaf
 
@@ -108,7 +131,6 @@ case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) exte
     if (!tpe.isList) mkErrorResult(s"Not a list: $tpe")
     else {
       val itemTpe = tpe.item.dealias
-      asTable.map(table => mapped.group(table, itemTpe).map(table => copy(tpe = itemTpe, focus = table)))
       asTable.map { table =>
 
         // The object mapping for `tpe`.
@@ -163,7 +185,7 @@ case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) exte
 
   def field(fieldName: String): Result[Cursor] = {
     val fieldTpe = tpe.field(fieldName)
-    if (fieldTpe.isLeaf)
+    if (isUnstructured(fieldTpe))
       asTable.map(table => copy(tpe = fieldTpe, focus = mapped.selectField(table.head, tpe, fieldName)))
     else
       copy(tpe = fieldTpe).rightIor

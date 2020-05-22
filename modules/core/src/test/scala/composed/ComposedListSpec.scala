@@ -3,8 +3,6 @@
 
 package composed
 
-import edu.gemini.grackle._
-
 import cats.Id
 import cats.implicits._
 import cats.tests.CatsSuite
@@ -84,7 +82,7 @@ object CollectionQueryCompiler extends QueryCompiler(collectionSchema) {
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("collectionByName", List(Binding("name", StringValue(name))), child) =>
-        Select("collectionByName", Nil, Unique(FieldEquals("name", name), child)).rightIor
+        Select("collectionByName", Nil, Unique(Eql(FieldPath(List("name")), Const(name)), child)).rightIor
     }
   ))
 
@@ -109,7 +107,7 @@ object ItemQueryCompiler extends QueryCompiler(itemSchema) {
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("itemById", List(Binding("id", IDValue(id))), child) =>
-        Select("itemById", Nil, Unique(FieldEquals("id", id), child)).rightIor
+        Select("itemById", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
     }
   ))
 
@@ -133,16 +131,16 @@ object ComposedListQueryCompiler extends QueryCompiler(composedSchema) {
   val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {
       case Select("itemById", List(Binding("id", IDValue(id))), child) =>
-        Select("itemById", Nil, Unique(FieldEquals("id", id), child)).rightIor
+        Select("itemById", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
       case Select("collectionByName", List(Binding("name", StringValue(name))), child) =>
-        Select("collectionByName", Nil, Unique(FieldEquals("name", name), child)).rightIor
+        Select("collectionByName", Nil, Unique(Eql(FieldPath(List("name")), Const(name)), child)).rightIor
     }
   ))
 
   val collectionItemJoin = (c: Cursor, q: Query) =>
     (c.focus, q) match {
       case (c: Collection, Select("items", _, child)) =>
-        GroupList(c.itemIds.map(id => Select("itemById", Nil, Unique(FieldEquals("id", id), child)))).rightIor
+        GroupList(c.itemIds.map(id => Select("itemById", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)))).rightIor
       case _ =>
         mkErrorResult(s"Unexpected cursor focus type in collectionItemJoin")
     }

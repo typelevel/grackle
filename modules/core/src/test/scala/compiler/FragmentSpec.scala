@@ -36,7 +36,7 @@ final class FragmentSuite extends CatsSuite {
 
     val expected =
       Select("user", Nil,
-        Unique(FieldEquals("id", "1"),
+        Unique(Eql(FieldPath(List("id")), Const("1")),
           Group(List(
             Select("friends", Nil,
               Group(List(
@@ -124,7 +124,7 @@ final class FragmentSuite extends CatsSuite {
 
     val expected =
       Select("user", Nil,
-        Unique(FieldEquals("id", "1"),
+        Unique(Eql(FieldPath(List("id")), Const("1")),
           Group(List(
             Select("friends", Nil,
               Group(List(
@@ -364,7 +364,7 @@ final class FragmentSuite extends CatsSuite {
     val expected =
       Group(List(
         Rename("user", Select("user", Nil,
-          Unique(FieldEquals("id", "1"),
+          Unique(Eql(FieldPath(List("id")), Const("1")),
             Select("favourite", Nil,
               Group(List(
                 Introspection(FragmentSchema, Select("__typename", Nil, Empty)),
@@ -380,7 +380,7 @@ final class FragmentSuite extends CatsSuite {
           )
         )),
         Rename("page", Select("user", Nil,
-          Unique(FieldEquals("id", "2"),
+          Unique(Eql(FieldPath(List("id")), Const("2")),
             Select("favourite", Nil,
               Group(List(
                 Introspection(FragmentSchema, Select("__typename", Nil, Empty)),
@@ -495,7 +495,7 @@ object FragmentCompiler extends QueryCompiler(FragmentSchema) {
   val selectElaborator = new SelectElaborator(Map(
     FragmentSchema.ref("Query") -> {
       case Select("user", List(Binding("id", IDValue(id))), child) =>
-        Select("user", Nil, Unique(FieldEquals("id", id), child)).rightIor
+        Select("user", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
       case sel@Select("profiles", _, _) =>
         sel.rightIor
     }

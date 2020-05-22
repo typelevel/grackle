@@ -15,7 +15,7 @@ val shapelessVersion            = "2.3.3"
 inThisBuild(Seq(
   homepage := Some(url("https://github.com/gemini-hlsw/gsp-graphql")),
   addCompilerPlugin("org.typelevel" %% "kind-projector" % kindProjectorVersion),
-  scalaVersion := "2.13.1"
+  scalaVersion := "2.13.2"
 ) ++ gspPublishSettings)
 
 lazy val commonSettings = Seq(

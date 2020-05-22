@@ -45,7 +45,7 @@ object CurrencyQueryCompiler extends QueryCompiler(CurrencySchema) {
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("fx", List(Binding("code", StringValue(code))), child) =>
-        Select("fx", Nil, Unique(FieldEquals("code", code), child)).rightIor
+        Select("fx", Nil, Unique(Eql(FieldPath(List("code")), Const(code)), child)).rightIor
     }
   ))
 
@@ -88,7 +88,7 @@ object CountryQueryCompiler extends QueryCompiler(CountrySchema) {
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(FieldEquals("code", code), child)).rightIor
+        Select("country", Nil, Unique(Eql(FieldPath(List("code")), Const(code)), child)).rightIor
       case Select("countries", _, child) =>
         Select("countries", Nil, child).rightIor
     }
@@ -108,9 +108,9 @@ object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
   val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {
       case Select("fx", List(Binding("code", StringValue(code))), child) =>
-        Select("fx", Nil, Unique(FieldEquals("code", code), child)).rightIor
+        Select("fx", Nil, Unique(Eql(FieldPath(List("code")), Const(code)), child)).rightIor
       case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(FieldEquals("code", code), child)).rightIor
+        Select("country", Nil, Unique(Eql(FieldPath(List("code")), Const(code)), child)).rightIor
       case Select("countries", _, child) =>
         Select("countries", Nil, child).rightIor
     }
@@ -119,7 +119,7 @@ object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
   val countryCurrencyJoin = (c: Cursor, q: Query) =>
     (c.focus, q) match {
       case (c: Country, Select("currency", _, child)) =>
-        Select("fx", Nil, Unique(FieldEquals("code", c.currencyCode), child)).rightIor
+        Select("fx", Nil, Unique(Eql(FieldPath(List("code")), Const(c.currencyCode)), child)).rightIor
       case _ =>
         mkErrorResult(s"Unexpected cursor focus type in countryCurrencyJoin")
     }

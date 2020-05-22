@@ -111,9 +111,9 @@ object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
     StarWarsSchema.ref("Query") -> {
       case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
         val episode = Episode.values.find(_.toString == e.name).get
-        Select("hero", Nil, Unique(FieldEquals("id", hero(episode).id), child)).rightIor
+        Select("hero", Nil, Unique(Eql(FieldPath(List("id")), Const(hero(episode).id)), child)).rightIor
       case Select(f@("character" | "human" | "droid"), List(Binding("id", IDValue(id))), child) =>
-        Select(f, Nil, Unique(FieldEquals("id", id), child)).rightIor
+        Select(f, Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
     }
   ))
 
