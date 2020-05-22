@@ -155,7 +155,7 @@ final class CompilerSuite extends CatsSuite {
     """
 
     val expected =
-      Unique(FieldEquals("id", "1000"),
+      Unique(Eql(FieldPath(List("id")), Const("1000")),
         Select("name", Nil) ~
           Select(
             "friends", Nil,
@@ -249,7 +249,7 @@ object SimpleCompiler extends QueryCompiler(SimpleSchema) {
   val selectElaborator = new SelectElaborator(Map(
     SimpleSchema.ref("Query") -> {
       case Select("character", List(Binding("id", StringValue(id))), child) =>
-        Unique(FieldEquals("id", id), child).rightIor
+        Unique(Eql(FieldPath(List("id")), Const(id)), child).rightIor
     }
   ))
 

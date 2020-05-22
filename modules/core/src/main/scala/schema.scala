@@ -303,11 +303,10 @@ sealed trait Type {
 
   /** Is this type a leaf type?
    *
-   * `true` if after stripping of aliases and nullability, is the underlying
-   * type a scalar or an enum, `false` otherwise.
+   * `true` if after stripping of aliases the underlying type a scalar or an
+   * enum, `false` otherwise.
    */
   def isLeaf: Boolean = this match {
-    case NullableType(tpe) => tpe.isLeaf
     case TypeRef(_, _) => dealias.isLeaf
     case _: ScalarType => true
     case _: EnumType => true
@@ -319,7 +318,6 @@ sealed trait Type {
    * otherwise yield `NoType`.
    */
   def asLeaf: Type = this match {
-    case NullableType(tpe) => tpe.asLeaf
     case TypeRef(_, _) => dealias.asLeaf
     case _: ScalarType => this
     case _: EnumType => this

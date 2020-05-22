@@ -17,6 +17,7 @@ import io.circe.literal.JsonStringContext
 
 import Query._
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
+import cats.kernel.{Eq, Order}
 
 /** GraphQL query Algebra */
 sealed trait Query {
@@ -181,33 +182,10 @@ object Query {
  * these cannot be arbitrary functions `Cursor => Boolean`.
  */
 trait Predicate extends Product with (Cursor => Boolean) {
-  /** The path from the current cursor position to predicated field/attribute. */
-  def path: List[String]
-
-  /** `true` if this predicate applies to a field, false if it applies to an attribute. */
-  def isField: Boolean
-
   override def toString = ScalaRunTime._toString(this)
 }
 
-/**
- * A reified predicate over a `Cursor` focussed on a field.
- */
-trait FieldPredicate extends Predicate {
-  /** `true` if this predicate applies to a field, false if it applies to an attribute. */
-  def isField = true
-}
-
-/**
- * A reified predicate over a `Cursor` focussed on an attribute.
- */
-trait AttributePredicate extends Predicate {
-  /** `true` if this predicate applies to a field, false if it applies to an attribute. */
-  def isField = false
-}
-
 object Predicate {
-  /** An extractor for scalar values */
   object ScalarFocus {
     def unapply(c: Cursor): Option[Any] =
       if (c.isLeaf) Some(c.focus)
@@ -219,70 +197,79 @@ object Predicate {
       else None
   }
 
-  /** Equality predicate for scalar fields. */
-  case class FieldEquals[T](fieldName: String, value: T) extends FieldPredicate {
-    def path = List(fieldName)
-    def apply(c: Cursor): Boolean =
-      c.field(fieldName) match {
-        case Ior.Right(ScalarFocus(focus)) => focus == value
-        case _ => false
-      }
+  sealed trait Term[T] {
+    def apply(c: Cursor): List[T]
   }
 
-  /** Regex predicate for String scalar fields. */
-  case class FieldMatches(fieldName: String, r: Regex) extends FieldPredicate {
-    def path = List(fieldName)
-    def apply(c: Cursor): Boolean =
-      c.field(fieldName) match {
-        case Ior.Right(ScalarFocus(focus: String)) => r.matches(focus)
-        case _ => false
-      }
+  case class Const[T](v: T) extends Term[T] {
+    def apply(c: Cursor): List[T] = List(v)
   }
 
-  /** A path predicate for scalar fields.
-   *
-   *  The path may pass through fields of List types, hence there might be multiple
-   *  occurrences of the final scalar fields. The predicate true iff it is satisfied for
-   *  at least one of those occurrences.
-   */
-  case class FieldContains[T](val path: List[String], value: T) extends FieldPredicate {
-    def apply(c: Cursor): Boolean =
+  sealed trait Path {
+    def path: List[String]
+  }
+
+  case class FieldPath[T](val path: List[String]) extends Term[T] with Path {
+    def apply(c: Cursor): List[T] =
       c.flatListPath(path) match {
-        case Ior.Right(cs) => cs.exists(_.focus == value)
-        case _ => false
+        case Ior.Right(cs) =>
+          cs.collect { case ScalarFocus(focus) => focus.asInstanceOf[T] }
+        case _ => Nil
       }
   }
 
-  /** Equality predicate for attributes. */
-  case class AttrEquals[T](attrName: String, value: T) extends AttributePredicate {
-    def path = List(attrName)
-    def apply(c: Cursor): Boolean =
-      c.attribute(attrName) match {
-        case Ior.Right(`value`) => true
-        case _ => false
-      }
-  }
-
-  /** Regex predicate for String attributes. */
-  case class AttrMatches(attrName: String, r: Regex) extends AttributePredicate {
-    def path = List(attrName)
-    def apply(c: Cursor): Boolean =
-      c.attribute(attrName) match {
-        case Ior.Right(value: String) => r.matches(value)
-        case _ => false
-      }
-  }
-
-  /** A path predicate for attributes.
-   *
-   *  The path may pass through fields of List types, hence there might be multiple
-   *  occurrences of the final scalar fields. The predicate true iff it is satisfied for
-   *  at least one of those occurrences.
-   */
-  case class AttrContains[T](val path: List[String], value: T) extends AttributePredicate {
-    def apply(c: Cursor): Boolean =
+  case class AttrPath[T](val path: List[String]) extends Term[T] with Path {
+    def apply(c: Cursor): List[T] =
       c.attrListPath(path) match {
-        case Ior.Right(attrs) => attrs.exists(_ == value)
+        case Ior.Right(cs) => cs.map(_.asInstanceOf[T])
+        case _ => Nil
+      }
+  }
+
+  trait Prop extends Predicate {
+    def apply(c: Cursor): Boolean
+  }
+
+  case class And(x: Prop, y: Prop) extends Prop {
+    def apply(c: Cursor): Boolean = x(c) && y(c)
+  }
+
+  case class Or(x: Prop, y: Prop) extends Prop {
+    def apply(c: Cursor): Boolean = x(c) || y(c)
+  }
+
+  case class Not(x: Prop) extends Prop {
+    def apply(c: Cursor): Boolean = !x(c)
+  }
+
+  case class Eql[T: Eq](x: Term[T], y: Term[T]) extends Prop {
+    def apply(c: Cursor): Boolean =
+      (x(c), y(c)) match {
+        case (List(x0), List(y0)) => x0 === y0
+        case _ => false
+      }
+  }
+
+  case class Contains[T: Eq](x: Term[T], y: Term[T]) extends Prop {
+    def apply(c: Cursor): Boolean =
+      (x(c), y(c)) match {
+        case (xs, List(y0)) => xs.exists(_ === y0)
+        case _ => false
+      }
+  }
+
+  case class Lt[T: Order](x: Term[T], y: Term[T]) extends Prop {
+    def apply(c: Cursor): Boolean =
+      (x(c), y(c)) match {
+        case (List(x0), List(y0)) => Order[T].compare(x0, y0) < 0
+        case _ => false
+      }
+  }
+
+  case class Matches(x: Term[String], r: Regex) extends Prop {
+    def apply(c: Cursor): Boolean =
+      x(c) match {
+        case List(x0) => r.matches(x0)
         case _ => false
       }
   }

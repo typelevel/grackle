@@ -7,6 +7,7 @@ package doobie
 import java.sql.ResultSet
 
 import cats.implicits._
+import cats.kernel.Monoid
 import _root_.doobie.{ ConnectionIO, Fragment, Fragments, Get, Read }
 import _root_.doobie.implicits._
 import _root_.doobie.enum.Nullability._
@@ -74,6 +75,20 @@ trait DoobieMapping {
     }
   }
 
+  def primaryColumnForTerm[T](tpe: Type, term: Term[T]): Option[ColumnRef] =
+    term match {
+      case Const(_) => None
+      case path: Path =>
+        val obj = tpe.underlyingObject
+        val prefix = path.path.init
+        val parent = obj.path(prefix)
+        val name = path.path.last
+        if (isField(path))
+          primaryColumnForField(parent, name)
+        else
+          columnForAttribute(parent, name)
+    }
+
   def keyColumnsForType(tpe: Type): List[ColumnRef] = {
     val obj = tpe.underlyingObject
     objectMapping(obj) match {
@@ -85,50 +100,55 @@ trait DoobieMapping {
   // This is partial, however, we should be able to perform a consistency check ahead of time
   // such that a valid query is guaranteed to be covered.
   def mapQuery(q: Query, tpe: Type): MappedQuery = {
-    type Acc = (List[ColumnRef], List[Join], List[(ColumnRef, Predicate)], List[(ObjectMapping, Type)])
+    type Acc = (List[ColumnRef], List[Join], List[(Type, Predicate)], List[(ObjectMapping, Type)])
+    implicit object MAcc extends Monoid[Acc] {
+      def combine(x: Acc, y: Acc): Acc =
+        (x._1 ++ y._1, x._2 ++ y._2, x._3 ++ y._3, x._4 ++ y._4)
+
+      def empty: Acc =  (Nil, Nil, Nil, Nil)
+    }
+
     def loop(q: Query, tpe: Type, acc: Acc): Acc = {
       val obj = tpe.underlyingObject
 
       def loopPredicate(pred: Predicate): Acc = {
-        def mkSelects(path: List[String]): Query =
-          path.foldRight(Empty: Query) { (fieldName, child) => Select(fieldName, Nil, child) }
+        def loopPath(path: Path): Acc = {
+          def mkSelects(path: List[String]): Query =
+            path.foldRight(Empty: Query) { (fieldName, child) => Select(fieldName, Nil, child) }
 
-        val prefix = pred.path.init
-        val parent = obj.path(prefix)
-        val name = pred.path.last
+          val prefix = path.path.init
+          val parent = obj.path(prefix)
+          val name = path.path.last
 
-        if (pred.isField) {
-          val pcol = primaryColumnForField(parent, name).getOrElse(sys.error(s"No field '$name' for type $parent"))
-          val (cols, joins, preds, omts) = loop(mkSelects(pred.path), obj, acc)
-          (cols, joins, (pcol, pred) :: preds, omts)
-        } else {
-          val pcol = columnForAttribute(parent, name).getOrElse(sys.error(s"No attribute '$name' for type $parent"))
-          val keyCols = keyColumnsForType(obj)
-          val omt = objectMapping(obj).map(om => (om, obj)).toList
-          val (cols, joins, preds, omts) = loop(mkSelects(prefix), obj, acc)
-          (pcol :: keyCols ++ cols, joins, (pcol, pred) :: preds, omt ++ omts)
+          if (isField(path)) {
+            loop(mkSelects(path.path), obj, acc)
+          } else {
+            val pcol = columnForAttribute(parent, name).getOrElse(sys.error(s"No attribute '$name' for type $parent"))
+            val keyCols = keyColumnsForType(obj)
+            val omt = objectMapping(obj).map(om => (om, obj)).toList
+            (pcol :: keyCols, List.empty[Join], List.empty[(Type, Predicate)], omt) |+| loop(mkSelects(prefix), obj, acc)
+          }
         }
+
+        paths(pred).foldMap(loopPath) |+|
+          ((List.empty[ColumnRef], List.empty[Join], List((tpe, pred)), List.empty[(ObjectMapping, Type)]))
       }
 
       q match {
         case Select(fieldName, _, child) =>
           val fieldTpe = obj.field(fieldName)
-          val omt = objectMapping(obj).map(om => (om, obj)).toList
           val keyCols = keyColumnsForType(obj)
-          loop(child, fieldTpe, (
-            columnsForField(obj, fieldName).toList ++ keyCols ++ acc._1,
-            joinsForField(obj, fieldName) ++ acc._2,
-            acc._3,
-            omt ++ acc._4
-          ))
+          val cols = columnsForField(obj, fieldName).toList ++ keyCols
+          val joins = joinsForField(obj, fieldName)
+          val omt = objectMapping(obj).map(om => (om, obj)).toList
+          loop(child, fieldTpe, (cols, joins, List.empty[(Type, Predicate)], omt) |+| acc)
+
         case Narrow(subtpe, child) =>
           loop(child, subtpe, acc)
         case Filter(pred, child) =>
-          val (cols, joins, preds, omts) = loopPredicate(pred)
-          loop(child, obj, (cols ++ acc._1, joins ++ acc._2, preds ++ acc._3, omts ++ acc._4))
+          loop(child, obj, loopPredicate(pred) |+| acc)
         case Unique(pred, child) =>
-          val (cols, joins, preds, omts) = loopPredicate(pred)
-          loop(child, obj, (cols ++ acc._1, joins ++ acc._2, preds ++ acc._3, omts ++ acc._4))
+          loop(child, obj, loopPredicate(pred) |+| acc)
         case Wrap(_, q) =>
           loop(q, obj, acc)
         case Rename(_, q) =>
@@ -145,7 +165,7 @@ trait DoobieMapping {
       }
     }
 
-    val (columns0, joins0, predicates, mappings0) = loop(q, tpe, (Nil, Nil, Nil, Nil))
+    val (columns0, joins0, predicates, mappings0) = loop(q, tpe, MAcc.empty)
 
     val columns = columns0.distinct
     val mappings = mappings0.toMap
@@ -246,7 +266,7 @@ object DoobieMapping {
     table: String,
     columns: List[ColumnRef],
     gets: List[(Boolean, (Get[_], NullabilityKnown))],
-    predicates: List[(ColumnRef, Predicate)],
+    predicates: List[(Type, Predicate)],
     joins: List[Join],
     mapping: DoobieMapping
   ) {
@@ -282,7 +302,7 @@ object DoobieMapping {
 
     def hasAttribute(tpe: Type, attrName: String): Boolean = {
       val obj = tpe.dealias
-      mapping.fieldMapping(obj, attrName).map(_ => true).getOrElse(false)
+      mapping.attributeMapping(obj, attrName).map(_ => true).getOrElse(false)
     }
 
     def columnOfAttribute(tpe: Type, attrName: String): ColumnRef = {
@@ -338,32 +358,42 @@ object DoobieMapping {
       }
     }
 
+    def fragmentForPred(tpe: Type, pred: Predicate): Fragment = {
+      def term[T](x: Term[T]): Fragment =
+        x match {
+          case path: Path =>
+            mapping.primaryColumnForTerm(tpe, path) match {
+              case Some(col) => Fragment.const(s"${col.toSql}")
+              case None => Fragment.empty
+            }
+          case Const(value: String) => fr0"$value"
+          case Const(value: Int) => fr0"$value"
+          case Const(value: Double) => fr0"$value"
+          case Const(value: Boolean) => fr0"$value"
+          case _ => Fragment.empty
+        }
+
+      def loop(pred: Predicate): Fragment =
+        pred match {
+          case And(x, y) => Fragments.and(loop(x), loop(y))
+          case Or(x, y) => Fragments.and(loop(x), loop(y))
+          case Not(x) => fr"NOT" ++ loop(x)
+          case Eql(x, y) => term(x) ++ fr0" = "++ term(y)
+          case Contains(x, y) => term(x) ++ fr0" = "++ term(y)
+          case Lt(x, y) => term(x) ++ fr0" < "++ term(y)
+          case Like(x, pattern, caseInsensitive) =>
+            val op = if(caseInsensitive) "ILIKE" else "LIKE"
+            term(x) ++ Fragment.const(s" $op ") ++ fr0"$pattern"
+          case _ => Fragment.empty
+        }
+
+      loop(pred)
+    }
+
     lazy val fragment: Fragment = {
       val cols = columns.map(_.toSql)
-      val preds = predicates.map {
-        case (col, FieldEquals(_, value)) =>
-          mkColEquality(col, value)
 
-        case (col, FieldLike(_, pattern, caseInsensitive)) =>
-          val op = if(caseInsensitive) "ILIKE" else "LIKE"
-          Fragment.const(s"${col.toSql} $op") ++ fr0"$pattern"
-
-        case (col, AttrEquals(_, value)) =>
-          mkColEquality(col, value)
-
-        case (col, AttrLike(_, pattern, caseInsensitive)) =>
-          val op = if(caseInsensitive) "ILIKE" else "LIKE"
-          Fragment.const(s"${col.toSql} $op") ++ fr0"$pattern"
-
-        case (col, FieldContains(_, value)) =>
-          mkColEquality(col, value)
-
-        case (col, AttrContains(_, value)) =>
-          mkColEquality(col, value)
-
-        case _ => Fragment.empty
-      }
-
+      val preds = predicates.map((fragmentForPred _).tupled)
       val where = Fragments.whereAnd(preds: _*)
 
       val select =

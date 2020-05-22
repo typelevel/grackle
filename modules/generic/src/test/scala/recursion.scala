@@ -71,7 +71,7 @@ object MutualRecursionQueryCompiler extends QueryCompiler(schema) {
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select(f@("programmeById" | "productionById"), List(Binding("id", IDValue(id))), child) =>
-        Select(f, Nil, Unique(FieldEquals("id", id), child)).rightIor
+        Select(f, Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
     }
   ))
 

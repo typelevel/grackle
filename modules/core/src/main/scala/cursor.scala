@@ -197,8 +197,9 @@ trait Cursor {
    * `fns` from the value at this `Cursor`, or an error on the left hand side if
    * there is no such path.
    */
-  def attrListPath(fns: List[String]): Result[List[Any]] = fns match {
-    case Nil => List(this).rightIor
+  def attrListPath(fns: List[String]): Result[List[Any]] = {
+    fns match {
+    case Nil => mkOneError("Unresolved path").leftIor
     case List(attrName) if hasAttribute(attrName) =>
       attribute(attrName).map(List(_))
     case fieldName :: rest =>
@@ -220,6 +221,7 @@ trait Cursor {
           case Ior.Left(es) => es.leftIor
           case Ior.Both(es, _) => es.leftIor
         }
+  }
   }
 }
 

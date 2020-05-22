@@ -140,18 +140,18 @@ object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
   val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {
       case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(AttrEquals("code", code), child)).rightIor
+        Select("country", Nil, Unique(Eql(AttrPath(List("code")), Const(code)), child)).rightIor
       case Select("countries", _, child) =>
         Select("countries", Nil, child).rightIor
       case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
-        Select("cities", Nil, Filter(FieldLike("name", namePattern, true), child)).rightIor
+        Select("cities", Nil, Filter(Like(FieldPath(List("name")), namePattern, true), child)).rightIor
     }
   ))
 
   val countryCurrencyJoin = (c: Cursor, q: Query) =>
     (c.attribute("code"), q) match {
       case (Ior.Right(countryCode: String), Select("currencies", _, child)) =>
-        Select("currencies", Nil, Filter(FieldEquals("countryCode", countryCode), child)).rightIor
+        Select("currencies", Nil, Filter(Eql(FieldPath(List("countryCode")), Const(countryCode)), child)).rightIor
       case _ => mkErrorResult(s"Expected 'code' attribute at ${c.tpe}")
     }
 

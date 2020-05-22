@@ -16,6 +16,50 @@ import DoobiePredicate._
 import DoobieMapping._, FieldMapping._
 
 object WorldData extends DoobieMapping {
+  val schema =
+    Schema(
+      """
+        type Query {
+          cities(namePattern: String = "%"): [City!]
+          country(code: String): Country
+          countries: [Country!]
+          language(language: String): Language
+          languages: [Language!]
+          search(minPopulation: Int!, indepSince: Int!): [Country!]!
+        }
+        type City {
+          name: String!
+          country: Country!
+          district: String!
+          population: Int!
+        }
+        type Language {
+          language: String!
+          isOfficial: Boolean!
+          percentage: Float!
+          countries: [Country!]!
+        }
+        type Country {
+          name: String!
+          continent: String!
+          region: String!
+          surfacearea: Float!
+          indepyear: Int
+          population: Int!
+          lifeexpectancy: Float
+          gnp: String
+          gnpold: String
+          localname: String!
+          governmentform: String!
+          headofstate: String
+          capitalId: Int
+          code2: String!
+          cities: [City!]!
+          languages: [Language!]!
+        }
+      """
+    ).right.get
+
   val countryMapping =
     ObjectMapping(
       tpe = "Country",
@@ -54,7 +98,7 @@ object WorldData extends DoobieMapping {
   def countryCityJoin(c: Cursor, q: Query): Result[Query] = q match {
     case Select("cities", Nil, child) =>
       c.attribute("code").map { case (code: String) =>
-        Select("cities", Nil, Filter(AttrEquals("countrycode", code), child))
+        Select("cities", Nil, Filter(Eql(AttrPath(List("countrycode")), Const(code)), child))
       }
     case _ => mkErrorResult("Bad staging join")
   }
@@ -62,7 +106,7 @@ object WorldData extends DoobieMapping {
   def countryLanguageJoin(c: Cursor, q: Query): Result[Query] = q match {
     case Select("languages", Nil, child) =>
       c.attribute("code").map { case (code: String) =>
-        Select("languages", Nil, Filter(AttrEquals("countrycode", code), child))
+        Select("languages", Nil, Filter(Eql(AttrPath(List("countrycode")), Const(code)), child))
       }
     case _ => mkErrorResult("Bad staging join")
   }
@@ -91,7 +135,7 @@ object WorldData extends DoobieMapping {
   def cityCountryJoin(c: Cursor, q: Query): Result[Query] = q match {
     case Select("country", Nil, child) =>
       c.attribute("countrycode").map { case (countrycode: String) =>
-        Select("country", Nil, Unique(AttrEquals("code", countrycode), child))
+        Select("country", Nil, Unique(Eql(AttrPath(List("code")), Const(countrycode)), child))
       }
     case _ => mkErrorResult("Bad staging join")
   }
@@ -119,7 +163,7 @@ object WorldData extends DoobieMapping {
   def languageCountryJoin(c: Cursor, q: Query): Result[Query] = q match {
     case Select("countries", Nil, child) =>
       c.field("language").map { case ScalarFocus(language: String) =>
-        Select("countries", Nil, Filter(FieldContains(List("languages", "language"), language), child))
+        Select("countries", Nil, Filter(Contains(FieldPath(List("languages", "language")), Const(language)), child))
       }
     case _ => mkErrorResult("Bad staging join")
   }
@@ -127,21 +171,31 @@ object WorldData extends DoobieMapping {
   val objectMappings = List(countryMapping, cityMapping, languageMapping)
 }
 
-object WorldQueryCompiler extends QueryCompiler(WorldSchema) {
-  val QueryType = WorldSchema.ref("Query")
+object WorldQueryCompiler extends QueryCompiler(WorldData.schema) {
+  val QueryType = WorldData.schema.ref("Query")
 
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(AttrEquals("code", code), child)).rightIor
+        Select("country", Nil, Unique(Eql(AttrPath(List("code")), Const(code)), child)).rightIor
       case Select("countries", Nil, child) =>
         Select("countries", Nil, child).rightIor
       case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
-        Select("cities", Nil, Filter(FieldLike("name", namePattern, true), child)).rightIor
+        Select("cities", Nil, Filter(Like(FieldPath(List("name")), namePattern, true), child)).rightIor
       case Select("language", List(Binding("language", StringValue(language))), child) =>
-        Select("language", Nil, Unique(FieldEquals("language", language), child)).rightIor
+        Select("language", Nil, Unique(Eql(FieldPath(List("language")), Const(language)), child)).rightIor
       case Select("languages", Nil, child) =>
         Select("languages", Nil, child).rightIor
+      case Select("search", List(Binding("minPopulation", IntValue(min)), Binding("indepSince", IntValue(year))), child) =>
+        Select("search", Nil,
+          Filter(
+            And(
+              Not(Lt(FieldPath(List("population")), Const(min))),
+              Not(Lt(FieldPath(List("indepyear")), Const(year)))
+            ),
+            child
+          )
+        ).rightIor
     }
   ))
 

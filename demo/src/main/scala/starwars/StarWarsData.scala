@@ -19,6 +19,7 @@ import StarWarsData._
 // These are all ordinary Scala types with no Grackle dependencies.
 //
 object StarWarsData {
+  // #schema
   val schema =
     Schema(
       """
@@ -55,6 +56,7 @@ object StarWarsData {
          }
       """
     ).right.get
+  // #schema
 
   val QueryType = schema.ref("Query")
   val CharacterType = schema.ref("Character")
@@ -189,14 +191,14 @@ object StarWarsQueryCompiler extends QueryCompiler(schema) {
       // Unique operator to pick out the target using the FieldEquals predicate.
       case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
         Episode.values.find(_.toString == e.name).map { episode =>
-          Select("hero", Nil, Unique(FieldEquals("id", hero(episode).id), child)).rightIor
+          Select("hero", Nil, Unique(Eql(FieldPath(List("id")), Const(hero(episode).id)), child)).rightIor
         }.getOrElse(mkErrorResult(s"Unknown episode '${e.name}'"))
 
       // The character, human and droid selectors all take a single ID argument and yield a
       // single value (if any) or null. We use the Unique operator to pick out the target
       // using the FieldEquals predicate.
       case Select(f@("character" | "human" | "droid"), List(Binding("id", IDValue(id))), child) =>
-        Select(f, Nil, Unique(FieldEquals("id", id), child)).rightIor
+        Select(f, Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
     }
   ))
   // #elaborator

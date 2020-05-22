@@ -141,9 +141,9 @@ yields the result,
 }
 ```
 
-Grackle represents schemas as a Scala value of type `Schema`,
+Grackle represents schemas as a Scala value of type `Schema` which can be constructed given a schema text,
 
-@@snip [StarWarsSchema.scala](/demo/src/main/scala/starwars/StarWarsSchema.scala)
+@@snip [StarWarsSchema.scala](/demo/src/main/scala/starwars/StarWarsData.scala) { #schema }
 
 ## The Scala model
 
@@ -277,6 +277,9 @@ For in-memory models this abstraction is implemented by `DataTypeCursor` which h
 generic way and is customized with a pair of `PartialFunctions`, one to set the starting point in the model for the
 root of a given query, and the other to handle navigation through fields.
 
+For in-memory models where the structure of the model ADT closely matches the GraphQL schema a `Cursor` can be derived
+automatically by a `GenericQueryInterpreter` which only needs to be supplemented with a root `PartialFunction`.
+
 For the Star Wars model the root `PartialFunction` is of the following form,
 
 @@snip [StarWarsData.scala](/demo/src/main/scala/starwars/StarWarsData.scala) { #root }
@@ -284,14 +287,6 @@ For the Star Wars model the root `PartialFunction` is of the following form,
 The left hand sides of the case expressions correspond to the top-level selection of the query (see the schema above)
 and the right hand side yields a pair, consisting of the GraphQL type, and the Scala value which form the root for the
 query. When the query is executed, navigation will start from that point and with that expected GraphQL type.
-
-The navigation `PartialFunction` is of the following form,
-
-@@snip [StarWarsData.scala](/demo/src/main/scala/starwars/StarWarsData.scala) { #cursor }
-
-Here the left hand sides of the case expressions are a pair consisting of a Scala value representing the current focus
-of the cursor in the model (these are Scala values) and the GraphQL field being navigated through. The right hand side
-yields the new focus for the cursor following the navigation step.
 
 ## The service
 
