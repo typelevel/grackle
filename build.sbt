@@ -11,6 +11,7 @@ val kindProjectorVersion        = "0.10.3"
 val logbackVersion              = "1.2.3"
 val log4catsVersion             = "1.0.1"
 val shapelessVersion            = "2.3.3"
+val testContainersVersion       = "0.37.0"
 
 inThisBuild(Seq(
   homepage := Some(url("https://github.com/gemini-hlsw/gsp-graphql")),
@@ -72,13 +73,17 @@ lazy val doobie = project
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-doobie",
+    fork in Test := true,
+    parallelExecution in Test := false,
     libraryDependencies ++= Seq(
-      "org.typelevel"     %% "cats-effect"            % catsEffectVersion,
-      "io.chrisdavenport" %% "log4cats-slf4j"         % log4catsVersion,
-      "org.tpolecat"      %% "doobie-core"            % doobieVersion,
+      "org.typelevel"      %% "cats-effect"                     % catsEffectVersion,
+      "io.chrisdavenport"  %% "log4cats-slf4j"                  % log4catsVersion,
+      "org.tpolecat"       %% "doobie-core"                     % doobieVersion,
 
-      "org.tpolecat"      %% "doobie-postgres"        % doobieVersion % "test",
-      "ch.qos.logback"    %  "logback-classic"        % logbackVersion % "test"
+      "org.tpolecat"       %% "doobie-postgres"                 % doobieVersion % "test",
+      "ch.qos.logback"     %  "logback-classic"                 % logbackVersion % "test",
+      "com.dimafeng"       %% "testcontainers-scala-scalatest"  % testContainersVersion % "test",
+      "com.dimafeng"       %% "testcontainers-scala-postgresql" % testContainersVersion % "test",
     )
   )
 

@@ -3,30 +3,13 @@
 
 package world
 
-import scala.concurrent.ExecutionContext
-
-import cats.effect.{ ContextShift, IO }
-import cats.tests.CatsSuite
-import doobie.Transactor
-import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import io.circe.literal.JsonStringContext
 import io.circe.optics.JsonPath.root
 
+import utils.DatabaseSuite
 import WorldData.schema.queryType
 
-final class WorldSpec extends CatsSuite {
-  implicit def contextShift: ContextShift[IO] =
-    IO.contextShift(ExecutionContext.global)
-
-  implicit val log = Slf4jLogger.unsafeCreate[IO]
-
-  val xa = Transactor.fromDriverManager[IO](
-    "org.postgresql.Driver",
-    "jdbc:postgresql:world",
-    "user",
-    "password"
-  )
-
+final class WorldSpec extends DatabaseSuite {
   test("simple query") {
     val query = """
       query {

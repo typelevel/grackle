@@ -7,7 +7,7 @@
 
 BEGIN;
 
-SET client_encoding = 'LATIN1';
+SET client_encoding = 'UTF8';
 
 CREATE TABLE city (
     id integer NOT NULL,
@@ -63,7 +63,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 17	Almere	NLD	Flevoland	142465
 18	Arnhem	NLD	Gelderland	138020
 19	Zaanstad	NLD	Noord-Holland	135621
-20	¥s-Hertogenbosch	NLD	Noord-Brabant	129170
+20	¬¥s-Hertogenbosch	NLD	Noord-Brabant	129170
 21	Amersfoort	NLD	Utrecht	126270
 22	Maastricht	NLD	Limburg	122087
 23	Dordrecht	NLD	Zuid-Holland	119811
@@ -76,26 +76,26 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 30	Delft	NLD	Zuid-Holland	95268
 31	Heerlen	NLD	Limburg	95052
 32	Alkmaar	NLD	Noord-Holland	92713
-33	Willemstad	ANT	CuraÁao	2345
+33	Willemstad	ANT	Cura√ßao	2345
 34	Tirana	ALB	Tirana	270000
 35	Alger	DZA	Alger	2168000
 36	Oran	DZA	Oran	609823
 37	Constantine	DZA	Constantine	443727
 38	Annaba	DZA	Annaba	222518
 39	Batna	DZA	Batna	183377
-40	SÈtif	DZA	SÈtif	179055
-41	Sidi Bel AbbËs	DZA	Sidi Bel AbbËs	153106
+40	S√©tif	DZA	S√©tif	179055
+41	Sidi Bel Abbƒçs	DZA	Sidi Bel Abbƒçs	153106
 42	Skikda	DZA	Skikda	128747
 43	Biskra	DZA	Biskra	128281
 44	Blida (el-Boulaida)	DZA	Blida	127284
-45	BÈjaÔa	DZA	BÈjaÔa	117162
+45	B√©jaƒèa	DZA	B√©jaƒèa	117162
 46	Mostaganem	DZA	Mostaganem	115212
-47	TÈbessa	DZA	TÈbessa	112007
+47	T√©bessa	DZA	T√©bessa	112007
 48	Tlemcen (Tilimsen)	DZA	Tlemcen	110242
-49	BÈchar	DZA	BÈchar	107311
+49	B√©char	DZA	B√©char	107311
 50	Tiaret	DZA	Tiaret	100118
 51	Ech-Chleff (el-Asnam)	DZA	Chlef	96794
-52	GhardaÔa	DZA	GhardaÔa	89415
+52	Ghardaƒèa	DZA	Ghardaƒèa	89415
 53	Tafuna	ASM	Tutuila	5200
 54	Fagatogo	ASM	Tutuila	2323
 55	Andorra la Vella	AND	Andorra la Vella	21189
@@ -104,9 +104,9 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 58	Lobito	AGO	Benguela	130000
 59	Benguela	AGO	Benguela	128300
 60	Namibe	AGO	Namibe	118200
-61	South Hill	AIA	ñ	961
-62	The Valley	AIA	ñ	595
-63	Saint John¥s	ATG	St John	24000
+61	South Hill	AIA	‚Äì	961
+62	The Valley	AIA	‚Äì	595
+63	Saint John¬¥s	ATG	St John	24000
 64	Dubai	ARE	Dubai	669181
 65	Abu Dhabi	ARE	Abu Dhabi	398695
 66	Sharja	ARE	Sharja	320095
@@ -114,53 +114,53 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 68	Ajman	ARE	Ajman	114395
 69	Buenos Aires	ARG	Distrito Federal	2982146
 70	La Matanza	ARG	Buenos Aires	1266461
-71	CÛrdoba	ARG	CÛrdoba	1157507
-72	Rosario	ARG	Santa FÈ	907718
+71	C√≥rdoba	ARG	C√≥rdoba	1157507
+72	Rosario	ARG	Santa F√©	907718
 73	Lomas de Zamora	ARG	Buenos Aires	622013
 74	Quilmes	ARG	Buenos Aires	559249
 75	Almirante Brown	ARG	Buenos Aires	538918
 76	La Plata	ARG	Buenos Aires	521936
 77	Mar del Plata	ARG	Buenos Aires	512880
-78	San Miguel de Tucum·n	ARG	Tucum·n	470809
-79	Lan˙s	ARG	Buenos Aires	469735
+78	San Miguel de Tucum√°n	ARG	Tucum√°n	470809
+79	Lan√∫s	ARG	Buenos Aires	469735
 80	Merlo	ARG	Buenos Aires	463846
-81	General San MartÌn	ARG	Buenos Aires	422542
+81	General San Mart√≠n	ARG	Buenos Aires	422542
 82	Salta	ARG	Salta	367550
 83	Moreno	ARG	Buenos Aires	356993
-84	Santa FÈ	ARG	Santa FÈ	353063
+84	Santa F√©	ARG	Santa F√©	353063
 85	Avellaneda	ARG	Buenos Aires	353046
 86	Tres de Febrero	ARG	Buenos Aires	352311
-87	MorÛn	ARG	Buenos Aires	349246
+87	Mor√≥n	ARG	Buenos Aires	349246
 88	Florencio Varela	ARG	Buenos Aires	315432
 89	San Isidro	ARG	Buenos Aires	306341
 90	Tigre	ARG	Buenos Aires	296226
 91	Malvinas Argentinas	ARG	Buenos Aires	290335
-92	Vicente LÛpez	ARG	Buenos Aires	288341
+92	Vicente L√≥pez	ARG	Buenos Aires	288341
 93	Berazategui	ARG	Buenos Aires	276916
 94	Corrientes	ARG	Corrientes	258103
 95	San Miguel	ARG	Buenos Aires	248700
-96	BahÌa Blanca	ARG	Buenos Aires	239810
-97	Esteban EcheverrÌa	ARG	Buenos Aires	235760
+96	Bah√≠a Blanca	ARG	Buenos Aires	239810
+97	Esteban Echeverr√≠a	ARG	Buenos Aires	235760
 98	Resistencia	ARG	Chaco	229212
-99	JosÈ C. Paz	ARG	Buenos Aires	221754
-100	Paran·	ARG	Entre Rios	207041
+99	Jos√© C. Paz	ARG	Buenos Aires	221754
+100	Paran√°	ARG	Entre Rios	207041
 101	Godoy Cruz	ARG	Mendoza	206998
 102	Posadas	ARG	Misiones	201273
-103	GuaymallÈn	ARG	Mendoza	200595
+103	Guaymall√©n	ARG	Mendoza	200595
 104	Santiago del Estero	ARG	Santiago del Estero	189947
 105	San Salvador de Jujuy	ARG	Jujuy	178748
 106	Hurlingham	ARG	Buenos Aires	170028
-107	NeuquÈn	ARG	NeuquÈn	167296
-108	ItuzaingÛ	ARG	Buenos Aires	158197
+107	Neuqu√©n	ARG	Neuqu√©n	167296
+108	Ituzaing√≥	ARG	Buenos Aires	158197
 109	San Fernando	ARG	Buenos Aires	153036
 110	Formosa	ARG	Formosa	147636
 111	Las Heras	ARG	Mendoza	145823
 112	La Rioja	ARG	La Rioja	138117
 113	San Fernando del Valle de Cata	ARG	Catamarca	134935
-114	RÌo Cuarto	ARG	CÛrdoba	134355
+114	R√≠o Cuarto	ARG	C√≥rdoba	134355
 115	Comodoro Rivadavia	ARG	Chubut	124104
 116	Mendoza	ARG	Mendoza	123027
-117	San Nicol·s de los Arroyos	ARG	Buenos Aires	119302
+117	San Nicol√°s de los Arroyos	ARG	Buenos Aires	119302
 118	San Juan	ARG	San Juan	119152
 119	Escobar	ARG	Buenos Aires	116675
 120	Concordia	ARG	Entre Rios	116485
@@ -170,9 +170,9 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 124	San Rafael	ARG	Mendoza	94651
 125	Tandil	ARG	Buenos Aires	91101
 126	Yerevan	ARM	Yerevan	1248700
-127	Gjumri	ARM	äirak	211700
+127	Gjumri	ARM	≈†irak	211700
 128	Vanadzor	ARM	Lori	172700
-129	Oranjestad	ABW	ñ	29034
+129	Oranjestad	ABW	‚Äì	29034
 130	Sydney	AUS	New South Wales	3276207
 131	Melbourne	AUS	Victoria	2865329
 132	Brisbane	AUS	Queensland	1291117
@@ -188,9 +188,9 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 142	Townsville	AUS	Queensland	109914
 143	Cairns	AUS	Queensland	92273
 144	Baku	AZE	Baki	1787800
-145	G‰nc‰	AZE	G‰nc‰	299300
+145	G√§nc√§	AZE	G√§nc√§	299300
 146	Sumqayit	AZE	Sumqayit	283000
-147	Ming‰Áevir	AZE	Ming‰Áevir	93900
+147	Ming√§√ßevir	AZE	Ming√§√ßevir	93900
 148	Nassau	BHS	New Providence	172000
 149	al-Manama	BHR	al-Manama	148000
 150	Dhaka	BGD	Dhaka	3612850
@@ -221,7 +221,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 175	Antwerpen	BEL	Antwerpen	446525
 176	Gent	BEL	East Flanderi	224180
 177	Charleroi	BEL	Hainaut	200827
-178	LiËge	BEL	LiËge	185639
+178	Liƒçge	BEL	Liƒçge	185639
 179	Bruxelles [Brussel]	BEL	Bryssel	133859
 180	Brugge	BEL	West Flanderi	116246
 181	Schaerbeek	BEL	Bryssel	105692
@@ -230,10 +230,10 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 184	Belize City	BLZ	Belize City	55810
 185	Belmopan	BLZ	Cayo	7105
 186	Cotonou	BEN	Atlantique	536827
-187	Porto-Novo	BEN	OuÈmÈ	194000
+187	Porto-Novo	BEN	Ou√©m√©	194000
 188	Djougou	BEN	Atacora	134099
 189	Parakou	BEN	Borgou	103577
-190	Saint George	BMU	Saint George¥s	1800
+190	Saint George	BMU	Saint George¬¥s	1800
 191	Hamilton	BMU	Hamilton	1200
 192	Thimphu	BTN	Thimphu	22000
 193	Santa Cruz de la Sierra	BOL	Santa Cruz	935361
@@ -242,263 +242,263 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 196	Cochabamba	BOL	Cochabamba	482800
 197	Oruro	BOL	Oruro	223553
 198	Sucre	BOL	Chuquisaca	178426
-199	PotosÌ	BOL	PotosÌ	140642
+199	Potos√≠	BOL	Potos√≠	140642
 200	Tarija	BOL	Tarija	125255
 201	Sarajevo	BIH	Federaatio	360000
 202	Banja Luka	BIH	Republika Srpska	143079
 203	Zenica	BIH	Federaatio	96027
 204	Gaborone	BWA	Gaborone	213017
 205	Francistown	BWA	Francistown	101805
-206	S„o Paulo	BRA	S„o Paulo	9968485
+206	SƒÉo Paulo	BRA	SƒÉo Paulo	9968485
 207	Rio de Janeiro	BRA	Rio de Janeiro	5598953
 208	Salvador	BRA	Bahia	2302832
 209	Belo Horizonte	BRA	Minas Gerais	2139125
-210	Fortaleza	BRA	Cear·	2097757
-211	BrasÌlia	BRA	Distrito Federal	1969868
-212	Curitiba	BRA	Paran·	1584232
+210	Fortaleza	BRA	Cear√°	2097757
+211	Bras√≠lia	BRA	Distrito Federal	1969868
+212	Curitiba	BRA	Paran√°	1584232
 213	Recife	BRA	Pernambuco	1378087
 214	Porto Alegre	BRA	Rio Grande do Sul	1314032
 215	Manaus	BRA	Amazonas	1255049
-216	BelÈm	BRA	Par·	1186926
-217	Guarulhos	BRA	S„o Paulo	1095874
-218	Goi‚nia	BRA	Goi·s	1056330
-219	Campinas	BRA	S„o Paulo	950043
-220	S„o GonÁalo	BRA	Rio de Janeiro	869254
-221	Nova IguaÁu	BRA	Rio de Janeiro	862225
-222	S„o LuÌs	BRA	Maranh„o	837588
-223	MaceiÛ	BRA	Alagoas	786288
+216	Bel√©m	BRA	Par√°	1186926
+217	Guarulhos	BRA	SƒÉo Paulo	1095874
+218	Goi√¢nia	BRA	Goi√°s	1056330
+219	Campinas	BRA	SƒÉo Paulo	950043
+220	SƒÉo Gon√ßalo	BRA	Rio de Janeiro	869254
+221	Nova Igua√ßu	BRA	Rio de Janeiro	862225
+222	SƒÉo Lu√≠s	BRA	MaranhƒÉo	837588
+223	Macei√≥	BRA	Alagoas	786288
 224	Duque de Caxias	BRA	Rio de Janeiro	746758
-225	S„o Bernardo do Campo	BRA	S„o Paulo	723132
-226	Teresina	BRA	PiauÌ	691942
+225	SƒÉo Bernardo do Campo	BRA	SƒÉo Paulo	723132
+226	Teresina	BRA	Piau√≠	691942
 227	Natal	BRA	Rio Grande do Norte	688955
-228	Osasco	BRA	S„o Paulo	659604
+228	Osasco	BRA	SƒÉo Paulo	659604
 229	Campo Grande	BRA	Mato Grosso do Sul	649593
-230	Santo AndrÈ	BRA	S„o Paulo	630073
-231	Jo„o Pessoa	BRA	ParaÌba	584029
-232	Jaboat„o dos Guararapes	BRA	Pernambuco	558680
+230	Santo Andr√©	BRA	SƒÉo Paulo	630073
+231	JoƒÉo Pessoa	BRA	Para√≠ba	584029
+232	JaboatƒÉo dos Guararapes	BRA	Pernambuco	558680
 233	Contagem	BRA	Minas Gerais	520801
-234	S„o JosÈ dos Campos	BRA	S„o Paulo	515553
-235	Uberl‚ndia	BRA	Minas Gerais	487222
+234	SƒÉo Jos√© dos Campos	BRA	SƒÉo Paulo	515553
+235	Uberl√¢ndia	BRA	Minas Gerais	487222
 236	Feira de Santana	BRA	Bahia	479992
-237	Ribeir„o Preto	BRA	S„o Paulo	473276
-238	Sorocaba	BRA	S„o Paulo	466823
-239	NiterÛi	BRA	Rio de Janeiro	459884
-240	Cuiab·	BRA	Mato Grosso	453813
+237	RibeirƒÉo Preto	BRA	SƒÉo Paulo	473276
+238	Sorocaba	BRA	SƒÉo Paulo	466823
+239	Niter√≥i	BRA	Rio de Janeiro	459884
+240	Cuiab√°	BRA	Mato Grosso	453813
 241	Juiz de Fora	BRA	Minas Gerais	450288
 242	Aracaju	BRA	Sergipe	445555
-243	S„o Jo„o de Meriti	BRA	Rio de Janeiro	440052
-244	Londrina	BRA	Paran·	432257
+243	SƒÉo JoƒÉo de Meriti	BRA	Rio de Janeiro	440052
+244	Londrina	BRA	Paran√°	432257
 245	Joinville	BRA	Santa Catarina	428011
 246	Belford Roxo	BRA	Rio de Janeiro	425194
-247	Santos	BRA	S„o Paulo	408748
-248	Ananindeua	BRA	Par·	400940
+247	Santos	BRA	SƒÉo Paulo	408748
+248	Ananindeua	BRA	Par√°	400940
 249	Campos dos Goytacazes	BRA	Rio de Janeiro	398418
-250	Mau·	BRA	S„o Paulo	375055
-251	CarapicuÌba	BRA	S„o Paulo	357552
+250	Mau√°	BRA	SƒÉo Paulo	375055
+251	Carapicu√≠ba	BRA	SƒÉo Paulo	357552
 252	Olinda	BRA	Pernambuco	354732
-253	Campina Grande	BRA	ParaÌba	352497
-254	S„o JosÈ do Rio Preto	BRA	S„o Paulo	351944
+253	Campina Grande	BRA	Para√≠ba	352497
+254	SƒÉo Jos√© do Rio Preto	BRA	SƒÉo Paulo	351944
 255	Caxias do Sul	BRA	Rio Grande do Sul	349581
-256	Moji das Cruzes	BRA	S„o Paulo	339194
-257	Diadema	BRA	S„o Paulo	335078
-258	Aparecida de Goi‚nia	BRA	Goi·s	324662
-259	Piracicaba	BRA	S„o Paulo	319104
-260	Cariacica	BRA	EspÌrito Santo	319033
-261	Vila Velha	BRA	EspÌrito Santo	318758
+256	Moji das Cruzes	BRA	SƒÉo Paulo	339194
+257	Diadema	BRA	SƒÉo Paulo	335078
+258	Aparecida de Goi√¢nia	BRA	Goi√°s	324662
+259	Piracicaba	BRA	SƒÉo Paulo	319104
+260	Cariacica	BRA	Esp√≠rito Santo	319033
+261	Vila Velha	BRA	Esp√≠rito Santo	318758
 262	Pelotas	BRA	Rio Grande do Sul	315415
-263	Bauru	BRA	S„o Paulo	313670
-264	Porto Velho	BRA	RondÙnia	309750
-265	Serra	BRA	EspÌrito Santo	302666
+263	Bauru	BRA	SƒÉo Paulo	313670
+264	Porto Velho	BRA	Rond√¥nia	309750
+265	Serra	BRA	Esp√≠rito Santo	302666
 266	Betim	BRA	Minas Gerais	302108
-267	JundÌaÌ	BRA	S„o Paulo	296127
+267	Jund√≠a√≠	BRA	SƒÉo Paulo	296127
 268	Canoas	BRA	Rio Grande do Sul	294125
-269	Franca	BRA	S„o Paulo	290139
-270	S„o Vicente	BRA	S„o Paulo	286848
-271	Maring·	BRA	Paran·	286461
+269	Franca	BRA	SƒÉo Paulo	290139
+270	SƒÉo Vicente	BRA	SƒÉo Paulo	286848
+271	Maring√°	BRA	Paran√°	286461
 272	Montes Claros	BRA	Minas Gerais	286058
-273	An·polis	BRA	Goi·s	282197
-274	FlorianÛpolis	BRA	Santa Catarina	281928
-275	PetrÛpolis	BRA	Rio de Janeiro	279183
-276	Itaquaquecetuba	BRA	S„o Paulo	270874
-277	VitÛria	BRA	EspÌrito Santo	270626
-278	Ponta Grossa	BRA	Paran·	268013
+273	An√°polis	BRA	Goi√°s	282197
+274	Florian√≥polis	BRA	Santa Catarina	281928
+275	Petr√≥polis	BRA	Rio de Janeiro	279183
+276	Itaquaquecetuba	BRA	SƒÉo Paulo	270874
+277	Vit√≥ria	BRA	Esp√≠rito Santo	270626
+278	Ponta Grossa	BRA	Paran√°	268013
 279	Rio Branco	BRA	Acre	259537
-280	Foz do IguaÁu	BRA	Paran·	259425
-281	Macap·	BRA	Amap·	256033
-282	IlhÈus	BRA	Bahia	254970
-283	VitÛria da Conquista	BRA	Bahia	253587
+280	Foz do Igua√ßu	BRA	Paran√°	259425
+281	Macap√°	BRA	Amap√°	256033
+282	Ilh√©us	BRA	Bahia	254970
+283	Vit√≥ria da Conquista	BRA	Bahia	253587
 284	Uberaba	BRA	Minas Gerais	249225
 285	Paulista	BRA	Pernambuco	248473
-286	Limeira	BRA	S„o Paulo	245497
+286	Limeira	BRA	SƒÉo Paulo	245497
 287	Blumenau	BRA	Santa Catarina	244379
 288	Caruaru	BRA	Pernambuco	244247
-289	SantarÈm	BRA	Par·	241771
+289	Santar√©m	BRA	Par√°	241771
 290	Volta Redonda	BRA	Rio de Janeiro	240315
 291	Novo Hamburgo	BRA	Rio Grande do Sul	239940
-292	Caucaia	BRA	Cear·	238738
+292	Caucaia	BRA	Cear√°	238738
 293	Santa Maria	BRA	Rio Grande do Sul	238473
-294	Cascavel	BRA	Paran·	237510
-295	Guaruj·	BRA	S„o Paulo	237206
-296	Ribeir„o das Neves	BRA	Minas Gerais	232685
+294	Cascavel	BRA	Paran√°	237510
+295	Guaruj√°	BRA	SƒÉo Paulo	237206
+296	RibeirƒÉo das Neves	BRA	Minas Gerais	232685
 297	Governador Valadares	BRA	Minas Gerais	231724
-298	TaubatÈ	BRA	S„o Paulo	229130
-299	Imperatriz	BRA	Maranh„o	224564
-300	GravataÌ	BRA	Rio Grande do Sul	223011
-301	Embu	BRA	S„o Paulo	222223
-302	MossorÛ	BRA	Rio Grande do Norte	214901
-303	V·rzea Grande	BRA	Mato Grosso	214435
+298	Taubat√©	BRA	SƒÉo Paulo	229130
+299	Imperatriz	BRA	MaranhƒÉo	224564
+300	Gravata√≠	BRA	Rio Grande do Sul	223011
+301	Embu	BRA	SƒÉo Paulo	222223
+302	Mossor√≥	BRA	Rio Grande do Norte	214901
+303	V√°rzea Grande	BRA	Mato Grosso	214435
 304	Petrolina	BRA	Pernambuco	210540
-305	Barueri	BRA	S„o Paulo	208426
-306	Viam„o	BRA	Rio Grande do Sul	207557
+305	Barueri	BRA	SƒÉo Paulo	208426
+306	ViamƒÉo	BRA	Rio Grande do Sul	207557
 307	Ipatinga	BRA	Minas Gerais	206338
 308	Juazeiro	BRA	Bahia	201073
-309	Juazeiro do Norte	BRA	Cear·	199636
-310	Tabo„o da Serra	BRA	S„o Paulo	197550
-311	S„o JosÈ dos Pinhais	BRA	Paran·	196884
-312	MagÈ	BRA	Rio de Janeiro	196147
-313	Suzano	BRA	S„o Paulo	195434
-314	S„o Leopoldo	BRA	Rio Grande do Sul	189258
-315	MarÌlia	BRA	S„o Paulo	188691
-316	S„o Carlos	BRA	S„o Paulo	187122
-317	SumarÈ	BRA	S„o Paulo	186205
-318	Presidente Prudente	BRA	S„o Paulo	185340
-319	DivinÛpolis	BRA	Minas Gerais	185047
+309	Juazeiro do Norte	BRA	Cear√°	199636
+310	TaboƒÉo da Serra	BRA	SƒÉo Paulo	197550
+311	SƒÉo Jos√© dos Pinhais	BRA	Paran√°	196884
+312	Mag√©	BRA	Rio de Janeiro	196147
+313	Suzano	BRA	SƒÉo Paulo	195434
+314	SƒÉo Leopoldo	BRA	Rio Grande do Sul	189258
+315	Mar√≠lia	BRA	SƒÉo Paulo	188691
+316	SƒÉo Carlos	BRA	SƒÉo Paulo	187122
+317	Sumar√©	BRA	SƒÉo Paulo	186205
+318	Presidente Prudente	BRA	SƒÉo Paulo	185340
+319	Divin√≥polis	BRA	Minas Gerais	185047
 320	Sete Lagoas	BRA	Minas Gerais	182984
 321	Rio Grande	BRA	Rio Grande do Sul	182222
 322	Itabuna	BRA	Bahia	182148
-323	JequiÈ	BRA	Bahia	179128
+323	Jequi√©	BRA	Bahia	179128
 324	Arapiraca	BRA	Alagoas	178988
-325	Colombo	BRA	Paran·	177764
-326	Americana	BRA	S„o Paulo	177409
+325	Colombo	BRA	Paran√°	177764
+326	Americana	BRA	SƒÉo Paulo	177409
 327	Alvorada	BRA	Rio Grande do Sul	175574
-328	Araraquara	BRA	S„o Paulo	174381
-329	ItaboraÌ	BRA	Rio de Janeiro	173977
-330	Santa B·rbara d¥Oeste	BRA	S„o Paulo	171657
+328	Araraquara	BRA	SƒÉo Paulo	174381
+329	Itabora√≠	BRA	Rio de Janeiro	173977
+330	Santa B√°rbara d¬¥Oeste	BRA	SƒÉo Paulo	171657
 331	Nova Friburgo	BRA	Rio de Janeiro	170697
-332	JacareÌ	BRA	S„o Paulo	170356
-333	AraÁatuba	BRA	S„o Paulo	169303
+332	Jacare√≠	BRA	SƒÉo Paulo	170356
+333	Ara√ßatuba	BRA	SƒÉo Paulo	169303
 334	Barra Mansa	BRA	Rio de Janeiro	168953
-335	Praia Grande	BRA	S„o Paulo	168434
-336	Marab·	BRA	Par·	167795
-337	Crici˙ma	BRA	Santa Catarina	167661
+335	Praia Grande	BRA	SƒÉo Paulo	168434
+336	Marab√°	BRA	Par√°	167795
+337	Crici√∫ma	BRA	Santa Catarina	167661
 338	Boa Vista	BRA	Roraima	167185
 339	Passo Fundo	BRA	Rio Grande do Sul	166343
 340	Dourados	BRA	Mato Grosso do Sul	164716
 341	Santa Luzia	BRA	Minas Gerais	164704
-342	Rio Claro	BRA	S„o Paulo	163551
-343	Maracana˙	BRA	Cear·	162022
-344	Guarapuava	BRA	Paran·	160510
-345	RondonÛpolis	BRA	Mato Grosso	155115
-346	S„o JosÈ	BRA	Santa Catarina	155105
-347	Cachoeiro de Itapemirim	BRA	EspÌrito Santo	155024
-348	NilÛpolis	BRA	Rio de Janeiro	153383
-349	Itapevi	BRA	S„o Paulo	150664
+342	Rio Claro	BRA	SƒÉo Paulo	163551
+343	Maracana√∫	BRA	Cear√°	162022
+344	Guarapuava	BRA	Paran√°	160510
+345	Rondon√≥polis	BRA	Mato Grosso	155115
+346	SƒÉo Jos√©	BRA	Santa Catarina	155105
+347	Cachoeiro de Itapemirim	BRA	Esp√≠rito Santo	155024
+348	Nil√≥polis	BRA	Rio de Janeiro	153383
+349	Itapevi	BRA	SƒÉo Paulo	150664
 350	Cabo de Santo Agostinho	BRA	Pernambuco	149964
-351	CamaÁari	BRA	Bahia	149146
-352	Sobral	BRA	Cear·	146005
-353	ItajaÌ	BRA	Santa Catarina	145197
-354	ChapecÛ	BRA	Santa Catarina	144158
-355	Cotia	BRA	S„o Paulo	140042
+351	Cama√ßari	BRA	Bahia	149146
+352	Sobral	BRA	Cear√°	146005
+353	Itaja√≠	BRA	Santa Catarina	145197
+354	Chapec√≥	BRA	Santa Catarina	144158
+355	Cotia	BRA	SƒÉo Paulo	140042
 356	Lages	BRA	Santa Catarina	139570
-357	Ferraz de Vasconcelos	BRA	S„o Paulo	139283
-358	Indaiatuba	BRA	S„o Paulo	135968
-359	Hortol‚ndia	BRA	S„o Paulo	135755
-360	Caxias	BRA	Maranh„o	133980
-361	S„o Caetano do Sul	BRA	S„o Paulo	133321
-362	Itu	BRA	S„o Paulo	132736
+357	Ferraz de Vasconcelos	BRA	SƒÉo Paulo	139283
+358	Indaiatuba	BRA	SƒÉo Paulo	135968
+359	Hortol√¢ndia	BRA	SƒÉo Paulo	135755
+360	Caxias	BRA	MaranhƒÉo	133980
+361	SƒÉo Caetano do Sul	BRA	SƒÉo Paulo	133321
+362	Itu	BRA	SƒÉo Paulo	132736
 363	Nossa Senhora do Socorro	BRA	Sergipe	131351
-364	ParnaÌba	BRA	PiauÌ	129756
-365	PoÁos de Caldas	BRA	Minas Gerais	129683
-366	TeresÛpolis	BRA	Rio de Janeiro	128079
+364	Parna√≠ba	BRA	Piau√≠	129756
+365	Po√ßos de Caldas	BRA	Minas Gerais	129683
+366	Teres√≥polis	BRA	Rio de Janeiro	128079
 367	Barreiras	BRA	Bahia	127801
-368	Castanhal	BRA	Par·	127634
+368	Castanhal	BRA	Par√°	127634
 369	Alagoinhas	BRA	Bahia	126820
-370	Itapecerica da Serra	BRA	S„o Paulo	126672
+370	Itapecerica da Serra	BRA	SƒÉo Paulo	126672
 371	Uruguaiana	BRA	Rio Grande do Sul	126305
-372	Paranagu·	BRA	Paran·	126076
-373	IbiritÈ	BRA	Minas Gerais	125982
-374	Timon	BRA	Maranh„o	125812
-375	Luzi‚nia	BRA	Goi·s	125597
-376	MacaÈ	BRA	Rio de Janeiro	125597
-377	TeÛfilo Otoni	BRA	Minas Gerais	124489
-378	Moji-GuaÁu	BRA	S„o Paulo	123782
+372	Paranagu√°	BRA	Paran√°	126076
+373	Ibirit√©	BRA	Minas Gerais	125982
+374	Timon	BRA	MaranhƒÉo	125812
+375	Luzi√¢nia	BRA	Goi√°s	125597
+376	Maca√©	BRA	Rio de Janeiro	125597
+377	Te√≥filo Otoni	BRA	Minas Gerais	124489
+378	Moji-Gua√ßu	BRA	SƒÉo Paulo	123782
 379	Palmas	BRA	Tocantins	121919
-380	Pindamonhangaba	BRA	S„o Paulo	121904
-381	Francisco Morato	BRA	S„o Paulo	121197
-382	BagÈ	BRA	Rio Grande do Sul	120793
+380	Pindamonhangaba	BRA	SƒÉo Paulo	121904
+381	Francisco Morato	BRA	SƒÉo Paulo	121197
+382	Bag√©	BRA	Rio Grande do Sul	120793
 383	Sapucaia do Sul	BRA	Rio Grande do Sul	120217
 384	Cabo Frio	BRA	Rio de Janeiro	119503
-385	Itapetininga	BRA	S„o Paulo	119391
+385	Itapetininga	BRA	SƒÉo Paulo	119391
 386	Patos de Minas	BRA	Minas Gerais	119262
 387	Camaragibe	BRA	Pernambuco	118968
-388	BraganÁa Paulista	BRA	S„o Paulo	116929
+388	Bragan√ßa Paulista	BRA	SƒÉo Paulo	116929
 389	Queimados	BRA	Rio de Janeiro	115020
-390	AraguaÌna	BRA	Tocantins	114948
+390	Aragua√≠na	BRA	Tocantins	114948
 391	Garanhuns	BRA	Pernambuco	114603
-392	VitÛria de Santo Ant„o	BRA	Pernambuco	113595
-393	Santa Rita	BRA	ParaÌba	113135
+392	Vit√≥ria de Santo AntƒÉo	BRA	Pernambuco	113595
+393	Santa Rita	BRA	Para√≠ba	113135
 394	Barbacena	BRA	Minas Gerais	113079
-395	Abaetetuba	BRA	Par·	111258
-396	Ja˙	BRA	S„o Paulo	109965
+395	Abaetetuba	BRA	Par√°	111258
+396	Ja√∫	BRA	SƒÉo Paulo	109965
 397	Lauro de Freitas	BRA	Bahia	109236
-398	Franco da Rocha	BRA	S„o Paulo	108964
+398	Franco da Rocha	BRA	SƒÉo Paulo	108964
 399	Teixeira de Freitas	BRA	Bahia	108441
 400	Varginha	BRA	Minas Gerais	108314
-401	Ribeir„o Pires	BRA	S„o Paulo	108121
-402	Sabar·	BRA	Minas Gerais	107781
-403	Catanduva	BRA	S„o Paulo	107761
-404	Rio Verde	BRA	Goi·s	107755
-405	Botucatu	BRA	S„o Paulo	107663
-406	Colatina	BRA	EspÌrito Santo	107354
+401	RibeirƒÉo Pires	BRA	SƒÉo Paulo	108121
+402	Sabar√°	BRA	Minas Gerais	107781
+403	Catanduva	BRA	SƒÉo Paulo	107761
+404	Rio Verde	BRA	Goi√°s	107755
+405	Botucatu	BRA	SƒÉo Paulo	107663
+406	Colatina	BRA	Esp√≠rito Santo	107354
 407	Santa Cruz do Sul	BRA	Rio Grande do Sul	106734
-408	Linhares	BRA	EspÌrito Santo	106278
-409	Apucarana	BRA	Paran·	105114
-410	Barretos	BRA	S„o Paulo	104156
-411	Guaratinguet·	BRA	S„o Paulo	103433
+408	Linhares	BRA	Esp√≠rito Santo	106278
+409	Apucarana	BRA	Paran√°	105114
+410	Barretos	BRA	SƒÉo Paulo	104156
+411	Guaratinguet√°	BRA	SƒÉo Paulo	103433
 412	Cachoeirinha	BRA	Rio Grande do Sul	103240
-413	CodÛ	BRA	Maranh„o	103153
-414	Jaragu· do Sul	BRA	Santa Catarina	102580
-415	Cubat„o	BRA	S„o Paulo	102372
+413	Cod√≥	BRA	MaranhƒÉo	103153
+414	Jaragu√° do Sul	BRA	Santa Catarina	102580
+415	CubatƒÉo	BRA	SƒÉo Paulo	102372
 416	Itabira	BRA	Minas Gerais	102217
-417	Itaituba	BRA	Par·	101320
-418	Araras	BRA	S„o Paulo	101046
+417	Itaituba	BRA	Par√°	101320
+418	Araras	BRA	SƒÉo Paulo	101046
 419	Resende	BRA	Rio de Janeiro	100627
-420	Atibaia	BRA	S„o Paulo	100356
+420	Atibaia	BRA	SƒÉo Paulo	100356
 421	Pouso Alegre	BRA	Minas Gerais	100028
-422	Toledo	BRA	Paran·	99387
-423	Crato	BRA	Cear·	98965
+422	Toledo	BRA	Paran√°	99387
+423	Crato	BRA	Cear√°	98965
 424	Passos	BRA	Minas Gerais	98570
 425	Araguari	BRA	Minas Gerais	98399
-426	S„o JosÈ de Ribamar	BRA	Maranh„o	98318
-427	Pinhais	BRA	Paran·	98198
-428	Sert„ozinho	BRA	S„o Paulo	98140
+426	SƒÉo Jos√© de Ribamar	BRA	MaranhƒÉo	98318
+427	Pinhais	BRA	Paran√°	98198
+428	SertƒÉozinho	BRA	SƒÉo Paulo	98140
 429	Conselheiro Lafaiete	BRA	Minas Gerais	97507
 430	Paulo Afonso	BRA	Bahia	97291
 431	Angra dos Reis	BRA	Rio de Janeiro	96864
-432	Eun·polis	BRA	Bahia	96610
-433	Salto	BRA	S„o Paulo	96348
-434	Ourinhos	BRA	S„o Paulo	96291
+432	Eun√°polis	BRA	Bahia	96610
+433	Salto	BRA	SƒÉo Paulo	96348
+434	Ourinhos	BRA	SƒÉo Paulo	96291
 435	Parnamirim	BRA	Rio Grande do Norte	96210
 436	Jacobina	BRA	Bahia	96131
 437	Coronel Fabriciano	BRA	Minas Gerais	95933
-438	Birigui	BRA	S„o Paulo	94685
-439	TatuÌ	BRA	S„o Paulo	93897
-440	Ji-Paran·	BRA	RondÙnia	93346
-441	Bacabal	BRA	Maranh„o	93121
-442	Camet·	BRA	Par·	92779
-443	GuaÌba	BRA	Rio Grande do Sul	92224
-444	S„o LourenÁo da Mata	BRA	Pernambuco	91999
+438	Birigui	BRA	SƒÉo Paulo	94685
+439	Tatu√≠	BRA	SƒÉo Paulo	93897
+440	Ji-Paran√°	BRA	Rond√¥nia	93346
+441	Bacabal	BRA	MaranhƒÉo	93121
+442	Camet√°	BRA	Par√°	92779
+443	Gua√≠ba	BRA	Rio Grande do Sul	92224
+444	SƒÉo Louren√ßo da Mata	BRA	Pernambuco	91999
 445	Santana do Livramento	BRA	Rio Grande do Sul	91779
-446	Votorantim	BRA	S„o Paulo	91777
-447	Campo Largo	BRA	Paran·	91203
-448	Patos	BRA	ParaÌba	90519
+446	Votorantim	BRA	SƒÉo Paulo	91777
+447	Campo Largo	BRA	Paran√°	91203
+448	Patos	BRA	Para√≠ba	90519
 449	Ituiutaba	BRA	Minas Gerais	90507
-450	Corumb·	BRA	Mato Grosso do Sul	90111
-451	PalhoÁa	BRA	Santa Catarina	89465
-452	Barra do PiraÌ	BRA	Rio de Janeiro	89388
-453	Bento GonÁalves	BRA	Rio Grande do Sul	89254
-454	Po·	BRA	S„o Paulo	89236
-455	¡guas Lindas de Goi·s	BRA	Goi·s	89200
+450	Corumb√°	BRA	Mato Grosso do Sul	90111
+451	Palho√ßa	BRA	Santa Catarina	89465
+452	Barra do Pira√≠	BRA	Rio de Janeiro	89388
+453	Bento Gon√ßalves	BRA	Rio Grande do Sul	89254
+454	Po√°	BRA	SƒÉo Paulo	89236
+455	√Åguas Lindas de Goi√°s	BRA	Goi√°s	89200
 456	London	GBR	England	7285000
 457	Birmingham	GBR	England	1013000
 458	Glasgow	GBR	Scotland	619680
@@ -579,7 +579,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 533	Eastbourne	GBR	England	90000
 534	Grimsby	GBR	England	89000
 535	Saint Helier	GBR	Jersey	27523
-536	Douglas	GBR	ñ	23487
+536	Douglas	GBR	‚Äì	23487
 537	Road Town	VGB	Tortola	8000
 538	Bandar Seri Begawan	BRN	Brunei and Muara	21484
 539	Sofija	BGR	Grad Sofija	1122302
@@ -591,27 +591,27 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 545	Pleven	BGR	Lovec	121952
 546	Sliven	BGR	Burgas	105530
 547	Dobric	BGR	Varna	100399
-548	äumen	BGR	Varna	94686
+548	≈†umen	BGR	Varna	94686
 549	Ouagadougou	BFA	Kadiogo	824000
 550	Bobo-Dioulasso	BFA	Houet	300000
-551	Koudougou	BFA	BoulkiemdÈ	105000
+551	Koudougou	BFA	Boulkiemd√©	105000
 552	Bujumbura	BDI	Bujumbura	300000
 553	George Town	CYM	Grand Cayman	19600
 554	Santiago de Chile	CHL	Santiago	4703954
 555	Puente Alto	CHL	Santiago	386236
-556	ViÒa del Mar	CHL	ValparaÌso	312493
-557	ValparaÌso	CHL	ValparaÌso	293800
-558	Talcahuano	CHL	BÌobÌo	277752
+556	Vi≈Ña del Mar	CHL	Valpara√≠so	312493
+557	Valpara√≠so	CHL	Valpara√≠so	293800
+558	Talcahuano	CHL	B√≠ob√≠o	277752
 559	Antofagasta	CHL	Antofagasta	251429
 560	San Bernardo	CHL	Santiago	241910
-561	Temuco	CHL	La AraucanÌa	233041
-562	ConcepciÛn	CHL	BÌobÌo	217664
-563	Rancagua	CHL	O¥Higgins	212977
-564	Arica	CHL	Tarapac·	189036
+561	Temuco	CHL	La Araucan√≠a	233041
+562	Concepci√≥n	CHL	B√≠ob√≠o	217664
+563	Rancagua	CHL	O¬¥Higgins	212977
+564	Arica	CHL	Tarapac√°	189036
 565	Talca	CHL	Maule	187557
-566	Chill·n	CHL	BÌobÌo	178182
-567	Iquique	CHL	Tarapac·	177892
-568	Los Angeles	CHL	BÌobÌo	158215
+566	Chill√°n	CHL	B√≠ob√≠o	178182
+567	Iquique	CHL	Tarapac√°	177892
+568	Los Angeles	CHL	B√≠ob√≠o	158215
 569	Puerto Montt	CHL	Los Lagos	152194
 570	Coquimbo	CHL	Coquimbo	143353
 571	Osorno	CHL	Los Lagos	141468
@@ -619,37 +619,37 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 573	Calama	CHL	Antofagasta	137265
 574	Valdivia	CHL	Los Lagos	133106
 575	Punta Arenas	CHL	Magallanes	125631
-576	CopiapÛ	CHL	Atacama	120128
-577	QuilpuÈ	CHL	ValparaÌso	118857
-578	CuricÛ	CHL	Maule	115766
+576	Copiap√≥	CHL	Atacama	120128
+577	Quilpu√©	CHL	Valpara√≠so	118857
+578	Curic√≥	CHL	Maule	115766
 579	Ovalle	CHL	Coquimbo	94854
-580	Coronel	CHL	BÌobÌo	93061
-581	San Pedro de la Paz	CHL	BÌobÌo	91684
+580	Coronel	CHL	B√≠ob√≠o	93061
+581	San Pedro de la Paz	CHL	B√≠ob√≠o	91684
 582	Melipilla	CHL	Santiago	91056
 583	Avarua	COK	Rarotonga	11900
-584	San JosÈ	CRI	San JosÈ	339131
+584	San Jos√©	CRI	San Jos√©	339131
 585	Djibouti	DJI	Djibouti	383000
 586	Roseau	DMA	St George	16243
-587	Santo Domingo de Guzm·n	DOM	Distrito Nacional	1609966
+587	Santo Domingo de Guzm√°n	DOM	Distrito Nacional	1609966
 588	Santiago de los Caballeros	DOM	Santiago	365463
 589	La Romana	DOM	La Romana	140204
-590	San Pedro de MacorÌs	DOM	San Pedro de MacorÌs	124735
-591	San Francisco de MacorÌs	DOM	Duarte	108485
+590	San Pedro de Macor√≠s	DOM	San Pedro de Macor√≠s	124735
+591	San Francisco de Macor√≠s	DOM	Duarte	108485
 592	San Felipe de Puerto Plata	DOM	Puerto Plata	89423
 593	Guayaquil	ECU	Guayas	2070040
 594	Quito	ECU	Pichincha	1573458
 595	Cuenca	ECU	Azuay	270353
 596	Machala	ECU	El Oro	210368
 597	Santo Domingo de los Colorados	ECU	Pichincha	202111
-598	Portoviejo	ECU	ManabÌ	176413
+598	Portoviejo	ECU	Manab√≠	176413
 599	Ambato	ECU	Tungurahua	169612
-600	Manta	ECU	ManabÌ	164739
+600	Manta	ECU	Manab√≠	164739
 601	Duran [Eloy Alfaro]	ECU	Guayas	152514
 602	Ibarra	ECU	Imbabura	130643
-603	Quevedo	ECU	Los RÌos	129631
+603	Quevedo	ECU	Los R√≠os	129631
 604	Milagro	ECU	Guayas	124177
 605	Loja	ECU	Loja	123875
-606	RÌobamba	ECU	Chimborazo	123163
+606	R√≠obamba	ECU	Chimborazo	123163
 607	Esmeraldas	ECU	Esmeraldas	123045
 608	Cairo	EGY	Kairo	6789479
 609	Alexandria	EGY	Aleksandria	3328196
@@ -701,60 +701,60 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 655	Valencia	ESP	Valencia	739412
 656	Sevilla	ESP	Andalusia	701927
 657	Zaragoza	ESP	Aragonia	603367
-658	M·laga	ESP	Andalusia	530553
+658	M√°laga	ESP	Andalusia	530553
 659	Bilbao	ESP	Baskimaa	357589
 660	Las Palmas de Gran Canaria	ESP	Canary Islands	354757
 661	Murcia	ESP	Murcia	353504
 662	Palma de Mallorca	ESP	Balears	326993
-663	Valladolid	ESP	Castilla and LeÛn	319998
-664	CÛrdoba	ESP	Andalusia	311708
+663	Valladolid	ESP	Castilla and Le√≥n	319998
+664	C√≥rdoba	ESP	Andalusia	311708
 665	Vigo	ESP	Galicia	283670
 666	Alicante [Alacant]	ESP	Valencia	272432
-667	GijÛn	ESP	Asturia	267980
-668	L¥Hospitalet de Llobregat	ESP	Katalonia	247986
+667	Gij√≥n	ESP	Asturia	267980
+668	L¬¥Hospitalet de Llobregat	ESP	Katalonia	247986
 669	Granada	ESP	Andalusia	244767
-670	A CoruÒa (La CoruÒa)	ESP	Galicia	243402
+670	A Coru≈Ña (La Coru≈Ña)	ESP	Galicia	243402
 671	Vitoria-Gasteiz	ESP	Baskimaa	217154
 672	Santa Cruz de Tenerife	ESP	Canary Islands	213050
 673	Badalona	ESP	Katalonia	209635
 674	Oviedo	ESP	Asturia	200453
-675	MÛstoles	ESP	Madrid	195351
+675	M√≥stoles	ESP	Madrid	195351
 676	Elche [Elx]	ESP	Valencia	193174
 677	Sabadell	ESP	Katalonia	184859
 678	Santander	ESP	Cantabria	184165
 679	Jerez de la Frontera	ESP	Andalusia	182660
-680	Pamplona [IruÒa]	ESP	Navarra	180483
-681	Donostia-San Sebasti·n	ESP	Baskimaa	179208
+680	Pamplona [Iru≈Ña]	ESP	Navarra	180483
+681	Donostia-San Sebasti√°n	ESP	Baskimaa	179208
 682	Cartagena	ESP	Murcia	177709
-683	LeganÈs	ESP	Madrid	173163
+683	Legan√©s	ESP	Madrid	173163
 684	Fuenlabrada	ESP	Madrid	171173
-685	AlmerÌa	ESP	Andalusia	169027
+685	Almer√≠a	ESP	Andalusia	169027
 686	Terrassa	ESP	Katalonia	168695
-687	Alcal· de Henares	ESP	Madrid	164463
-688	Burgos	ESP	Castilla and LeÛn	162802
-689	Salamanca	ESP	Castilla and LeÛn	158720
+687	Alcal√° de Henares	ESP	Madrid	164463
+688	Burgos	ESP	Castilla and Le√≥n	162802
+689	Salamanca	ESP	Castilla and Le√≥n	158720
 690	Albacete	ESP	Kastilia-La Mancha	147527
 691	Getafe	ESP	Madrid	145371
-692	C·diz	ESP	Andalusia	142449
-693	AlcorcÛn	ESP	Madrid	142048
+692	C√°diz	ESP	Andalusia	142449
+693	Alcorc√≥n	ESP	Madrid	142048
 694	Huelva	ESP	Andalusia	140583
-695	LeÛn	ESP	Castilla and LeÛn	139809
-696	CastellÛn de la Plana [Castell	ESP	Valencia	139712
+695	Le√≥n	ESP	Castilla and Le√≥n	139809
+696	Castell√≥n de la Plana [Castell	ESP	Valencia	139712
 697	Badajoz	ESP	Extremadura	136613
-698	[San CristÛbal de] la Laguna	ESP	Canary Islands	127945
-699	LogroÒo	ESP	La Rioja	127093
+698	[San Crist√≥bal de] la Laguna	ESP	Canary Islands	127945
+699	Logro≈Ño	ESP	La Rioja	127093
 700	Santa Coloma de Gramenet	ESP	Katalonia	120802
 701	Tarragona	ESP	Katalonia	113016
-702	Lleida (LÈrida)	ESP	Katalonia	112207
-703	JaÈn	ESP	Andalusia	109247
+702	Lleida (L√©rida)	ESP	Katalonia	112207
+703	Ja√©n	ESP	Andalusia	109247
 704	Ourense (Orense)	ESP	Galicia	109120
-705	MatarÛ	ESP	Katalonia	104095
+705	Matar√≥	ESP	Katalonia	104095
 706	Algeciras	ESP	Andalusia	103106
 707	Marbella	ESP	Andalusia	101144
 708	Barakaldo	ESP	Baskimaa	98212
 709	Dos Hermanas	ESP	Andalusia	94591
 710	Santiago de Compostela	ESP	Galicia	93745
-711	TorrejÛn de Ardoz	ESP	Madrid	92262
+711	Torrej√≥n de Ardoz	ESP	Madrid	92262
 712	Cape Town	ZAF	Western Cape	2352121
 713	Soweto	ZAF	Gauteng	904165
 714	Johannesburg	ZAF	Gauteng	756653
@@ -816,21 +816,21 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 770	Zamboanga	PHL	Western Mindanao	601794
 771	Pasig	PHL	National Capital Reg	505058
 772	Valenzuela	PHL	National Capital Reg	485433
-773	Las PiÒas	PHL	National Capital Reg	472780
+773	Las Pi≈Ñas	PHL	National Capital Reg	472780
 774	Antipolo	PHL	Southern Tagalog	470866
 775	Taguig	PHL	National Capital Reg	467375
 776	Cagayan de Oro	PHL	Northern Mindanao	461877
-777	ParaÒaque	PHL	National Capital Reg	449811
+777	Para≈Ñaque	PHL	National Capital Reg	449811
 778	Makati	PHL	National Capital Reg	444867
 779	Bacolod	PHL	Western Visayas	429076
 780	General Santos	PHL	Southern Mindanao	411822
 781	Marikina	PHL	National Capital Reg	391170
-782	DasmariÒas	PHL	Southern Tagalog	379520
+782	Dasmari≈Ñas	PHL	Southern Tagalog	379520
 783	Muntinlupa	PHL	National Capital Reg	379310
 784	Iloilo	PHL	Western Visayas	365820
 785	Pasay	PHL	National Capital Reg	354908
 786	Malabon	PHL	National Capital Reg	338855
-787	San JosÈ del Monte	PHL	Central Luzon	315807
+787	San Jos√© del Monte	PHL	Central Luzon	315807
 788	Bacoor	PHL	Southern Tagalog	305699
 789	Iligan	PHL	Central Mindanao	285061
 790	Calamba	PHL	Southern Tagalog	281146
@@ -849,7 +849,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 803	Lipa	PHL	Southern Tagalog	218447
 804	Lapu-Lapu	PHL	Central Visayas	217019
 805	San Pablo	PHL	Southern Tagalog	207927
-806	BiÒan	PHL	Southern Tagalog	201186
+806	Bi≈Ñan	PHL	Southern Tagalog	201186
 807	Taytay	PHL	Southern Tagalog	198183
 808	Lucena	PHL	Southern Tagalog	196075
 809	Imus	PHL	Southern Tagalog	195482
@@ -944,27 +944,27 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 898	Sorsogon	PHL	Bicol	92512
 899	Candelaria	PHL	Southern Tagalog	92429
 900	Ligao	PHL	Bicol	90603
-901	TÛrshavn	FRO	Streymoyar	14542
+901	T√≥rshavn	FRO	Streymoyar	14542
 902	Libreville	GAB	Estuaire	419000
 903	Serekunda	GMB	Kombo St Mary	102600
 904	Banjul	GMB	Banjul	42326
 905	Tbilisi	GEO	Tbilisi	1235200
 906	Kutaisi	GEO	Imereti	240900
 907	Rustavi	GEO	Kvemo Kartli	155400
-908	Batumi	GEO	Adzaria [Atöara]	137700
+908	Batumi	GEO	Adzaria [At≈°ara]	137700
 909	Sohumi	GEO	Abhasia [Aphazeti]	111700
 910	Accra	GHA	Greater Accra	1070000
 911	Kumasi	GHA	Ashanti	385192
 912	Tamale	GHA	Northern	151069
 913	Tema	GHA	Greater Accra	109975
 914	Sekondi-Takoradi	GHA	Western	103653
-915	Gibraltar	GIB	ñ	27025
-916	Saint George¥s	GRD	St George	4621
+915	Gibraltar	GIB	‚Äì	27025
+916	Saint George¬¥s	GRD	St George	4621
 917	Nuuk	GRL	Kitaa	13445
 918	Les Abymes	GLP	Grande-Terre	62947
 919	Basse-Terre	GLP	Basse-Terre	12433
-920	Tamuning	GUM	ñ	9500
-921	AgaÒa	GUM	ñ	1139
+920	Tamuning	GUM	‚Äì	9500
+921	Aga≈Ña	GUM	‚Äì	1139
 922	Ciudad de Guatemala	GTM	Guatemala	823301
 923	Mixco	GTM	Guatemala	209791
 924	Villa Nueva	GTM	Guatemala	101295
@@ -975,13 +975,13 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 929	Port-au-Prince	HTI	Ouest	884472
 930	Carrefour	HTI	Ouest	290204
 931	Delmas	HTI	Ouest	240429
-932	Le-Cap-HaÔtien	HTI	Nord	102233
+932	Le-Cap-Haƒètien	HTI	Nord	102233
 933	Tegucigalpa	HND	Distrito Central	813900
-934	San Pedro Sula	HND	CortÈs	383900
-935	La Ceiba	HND	Atl·ntida	89200
+934	San Pedro Sula	HND	Cort√©s	383900
+935	La Ceiba	HND	Atl√°ntida	89200
 936	Kowloon and New Kowloon	HKG	Kowloon and New Kowl	1987996
 937	Victoria	HKG	Hongkong	1312637
-938	Longyearbyen	SJM	L‰nsimaa	1438
+938	Longyearbyen	SJM	L√§nsimaa	1438
 939	Jakarta	IDN	Jakarta Raya	9604900
 940	Surabaya	IDN	East Java	2663820
 941	Bandung	IDN	West Java	2429000
@@ -1492,7 +1492,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 1446	Qomsheh	IRN	Esfahan	89800
 1447	Dublin	IRL	Leinster	481854
 1448	Cork	IRL	Munster	127187
-1449	ReykjavÌk	ISL	HˆfuborgarsvÊi	109184
+1449	Reykjav√≠k	ISL	H√∂fuƒëborgarsvƒáƒëi	109184
 1450	Jerusalem	ISR	Jerusalem	633700
 1451	Tel Aviv-Jaffa	ISR	Tel Aviv	348100
 1452	Haifa	ISR	Haifa	265700
@@ -1532,7 +1532,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 1486	Livorno	ITA	Toscana	161673
 1487	Perugia	ITA	Umbria	156673
 1488	Foggia	ITA	Apulia	154891
-1489	Reggio nell¥ Emilia	ITA	Emilia-Romagna	143664
+1489	Reggio nell¬¥ Emilia	ITA	Emilia-Romagna	143664
 1490	Salerno	ITA	Campania	142055
 1491	Ravenna	ITA	Emilia-Romagna	138418
 1492	Ferrara	ITA	Emilia-Romagna	132127
@@ -1545,7 +1545,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 1499	Latina	ITA	Latium	114099
 1500	Vicenza	ITA	Veneto	109738
 1501	Terni	ITA	Umbria	107770
-1502	ForlÏ	ITA	Emilia-Romagna	107475
+1502	Forlƒõ	ITA	Emilia-Romagna	107475
 1503	Trento	ITA	Trentino-Alto Adige	104906
 1504	Novara	ITA	Piemonte	102037
 1505	Piacenza	ITA	Emilia-Romagna	98384
@@ -1571,7 +1571,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 1525	Linz	AUT	North Austria	188022
 1526	Salzburg	AUT	Salzburg	144247
 1527	Innsbruck	AUT	Tiroli	111752
-1528	Klagenfurt	AUT	K‰rnten	91141
+1528	Klagenfurt	AUT	K√§rnten	91141
 1529	Spanish Town	JAM	St. Catherine	110379
 1530	Kingston	JAM	St. Andrew	103962
 1531	Portmore	JAM	St. Andrew	99799
@@ -1834,11 +1834,11 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 1788	Irbid	JOR	Irbid	231511
 1789	al-Rusayfa	JOR	al-Zarqa	137247
 1790	Wadi al-Sir	JOR	Amman	89104
-1791	Flying Fish Cove	CXR	ñ	700
+1791	Flying Fish Cove	CXR	‚Äì	700
 1792	Beograd	YUG	Central Serbia	1204000
 1793	Novi Sad	YUG	Vojvodina	179626
-1794	Niö	YUG	Central Serbia	175391
-1795	Priötina	YUG	Kosovo and Metohija	155496
+1794	Ni≈°	YUG	Central Serbia	175391
+1795	Pri≈°tina	YUG	Kosovo and Metohija	155496
 1796	Kragujevac	YUG	Central Serbia	147305
 1797	Podgorica	YUG	Montenegro	135000
 1798	Subotica	YUG	Vojvodina	100386
@@ -1847,13 +1847,13 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 1801	Battambang	KHM	Battambang	129800
 1802	Siem Reap	KHM	Siem Reap	105100
 1803	Douala	CMR	Littoral	1448300
-1804	YaoundÈ	CMR	Centre	1372800
+1804	Yaound√©	CMR	Centre	1372800
 1805	Garoua	CMR	Nord	177000
-1806	Maroua	CMR	ExtrÍme-Nord	143000
+1806	Maroua	CMR	Extrƒôme-Nord	143000
 1807	Bamenda	CMR	Nord-Ouest	138000
 1808	Bafoussam	CMR	Ouest	131000
 1809	Nkongsamba	CMR	Littoral	112454
-1810	MontrÈal	CAN	QuÈbec	1016376
+1810	Montr√©al	CAN	Qu√©bec	1016376
 1811	Calgary	CAN	Alberta	768082
 1812	Toronto	CAN	Ontario	688275
 1813	North York	CAN	Ontario	622632
@@ -1866,7 +1866,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 1820	London	CAN	Ontario	339917
 1821	Hamilton	CAN	Ontario	335614
 1822	Ottawa	CAN	Ontario	335277
-1823	Laval	CAN	QuÈbec	330393
+1823	Laval	CAN	Qu√©bec	330393
 1824	Surrey	CAN	British Colombia	304477
 1825	Brampton	CAN	Ontario	296711
 1826	Windsor	CAN	Ontario	207588
@@ -1875,7 +1875,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 1829	Markham	CAN	Ontario	189098
 1830	Regina	CAN	Saskatchewan	180400
 1831	Burnaby	CAN	British Colombia	179209
-1832	QuÈbec	CAN	QuÈbec	167264
+1832	Qu√©bec	CAN	Qu√©bec	167264
 1833	York	CAN	Ontario	154980
 1834	Richmond	CAN	British Colombia	148867
 1835	Vaughan	CAN	Ontario	147889
@@ -1883,7 +1883,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 1837	Oshawa	CAN	Ontario	140173
 1838	Oakville	CAN	Ontario	139192
 1839	Saint Catharines	CAN	Ontario	136216
-1840	Longueuil	CAN	QuÈbec	127977
+1840	Longueuil	CAN	Qu√©bec	127977
 1841	Richmond Hill	CAN	Ontario	116428
 1842	Thunder Bay	CAN	Ontario	115913
 1843	Nepean	CAN	Ontario	115100
@@ -1894,24 +1894,24 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 1848	Gloucester	CAN	Ontario	107314
 1849	Abbotsford	CAN	British Colombia	105403
 1850	Guelph	CAN	Ontario	103593
-1851	Saint John¥s	CAN	Newfoundland	101936
+1851	Saint John¬¥s	CAN	Newfoundland	101936
 1852	Coquitlam	CAN	British Colombia	101820
 1853	Saanich	CAN	British Colombia	101388
-1854	Gatineau	CAN	QuÈbec	100702
+1854	Gatineau	CAN	Qu√©bec	100702
 1855	Delta	CAN	British Colombia	95411
 1856	Sudbury	CAN	Ontario	92686
 1857	Kelowna	CAN	British Colombia	89442
 1858	Barrie	CAN	Ontario	89269
-1859	Praia	CPV	S„o Tiago	94800
+1859	Praia	CPV	SƒÉo Tiago	94800
 1860	Almaty	KAZ	Almaty Qalasy	1129400
 1861	Qaraghandy	KAZ	Qaraghandy	436900
 1862	Shymkent	KAZ	South Kazakstan	360100
 1863	Taraz	KAZ	Taraz	330100
 1864	Astana	KAZ	Astana	311200
-1865	÷skemen	KAZ	East Kazakstan	311000
+1865	√ñskemen	KAZ	East Kazakstan	311000
 1866	Pavlodar	KAZ	Pavlodar	300500
 1867	Semey	KAZ	East Kazakstan	269600
-1868	Aqtˆbe	KAZ	Aqtˆbe	253100
+1868	Aqt√∂be	KAZ	Aqt√∂be	253100
 1869	Qostanay	KAZ	Qostanay	221400
 1870	Petropavl	KAZ	North Kazakstan	203500
 1871	Oral	KAZ	West Kazakstan	195500
@@ -1920,7 +1920,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 1874	Aqtau	KAZ	Mangghystau	143400
 1875	Atyrau	KAZ	Atyrau	142500
 1876	Ekibastuz	KAZ	Pavlodar	127200
-1877	Kˆkshetau	KAZ	North Kazakstan	123400
+1877	K√∂kshetau	KAZ	North Kazakstan	123400
 1878	Rudnyy	KAZ	Qostanay	109500
 1879	Taldyqorghan	KAZ	Almaty	98000
 1880	Zhezqazghan	KAZ	Qaraghandy	90000
@@ -1944,7 +1944,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 1898	Chengdu	CHN	Sichuan	3361500
 1899	Nanking [Nanjing]	CHN	Jiangsu	2870300
 1900	Changchun	CHN	Jilin	2812000
-1901	Xi¥an	CHN	Shaanxi	2761400
+1901	Xi¬¥an	CHN	Shaanxi	2761400
 1902	Dalian	CHN	Liaoning	2697000
 1903	Qingdao	CHN	Shandong	2596000
 1904	Jinan	CHN	Shandong	2278100
@@ -1960,7 +1960,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 1914	Guiyang	CHN	Guizhou	1465200
 1915	Ningbo	CHN	Zhejiang	1371200
 1916	Hefei	CHN	Anhui	1369100
-1917	Urumtöi [‹r¸mqi]	CHN	Xinxiang	1310100
+1917	Urumt≈°i [√úr√ºmqi]	CHN	Xinxiang	1310100
 1918	Anshan	CHN	Liaoning	1200000
 1919	Fushun	CHN	Liaoning	1200000
 1920	Nanning	CHN	Guangxi	1161800
@@ -2034,7 +2034,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 1988	Liaoyuan	CHN	Jilin	354141
 1989	Lianyungang	CHN	Jiangsu	354139
 1990	Xianyang	CHN	Shaanxi	352125
-1991	Tai¥an	CHN	Shandong	350696
+1991	Tai¬¥an	CHN	Shandong	350696
 1992	Chifeng	CHN	Inner Mongolia	350077
 1993	Shaoguan	CHN	Guangdong	350043
 1994	Nantong	CHN	Jiangsu	343341
@@ -2048,7 +2048,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2002	Chaozhou	CHN	Guangdong	313469
 2003	Yangzhou	CHN	Jiangsu	312892
 2004	Dongwan	CHN	Guangdong	308669
-2005	Ma¥anshan	CHN	Anhui	305421
+2005	Ma¬¥anshan	CHN	Anhui	305421
 2006	Foshan	CHN	Guangdong	303160
 2007	Yueyang	CHN	Hunan	302800
 2008	Xingtai	CHN	Hebei	302789
@@ -2108,7 +2108,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2062	Haicheng	CHN	Liaoning	205560
 2063	Qianjiang	CHN	Hubei	205504
 2064	Baiyin	CHN	Gansu	204970
-2065	Bei¥an	CHN	Heilongjiang	204899
+2065	Bei¬¥an	CHN	Heilongjiang	204899
 2066	Yixing	CHN	Jiangsu	200824
 2067	Laizhou	CHN	Shandong	198664
 2068	Qaramay	CHN	Xinxiang	197602
@@ -2171,7 +2171,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2125	Ulanhot	CHN	Inner Mongolia	159538
 2126	Korla	CHN	Xinxiang	159344
 2127	Wanxian	CHN	Sichuan	156823
-2128	Rui¥an	CHN	Zhejiang	156468
+2128	Rui¬¥an	CHN	Zhejiang	156468
 2129	Zhoushan	CHN	Zhejiang	156317
 2130	Liangcheng	CHN	Shandong	156307
 2131	Jiaozhou	CHN	Shandong	153364
@@ -2180,20 +2180,20 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2134	Yichun	CHN	Jiangxi	151585
 2135	Taonan	CHN	Jilin	150168
 2136	Pingdu	CHN	Shandong	150123
-2137	Ji¥an	CHN	Jiangxi	148583
+2137	Ji¬¥an	CHN	Jiangxi	148583
 2138	Longkou	CHN	Shandong	148362
 2139	Langfang	CHN	Hebei	148105
 2140	Zhoukou	CHN	Henan	146288
 2141	Suining	CHN	Sichuan	146086
 2142	Yulin	CHN	Guangxi	144467
 2143	Jinhua	CHN	Zhejiang	144280
-2144	Liu¥an	CHN	Anhui	144248
+2144	Liu¬¥an	CHN	Anhui	144248
 2145	Shuangcheng	CHN	Heilongjiang	142659
 2146	Suizhou	CHN	Hubei	142302
 2147	Ankang	CHN	Shaanxi	142170
 2148	Weinan	CHN	Shaanxi	140169
 2149	Longjing	CHN	Jilin	139417
-2150	Da¥an	CHN	Jilin	138963
+2150	Da¬¥an	CHN	Jilin	138963
 2151	Lengshuijiang	CHN	Hunan	137994
 2152	Laiyang	CHN	Shandong	137080
 2153	Xianning	CHN	Hubei	136811
@@ -2214,7 +2214,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2168	Meixian	CHN	Guangdong	132156
 2169	Yushu	CHN	Jilin	131861
 2170	Tiefa	CHN	Liaoning	131807
-2171	Huai¥an	CHN	Jiangsu	131149
+2171	Huai¬¥an	CHN	Jiangsu	131149
 2172	Leiyang	CHN	Hunan	130115
 2173	Zalantun	CHN	Inner Mongolia	130031
 2174	Weihai	CHN	Shandong	128888
@@ -2245,11 +2245,11 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2199	Yuyao	CHN	Zhejiang	114065
 2200	Guigang	CHN	Guangxi	114025
 2201	Kaili	CHN	Guizhou	113958
-2202	Yan¥an	CHN	Shaanxi	113277
+2202	Yan¬¥an	CHN	Shaanxi	113277
 2203	Beihai	CHN	Guangxi	112673
 2204	Xuangzhou	CHN	Anhui	112673
 2205	Quzhou	CHN	Zhejiang	112373
-2206	Yong¥an	CHN	Fujian	111762
+2206	Yong¬¥an	CHN	Fujian	111762
 2207	Zixing	CHN	Hunan	110048
 2208	Liyang	CHN	Jiangsu	109520
 2209	Yizheng	CHN	Jiangsu	109268
@@ -2261,7 +2261,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2215	Yuanjiang	CHN	Hunan	107004
 2216	Bozhou	CHN	Anhui	106346
 2217	Jinchang	CHN	Gansu	105287
-2218	Fu¥an	CHN	Fujian	105265
+2218	Fu¬¥an	CHN	Fujian	105265
 2219	Suqian	CHN	Jiangsu	105021
 2220	Shishou	CHN	Hubei	104571
 2221	Hengshui	CHN	Hebei	104269
@@ -2280,7 +2280,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2234	Jieyang	CHN	Guangdong	98531
 2235	Zhangjiagang	CHN	Jiangsu	97994
 2236	Tong Xian	CHN	Peking	97168
-2237	Ya¥an	CHN	Sichuan	95900
+2237	Ya¬¥an	CHN	Sichuan	95900
 2238	Jinzhou	CHN	Liaoning	95761
 2239	Emeishan	CHN	Sichuan	94000
 2240	Enshi	CHN	Hubei	93056
@@ -2300,43 +2300,43 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2254	Osh	KGZ	Osh	222700
 2255	Bikenibeu	KIR	South Tarawa	5055
 2256	Bairiki	KIR	South Tarawa	2226
-2257	SantafÈ de Bogot·	COL	SantafÈ de Bogot·	6260862
+2257	Santaf√© de Bogot√°	COL	Santaf√© de Bogot√°	6260862
 2258	Cali	COL	Valle	2077386
-2259	MedellÌn	COL	Antioquia	1861265
-2260	Barranquilla	COL	Atl·ntico	1223260
-2261	Cartagena	COL	BolÌvar	805757
-2262	C˙cuta	COL	Norte de Santander	606932
+2259	Medell√≠n	COL	Antioquia	1861265
+2260	Barranquilla	COL	Atl√°ntico	1223260
+2261	Cartagena	COL	Bol√≠var	805757
+2262	C√∫cuta	COL	Norte de Santander	606932
 2263	Bucaramanga	COL	Santander	515555
-2264	IbaguÈ	COL	Tolima	393664
+2264	Ibagu√©	COL	Tolima	393664
 2265	Pereira	COL	Risaralda	381725
 2266	Santa Marta	COL	Magdalena	359147
 2267	Manizales	COL	Caldas	337580
 2268	Bello	COL	Antioquia	333470
-2269	Pasto	COL	NariÒo	332396
+2269	Pasto	COL	Nari≈Ño	332396
 2270	Neiva	COL	Huila	300052
-2271	Soledad	COL	Atl·ntico	295058
-2272	Armenia	COL	QuindÌo	288977
+2271	Soledad	COL	Atl√°ntico	295058
+2272	Armenia	COL	Quind√≠o	288977
 2273	Villavicencio	COL	Meta	273140
 2274	Soacha	COL	Cundinamarca	272058
 2275	Valledupar	COL	Cesar	263247
-2276	MonterÌa	COL	CÛrdoba	248245
-2277	Itag¸Ì	COL	Antioquia	228985
+2276	Monter√≠a	COL	C√≥rdoba	248245
+2277	Itag√º√≠	COL	Antioquia	228985
 2278	Palmira	COL	Valle	226509
 2279	Buenaventura	COL	Valle	224336
 2280	Floridablanca	COL	Santander	221913
 2281	Sincelejo	COL	Sucre	220704
-2282	Popay·n	COL	Cauca	200719
+2282	Popay√°n	COL	Cauca	200719
 2283	Barrancabermeja	COL	Santander	178020
 2284	Dos Quebradas	COL	Risaralda	159363
-2285	Tulu·	COL	Valle	152488
+2285	Tulu√°	COL	Valle	152488
 2286	Envigado	COL	Antioquia	135848
 2287	Cartago	COL	Valle	125884
 2288	Girardot	COL	Cundinamarca	110963
 2289	Buga	COL	Valle	110699
-2290	Tunja	COL	Boyac·	109740
-2291	Florencia	COL	Caquet·	108574
+2290	Tunja	COL	Boyac√°	109740
+2291	Florencia	COL	Caquet√°	108574
 2292	Maicao	COL	La Guajira	108053
-2293	Sogamoso	COL	Boyac·	107728
+2293	Sogamoso	COL	Boyac√°	107728
 2294	Giron	COL	Santander	90688
 2295	Moroni	COM	Njazidja	36000
 2296	Brazzaville	COG	Brazzaville	950000
@@ -2345,16 +2345,16 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2299	Lubumbashi	COD	Shaba	851381
 2300	Mbuji-Mayi	COD	East Kasai	806475
 2301	Kolwezi	COD	Shaba	417810
-2302	Kisangani	COD	Haute-ZaÔre	417517
+2302	Kisangani	COD	Haute-Zaƒère	417517
 2303	Kananga	COD	West Kasai	393030
 2304	Likasi	COD	Shaba	299118
 2305	Bukavu	COD	South Kivu	201569
 2306	Kikwit	COD	Bandundu	182142
 2307	Tshikapa	COD	West Kasai	180860
-2308	Matadi	COD	Bas-ZaÔre	172730
+2308	Matadi	COD	Bas-Zaƒère	172730
 2309	Mbandaka	COD	Equateur	169841
 2310	Mwene-Ditu	COD	East Kasai	137459
-2311	Boma	COD	Bas-ZaÔre	135284
+2311	Boma	COD	Bas-Zaƒère	135284
 2312	Uvira	COD	South Kivu	115590
 2313	Butembo	COD	North Kivu	109406
 2314	Goma	COD	North Kivu	109094
@@ -2458,18 +2458,18 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2412	Osijek	HRV	Osijek-Baranja	104761
 2413	La Habana	CUB	La Habana	2256000
 2414	Santiago de Cuba	CUB	Santiago de Cuba	433180
-2415	Camag¸ey	CUB	Camag¸ey	298726
-2416	HolguÌn	CUB	HolguÌn	249492
+2415	Camag√ºey	CUB	Camag√ºey	298726
+2416	Holgu√≠n	CUB	Holgu√≠n	249492
 2417	Santa Clara	CUB	Villa Clara	207350
-2418	Guant·namo	CUB	Guant·namo	205078
-2419	Pinar del RÌo	CUB	Pinar del RÌo	142100
+2418	Guant√°namo	CUB	Guant√°namo	205078
+2419	Pinar del R√≠o	CUB	Pinar del R√≠o	142100
 2420	Bayamo	CUB	Granma	141000
 2421	Cienfuegos	CUB	Cienfuegos	132770
 2422	Victoria de las Tunas	CUB	Las Tunas	132350
 2423	Matanzas	CUB	Matanzas	123273
 2424	Manzanillo	CUB	Granma	109350
-2425	Sancti-SpÌritus	CUB	Sancti-SpÌritus	100751
-2426	Ciego de ¡vila	CUB	Ciego de ¡vila	98505
+2425	Sancti-Sp√≠ritus	CUB	Sancti-Sp√≠ritus	100751
+2426	Ciego de √Åvila	CUB	Ciego de √Åvila	98505
 2427	al-Salimiya	KWT	Hawalli	130215
 2428	Jalib al-Shuyukh	KWT	Hawalli	102178
 2429	Kuwait	KWT	al-Asima	28859
@@ -2493,14 +2493,14 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2447	Vilnius	LTU	Vilna	577969
 2448	Kaunas	LTU	Kaunas	412639
 2449	Klaipeda	LTU	Klaipeda	202451
-2450	äiauliai	LTU	äiauliai	146563
+2450	≈†iauliai	LTU	≈†iauliai	146563
 2451	Panevezys	LTU	Panevezys	133695
-2452	Luxembourg [Luxemburg/LÎtzebuerg]	LUX	Luxembourg	80700
-2453	El-Aai˙n	ESH	El-Aai˙n	169000
+2452	Luxembourg [Luxemburg/L√´tzebuerg]	LUX	Luxembourg	80700
+2453	El-Aai√∫n	ESH	El-Aai√∫n	169000
 2454	Macao	MAC	Macau	437500
 2455	Antananarivo	MDG	Antananarivo	675669
 2456	Toamasina	MDG	Toamasina	127441
-2457	AntsirabÈ	MDG	Antananarivo	120239
+2457	Antsirab√©	MDG	Antananarivo	120239
 2458	Mahajanga	MDG	Mahajanga	100807
 2459	Fianarantsoa	MDG	Fianarantsoa	99005
 2460	Skopje	MKD	Skopje	444299
@@ -2529,148 +2529,148 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2483	Birkirkara	MLT	Outer Harbour	21445
 2484	Valletta	MLT	Inner Harbour	7073
 2485	Casablanca	MAR	Casablanca	2940623
-2486	Rabat	MAR	Rabat-SalÈ-Zammour-Z	623457
+2486	Rabat	MAR	Rabat-Sal√©-Zammour-Z	623457
 2487	Marrakech	MAR	Marrakech-Tensift-Al	621914
-2488	FËs	MAR	FËs-Boulemane	541162
-2489	Tanger	MAR	Tanger-TÈtouan	521735
-2490	SalÈ	MAR	Rabat-SalÈ-Zammour-Z	504420
-2491	MeknËs	MAR	MeknËs-Tafilalet	460000
+2488	Fƒçs	MAR	Fƒçs-Boulemane	541162
+2489	Tanger	MAR	Tanger-T√©touan	521735
+2490	Sal√©	MAR	Rabat-Sal√©-Zammour-Z	504420
+2491	Meknƒçs	MAR	Meknƒçs-Tafilalet	460000
 2492	Oujda	MAR	Oriental	365382
-2493	KÈnitra	MAR	Gharb-Chrarda-BÈni H	292600
-2494	TÈtouan	MAR	Tanger-TÈtouan	277516
+2493	K√©nitra	MAR	Gharb-Chrarda-B√©ni H	292600
+2494	T√©touan	MAR	Tanger-T√©touan	277516
 2495	Safi	MAR	Doukkala-Abda	262300
-2496	Agadir	MAR	Souss Massa-Dra‚	155244
+2496	Agadir	MAR	Souss Massa-Dra√¢	155244
 2497	Mohammedia	MAR	Casablanca	154706
 2498	Khouribga	MAR	Chaouia-Ouardigha	152090
 2499	Beni-Mellal	MAR	Tadla-Azilal	140212
-2500	TÈmara	MAR	Rabat-SalÈ-Zammour-Z	126303
+2500	T√©mara	MAR	Rabat-Sal√©-Zammour-Z	126303
 2501	El Jadida	MAR	Doukkala-Abda	119083
 2502	Nador	MAR	Oriental	112450
-2503	Ksar el Kebir	MAR	Tanger-TÈtouan	107065
+2503	Ksar el Kebir	MAR	Tanger-T√©touan	107065
 2504	Settat	MAR	Chaouia-Ouardigha	96200
 2505	Taza	MAR	Taza-Al Hoceima-Taou	92700
-2506	El Araich	MAR	Tanger-TÈtouan	90400
+2506	El Araich	MAR	Tanger-T√©touan	90400
 2507	Dalap-Uliga-Darrit	MHL	Majuro	28000
 2508	Fort-de-France	MTQ	Fort-de-France	94050
 2509	Nouakchott	MRT	Nouakchott	667300
-2510	Nou‚dhibou	MRT	Dakhlet Nou‚dhibou	97600
+2510	Nou√¢dhibou	MRT	Dakhlet Nou√¢dhibou	97600
 2511	Port-Louis	MUS	Port-Louis	138200
 2512	Beau Bassin-Rose Hill	MUS	Plaines Wilhelms	100616
 2513	Vacoas-Phoenix	MUS	Plaines Wilhelms	98464
 2514	Mamoutzou	MYT	Mamoutzou	12000
-2515	Ciudad de MÈxico	MEX	Distrito Federal	8591309
+2515	Ciudad de M√©xico	MEX	Distrito Federal	8591309
 2516	Guadalajara	MEX	Jalisco	1647720
-2517	Ecatepec de Morelos	MEX	MÈxico	1620303
+2517	Ecatepec de Morelos	MEX	M√©xico	1620303
 2518	Puebla	MEX	Puebla	1346176
-2519	NezahualcÛyotl	MEX	MÈxico	1224924
-2520	Ju·rez	MEX	Chihuahua	1217818
+2519	Nezahualc√≥yotl	MEX	M√©xico	1224924
+2520	Ju√°rez	MEX	Chihuahua	1217818
 2521	Tijuana	MEX	Baja California	1212232
-2522	LeÛn	MEX	Guanajuato	1133576
-2523	Monterrey	MEX	Nuevo LeÛn	1108499
+2522	Le√≥n	MEX	Guanajuato	1133576
+2523	Monterrey	MEX	Nuevo Le√≥n	1108499
 2524	Zapopan	MEX	Jalisco	1002239
-2525	Naucalpan de Ju·rez	MEX	MÈxico	857511
+2525	Naucalpan de Ju√°rez	MEX	M√©xico	857511
 2526	Mexicali	MEX	Baja California	764902
-2527	Culiac·n	MEX	Sinaloa	744859
-2528	Acapulco de Ju·rez	MEX	Guerrero	721011
-2529	Tlalnepantla de Baz	MEX	MÈxico	720755
-2530	MÈrida	MEX	Yucat·n	703324
+2527	Culiac√°n	MEX	Sinaloa	744859
+2528	Acapulco de Ju√°rez	MEX	Guerrero	721011
+2529	Tlalnepantla de Baz	MEX	M√©xico	720755
+2530	M√©rida	MEX	Yucat√°n	703324
 2531	Chihuahua	MEX	Chihuahua	670208
-2532	San Luis PotosÌ	MEX	San Luis PotosÌ	669353
-2533	Guadalupe	MEX	Nuevo LeÛn	668780
-2534	Toluca	MEX	MÈxico	665617
+2532	San Luis Potos√≠	MEX	San Luis Potos√≠	669353
+2533	Guadalupe	MEX	Nuevo Le√≥n	668780
+2534	Toluca	MEX	M√©xico	665617
 2535	Aguascalientes	MEX	Aguascalientes	643360
-2536	QuerÈtaro	MEX	QuerÈtaro de Arteaga	639839
-2537	Morelia	MEX	Michoac·n de Ocampo	619958
+2536	Quer√©taro	MEX	Quer√©taro de Arteaga	639839
+2537	Morelia	MEX	Michoac√°n de Ocampo	619958
 2538	Hermosillo	MEX	Sonora	608697
 2539	Saltillo	MEX	Coahuila de Zaragoza	577352
-2540	TorreÛn	MEX	Coahuila de Zaragoza	529093
+2540	Torre√≥n	MEX	Coahuila de Zaragoza	529093
 2541	Centro (Villahermosa)	MEX	Tabasco	519873
-2542	San Nicol·s de los Garza	MEX	Nuevo LeÛn	495540
+2542	San Nicol√°s de los Garza	MEX	Nuevo Le√≥n	495540
 2543	Durango	MEX	Durango	490524
-2544	Chimalhuac·n	MEX	MÈxico	490245
+2544	Chimalhuac√°n	MEX	M√©xico	490245
 2545	Tlaquepaque	MEX	Jalisco	475472
-2546	Atizap·n de Zaragoza	MEX	MÈxico	467262
+2546	Atizap√°n de Zaragoza	MEX	M√©xico	467262
 2547	Veracruz	MEX	Veracruz	457119
-2548	Cuautitl·n Izcalli	MEX	MÈxico	452976
+2548	Cuautitl√°n Izcalli	MEX	M√©xico	452976
 2549	Irapuato	MEX	Guanajuato	440039
-2550	Tuxtla GutiÈrrez	MEX	Chiapas	433544
-2551	Tultitl·n	MEX	MÈxico	432411
+2550	Tuxtla Guti√©rrez	MEX	Chiapas	433544
+2551	Tultitl√°n	MEX	M√©xico	432411
 2552	Reynosa	MEX	Tamaulipas	419776
-2553	Benito Ju·rez	MEX	Quintana Roo	419276
+2553	Benito Ju√°rez	MEX	Quintana Roo	419276
 2554	Matamoros	MEX	Tamaulipas	416428
 2555	Xalapa	MEX	Veracruz	390058
 2556	Celaya	MEX	Guanajuato	382140
-2557	Mazatl·n	MEX	Sinaloa	380265
+2557	Mazatl√°n	MEX	Sinaloa	380265
 2558	Ensenada	MEX	Baja California	369573
 2559	Ahome	MEX	Sinaloa	358663
 2560	Cajeme	MEX	Sonora	355679
 2561	Cuernavaca	MEX	Morelos	337966
-2562	Tonal·	MEX	Jalisco	336109
-2563	Valle de Chalco Solidaridad	MEX	MÈxico	323113
+2562	Tonal√°	MEX	Jalisco	336109
+2563	Valle de Chalco Solidaridad	MEX	M√©xico	323113
 2564	Nuevo Laredo	MEX	Tamaulipas	310277
 2565	Tepic	MEX	Nayarit	305025
 2566	Tampico	MEX	Tamaulipas	294789
-2567	Ixtapaluca	MEX	MÈxico	293160
-2568	Apodaca	MEX	Nuevo LeÛn	282941
+2567	Ixtapaluca	MEX	M√©xico	293160
+2568	Apodaca	MEX	Nuevo Le√≥n	282941
 2569	Guasave	MEX	Sinaloa	277201
-2570	GÛmez Palacio	MEX	Durango	272806
+2570	G√≥mez Palacio	MEX	Durango	272806
 2571	Tapachula	MEX	Chiapas	271141
-2572	Nicol·s Romero	MEX	MÈxico	269393
+2572	Nicol√°s Romero	MEX	M√©xico	269393
 2573	Coatzacoalcos	MEX	Veracruz	267037
-2574	Uruapan	MEX	Michoac·n de Ocampo	265211
+2574	Uruapan	MEX	Michoac√°n de Ocampo	265211
 2575	Victoria	MEX	Tamaulipas	262686
-2576	Oaxaca de Ju·rez	MEX	Oaxaca	256848
-2577	Coacalco de Berrioz·bal	MEX	MÈxico	252270
+2576	Oaxaca de Ju√°rez	MEX	Oaxaca	256848
+2577	Coacalco de Berrioz√°bal	MEX	M√©xico	252270
 2578	Pachuca de Soto	MEX	Hidalgo	244688
-2579	General Escobedo	MEX	Nuevo LeÛn	232961
+2579	General Escobedo	MEX	Nuevo Le√≥n	232961
 2580	Salamanca	MEX	Guanajuato	226864
-2581	Santa Catarina	MEX	Nuevo LeÛn	226573
-2582	Tehuac·n	MEX	Puebla	225943
-2583	Chalco	MEX	MÈxico	222201
-2584	C·rdenas	MEX	Tabasco	216903
+2581	Santa Catarina	MEX	Nuevo Le√≥n	226573
+2582	Tehuac√°n	MEX	Puebla	225943
+2583	Chalco	MEX	M√©xico	222201
+2584	C√°rdenas	MEX	Tabasco	216903
 2585	Campeche	MEX	Campeche	216735
-2586	La Paz	MEX	MÈxico	213045
-2587	OthÛn P. Blanco (Chetumal)	MEX	Quintana Roo	208014
-2588	Texcoco	MEX	MÈxico	203681
+2586	La Paz	MEX	M√©xico	213045
+2587	Oth√≥n P. Blanco (Chetumal)	MEX	Quintana Roo	208014
+2588	Texcoco	MEX	M√©xico	203681
 2589	La Paz	MEX	Baja California Sur	196708
-2590	Metepec	MEX	MÈxico	194265
+2590	Metepec	MEX	M√©xico	194265
 2591	Monclova	MEX	Coahuila de Zaragoza	193657
-2592	Huixquilucan	MEX	MÈxico	193156
+2592	Huixquilucan	MEX	M√©xico	193156
 2593	Chilpancingo de los Bravo	MEX	Guerrero	192509
 2594	Puerto Vallarta	MEX	Jalisco	183741
 2595	Fresnillo	MEX	Zacatecas	182744
 2596	Ciudad Madero	MEX	Tamaulipas	182012
-2597	Soledad de Graciano S·nchez	MEX	San Luis PotosÌ	179956
-2598	San Juan del RÌo	MEX	QuerÈtaro	179300
-2599	San Felipe del Progreso	MEX	MÈxico	177330
-2600	CÛrdoba	MEX	Veracruz	176952
-2601	Tec·mac	MEX	MÈxico	172410
+2597	Soledad de Graciano S√°nchez	MEX	San Luis Potos√≠	179956
+2598	San Juan del R√≠o	MEX	Quer√©taro	179300
+2599	San Felipe del Progreso	MEX	M√©xico	177330
+2600	C√≥rdoba	MEX	Veracruz	176952
+2601	Tec√°mac	MEX	M√©xico	172410
 2602	Ocosingo	MEX	Chiapas	171495
 2603	Carmen	MEX	Campeche	171367
-2604	L·zaro C·rdenas	MEX	Michoac·n de Ocampo	170878
+2604	L√°zaro C√°rdenas	MEX	Michoac√°n de Ocampo	170878
 2605	Jiutepec	MEX	Morelos	170428
 2606	Papantla	MEX	Veracruz	170123
 2607	Comalcalco	MEX	Tabasco	164640
-2608	Zamora	MEX	Michoac·n de Ocampo	161191
+2608	Zamora	MEX	Michoac√°n de Ocampo	161191
 2609	Nogales	MEX	Sonora	159103
 2610	Huimanguillo	MEX	Tabasco	158335
 2611	Cuautla	MEX	Morelos	153132
-2612	Minatitl·n	MEX	Veracruz	152983
+2612	Minatitl√°n	MEX	Veracruz	152983
 2613	Poza Rica de Hidalgo	MEX	Veracruz	152678
-2614	Ciudad Valles	MEX	San Luis PotosÌ	146411
+2614	Ciudad Valles	MEX	San Luis Potos√≠	146411
 2615	Navolato	MEX	Sinaloa	145396
-2616	San Luis RÌo Colorado	MEX	Sonora	145276
-2617	PÈnjamo	MEX	Guanajuato	143927
-2618	San AndrÈs Tuxtla	MEX	Veracruz	142251
+2616	San Luis R√≠o Colorado	MEX	Sonora	145276
+2617	P√©njamo	MEX	Guanajuato	143927
+2618	San Andr√©s Tuxtla	MEX	Veracruz	142251
 2619	Guanajuato	MEX	Guanajuato	141215
 2620	Navojoa	MEX	Sonora	140495
-2621	Zit·cuaro	MEX	Michoac·n de Ocampo	137970
-2622	Boca del RÌo	MEX	Veracruz-Llave	135721
+2621	Zit√°cuaro	MEX	Michoac√°n de Ocampo	137970
+2622	Boca del R√≠o	MEX	Veracruz-Llave	135721
 2623	Allende	MEX	Guanajuato	134645
 2624	Silao	MEX	Guanajuato	134037
 2625	Macuspana	MEX	Tabasco	133795
 2626	San Juan Bautista Tuxtepec	MEX	Oaxaca	133675
-2627	San CristÛbal de las Casas	MEX	Chiapas	132317
+2627	San Crist√≥bal de las Casas	MEX	Chiapas	132317
 2628	Valle de Santiago	MEX	Guanajuato	130557
 2629	Guaymas	MEX	Sonora	130108
 2630	Colima	MEX	Colima	129454
@@ -2678,57 +2678,57 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2632	Lagos de Moreno	MEX	Jalisco	127949
 2633	Piedras Negras	MEX	Coahuila de Zaragoza	127898
 2634	Altamira	MEX	Tamaulipas	127490
-2635	T˙xpam	MEX	Veracruz	126475
-2636	San Pedro Garza GarcÌa	MEX	Nuevo LeÛn	126147
-2637	CuauhtÈmoc	MEX	Chihuahua	124279
+2635	T√∫xpam	MEX	Veracruz	126475
+2636	San Pedro Garza Garc√≠a	MEX	Nuevo Le√≥n	126147
+2637	Cuauht√©moc	MEX	Chihuahua	124279
 2638	Manzanillo	MEX	Colima	124014
 2639	Iguala de la Independencia	MEX	Guerrero	123883
 2640	Zacatecas	MEX	Zacatecas	123700
-2641	Tlajomulco de Z˙Òiga	MEX	Jalisco	123220
+2641	Tlajomulco de Z√∫≈Ñiga	MEX	Jalisco	123220
 2642	Tulancingo de Bravo	MEX	Hidalgo	121946
-2643	Zinacantepec	MEX	MÈxico	121715
-2644	San MartÌn Texmelucan	MEX	Puebla	121093
-2645	Tepatitl·n de Morelos	MEX	Jalisco	118948
-2646	MartÌnez de la Torre	MEX	Veracruz	118815
+2643	Zinacantepec	MEX	M√©xico	121715
+2644	San Mart√≠n Texmelucan	MEX	Puebla	121093
+2645	Tepatitl√°n de Morelos	MEX	Jalisco	118948
+2646	Mart√≠nez de la Torre	MEX	Veracruz	118815
 2647	Orizaba	MEX	Veracruz	118488
-2648	Apatzing·n	MEX	Michoac·n de Ocampo	117849
+2648	Apatzing√°n	MEX	Michoac√°n de Ocampo	117849
 2649	Atlixco	MEX	Puebla	117019
 2650	Delicias	MEX	Chihuahua	116132
-2651	Ixtlahuaca	MEX	MÈxico	115548
+2651	Ixtlahuaca	MEX	M√©xico	115548
 2652	El Mante	MEX	Tamaulipas	112453
 2653	Lerdo	MEX	Durango	112272
-2654	Almoloya de Ju·rez	MEX	MÈxico	110550
-2655	Ac·mbaro	MEX	Guanajuato	110487
-2656	AcuÒa	MEX	Coahuila de Zaragoza	110388
+2654	Almoloya de Ju√°rez	MEX	M√©xico	110550
+2655	Ac√°mbaro	MEX	Guanajuato	110487
+2656	Acu≈Ña	MEX	Coahuila de Zaragoza	110388
 2657	Guadalupe	MEX	Zacatecas	108881
 2658	Huejutla de Reyes	MEX	Hidalgo	108017
-2659	Hidalgo	MEX	Michoac·n de Ocampo	106198
+2659	Hidalgo	MEX	Michoac√°n de Ocampo	106198
 2660	Los Cabos	MEX	Baja California Sur	105199
-2661	Comit·n de DomÌnguez	MEX	Chiapas	104986
-2662	Cunduac·n	MEX	Tabasco	104164
-2663	RÌo Bravo	MEX	Tamaulipas	103901
+2661	Comit√°n de Dom√≠nguez	MEX	Chiapas	104986
+2662	Cunduac√°n	MEX	Tabasco	104164
+2663	R√≠o Bravo	MEX	Tamaulipas	103901
 2664	Temapache	MEX	Veracruz	102824
 2665	Chilapa de Alvarez	MEX	Guerrero	102716
 2666	Hidalgo del Parral	MEX	Chihuahua	100881
-2667	San Francisco del RincÛn	MEX	Guanajuato	100149
-2668	Taxco de AlarcÛn	MEX	Guerrero	99907
-2669	Zumpango	MEX	MÈxico	99781
+2667	San Francisco del Rinc√≥n	MEX	Guanajuato	100149
+2668	Taxco de Alarc√≥n	MEX	Guerrero	99907
+2669	Zumpango	MEX	M√©xico	99781
 2670	San Pedro Cholula	MEX	Puebla	99734
-2671	Lerma	MEX	MÈxico	99714
-2672	Tecom·n	MEX	Colima	99296
+2671	Lerma	MEX	M√©xico	99714
+2672	Tecom√°n	MEX	Colima	99296
 2673	Las Margaritas	MEX	Chiapas	97389
 2674	Cosoleacaque	MEX	Veracruz	97199
 2675	San Luis de la Paz	MEX	Guanajuato	96763
-2676	JosÈ Azueta	MEX	Guerrero	95448
+2676	Jos√© Azueta	MEX	Guerrero	95448
 2677	Santiago Ixcuintla	MEX	Nayarit	95311
 2678	San Felipe	MEX	Guanajuato	95305
-2679	Tejupilco	MEX	MÈxico	94934
+2679	Tejupilco	MEX	M√©xico	94934
 2680	Tantoyuca	MEX	Veracruz	94709
 2681	Salvatierra	MEX	Guanajuato	94322
-2682	Tultepec	MEX	MÈxico	93364
+2682	Tultepec	MEX	M√©xico	93364
 2683	Temixco	MEX	Morelos	92686
 2684	Matamoros	MEX	Coahuila de Zaragoza	91858
-2685	P·nuco	MEX	Veracruz	90551
+2685	P√°nuco	MEX	Veracruz	90551
 2686	El Fuerte	MEX	Sinaloa	89556
 2687	Tierra Blanca	MEX	Veracruz	89143
 2688	Weno	FSM	Chuuk	22000
@@ -2736,9 +2736,9 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2690	Chisinau	MDA	Chisinau	719900
 2691	Tiraspol	MDA	Dnjestria	194300
 2692	Balti	MDA	Balti	153400
-2693	Bender (TÓghina)	MDA	Bender (TÓghina)	125700
-2694	Monte-Carlo	MCO	ñ	13154
-2695	Monaco-Ville	MCO	ñ	1234
+2693	Bender (T√Æghina)	MDA	Bender (T√Æghina)	125700
+2694	Monte-Carlo	MCO	‚Äì	13154
+2695	Monaco-Ville	MCO	‚Äì	1234
 2696	Ulan Bator	MNG	Ulaanbaatar	773700
 2697	Plymouth	MSR	Plymouth	2000
 2698	Maputo	MOZ	Maputo	1018938
@@ -2746,12 +2746,12 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2700	Beira	MOZ	Sofala	397368
 2701	Nampula	MOZ	Nampula	303346
 2702	Chimoio	MOZ	Manica	171056
-2703	NaÁala-Porto	MOZ	Nampula	158248
-2704	Quelimane	MOZ	ZambÈzia	150116
-2705	Mocuba	MOZ	ZambÈzia	124700
+2703	Na√ßala-Porto	MOZ	Nampula	158248
+2704	Quelimane	MOZ	Zamb√©zia	150116
+2705	Mocuba	MOZ	Zamb√©zia	124700
 2706	Tete	MOZ	Tete	101984
 2707	Xai-Xai	MOZ	Gaza	99442
-2708	Gurue	MOZ	ZambÈzia	99300
+2708	Gurue	MOZ	Zamb√©zia	99300
 2709	Maxixe	MOZ	Inhambane	93985
 2710	Rangoon (Yangon)	MMR	Rangoon [Yangon]	3361700
 2711	Mandalay	MMR	Mandalay	885300
@@ -2770,15 +2770,15 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2724	Tavoy (Dawei)	MMR	Tenasserim [Tanintha	96800
 2725	Pagakku (Pakokku)	MMR	Magwe [Magway]	94800
 2726	Windhoek	NAM	Khomas	169000
-2727	Yangor	NRU	ñ	4050
-2728	Yaren	NRU	ñ	559
+2727	Yangor	NRU	‚Äì	4050
+2728	Yaren	NRU	‚Äì	559
 2729	Kathmandu	NPL	Central	591835
 2730	Biratnagar	NPL	Eastern	157764
 2731	Pokhara	NPL	Western	146318
 2732	Lalitapur	NPL	Central	145847
 2733	Birgunj	NPL	Central	90639
 2734	Managua	NIC	Managua	959000
-2735	LeÛn	NIC	LeÛn	123865
+2735	Le√≥n	NIC	Le√≥n	123865
 2736	Chinandega	NIC	Chinandega	97387
 2737	Masaya	NIC	Masaya	88971
 2738	Niamey	NER	Niamey	420000
@@ -2848,15 +2848,15 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2802	Ise-Ekiti	NGA	Ondo & Ekiti	103400
 2803	Ugep	NGA	Cross River	102600
 2804	Epe	NGA	Lagos	101000
-2805	Alofi	NIU	ñ	682
-2806	Kingston	NFK	ñ	800
+2805	Alofi	NIU	‚Äì	682
+2806	Kingston	NFK	‚Äì	800
 2807	Oslo	NOR	Oslo	508726
 2808	Bergen	NOR	Hordaland	230948
-2809	Trondheim	NOR	S¯r-Tr¯ndelag	150166
+2809	Trondheim	NOR	S≈ôr-Tr≈ôndelag	150166
 2810	Stavanger	NOR	Rogaland	108848
-2811	BÊrum	NOR	Akershus	101340
+2811	Bƒárum	NOR	Akershus	101340
 2812	Abidjan	CIV	Abidjan	2500000
-2813	BouakÈ	CIV	BouakÈ	329850
+2813	Bouak√©	CIV	Bouak√©	329850
 2814	Yamoussoukro	CIV	Yamoussoukro	130000
 2815	Daloa	CIV	Daloa	121842
 2816	Korhogo	CIV	Korhogo	109445
@@ -2925,13 +2925,13 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2879	Wazirabad	PAK	Punjab	89700
 2880	Nowshera	PAK	Nothwest Border Prov	89400
 2881	Koror	PLW	Koror	12000
-2882	Ciudad de Panam·	PAN	Panam·	471373
+2882	Ciudad de Panam√°	PAN	Panam√°	471373
 2883	San Miguelito	PAN	San Miguelito	315382
 2884	Port Moresby	PNG	National Capital Dis	247000
-2885	AsunciÛn	PRY	AsunciÛn	557776
-2886	Ciudad del Este	PRY	Alto Paran·	133881
+2885	Asunci√≥n	PRY	Asunci√≥n	557776
+2886	Ciudad del Este	PRY	Alto Paran√°	133881
 2887	San Lorenzo	PRY	Central	133395
-2888	LambarÈ	PRY	Central	99681
+2888	Lambar√©	PRY	Central	99681
 2889	Fernando de la Mora	PRY	Central	95287
 2890	Lima	PER	Lima	6464693
 2891	Arequipa	PER	Arequipa	762000
@@ -2940,7 +2940,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2894	Callao	PER	Callao	424294
 2895	Iquitos	PER	Loreto	367000
 2896	Chimbote	PER	Ancash	336000
-2897	Huancayo	PER	JunÌn	327000
+2897	Huancayo	PER	Jun√≠n	327000
 2898	Piura	PER	Piura	325000
 2899	Cusco	PER	Cusco	291000
 2900	Pucallpa	PER	Ucayali	220866
@@ -2948,32 +2948,32 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2902	Ica	PER	Ica	194820
 2903	Sullana	PER	Piura	147361
 2904	Juliaca	PER	Puno	142576
-2905	Hu·nuco	PER	Huanuco	129688
+2905	Hu√°nuco	PER	Huanuco	129688
 2906	Ayacucho	PER	Ayacucho	118960
 2907	Chincha Alta	PER	Ica	110016
 2908	Cajamarca	PER	Cajamarca	108009
 2909	Puno	PER	Puno	101578
 2910	Ventanilla	PER	Callao	101056
 2911	Castilla	PER	Piura	90642
-2912	Adamstown	PCN	ñ	42
+2912	Adamstown	PCN	‚Äì	42
 2913	Garapan	MNP	Saipan	9200
 2914	Lisboa	PRT	Lisboa	563210
 2915	Porto	PRT	Porto	273060
 2916	Amadora	PRT	Lisboa	122106
-2917	CoÌmbra	PRT	CoÌmbra	96100
+2917	Co√≠mbra	PRT	Co√≠mbra	96100
 2918	Braga	PRT	Braga	90535
 2919	San Juan	PRI	San Juan	434374
-2920	BayamÛn	PRI	BayamÛn	224044
+2920	Bayam√≥n	PRI	Bayam√≥n	224044
 2921	Ponce	PRI	Ponce	186475
 2922	Carolina	PRI	Carolina	186076
 2923	Caguas	PRI	Caguas	140502
 2924	Arecibo	PRI	Arecibo	100131
 2925	Guaynabo	PRI	Guaynabo	100053
-2926	Mayag¸ez	PRI	Mayag¸ez	98434
+2926	Mayag√ºez	PRI	Mayag√ºez	98434
 2927	Toa Baja	PRI	Toa Baja	94085
 2928	Warszawa	POL	Mazowieckie	1615369
-2929	LÛdz	POL	Lodzkie	800110
-2930	KrakÛw	POL	Malopolskie	738150
+2929	L√≥dz	POL	Lodzkie	800110
+2930	Krak√≥w	POL	Malopolskie	738150
 2931	Wroclaw	POL	Dolnoslaskie	636765
 2932	Poznan	POL	Wielkopolskie	576899
 2933	Gdansk	POL	Pomorskie	458988
@@ -2993,35 +2993,35 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2947	Zabrze	POL	Slaskie	200177
 2948	Bielsko-Biala	POL	Slaskie	180307
 2949	Olsztyn	POL	Warminsko-Mazurskie	170904
-2950	RzeszÛw	POL	Podkarpackie	162049
+2950	Rzesz√≥w	POL	Podkarpackie	162049
 2951	Ruda Slaska	POL	Slaskie	159665
 2952	Rybnik	POL	Slaskie	144582
 2953	Walbrzych	POL	Dolnoslaskie	136923
 2954	Tychy	POL	Slaskie	133178
-2955	Dabrowa GÛrnicza	POL	Slaskie	131037
+2955	Dabrowa G√≥rnicza	POL	Slaskie	131037
 2956	Plock	POL	Mazowieckie	131011
 2957	Elblag	POL	Warminsko-Mazurskie	129782
 2958	Opole	POL	Opolskie	129553
-2959	GorzÛw Wielkopolski	POL	Lubuskie	126019
+2959	Gorz√≥w Wielkopolski	POL	Lubuskie	126019
 2960	Wloclawek	POL	Kujawsko-Pomorskie	123373
-2961	ChorzÛw	POL	Slaskie	121708
-2962	TarnÛw	POL	Malopolskie	121494
-2963	Zielona GÛra	POL	Lubuskie	118182
+2961	Chorz√≥w	POL	Slaskie	121708
+2962	Tarn√≥w	POL	Malopolskie	121494
+2963	Zielona G√≥ra	POL	Lubuskie	118182
 2964	Koszalin	POL	Zachodnio-Pomorskie	112375
 2965	Legnica	POL	Dolnoslaskie	109335
 2966	Kalisz	POL	Wielkopolskie	106641
 2967	Grudziadz	POL	Kujawsko-Pomorskie	102434
 2968	Slupsk	POL	Pomorskie	102370
-2969	Jastrzebie-ZdrÛj	POL	Slaskie	102294
+2969	Jastrzebie-Zdr√≥j	POL	Slaskie	102294
 2970	Jaworzno	POL	Slaskie	97929
-2971	Jelenia GÛra	POL	Dolnoslaskie	93901
+2971	Jelenia G√≥ra	POL	Dolnoslaskie	93901
 2972	Malabo	GNQ	Bioko	40000
 2973	Doha	QAT	Doha	355000
-2974	Paris	FRA	Œle-de-France	2125246
-2975	Marseille	FRA	Provence-Alpes-CÙte	798430
-2976	Lyon	FRA	RhÙne-Alpes	445452
-2977	Toulouse	FRA	Midi-PyrÈnÈes	390350
-2978	Nice	FRA	Provence-Alpes-CÙte	342738
+2974	Paris	FRA	√éle-de-France	2125246
+2975	Marseille	FRA	Provence-Alpes-C√¥te	798430
+2976	Lyon	FRA	Rh√¥ne-Alpes	445452
+2977	Toulouse	FRA	Midi-Pyr√©n√©es	390350
+2978	Nice	FRA	Provence-Alpes-C√¥te	342738
 2979	Nantes	FRA	Pays de la Loire	270251
 2980	Strasbourg	FRA	Alsace	264115
 2981	Montpellier	FRA	Languedoc-Roussillon	225392
@@ -3029,34 +3029,34 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 2983	Rennes	FRA	Haute-Normandie	206229
 2984	Le Havre	FRA	Champagne-Ardenne	190905
 2985	Reims	FRA	Nord-Pas-de-Calais	187206
-2986	Lille	FRA	RhÙne-Alpes	184657
-2987	St-…tienne	FRA	Bretagne	180210
-2988	Toulon	FRA	Provence-Alpes-CÙte	160639
-2989	Grenoble	FRA	RhÙne-Alpes	153317
+2986	Lille	FRA	Rh√¥ne-Alpes	184657
+2987	St-√âtienne	FRA	Bretagne	180210
+2988	Toulon	FRA	Provence-Alpes-C√¥te	160639
+2989	Grenoble	FRA	Rh√¥ne-Alpes	153317
 2990	Angers	FRA	Pays de la Loire	151279
 2991	Dijon	FRA	Bourgogne	149867
 2992	Brest	FRA	Bretagne	149634
 2993	Le Mans	FRA	Pays de la Loire	146105
 2994	Clermont-Ferrand	FRA	Auvergne	137140
 2995	Amiens	FRA	Picardie	135501
-2996	Aix-en-Provence	FRA	Provence-Alpes-CÙte	134222
+2996	Aix-en-Provence	FRA	Provence-Alpes-C√¥te	134222
 2997	Limoges	FRA	Limousin	133968
-2998	NÓmes	FRA	Languedoc-Roussillon	133424
+2998	N√Æmes	FRA	Languedoc-Roussillon	133424
 2999	Tours	FRA	Centre	132820
-3000	Villeurbanne	FRA	RhÙne-Alpes	124215
+3000	Villeurbanne	FRA	Rh√¥ne-Alpes	124215
 3001	Metz	FRA	Lorraine	123776
-3002	BesanÁon	FRA	Franche-ComtÈ	117733
+3002	Besan√ßon	FRA	Franche-Comt√©	117733
 3003	Caen	FRA	Basse-Normandie	113987
-3004	OrlÈans	FRA	Centre	113126
+3004	Orl√©ans	FRA	Centre	113126
 3005	Mulhouse	FRA	Alsace	110359
 3006	Rouen	FRA	Haute-Normandie	106592
-3007	Boulogne-Billancourt	FRA	Œle-de-France	106367
+3007	Boulogne-Billancourt	FRA	√éle-de-France	106367
 3008	Perpignan	FRA	Languedoc-Roussillon	105115
 3009	Nancy	FRA	Lorraine	103605
 3010	Roubaix	FRA	Nord-Pas-de-Calais	96984
-3011	Argenteuil	FRA	Œle-de-France	93961
+3011	Argenteuil	FRA	√éle-de-France	93961
 3012	Tourcoing	FRA	Nord-Pas-de-Calais	93540
-3013	Montreuil	FRA	Œle-de-France	90674
+3013	Montreuil	FRA	√éle-de-France	90674
 3014	Cayenne	GUF	Cayenne	50699
 3015	Faaa	PYF	Tahiti	25888
 3016	Papeete	PYF	Tahiti	25553
@@ -3076,36 +3076,36 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3030	Pitesti	ROM	Arges	187170
 3031	Arad	ROM	Arad	184408
 3032	Sibiu	ROM	Sibiu	169611
-3033	T‚rgu Mures	ROM	Mures	165153
+3033	T√¢rgu Mures	ROM	Mures	165153
 3034	Baia Mare	ROM	Maramures	149665
 3035	Buzau	ROM	Buzau	148372
 3036	Satu Mare	ROM	Satu Mare	130059
 3037	Botosani	ROM	Botosani	128730
 3038	Piatra Neamt	ROM	Neamt	125070
-3039	R‚mnicu V‚lcea	ROM	V‚lcea	119741
+3039	R√¢mnicu V√¢lcea	ROM	V√¢lcea	119741
 3040	Suceava	ROM	Suceava	118549
 3041	Drobeta-Turnu Severin	ROM	Mehedinti	117865
-3042	T‚rgoviste	ROM	D‚mbovita	98980
+3042	T√¢rgoviste	ROM	D√¢mbovita	98980
 3043	Focsani	ROM	Vrancea	98979
-3044	T‚rgu Jiu	ROM	Gorj	98524
+3044	T√¢rgu Jiu	ROM	Gorj	98524
 3045	Tulcea	ROM	Tulcea	96278
 3046	Resita	ROM	Caras-Severin	93976
 3047	Kigali	RWA	Kigali	286000
 3048	Stockholm	SWE	Lisboa	750348
-3049	Gothenburg [Gˆteborg]	SWE	West Gˆtanmaan l‰n	466990
-3050	Malmˆ	SWE	SkÂne l‰n	259579
-3051	Uppsala	SWE	Uppsala l‰n	189569
-3052	Linkˆping	SWE	East Gˆtanmaan l‰n	133168
-3053	V‰sterÂs	SWE	V‰stmanlands l‰n	126328
-3054	÷rebro	SWE	÷rebros l‰n	124207
-3055	Norrkˆping	SWE	East Gˆtanmaan l‰n	122199
-3056	Helsingborg	SWE	SkÂne l‰n	117737
-3057	Jˆnkˆping	SWE	Jˆnkˆpings l‰n	117095
-3058	UmeÂ	SWE	V‰sterbottens l‰n	104512
-3059	Lund	SWE	SkÂne l‰n	98948
-3060	BorÂs	SWE	West Gˆtanmaan l‰n	96883
-3061	Sundsvall	SWE	V‰sternorrlands l‰n	93126
-3062	G‰vle	SWE	G‰vleborgs l‰n	90742
+3049	Gothenburg [G√∂teborg]	SWE	West G√∂tanmaan l√§n	466990
+3050	Malm√∂	SWE	Skƒ∫ne l√§n	259579
+3051	Uppsala	SWE	Uppsala l√§n	189569
+3052	Link√∂ping	SWE	East G√∂tanmaan l√§n	133168
+3053	V√§sterƒ∫s	SWE	V√§stmanlands l√§n	126328
+3054	√ñrebro	SWE	√ñrebros l√§n	124207
+3055	Norrk√∂ping	SWE	East G√∂tanmaan l√§n	122199
+3056	Helsingborg	SWE	Skƒ∫ne l√§n	117737
+3057	J√∂nk√∂ping	SWE	J√∂nk√∂pings l√§n	117095
+3058	Umeƒ∫	SWE	V√§sterbottens l√§n	104512
+3059	Lund	SWE	Skƒ∫ne l√§n	98948
+3060	Borƒ∫s	SWE	West G√∂tanmaan l√§n	96883
+3061	Sundsvall	SWE	V√§sternorrlands l√§n	93126
+3062	G√§vle	SWE	G√§vleborgs l√§n	90742
 3063	Jamestown	SHN	Saint Helena	1500
 3064	Basseterre	KNA	St George Basseterre	11600
 3065	Castries	LCA	Castries	2301
@@ -3113,29 +3113,29 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3067	Saint-Pierre	SPM	Saint-Pierre	5808
 3068	Berlin	DEU	Berliini	3386667
 3069	Hamburg	DEU	Hamburg	1704735
-3070	Munich [M¸nchen]	DEU	Baijeri	1194560
-3071	Kˆln	DEU	Nordrhein-Westfalen	962507
+3070	Munich [M√ºnchen]	DEU	Baijeri	1194560
+3071	K√∂ln	DEU	Nordrhein-Westfalen	962507
 3072	Frankfurt am Main	DEU	Hessen	643821
 3073	Essen	DEU	Nordrhein-Westfalen	599515
 3074	Dortmund	DEU	Nordrhein-Westfalen	590213
-3075	Stuttgart	DEU	Baden-W¸rttemberg	582443
-3076	D¸sseldorf	DEU	Nordrhein-Westfalen	568855
+3075	Stuttgart	DEU	Baden-W√ºrttemberg	582443
+3076	D√ºsseldorf	DEU	Nordrhein-Westfalen	568855
 3077	Bremen	DEU	Bremen	540330
 3078	Duisburg	DEU	Nordrhein-Westfalen	519793
 3079	Hannover	DEU	Niedersachsen	514718
 3080	Leipzig	DEU	Saksi	489532
-3081	N¸rnberg	DEU	Baijeri	486628
+3081	N√ºrnberg	DEU	Baijeri	486628
 3082	Dresden	DEU	Saksi	476668
 3083	Bochum	DEU	Nordrhein-Westfalen	392830
 3084	Wuppertal	DEU	Nordrhein-Westfalen	368993
 3085	Bielefeld	DEU	Nordrhein-Westfalen	321125
-3086	Mannheim	DEU	Baden-W¸rttemberg	307730
+3086	Mannheim	DEU	Baden-W√ºrttemberg	307730
 3087	Bonn	DEU	Nordrhein-Westfalen	301048
 3088	Gelsenkirchen	DEU	Nordrhein-Westfalen	281979
-3089	Karlsruhe	DEU	Baden-W¸rttemberg	277204
+3089	Karlsruhe	DEU	Baden-W√ºrttemberg	277204
 3090	Wiesbaden	DEU	Hessen	268716
-3091	M¸nster	DEU	Nordrhein-Westfalen	264670
-3092	Mˆnchengladbach	DEU	Nordrhein-Westfalen	263697
+3091	M√ºnster	DEU	Nordrhein-Westfalen	264670
+3092	M√∂nchengladbach	DEU	Nordrhein-Westfalen	263697
 3093	Chemnitz	DEU	Saksi	263222
 3094	Augsburg	DEU	Baijeri	254867
 3095	Halle/Saale	DEU	Anhalt Sachsen	254360
@@ -3145,45 +3145,45 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3099	Magdeburg	DEU	Anhalt Sachsen	235073
 3100	Kiel	DEU	Schleswig-Holstein	233795
 3101	Oberhausen	DEU	Nordrhein-Westfalen	222349
-3102	L¸beck	DEU	Schleswig-Holstein	213326
+3102	L√ºbeck	DEU	Schleswig-Holstein	213326
 3103	Hagen	DEU	Nordrhein-Westfalen	205201
 3104	Rostock	DEU	Mecklenburg-Vorpomme	203279
-3105	Freiburg im Breisgau	DEU	Baden-W¸rttemberg	202455
-3106	Erfurt	DEU	Th¸ringen	201267
+3105	Freiburg im Breisgau	DEU	Baden-W√ºrttemberg	202455
+3106	Erfurt	DEU	Th√ºringen	201267
 3107	Kassel	DEU	Hessen	196211
-3108	Saarbr¸cken	DEU	Saarland	183836
+3108	Saarbr√ºcken	DEU	Saarland	183836
 3109	Mainz	DEU	Rheinland-Pfalz	183134
 3110	Hamm	DEU	Nordrhein-Westfalen	181804
 3111	Herne	DEU	Nordrhein-Westfalen	175661
-3112	M¸lheim an der Ruhr	DEU	Nordrhein-Westfalen	173895
+3112	M√ºlheim an der Ruhr	DEU	Nordrhein-Westfalen	173895
 3113	Solingen	DEU	Nordrhein-Westfalen	165583
-3114	Osnabr¸ck	DEU	Niedersachsen	164539
+3114	Osnabr√ºck	DEU	Niedersachsen	164539
 3115	Ludwigshafen am Rhein	DEU	Rheinland-Pfalz	163771
 3116	Leverkusen	DEU	Nordrhein-Westfalen	160841
 3117	Oldenburg	DEU	Niedersachsen	154125
 3118	Neuss	DEU	Nordrhein-Westfalen	149702
-3119	Heidelberg	DEU	Baden-W¸rttemberg	139672
+3119	Heidelberg	DEU	Baden-W√ºrttemberg	139672
 3120	Darmstadt	DEU	Hessen	137776
 3121	Paderborn	DEU	Nordrhein-Westfalen	137647
 3122	Potsdam	DEU	Brandenburg	128983
-3123	W¸rzburg	DEU	Baijeri	127350
+3123	W√ºrzburg	DEU	Baijeri	127350
 3124	Regensburg	DEU	Baijeri	125236
 3125	Recklinghausen	DEU	Nordrhein-Westfalen	125022
-3126	Gˆttingen	DEU	Niedersachsen	124775
+3126	G√∂ttingen	DEU	Niedersachsen	124775
 3127	Bremerhaven	DEU	Bremen	122735
 3128	Wolfsburg	DEU	Niedersachsen	121954
 3129	Bottrop	DEU	Nordrhein-Westfalen	121097
 3130	Remscheid	DEU	Nordrhein-Westfalen	120125
-3131	Heilbronn	DEU	Baden-W¸rttemberg	119526
-3132	Pforzheim	DEU	Baden-W¸rttemberg	117227
+3131	Heilbronn	DEU	Baden-W√ºrttemberg	119526
+3132	Pforzheim	DEU	Baden-W√ºrttemberg	117227
 3133	Offenbach am Main	DEU	Hessen	116627
-3134	Ulm	DEU	Baden-W¸rttemberg	116103
+3134	Ulm	DEU	Baden-W√ºrttemberg	116103
 3135	Ingolstadt	DEU	Baijeri	114826
-3136	Gera	DEU	Th¸ringen	114718
+3136	Gera	DEU	Th√ºringen	114718
 3137	Salzgitter	DEU	Niedersachsen	112934
 3138	Cottbus	DEU	Brandenburg	110894
-3139	Reutlingen	DEU	Baden-W¸rttemberg	110343
-3140	F¸rth	DEU	Baijeri	109771
+3139	Reutlingen	DEU	Baden-W√ºrttemberg	110343
+3140	F√ºrth	DEU	Baijeri	109771
 3141	Siegen	DEU	Nordrhein-Westfalen	109225
 3142	Koblenz	DEU	Rheinland-Pfalz	108003
 3143	Moers	DEU	Nordrhein-Westfalen	106837
@@ -3195,15 +3195,15 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3149	Erlangen	DEU	Baijeri	100750
 3150	Kaiserslautern	DEU	Rheinland-Pfalz	100025
 3151	Trier	DEU	Rheinland-Pfalz	99891
-3152	Jena	DEU	Th¸ringen	99779
+3152	Jena	DEU	Th√ºringen	99779
 3153	Iserlohn	DEU	Nordrhein-Westfalen	99474
-3154	G¸tersloh	DEU	Nordrhein-Westfalen	95028
+3154	G√ºtersloh	DEU	Nordrhein-Westfalen	95028
 3155	Marl	DEU	Nordrhein-Westfalen	93735
-3156	L¸nen	DEU	Nordrhein-Westfalen	92044
-3157	D¸ren	DEU	Nordrhein-Westfalen	91092
+3156	L√ºnen	DEU	Nordrhein-Westfalen	92044
+3157	D√ºren	DEU	Nordrhein-Westfalen	91092
 3158	Ratingen	DEU	Nordrhein-Westfalen	90951
 3159	Velbert	DEU	Nordrhein-Westfalen	89881
-3160	Esslingen am Neckar	DEU	Baden-W¸rttemberg	89667
+3160	Esslingen am Neckar	DEU	Baden-W√ºrttemberg	89667
 3161	Honiara	SLB	Honiara	50100
 3162	Lusaka	ZMB	Lusaka	1317000
 3163	Ndola	ZMB	Copperbelt	329200
@@ -3215,7 +3215,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3169	Apia	WSM	Upolu	35900
 3170	Serravalle	SMR	Serravalle/Dogano	4802
 3171	San Marino	SMR	San Marino	2294
-3172	S„o TomÈ	STP	Aqua Grande	49541
+3172	SƒÉo Tom√©	STP	Aqua Grande	49541
 3173	Riyadh	SAU	Riyadh	3324000
 3174	Jedda	SAU	Mekka	2046300
 3175	Mekka	SAU	Mekka	965700
@@ -3235,26 +3235,26 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3189	al-Tuqba	SAU	al-Sharqiya	125700
 3190	Yanbu	SAU	Medina	119800
 3191	Abha	SAU	Asir	112300
-3192	Ara¥ar	SAU	al-Khudud al-Samaliy	108100
+3192	Ara¬¥ar	SAU	al-Khudud al-Samaliy	108100
 3193	al-Qatif	SAU	al-Sharqiya	98900
 3194	al-Hawiya	SAU	Mekka	93900
 3195	Unayza	SAU	Qasim	91100
 3196	Najran	SAU	Najran	91000
 3197	Pikine	SEN	Cap-Vert	855287
 3198	Dakar	SEN	Cap-Vert	785071
-3199	ThiËs	SEN	ThiËs	248000
+3199	Thiƒçs	SEN	Thiƒçs	248000
 3200	Kaolack	SEN	Kaolack	199000
 3201	Ziguinchor	SEN	Ziguinchor	192000
 3202	Rufisque	SEN	Cap-Vert	150000
 3203	Saint-Louis	SEN	Saint-Louis	132400
-3204	Mbour	SEN	ThiËs	109300
+3204	Mbour	SEN	Thiƒçs	109300
 3205	Diourbel	SEN	Diourbel	99400
-3206	Victoria	SYC	MahÈ	41000
+3206	Victoria	SYC	Mah√©	41000
 3207	Freetown	SLE	Western	850000
-3208	Singapore	SGP	ñ	4017733
+3208	Singapore	SGP	‚Äì	4017733
 3209	Bratislava	SVK	Bratislava	448292
-3210	Koöice	SVK	V˝chodnÈ Slovensko	241874
-3211	Preöov	SVK	V˝chodnÈ Slovensko	93977
+3210	Ko≈°ice	SVK	V√Ωchodn√© Slovensko	241874
+3211	Pre≈°ov	SVK	V√Ωchodn√© Slovensko	93977
 3212	Ljubljana	SVN	Osrednjeslovenska	270986
 3213	Maribor	SVN	Podravska	115532
 3214	Mogadishu	SOM	Banaadir	997000
@@ -3283,12 +3283,12 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3237	Espoo	FIN	Newmaa	213271
 3238	Tampere	FIN	Pirkanmaa	195468
 3239	Vantaa	FIN	Newmaa	178471
-3240	Turku [≈bo]	FIN	Varsinais-Suomi	172561
+3240	Turku [ƒπbo]	FIN	Varsinais-Suomi	172561
 3241	Oulu	FIN	Pohjois-Pohjanmaa	120753
-3242	Lahti	FIN	P‰ij‰t-H‰me	96921
+3242	Lahti	FIN	P√§ij√§t-H√§me	96921
 3243	Paramaribo	SUR	Paramaribo	112000
 3244	Mbabane	SWZ	Hhohho	61000
-3245	Z¸rich	CHE	Z¸rich	336800
+3245	Z√ºrich	CHE	Z√ºrich	336800
 3246	Geneve	CHE	Geneve	173500
 3247	Basel	CHE	Basel-Stadt	166700
 3248	Bern	CHE	Bern	122700
@@ -3343,7 +3343,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3297	Hualien	TWN	Hualien	108407
 3298	Nantou	TWN	Nantou	104723
 3299	Lungtan	TWN	Taipei	103088
-3300	Touliu	TWN	Y¸nlin	98900
+3300	Touliu	TWN	Y√ºnlin	98900
 3301	Tsaotun	TWN	Nantou	96800
 3302	Kangshan	TWN	Kaohsiung	92200
 3303	Ilan	TWN	Ilan	92000
@@ -3358,8 +3358,8 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3312	Arusha	TZA	Arusha	102500
 3313	Moshi	TZA	Kilimanjaro	96800
 3314	Tabora	TZA	Tabora	92800
-3315	K¯benhavn	DNK	K¯benhavn	495699
-3316	≈rhus	DNK	≈rhus	284846
+3315	K≈ôbenhavn	DNK	K≈ôbenhavn	495699
+3316	ƒπrhus	DNK	ƒπrhus	284846
 3317	Odense	DNK	Fyn	183912
 3318	Aalborg	DNK	Nordjylland	161161
 3319	Frederiksberg	DNK	Frederiksberg	90327
@@ -3375,23 +3375,23 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3329	Ubon Ratchathani	THA	Ubon Ratchathani	116300
 3330	Songkhla	THA	Songkhla	94900
 3331	Nakhon Pathom	THA	Nakhon Pathom	94100
-3332	LomÈ	TGO	Maritime	375000
+3332	Lom√©	TGO	Maritime	375000
 3333	Fakaofo	TKL	Fakaofo	300
-3334	Nuku¥alofa	TON	Tongatapu	22400
+3334	Nuku¬¥alofa	TON	Tongatapu	22400
 3335	Chaguanas	TTO	Caroni	56601
 3336	Port-of-Spain	TTO	Port-of-Spain	43396
-3337	N¥DjamÈna	TCD	Chari-Baguirmi	530965
+3337	N¬¥Djam√©na	TCD	Chari-Baguirmi	530965
 3338	Moundou	TCD	Logone Occidental	99500
-3339	Praha	CZE	HlavnÌ mesto Praha	1181126
-3340	Brno	CZE	JiznÌ Morava	381862
-3341	Ostrava	CZE	SevernÌ Morava	320041
-3342	Plzen	CZE	ZapadnÌ Cechy	166759
-3343	Olomouc	CZE	SevernÌ Morava	102702
-3344	Liberec	CZE	SevernÌ Cechy	99155
-3345	CeskÈ Budejovice	CZE	JiznÌ Cechy	98186
-3346	Hradec Kr·lovÈ	CZE	V˝chodnÌ Cechy	98080
-3347	⁄stÌ nad Labem	CZE	SevernÌ Cechy	95491
-3348	Pardubice	CZE	V˝chodnÌ Cechy	91309
+3339	Praha	CZE	Hlavn√≠ mesto Praha	1181126
+3340	Brno	CZE	Jizn√≠ Morava	381862
+3341	Ostrava	CZE	Severn√≠ Morava	320041
+3342	Plzen	CZE	Zapadn√≠ Cechy	166759
+3343	Olomouc	CZE	Severn√≠ Morava	102702
+3344	Liberec	CZE	Severn√≠ Cechy	99155
+3345	Cesk√© Budejovice	CZE	Jizn√≠ Cechy	98186
+3346	Hradec Kr√°lov√©	CZE	V√Ωchodn√≠ Cechy	98080
+3347	√öst√≠ nad Labem	CZE	Severn√≠ Cechy	95491
+3348	Pardubice	CZE	V√Ωchodn√≠ Cechy	91309
 3349	Tunis	TUN	Tunis	690600
 3350	Sfax	TUN	Sfax	257800
 3351	Ariana	TUN	Ariana	197000
@@ -3399,7 +3399,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3353	Sousse	TUN	Sousse	145900
 3354	Kairouan	TUN	Kairouan	113100
 3355	Biserta	TUN	Biserta	108900
-3356	GabËs	TUN	GabËs	106600
+3356	Gabƒçs	TUN	Gabƒçs	106600
 3357	Istanbul	TUR	Istanbul	8787958
 3358	Ankara	TUR	Ankara	3038159
 3359	Izmir	TUR	Izmir	2130359
@@ -3407,7 +3407,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3361	Bursa	TUR	Bursa	1095842
 3362	Gaziantep	TUR	Gaziantep	789056
 3363	Konya	TUR	Konya	628364
-3364	Mersin (IÁel)	TUR	IÁel	587212
+3364	Mersin (I√ßel)	TUR	I√ßel	587212
 3365	Antalya	TUR	Antalya	564914
 3366	Diyarbakir	TUR	Diyarbakir	479884
 3367	Kayseri	TUR	Kayseri	475657
@@ -3421,7 +3421,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3375	Erzurum	TUR	Erzurum	246535
 3376	Tarsus	TUR	Adana	246206
 3377	Kahramanmaras	TUR	Kahramanmaras	245772
-3378	El‚zig	TUR	El‚zig	228815
+3378	El√¢zig	TUR	El√¢zig	228815
 3379	Van	TUR	Van	219319
 3380	Sultanbeyli	TUR	Istanbul	211068
 3381	Izmit (Kocaeli)	TUR	Kocaeli	210068
@@ -3431,8 +3431,8 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3385	Sakarya (Adapazari)	TUR	Sakarya	190641
 3386	Iskenderun	TUR	Hatay	153022
 3387	Osmaniye	TUR	Osmaniye	146003
-3388	«orum	TUR	«orum	145495
-3389	K¸tahya	TUR	K¸tahya	144761
+3388	√áorum	TUR	√áorum	145495
+3389	K√ºtahya	TUR	K√ºtahya	144761
 3390	Hatay (Antakya)	TUR	Hatay	143982
 3391	Kirikkale	TUR	Kirikkale	142044
 3392	Adiyaman	TUR	Adiyaman	141529
@@ -3441,9 +3441,9 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3395	Aydin	TUR	Aydin	128651
 3396	Usak	TUR	Usak	128162
 3397	Edirne	TUR	Edirne	123383
-3398	«orlu	TUR	Tekirdag	123300
+3398	√áorlu	TUR	Tekirdag	123300
 3399	Isparta	TUR	Isparta	121911
-3400	Karab¸k	TUR	Karab¸k	118285
+3400	Karab√ºk	TUR	Karab√ºk	118285
 3401	Kilis	TUR	Kilis	118245
 3402	Alanya	TUR	Antalya	117300
 3403	Kiziltepe	TUR	Mardin	112000
@@ -3460,10 +3460,10 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3414	Nazilli	TUR	Aydin	99900
 3415	Tokat	TUR	Tokat	99500
 3416	Kars	TUR	Kars	93000
-3417	Inegˆl	TUR	Bursa	90500
+3417	Ineg√∂l	TUR	Bursa	90500
 3418	Bandirma	TUR	Balikesir	90200
 3419	Ashgabat	TKM	Ahal	540600
-3420	Ch‰rjew	TKM	Lebap	189200
+3420	Ch√§rjew	TKM	Lebap	189200
 3421	Dashhowuz	TKM	Dashhowuz	141800
 3422	Mary	TKM	Mary	101000
 3423	Cockburn Town	TCA	Grand Turk	4800
@@ -3486,57 +3486,57 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3440	Sevastopol	UKR	Krim	348000
 3441	Simferopol	UKR	Krim	339000
 3442	Pultava [Poltava]	UKR	Pultava	313000
-3443	Töernigiv	UKR	Töernigiv	313000
-3444	Töerkasy	UKR	Töerkasy	309000
+3443	T≈°ernigiv	UKR	T≈°ernigiv	313000
+3444	T≈°erkasy	UKR	T≈°erkasy	309000
 3445	Gorlivka	UKR	Donetsk	299000
 3446	Zytomyr	UKR	Zytomyr	297000
 3447	Sumy	UKR	Sumy	294000
 3448	Dniprodzerzynsk	UKR	Dnipropetrovsk	270000
 3449	Kirovograd	UKR	Kirovograd	265000
 3450	Hmelnytskyi	UKR	Hmelnytskyi	262000
-3451	Töernivtsi	UKR	Töernivtsi	259000
+3451	T≈°ernivtsi	UKR	T≈°ernivtsi	259000
 3452	Rivne	UKR	Rivne	245000
-3453	Krementöuk	UKR	Pultava	239000
+3453	Krement≈°uk	UKR	Pultava	239000
 3454	Ivano-Frankivsk	UKR	Ivano-Frankivsk	237000
 3455	Ternopil	UKR	Ternopil	236000
 3456	Lutsk	UKR	Volynia	217000
 3457	Bila Tserkva	UKR	Kiova	215000
 3458	Kramatorsk	UKR	Donetsk	186000
 3459	Melitopol	UKR	Zaporizzja	169000
-3460	Kertö	UKR	Krim	162000
+3460	Kert≈°	UKR	Krim	162000
 3461	Nikopol	UKR	Dnipropetrovsk	149000
 3462	Berdjansk	UKR	Zaporizzja	130000
 3463	Pavlograd	UKR	Dnipropetrovsk	127000
 3464	Sjeverodonetsk	UKR	Lugansk	127000
 3465	Slovjansk	UKR	Donetsk	127000
 3466	Uzgorod	UKR	Taka-Karpatia	127000
-3467	Altöevsk	UKR	Lugansk	119000
-3468	Lysytöansk	UKR	Lugansk	116000
+3467	Alt≈°evsk	UKR	Lugansk	119000
+3468	Lysyt≈°ansk	UKR	Lugansk	116000
 3469	Jevpatorija	UKR	Krim	112000
 3470	Kamjanets-Podilskyi	UKR	Hmelnytskyi	109000
 3471	Jenakijeve	UKR	Donetsk	105000
-3472	Krasnyi Lutö	UKR	Lugansk	101000
+3472	Krasnyi Lut≈°	UKR	Lugansk	101000
 3473	Stahanov	UKR	Lugansk	101000
 3474	Oleksandrija	UKR	Kirovograd	99000
 3475	Konotop	UKR	Sumy	96000
 3476	Kostjantynivka	UKR	Donetsk	95000
-3477	Berdytöiv	UKR	Zytomyr	90000
+3477	Berdyt≈°iv	UKR	Zytomyr	90000
 3478	Izmajil	UKR	Odesa	90000
-3479	äostka	UKR	Sumy	90000
-3480	Uman	UKR	Töerkasy	90000
+3479	≈†ostka	UKR	Sumy	90000
+3480	Uman	UKR	T≈°erkasy	90000
 3481	Brovary	UKR	Kiova	89000
-3482	Mukatöeve	UKR	Taka-Karpatia	89000
+3482	Mukat≈°eve	UKR	Taka-Karpatia	89000
 3483	Budapest	HUN	Budapest	1811552
-3484	Debrecen	HUN	Hajd˙-Bihar	203648
-3485	Miskolc	HUN	Borsod-Aba˙j-ZemplÈn	172357
-3486	Szeged	HUN	Csongr·d	158158
-3487	PÈcs	HUN	Baranya	157332
-3488	Gyˆr	HUN	Gyˆr-Moson-Sopron	127119
-3489	Nyiregyh·za	HUN	Szabolcs-Szatm·r-Ber	112419
-3490	KecskemÈt	HUN	B·cs-Kiskun	105606
-3491	SzÈkesfehÈrv·r	HUN	FejÈr	105119
+3484	Debrecen	HUN	Hajd√∫-Bihar	203648
+3485	Miskolc	HUN	Borsod-Aba√∫j-Zempl√©n	172357
+3486	Szeged	HUN	Csongr√°d	158158
+3487	P√©cs	HUN	Baranya	157332
+3488	Gy√∂r	HUN	Gy√∂r-Moson-Sopron	127119
+3489	Nyiregyh√°za	HUN	Szabolcs-Szatm√°r-Ber	112419
+3490	Kecskem√©t	HUN	B√°cs-Kiskun	105606
+3491	Sz√©kesfeh√©rv√°r	HUN	Fej√©r	105119
 3492	Montevideo	URY	Montevideo	1236000
-3493	NoumÈa	NCL	ñ	76293
+3493	Noum√©a	NCL	‚Äì	76293
 3494	Auckland	NZL	Auckland	381800
 3495	Christchurch	NZL	Canterbury	324200
 3496	Manukau	NZL	Auckland	281800
@@ -3553,11 +3553,11 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3507	Buhoro	UZB	Buhoro	237100
 3508	Karsi	UZB	Qashqadaryo	194100
 3509	Nukus	UZB	Karakalpakistan	194100
-3510	K¸kon	UZB	Fargona	190100
+3510	K√ºkon	UZB	Fargona	190100
 3511	Fargona	UZB	Fargona	180500
 3512	Circik	UZB	Toskent	146400
 3513	Margilon	UZB	Fargona	140800
-3514	‹rgenc	UZB	Khorazm	138900
+3514	√úrgenc	UZB	Khorazm	138900
 3515	Angren	UZB	Toskent	128000
 3516	Cizah	UZB	Cizah	124800
 3517	Navoi	UZB	Navoi	116300
@@ -3570,59 +3570,59 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3524	Grodno	BLR	Grodno	302000
 3525	Brest	BLR	Brest	286000
 3526	Bobruisk	BLR	Mogiljov	221000
-3527	Baranovitöi	BLR	Brest	167000
+3527	Baranovit≈°i	BLR	Brest	167000
 3528	Borisov	BLR	Minsk	151000
 3529	Pinsk	BLR	Brest	130000
-3530	Oröa	BLR	Vitebsk	124000
+3530	Or≈°a	BLR	Vitebsk	124000
 3531	Mozyr	BLR	Gomel	110000
 3532	Novopolotsk	BLR	Vitebsk	106000
 3533	Lida	BLR	Grodno	101000
 3534	Soligorsk	BLR	Minsk	101000
-3535	Molodetöno	BLR	Minsk	97000
+3535	Molodet≈°no	BLR	Minsk	97000
 3536	Mata-Utu	WLF	Wallis	1137
 3537	Port-Vila	VUT	Shefa	33700
-3538	Citt‡ del Vaticano	VAT	ñ	455
+3538	Citt≈ï del Vaticano	VAT	‚Äì	455
 3539	Caracas	VEN	Distrito Federal	1975294
-3540	MaracaÌbo	VEN	Zulia	1304776
+3540	Maraca√≠bo	VEN	Zulia	1304776
 3541	Barquisimeto	VEN	Lara	877239
 3542	Valencia	VEN	Carabobo	794246
-3543	Ciudad Guayana	VEN	BolÌvar	663713
+3543	Ciudad Guayana	VEN	Bol√≠var	663713
 3544	Petare	VEN	Miranda	488868
 3545	Maracay	VEN	Aragua	444443
-3546	Barcelona	VEN	Anzo·tegui	322267
-3547	MaturÌn	VEN	Monagas	319726
-3548	San CristÛbal	VEN	T·chira	319373
-3549	Ciudad BolÌvar	VEN	BolÌvar	301107
-3550	Cuman·	VEN	Sucre	293105
-3551	MÈrida	VEN	MÈrida	224887
+3546	Barcelona	VEN	Anzo√°tegui	322267
+3547	Matur√≠n	VEN	Monagas	319726
+3548	San Crist√≥bal	VEN	T√°chira	319373
+3549	Ciudad Bol√≠var	VEN	Bol√≠var	301107
+3550	Cuman√°	VEN	Sucre	293105
+3551	M√©rida	VEN	M√©rida	224887
 3552	Cabimas	VEN	Zulia	221329
 3553	Barinas	VEN	Barinas	217831
 3554	Turmero	VEN	Aragua	217499
 3555	Baruta	VEN	Miranda	207290
 3556	Puerto Cabello	VEN	Carabobo	187722
-3557	Santa Ana de Coro	VEN	FalcÛn	185766
+3557	Santa Ana de Coro	VEN	Falc√≥n	185766
 3558	Los Teques	VEN	Miranda	178784
-3559	Punto Fijo	VEN	FalcÛn	167215
+3559	Punto Fijo	VEN	Falc√≥n	167215
 3560	Guarenas	VEN	Miranda	165889
 3561	Acarigua	VEN	Portuguesa	158954
-3562	Puerto La Cruz	VEN	Anzo·tegui	155700
+3562	Puerto La Cruz	VEN	Anzo√°tegui	155700
 3563	Ciudad Losada	VEN		134501
 3564	Guacara	VEN	Carabobo	131334
 3565	Valera	VEN	Trujillo	130281
 3566	Guanare	VEN	Portuguesa	125621
-3567	Car˙pano	VEN	Sucre	119639
+3567	Car√∫pano	VEN	Sucre	119639
 3568	Catia La Mar	VEN	Distrito Federal	117012
-3569	El Tigre	VEN	Anzo·tegui	116256
+3569	El Tigre	VEN	Anzo√°tegui	116256
 3570	Guatire	VEN	Miranda	109121
-3571	Calabozo	VEN	Gu·rico	107146
-3572	Pozuelos	VEN	Anzo·tegui	105690
+3571	Calabozo	VEN	Gu√°rico	107146
+3572	Pozuelos	VEN	Anzo√°tegui	105690
 3573	Ciudad Ojeda	VEN	Zulia	99354
 3574	Ocumare del Tuy	VEN	Miranda	97168
-3575	Valle de la Pascua	VEN	Gu·rico	95927
+3575	Valle de la Pascua	VEN	Gu√°rico	95927
 3576	Araure	VEN	Portuguesa	94269
 3577	San Fernando de Apure	VEN	Apure	93809
 3578	San Felipe	VEN	Yaracuy	90940
-3579	El LimÛn	VEN	Aragua	90000
+3579	El Lim√≥n	VEN	Aragua	90000
 3580	Moscow	RUS	Moscow (City)	8389200
 3581	St Petersburg	RUS	Pietari	4694000
 3582	Novosibirsk	RUS	Novosibirsk	1398800
@@ -3631,8 +3631,8 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3585	Samara	RUS	Samara	1156100
 3586	Omsk	RUS	Omsk	1148900
 3587	Kazan	RUS	Tatarstan	1101000
-3588	Ufa	RUS	Baökortostan	1091200
-3589	Töeljabinsk	RUS	Töeljabinsk	1083200
+3588	Ufa	RUS	Ba≈°kortostan	1091200
+3589	T≈°eljabinsk	RUS	T≈°eljabinsk	1083200
 3590	Rostov-na-Donu	RUS	Rostov-na-Donu	1012700
 3591	Perm	RUS	Perm	1009700
 3592	Volgograd	RUS	Volgograd	993400
@@ -3653,7 +3653,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3607	Rjazan	RUS	Rjazan	529900
 3608	Orenburg	RUS	Orenburg	523600
 3609	Lipetsk	RUS	Lipetsk	521000
-3610	Nabereznyje Töelny	RUS	Tatarstan	514700
+3610	Nabereznyje T≈°elny	RUS	Tatarstan	514700
 3611	Tula	RUS	Tula	506100
 3612	Tjumen	RUS	Tjumen	503400
 3613	Kemerovo	RUS	Kemerovo	492700
@@ -3661,30 +3661,30 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3615	Tomsk	RUS	Tomsk	482100
 3616	Kirov	RUS	Kirov	466200
 3617	Ivanovo	RUS	Ivanovo	459200
-3618	Töeboksary	RUS	Töuvassia	459200
+3618	T≈°eboksary	RUS	T≈°uvassia	459200
 3619	Brjansk	RUS	Brjansk	457400
 3620	Tver	RUS	Tver	454900
 3621	Kursk	RUS	Kursk	443500
-3622	Magnitogorsk	RUS	Töeljabinsk	427900
+3622	Magnitogorsk	RUS	T≈°eljabinsk	427900
 3623	Kaliningrad	RUS	Kaliningrad	424400
 3624	Nizni Tagil	RUS	Sverdlovsk	390900
 3625	Murmansk	RUS	Murmansk	376300
 3626	Ulan-Ude	RUS	Burjatia	370400
 3627	Kurgan	RUS	Kurgan	364700
 3628	Arkangeli	RUS	Arkangeli	361800
-3629	Sotöi	RUS	Krasnodar	358600
+3629	Sot≈°i	RUS	Krasnodar	358600
 3630	Smolensk	RUS	Smolensk	353400
 3631	Orjol	RUS	Orjol	344500
 3632	Stavropol	RUS	Stavropol	343300
 3633	Belgorod	RUS	Belgorod	342000
 3634	Kaluga	RUS	Kaluga	339300
 3635	Vladimir	RUS	Vladimir	337100
-3636	Mahatökala	RUS	Dagestan	332800
-3637	Töerepovets	RUS	Vologda	324400
+3636	Mahat≈°kala	RUS	Dagestan	332800
+3637	T≈°erepovets	RUS	Vologda	324400
 3638	Saransk	RUS	Mordva	314800
 3639	Tambov	RUS	Tambov	312000
 3640	Vladikavkaz	RUS	North Ossetia-Alania	310100
-3641	Töita	RUS	Töita	309900
+3641	T≈°ita	RUS	T≈°ita	309900
 3642	Vologda	RUS	Vologda	302500
 3643	Veliki Novgorod	RUS	Novgorod	299500
 3644	Komsomolsk-na-Amure	RUS	Habarovsk	291600
@@ -3696,47 +3696,47 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3650	Dzerzinsk	RUS	Nizni Novgorod	277100
 3651	Surgut	RUS	Hanti-Mansia	274900
 3652	Orsk	RUS	Orenburg	273900
-3653	Sterlitamak	RUS	Baökortostan	265200
+3653	Sterlitamak	RUS	Ba≈°kortostan	265200
 3654	Angarsk	RUS	Irkutsk	264700
-3655	Joökar-Ola	RUS	Marinmaa	249200
+3655	Jo≈°kar-Ola	RUS	Marinmaa	249200
 3656	Rybinsk	RUS	Jaroslavl	239600
 3657	Prokopjevsk	RUS	Kemerovo	237300
 3658	Niznevartovsk	RUS	Hanti-Mansia	233900
-3659	Naltöik	RUS	Kabardi-Balkaria	233400
+3659	Nalt≈°ik	RUS	Kabardi-Balkaria	233400
 3660	Syktyvkar	RUS	Komi	229700
 3661	Severodvinsk	RUS	Arkangeli	229300
 3662	Bijsk	RUS	Altai	225000
 3663	Niznekamsk	RUS	Tatarstan	223400
-3664	Blagoveötöensk	RUS	Amur	222000
-3665	äahty	RUS	Rostov-na-Donu	221800
+3664	Blagove≈°t≈°ensk	RUS	Amur	222000
+3665	≈†ahty	RUS	Rostov-na-Donu	221800
 3666	Staryi Oskol	RUS	Belgorod	213800
 3667	Zelenograd	RUS	Moscow (City)	207100
 3668	Balakovo	RUS	Saratov	206000
 3669	Novorossijsk	RUS	Krasnodar	203300
 3670	Pihkova	RUS	Pihkova	201500
-3671	Zlatoust	RUS	Töeljabinsk	196900
+3671	Zlatoust	RUS	T≈°eljabinsk	196900
 3672	Jakutsk	RUS	Saha (Jakutia)	195400
 3673	Podolsk	RUS	Moskova	194300
-3674	Petropavlovsk-Kamtöatski	RUS	Kamtöatka	194100
+3674	Petropavlovsk-Kamt≈°atski	RUS	Kamt≈°atka	194100
 3675	Kamensk-Uralski	RUS	Sverdlovsk	190600
 3676	Engels	RUS	Saratov	189000
 3677	Syzran	RUS	Samara	186900
-3678	Grozny	RUS	Töetöenia	186000
-3679	Novotöerkassk	RUS	Rostov-na-Donu	184400
+3678	Grozny	RUS	T≈°et≈°enia	186000
+3679	Novot≈°erkassk	RUS	Rostov-na-Donu	184400
 3680	Berezniki	RUS	Perm	181900
 3681	Juzno-Sahalinsk	RUS	Sahalin	179200
 3682	Volgodonsk	RUS	Rostov-na-Donu	178200
 3683	Abakan	RUS	Hakassia	169200
 3684	Maikop	RUS	Adygea	167300
-3685	Miass	RUS	Töeljabinsk	166200
+3685	Miass	RUS	T≈°eljabinsk	166200
 3686	Armavir	RUS	Krasnodar	164900
 3687	Ljubertsy	RUS	Moskova	163900
 3688	Rubtsovsk	RUS	Altai	162600
 3689	Kovrov	RUS	Vladimir	159900
 3690	Nahodka	RUS	Primorje	157700
 3691	Ussurijsk	RUS	Primorje	157300
-3692	Salavat	RUS	Baökortostan	156800
-3693	Mytiötöi	RUS	Moskova	155700
+3692	Salavat	RUS	Ba≈°kortostan	156800
+3693	Myti≈°t≈°i	RUS	Moskova	155700
 3694	Kolomna	RUS	Moskova	150700
 3695	Elektrostal	RUS	Moskova	147000
 3696	Murom	RUS	Vladimir	142400
@@ -3747,28 +3747,28 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3701	Dimitrovgrad	RUS	Uljanovsk	137000
 3702	Pervouralsk	RUS	Sverdlovsk	136100
 3703	Himki	RUS	Moskova	133700
-3704	Balaöiha	RUS	Moskova	132900
+3704	Bala≈°iha	RUS	Moskova	132900
 3705	Nevinnomyssk	RUS	Stavropol	132600
 3706	Pjatigorsk	RUS	Stavropol	132500
 3707	Korolev	RUS	Moskova	132400
 3708	Serpuhov	RUS	Moskova	132000
 3709	Odintsovo	RUS	Moskova	127400
 3710	Orehovo-Zujevo	RUS	Moskova	124900
-3711	Kamyöin	RUS	Volgograd	124600
-3712	Novotöeboksarsk	RUS	Töuvassia	123400
-3713	Töerkessk	RUS	Karatöai-Töerkessia	121700
-3714	Atöinsk	RUS	Krasnojarsk	121600
+3711	Kamy≈°in	RUS	Volgograd	124600
+3712	Novot≈°eboksarsk	RUS	T≈°uvassia	123400
+3713	T≈°erkessk	RUS	Karat≈°ai-T≈°erkessia	121700
+3714	At≈°insk	RUS	Krasnojarsk	121600
 3715	Magadan	RUS	Magadan	121000
-3716	Mitöurinsk	RUS	Tambov	120700
+3716	Mit≈°urinsk	RUS	Tambov	120700
 3717	Kislovodsk	RUS	Stavropol	120400
 3718	Jelets	RUS	Lipetsk	119400
 3719	Seversk	RUS	Tomsk	118600
 3720	Noginsk	RUS	Moskova	117200
 3721	Velikije Luki	RUS	Pihkova	116300
-3722	Novokuibyöevsk	RUS	Samara	116200
-3723	Neftekamsk	RUS	Baökortostan	115700
+3722	Novokuiby≈°evsk	RUS	Samara	116200
+3723	Neftekamsk	RUS	Ba≈°kortostan	115700
 3724	Leninsk-Kuznetski	RUS	Kemerovo	113800
-3725	Oktjabrski	RUS	Baökortostan	111500
+3725	Oktjabrski	RUS	Ba≈°kortostan	111500
 3726	Sergijev Posad	RUS	Moskova	111100
 3727	Arzamas	RUS	Nizni Novgorod	110700
 3728	Kiseljovsk	RUS	Kemerovo	110000
@@ -3779,17 +3779,17 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3733	Solikamsk	RUS	Perm	106000
 3734	Sarapul	RUS	Udmurtia	105700
 3735	Ust-Ilimsk	RUS	Irkutsk	105200
-3736	ätöolkovo	RUS	Moskova	104900
-3737	Mezduretöensk	RUS	Kemerovo	104400
+3736	≈†t≈°olkovo	RUS	Moskova	104900
+3737	Mezduret≈°ensk	RUS	Kemerovo	104400
 3738	Usolje-Sibirskoje	RUS	Irkutsk	103500
 3739	Elista	RUS	Kalmykia	103300
-3740	Novoöahtinsk	RUS	Rostov-na-Donu	101900
+3740	Novo≈°ahtinsk	RUS	Rostov-na-Donu	101900
 3741	Votkinsk	RUS	Udmurtia	101700
 3742	Kyzyl	RUS	Tyva	101100
 3743	Serov	RUS	Sverdlovsk	100400
 3744	Zelenodolsk	RUS	Tatarstan	100200
 3745	Zeleznodoroznyi	RUS	Moskova	100100
-3746	Kineöma	RUS	Ivanovo	100000
+3746	Kine≈°ma	RUS	Ivanovo	100000
 3747	Kuznetsk	RUS	Penza	98200
 3748	Uhta	RUS	Komi	98000
 3749	Jessentuki	RUS	Stavropol	97900
@@ -3797,26 +3797,26 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3751	Neftejugansk	RUS	Hanti-Mansia	97400
 3752	Bataisk	RUS	Rostov-na-Donu	97300
 3753	Nojabrsk	RUS	Yamalin Nenetsia	97300
-3754	Balaöov	RUS	Saratov	97100
+3754	Bala≈°ov	RUS	Saratov	97100
 3755	Zeleznogorsk	RUS	Kursk	96900
 3756	Zukovski	RUS	Moskova	96500
 3757	Anzero-Sudzensk	RUS	Kemerovo	96100
 3758	Bugulma	RUS	Tatarstan	94100
 3759	Zeleznogorsk	RUS	Krasnojarsk	94000
 3760	Novouralsk	RUS	Sverdlovsk	93300
-3761	Puökin	RUS	Pietari	92900
+3761	Pu≈°kin	RUS	Pietari	92900
 3762	Vorkuta	RUS	Komi	92600
 3763	Derbent	RUS	Dagestan	92300
-3764	Kirovo-Töepetsk	RUS	Kirov	91600
+3764	Kirovo-T≈°epetsk	RUS	Kirov	91600
 3765	Krasnogorsk	RUS	Moskova	91000
 3766	Klin	RUS	Moskova	90000
-3767	Töaikovski	RUS	Perm	90000
+3767	T≈°aikovski	RUS	Perm	90000
 3768	Novyi Urengoi	RUS	Yamalin Nenetsia	89800
 3769	Ho Chi Minh City	VNM	Ho Chi Minh City	3980000
 3770	Hanoi	VNM	Hanoi	1410000
 3771	Haiphong	VNM	Haiphong	783133
 3772	Da Nang	VNM	Quang Nam-Da Nang	382674
-3773	BiÍn Hoa	VNM	Dong Nai	282095
+3773	Biƒôn Hoa	VNM	Dong Nai	282095
 3774	Nha Trang	VNM	Khanh Hoa	221331
 3775	Hue	VNM	Thua Thien-Hue	219149
 3776	Can Tho	VNM	Can Tho	215587
@@ -3828,7 +3828,7 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 3782	Long Xuyen	VNM	An Giang	132681
 3783	Thai Nguyen	VNM	Bac Thai	127643
 3784	Hong Gai	VNM	Quang Ninh	127484
-3785	Phan ThiÍt	VNM	Binh Thuan	114236
+3785	Phan Thiƒôt	VNM	Binh Thuan	114236
 3786	Cam Ranh	VNM	Khanh Hoa	114041
 3787	Vinh	VNM	Nghe An	112455
 3788	My Tho	VNM	Tien Giang	108404
@@ -4134,29 +4134,29 @@ COPY country (code, name, continent, region, surfacearea, indepyear, population,
 AFG	Afghanistan	Asia	Southern and Central Asia	652090	1919	22720000	45.900002	5976.00	\N	Afganistan/Afqanestan	Islamic Emirate	Mohammad Omar	1	AF
 NLD	Netherlands	Europe	Western Europe	41526	1581	15864000	78.300003	371362.00	360478.00	Nederland	Constitutional Monarchy	Beatrix	5	NL
 ANT	Netherlands Antilles	North America	Caribbean	800	\N	217000	74.699997	1941.00	\N	Nederlandse Antillen	Nonmetropolitan Territory of The Netherlands	Beatrix	33	AN
-ALB	Albania	Europe	Southern Europe	28748	1912	3401200	71.599998	3205.00	2500.00	ShqipÎria	Republic	Rexhep Mejdani	34	AL
-DZA	Algeria	Africa	Northern Africa	2381741	1962	31471000	69.699997	49982.00	46966.00	Al-Jazaíir/AlgÈrie	Republic	Abdelaziz Bouteflika	35	DZ
+ALB	Albania	Europe	Southern Europe	28748	1912	3401200	71.599998	3205.00	2500.00	Shqip√´ria	Republic	Rexhep Mejdani	34	AL
+DZA	Algeria	Africa	Northern Africa	2381741	1962	31471000	69.699997	49982.00	46966.00	Al-Jaza‚Äôir/Alg√©rie	Republic	Abdelaziz Bouteflika	35	DZ
 ASM	American Samoa	Oceania	Polynesia	199	\N	68000	75.099998	334.00	\N	Amerika Samoa	US Territory	George W. Bush	54	AS
 AND	Andorra	Europe	Southern Europe	468	1278	78000	83.5	1630.00	\N	Andorra	Parliamentary Coprincipality		55	AD
-AGO	Angola	Africa	Central Africa	1246700	1975	12878000	38.299999	6648.00	7984.00	Angola	Republic	JosÈ Eduardo dos Santos	56	AO
+AGO	Angola	Africa	Central Africa	1246700	1975	12878000	38.299999	6648.00	7984.00	Angola	Republic	Jos√© Eduardo dos Santos	56	AO
 AIA	Anguilla	North America	Caribbean	96	\N	8000	76.099998	63.20	\N	Anguilla	Dependent Territory of the UK	Elisabeth II	62	AI
 ATG	Antigua and Barbuda	North America	Caribbean	442	1981	68000	70.5	612.00	584.00	Antigua and Barbuda	Constitutional Monarchy	Elisabeth II	63	AG
-ARE	United Arab Emirates	Asia	Middle East	83600	1971	2441000	74.099998	37966.00	36846.00	Al-Imarat al-¥Arabiya al-Muttahida	Emirate Federation	Zayid bin Sultan al-Nahayan	65	AE
-ARG	Argentina	South America	South America	2780400	1816	37032000	75.099998	340238.00	323310.00	Argentina	Federal Republic	Fernando de la R˙a	69	AR
-ARM	Armenia	Asia	Middle East	29800	1991	3520000	66.400002	1813.00	1627.00	Hajastan	Republic	Robert Kotöarjan	126	AM
+ARE	United Arab Emirates	Asia	Middle East	83600	1971	2441000	74.099998	37966.00	36846.00	Al-Imarat al-¬¥Arabiya al-Muttahida	Emirate Federation	Zayid bin Sultan al-Nahayan	65	AE
+ARG	Argentina	South America	South America	2780400	1816	37032000	75.099998	340238.00	323310.00	Argentina	Federal Republic	Fernando de la R√∫a	69	AR
+ARM	Armenia	Asia	Middle East	29800	1991	3520000	66.400002	1813.00	1627.00	Hajastan	Republic	Robert Kot≈°arjan	126	AM
 ABW	Aruba	North America	Caribbean	193	\N	103000	78.400002	828.00	793.00	Aruba	Nonmetropolitan Territory of The Netherlands	Beatrix	129	AW
 AUS	Australia	Oceania	Australia and New Zealand	7741220	1901	18886000	79.800003	351182.00	392911.00	Australia	Constitutional Monarchy, Federation	Elisabeth II	135	AU
-AZE	Azerbaijan	Asia	Middle East	86600	1991	7734000	62.900002	4127.00	4100.00	Az‰rbaycan	Federal Republic	Heyd‰r ƒliyev	144	AZ
+AZE	Azerbaijan	Asia	Middle East	86600	1991	7734000	62.900002	4127.00	4100.00	Az√§rbaycan	Federal Republic	Heyd√§r √Ñliyev	144	AZ
 BHS	Bahamas	North America	Caribbean	13878	1973	307000	71.099998	3527.00	3347.00	The Bahamas	Constitutional Monarchy	Elisabeth II	148	BS
 BHR	Bahrain	Asia	Middle East	694	1971	617000	73	6366.00	6097.00	Al-Bahrayn	Monarchy (Emirate)	Hamad ibn Isa al-Khalifa	149	BH
 BGD	Bangladesh	Asia	Southern and Central Asia	143998	1971	129155000	60.200001	32852.00	31966.00	Bangladesh	Republic	Shahabuddin Ahmad	150	BD
 BRB	Barbados	North America	Caribbean	430	1966	270000	73	2223.00	2186.00	Barbados	Constitutional Monarchy	Elisabeth II	174	BB
-BEL	Belgium	Europe	Western Europe	30518	1830	10239000	77.800003	249704.00	243948.00	BelgiÎ/Belgique	Constitutional Monarchy, Federation	Albert II	179	BE
+BEL	Belgium	Europe	Western Europe	30518	1830	10239000	77.800003	249704.00	243948.00	Belgi√´/Belgique	Constitutional Monarchy, Federation	Albert II	179	BE
 BLZ	Belize	North America	Central America	22696	1981	241000	70.900002	630.00	616.00	Belize	Constitutional Monarchy	Elisabeth II	185	BZ
-BEN	Benin	Africa	Western Africa	112622	1960	6097000	50.200001	2357.00	2141.00	BÈnin	Republic	Mathieu KÈrÈkou	187	BJ
+BEN	Benin	Africa	Western Africa	112622	1960	6097000	50.200001	2357.00	2141.00	B√©nin	Republic	Mathieu K√©r√©kou	187	BJ
 BMU	Bermuda	North America	North America	53	\N	65000	76.900002	2328.00	2190.00	Bermuda	Dependent Territory of the UK	Elisabeth II	191	BM
 BTN	Bhutan	Asia	Southern and Central Asia	47000	1910	2124000	52.400002	372.00	383.00	Druk-Yul	Monarchy	Jigme Singye Wangchuk	192	BT
-BOL	Bolivia	South America	South America	1098581	1825	8329000	63.700001	8571.00	7967.00	Bolivia	Republic	Hugo B·nzer Su·rez	194	BO
+BOL	Bolivia	South America	South America	1098581	1825	8329000	63.700001	8571.00	7967.00	Bolivia	Republic	Hugo B√°nzer Su√°rez	194	BO
 BIH	Bosnia and Herzegovina	Europe	Southern Europe	51197	1992	3972000	71.5	2841.00	\N	Bosna i Hercegovina	Federal Republic	Ante Jelavic	201	BA
 BWA	Botswana	Africa	Southern Africa	581730	1966	1622000	39.299999	4834.00	4935.00	Botswana	Republic	Festus G. Mogae	204	BW
 BRA	Brazil	South America	South America	8547403	1822	170115000	62.900002	776739.00	804108.00	Brasil	Federal Republic	Fernando Henrique Cardoso	211	BR
@@ -4164,90 +4164,90 @@ GBR	United Kingdom	Europe	British Islands	242900	1066	59623400	77.699997	1378330
 VGB	Virgin Islands, British	North America	Caribbean	151	\N	21000	75.400002	612.00	573.00	British Virgin Islands	Dependent Territory of the UK	Elisabeth II	537	VG
 BRN	Brunei	Asia	Southeast Asia	5765	1984	328000	73.599998	11705.00	12460.00	Brunei Darussalam	Monarchy (Sultanate)	Haji Hassan al-Bolkiah	538	BN
 BGR	Bulgaria	Europe	Eastern Europe	110994	1908	8190900	70.900002	12178.00	10169.00	Balgarija	Republic	Petar Stojanov	539	BG
-BFA	Burkina Faso	Africa	Western Africa	274000	1960	11937000	46.700001	2425.00	2201.00	Burkina Faso	Republic	Blaise CompaorÈ	549	BF
+BFA	Burkina Faso	Africa	Western Africa	274000	1960	11937000	46.700001	2425.00	2201.00	Burkina Faso	Republic	Blaise Compaor√©	549	BF
 BDI	Burundi	Africa	Eastern Africa	27834	1962	6695000	46.200001	903.00	982.00	Burundi/Uburundi	Republic	Pierre Buyoya	552	BI
 CYM	Cayman Islands	North America	Caribbean	264	\N	38000	78.900002	1263.00	1186.00	Cayman Islands	Dependent Territory of the UK	Elisabeth II	553	KY
 CHL	Chile	South America	South America	756626	1810	15211000	75.699997	72949.00	75780.00	Chile	Republic	Ricardo Lagos Escobar	554	CL
 COK	Cook Islands	Oceania	Polynesia	236	\N	20000	71.099998	100.00	\N	The Cook Islands	Nonmetropolitan Territory of New Zealand	Elisabeth II	583	CK
-CRI	Costa Rica	North America	Central America	51100	1821	4023000	75.800003	10226.00	9757.00	Costa Rica	Republic	Miguel ¡ngel RodrÌguez EcheverrÌa	584	CR
+CRI	Costa Rica	North America	Central America	51100	1821	4023000	75.800003	10226.00	9757.00	Costa Rica	Republic	Miguel √Ångel Rodr√≠guez Echeverr√≠a	584	CR
 DJI	Djibouti	Africa	Eastern Africa	23200	1977	638000	50.799999	382.00	373.00	Djibouti/Jibuti	Republic	Ismail Omar Guelleh	585	DJ
 DMA	Dominica	North America	Caribbean	751	1978	71000	73.400002	256.00	243.00	Dominica	Republic	Vernon Shaw	586	DM
-DOM	Dominican Republic	North America	Caribbean	48511	1844	8495000	73.199997	15846.00	15076.00	Rep˙blica Dominicana	Republic	HipÛlito MejÌa DomÌnguez	587	DO
+DOM	Dominican Republic	North America	Caribbean	48511	1844	8495000	73.199997	15846.00	15076.00	Rep√∫blica Dominicana	Republic	Hip√≥lito Mej√≠a Dom√≠nguez	587	DO
 ECU	Ecuador	South America	South America	283561	1822	12646000	71.099998	19770.00	19769.00	Ecuador	Republic	Gustavo Noboa Bejarano	594	EC
 EGY	Egypt	Africa	Northern Africa	1001449	1922	68470000	63.299999	82710.00	75617.00	Misr	Republic	Hosni Mubarak	608	EG
-SLV	El Salvador	North America	Central America	21041	1841	6276000	69.699997	11863.00	11203.00	El Salvador	Republic	Francisco Guillermo Flores PÈrez	645	SV
+SLV	El Salvador	North America	Central America	21041	1841	6276000	69.699997	11863.00	11203.00	El Salvador	Republic	Francisco Guillermo Flores P√©rez	645	SV
 ERI	Eritrea	Africa	Eastern Africa	117600	1993	3850000	55.799999	650.00	755.00	Ertra	Republic	Isayas Afewerki [Isaias Afwerki]	652	ER
-ESP	Spain	Europe	Southern Europe	505992	1492	39441700	78.800003	553233.00	532031.00	EspaÒa	Constitutional Monarchy	Juan Carlos I	653	ES
+ESP	Spain	Europe	Southern Europe	505992	1492	39441700	78.800003	553233.00	532031.00	Espa≈Ña	Constitutional Monarchy	Juan Carlos I	653	ES
 ZAF	South Africa	Africa	Southern Africa	1221037	1910	40377000	51.099998	116729.00	129092.00	South Africa	Republic	Thabo Mbeki	716	ZA
-ETH	Ethiopia	Africa	Eastern Africa	1104300	-1000	62565000	45.200001	6353.00	6180.00	YeItyop¥iya	Republic	Negasso Gidada	756	ET
+ETH	Ethiopia	Africa	Eastern Africa	1104300	-1000	62565000	45.200001	6353.00	6180.00	YeItyop¬¥iya	Republic	Negasso Gidada	756	ET
 FLK	Falkland Islands	South America	South America	12173	\N	2000	\N	0.00	\N	Falkland Islands	Dependent Territory of the UK	Elisabeth II	763	FK
 FJI	Fiji Islands	Oceania	Melanesia	18274	1970	817000	67.900002	1536.00	2149.00	Fiji Islands	Republic	Josefa Iloilo	764	FJ
 PHL	Philippines	Asia	Southeast Asia	300000	1946	75967000	67.5	65107.00	82239.00	Pilipinas	Republic	Gloria Macapagal-Arroyo	766	PH
-FRO	Faroe Islands	Europe	Nordic Countries	1399	\N	43000	78.400002	0.00	\N	F¯royar	Part of Denmark	Margrethe II	901	FO
+FRO	Faroe Islands	Europe	Nordic Countries	1399	\N	43000	78.400002	0.00	\N	F≈ôroyar	Part of Denmark	Margrethe II	901	FO
 GAB	Gabon	Africa	Central Africa	267668	1960	1226000	50.099998	5493.00	5279.00	Le Gabon	Republic	Omar Bongo	902	GA
 GMB	Gambia	Africa	Western Africa	11295	1965	1305000	53.200001	320.00	325.00	The Gambia	Republic	Yahya Jammeh	904	GM
-GEO	Georgia	Asia	Middle East	69700	1991	4968000	64.5	6064.00	5924.00	Sakartvelo	Republic	Eduard äevardnadze	905	GE
+GEO	Georgia	Asia	Middle East	69700	1991	4968000	64.5	6064.00	5924.00	Sakartvelo	Republic	Eduard ≈†evardnadze	905	GE
 GHA	Ghana	Africa	Western Africa	238533	1957	20212000	57.400002	7137.00	6884.00	Ghana	Republic	John Kufuor	910	GH
 GIB	Gibraltar	Europe	Southern Europe	6	\N	25000	79	258.00	\N	Gibraltar	Dependent Territory of the UK	Elisabeth II	915	GI
 GRD	Grenada	North America	Caribbean	344	1974	94000	64.5	318.00	\N	Grenada	Constitutional Monarchy	Elisabeth II	916	GD
-GRL	Greenland	North America	North America	2166090	\N	56000	68.099998	0.00	\N	Kalaallit Nunaat/Gr¯nland	Part of Denmark	Margrethe II	917	GL
+GRL	Greenland	North America	North America	2166090	\N	56000	68.099998	0.00	\N	Kalaallit Nunaat/Gr≈ônland	Part of Denmark	Margrethe II	917	GL
 GLP	Guadeloupe	North America	Caribbean	1705	\N	456000	77	3501.00	\N	Guadeloupe	Overseas Department of France	Jacques Chirac	919	GP
 GUM	Guam	Oceania	Micronesia	549	\N	168000	77.800003	1197.00	1136.00	Guam	US Territory	George W. Bush	921	GU
 GTM	Guatemala	North America	Central America	108889	1821	11385000	66.199997	19008.00	17797.00	Guatemala	Republic	Alfonso Portillo Cabrera	922	GT
-GIN	Guinea	Africa	Western Africa	245857	1958	7430000	45.599998	2352.00	2383.00	GuinÈe	Republic	Lansana ContÈ	926	GN
-GNB	Guinea-Bissau	Africa	Western Africa	36125	1974	1213000	49	293.00	272.00	GuinÈ-Bissau	Republic	Kumba Ial·	927	GW
+GIN	Guinea	Africa	Western Africa	245857	1958	7430000	45.599998	2352.00	2383.00	Guin√©e	Republic	Lansana Cont√©	926	GN
+GNB	Guinea-Bissau	Africa	Western Africa	36125	1974	1213000	49	293.00	272.00	Guin√©-Bissau	Republic	Kumba Ial√°	927	GW
 GUY	Guyana	South America	South America	214969	1966	861000	64	722.00	743.00	Guyana	Republic	Bharrat Jagdeo	928	GY
-HTI	Haiti	North America	Caribbean	27750	1804	8222000	49.200001	3459.00	3107.00	HaÔti/Dayti	Republic	Jean-Bertrand Aristide	929	HT
-HND	Honduras	North America	Central America	112088	1838	6485000	69.900002	5333.00	4697.00	Honduras	Republic	Carlos Roberto Flores FacussÈ	933	HN
+HTI	Haiti	North America	Caribbean	27750	1804	8222000	49.200001	3459.00	3107.00	Haƒèti/Dayti	Republic	Jean-Bertrand Aristide	929	HT
+HND	Honduras	North America	Central America	112088	1838	6485000	69.900002	5333.00	4697.00	Honduras	Republic	Carlos Roberto Flores Facuss√©	933	HN
 HKG	Hong Kong	Asia	Eastern Asia	1075	\N	6782000	79.5	166448.00	173610.00	Xianggang/Hong Kong	Special Administrative Region of China	Jiang Zemin	937	HK
 SJM	Svalbard and Jan Mayen	Europe	Nordic Countries	62422	\N	3200	\N	0.00	\N	Svalbard og Jan Mayen	Dependent Territory of Norway	Harald V	938	SJ
 IDN	Indonesia	Asia	Southeast Asia	1904569	1945	212107000	68	84982.00	215002.00	Indonesia	Republic	Abdurrahman Wahid	939	ID
 IND	India	Asia	Southern and Central Asia	3287263	1947	1013662000	62.5	447114.00	430572.00	Bharat/India	Federal Republic	Kocheril Raman Narayanan	1109	IN
-IRQ	Iraq	Asia	Middle East	438317	1932	23115000	66.5	11500.00	\N	Al-¥Iraq	Republic	Saddam Hussein al-Takriti	1365	IQ
+IRQ	Iraq	Asia	Middle East	438317	1932	23115000	66.5	11500.00	\N	Al-¬¥Iraq	Republic	Saddam Hussein al-Takriti	1365	IQ
 IRN	Iran	Asia	Southern and Central Asia	1648195	1906	67702000	69.699997	195746.00	160151.00	Iran	Islamic Republic	Ali Mohammad Khatami-Ardakani	1380	IR
-IRL	Ireland	Europe	British Islands	70273	1921	3775100	76.800003	75921.00	73132.00	Ireland/…ire	Republic	Mary McAleese	1447	IE
-ISL	Iceland	Europe	Nordic Countries	103000	1944	279000	79.400002	8255.00	7474.00	Õsland	Republic	”lafur Ragnar GrÌmsson	1449	IS
-ISR	Israel	Asia	Middle East	21056	1948	6217000	78.599998	97477.00	98577.00	Yisraíel/Israíil	Republic	Moshe Katzav	1450	IL
+IRL	Ireland	Europe	British Islands	70273	1921	3775100	76.800003	75921.00	73132.00	Ireland/√âire	Republic	Mary McAleese	1447	IE
+ISL	Iceland	Europe	Nordic Countries	103000	1944	279000	79.400002	8255.00	7474.00	√çsland	Republic	√ìlafur Ragnar Gr√≠msson	1449	IS
+ISR	Israel	Asia	Middle East	21056	1948	6217000	78.599998	97477.00	98577.00	Yisra‚Äôel/Isra‚Äôil	Republic	Moshe Katzav	1450	IL
 ITA	Italy	Europe	Southern Europe	301316	1861	57680000	79	1161755.00	1145372.00	Italia	Republic	Carlo Azeglio Ciampi	1464	IT
-TMP	East Timor	Asia	Southeast Asia	14874	\N	885000	46	0.00	\N	Timor Timur	Administrated by the UN	JosÈ Alexandre Gusm„o	1522	TP
-AUT	Austria	Europe	Western Europe	83859	1918	8091800	77.699997	211860.00	206025.00	÷sterreich	Federal Republic	Thomas Klestil	1523	AT
+TMP	East Timor	Asia	Southeast Asia	14874	\N	885000	46	0.00	\N	Timor Timur	Administrated by the UN	Jos√© Alexandre GusmƒÉo	1522	TP
+AUT	Austria	Europe	Western Europe	83859	1918	8091800	77.699997	211860.00	206025.00	√ñsterreich	Federal Republic	Thomas Klestil	1523	AT
 JAM	Jamaica	North America	Caribbean	10990	1962	2583000	75.199997	6871.00	6722.00	Jamaica	Constitutional Monarchy	Elisabeth II	1530	JM
 JPN	Japan	Asia	Eastern Asia	377829	-660	126714000	80.699997	3787042.00	4192638.00	Nihon/Nippon	Constitutional Monarchy	Akihito	1532	JP
 YEM	Yemen	Asia	Middle East	527968	1918	18112000	59.799999	6041.00	5729.00	Al-Yaman	Republic	Ali Abdallah Salih	1780	YE
 JOR	Jordan	Asia	Middle East	88946	1946	5083000	77.400002	7526.00	7051.00	Al-Urdunn	Constitutional Monarchy	Abdullah II	1786	JO
 CXR	Christmas Island	Oceania	Australia and New Zealand	135	\N	2500	\N	0.00	\N	Christmas Island	Territory of Australia	Elisabeth II	1791	CX
-YUG	Yugoslavia	Europe	Southern Europe	102173	1918	10640000	72.400002	17000.00	\N	Jugoslavija	Federal Republic	Vojislav Koötunica	1792	YU
-KHM	Cambodia	Asia	Southeast Asia	181035	1953	11168000	56.5	5121.00	5670.00	K‚mpuchÈa	Constitutional Monarchy	Norodom Sihanouk	1800	KH
+YUG	Yugoslavia	Europe	Southern Europe	102173	1918	10640000	72.400002	17000.00	\N	Jugoslavija	Federal Republic	Vojislav Ko≈°tunica	1792	YU
+KHM	Cambodia	Asia	Southeast Asia	181035	1953	11168000	56.5	5121.00	5670.00	K√¢mpuch√©a	Constitutional Monarchy	Norodom Sihanouk	1800	KH
 CMR	Cameroon	Africa	Central Africa	475442	1960	15085000	54.799999	9174.00	8596.00	Cameroun/Cameroon	Republic	Paul Biya	1804	CM
 CAN	Canada	North America	North America	9970610	1867	31147000	79.400002	598862.00	625626.00	Canada	Constitutional Monarchy, Federation	Elisabeth II	1822	CA
-CPV	Cape Verde	Africa	Western Africa	4033	1975	428000	68.900002	435.00	420.00	Cabo Verde	Republic	AntÛnio Mascarenhas Monteiro	1859	CV
+CPV	Cape Verde	Africa	Western Africa	4033	1975	428000	68.900002	435.00	420.00	Cabo Verde	Republic	Ant√≥nio Mascarenhas Monteiro	1859	CV
 KAZ	Kazakstan	Asia	Southern and Central Asia	2724900	1991	16223000	63.200001	24375.00	23383.00	Qazaqstan	Republic	Nursultan Nazarbajev	1864	KZ
 KEN	Kenya	Africa	Eastern Africa	580367	1963	30080000	48	9217.00	10241.00	Kenya	Republic	Daniel arap Moi	1881	KE
-CAF	Central African Republic	Africa	Central Africa	622984	1960	3615000	44	1054.00	993.00	Centrafrique/BÍ-AfrÓka	Republic	Ange-FÈlix PatassÈ	1889	CF
+CAF	Central African Republic	Africa	Central Africa	622984	1960	3615000	44	1054.00	993.00	Centrafrique/Bƒô-Afr√Æka	Republic	Ange-F√©lix Patass√©	1889	CF
 CHN	China	Asia	Eastern Asia	9572900	-1523	1277558000	71.400002	982268.00	917719.00	Zhongquo	People'sRepublic	Jiang Zemin	1891	CN
 KGZ	Kyrgyzstan	Asia	Southern and Central Asia	199900	1991	4699000	63.400002	1626.00	1767.00	Kyrgyzstan	Republic	Askar Akajev	2253	KG
 KIR	Kiribati	Oceania	Micronesia	726	1979	83000	59.799999	40.70	\N	Kiribati	Republic	Teburoro Tito	2256	KI
-COL	Colombia	South America	South America	1138914	1810	42321000	70.300003	102896.00	105116.00	Colombia	Republic	AndrÈs Pastrana Arango	2257	CO
+COL	Colombia	South America	South America	1138914	1810	42321000	70.300003	102896.00	105116.00	Colombia	Republic	Andr√©s Pastrana Arango	2257	CO
 COM	Comoros	Africa	Eastern Africa	1862	1975	578000	60	4401.00	4361.00	Komori/Comores	Republic	Azali Assoumani	2295	KM
 COG	Congo	Africa	Central Africa	342000	1960	2943000	47.400002	2108.00	2287.00	Congo	Republic	Denis Sassou-Nguesso	2296	CG
-COD	Congo, The Democratic Republic of the	Africa	Central Africa	2344858	1960	51654000	48.799999	6964.00	2474.00	RÈpublique DÈmocratique du Congo	Republic	Joseph Kabila	2298	CD
+COD	Congo, The Democratic Republic of the	Africa	Central Africa	2344858	1960	51654000	48.799999	6964.00	2474.00	R√©publique D√©mocratique du Congo	Republic	Joseph Kabila	2298	CD
 CCK	Cocos (Keeling) Islands	Oceania	Australia and New Zealand	14	\N	600	\N	0.00	\N	Cocos (Keeling) Islands	Territory of Australia	Elisabeth II	2317	CC
-PRK	North Korea	Asia	Eastern Asia	120538	1948	24039000	70.699997	5332.00	\N	Choson Minjujuui In¥min Konghwaguk (Bukhan)	Socialistic Republic	Kim Jong-il	2318	KP
-KOR	South Korea	Asia	Eastern Asia	99434	1948	46844000	74.400002	320749.00	442544.00	Taehan Miníguk (Namhan)	Republic	Kim Dae-jung	2331	KR
-GRC	Greece	Europe	Southern Europe	131626	1830	10545700	78.400002	120724.00	119946.00	Ell·da	Republic	Kostis Stefanopoulos	2401	GR
-HRV	Croatia	Europe	Southern Europe	56538	1991	4473000	73.699997	20208.00	19300.00	Hrvatska	Republic	ätipe Mesic	2409	HR
+PRK	North Korea	Asia	Eastern Asia	120538	1948	24039000	70.699997	5332.00	\N	Choson Minjujuui In¬¥min Konghwaguk (Bukhan)	Socialistic Republic	Kim Jong-il	2318	KP
+KOR	South Korea	Asia	Eastern Asia	99434	1948	46844000	74.400002	320749.00	442544.00	Taehan Min‚Äôguk (Namhan)	Republic	Kim Dae-jung	2331	KR
+GRC	Greece	Europe	Southern Europe	131626	1830	10545700	78.400002	120724.00	119946.00	Ell√°da	Republic	Kostis Stefanopoulos	2401	GR
+HRV	Croatia	Europe	Southern Europe	56538	1991	4473000	73.699997	20208.00	19300.00	Hrvatska	Republic	≈†tipe Mesic	2409	HR
 CUB	Cuba	North America	Caribbean	110861	1902	11201000	76.199997	17843.00	18862.00	Cuba	Socialistic Republic	Fidel Castro Ruz	2413	CU
 KWT	Kuwait	Asia	Middle East	17818	1961	1972000	76.099998	27037.00	30373.00	Al-Kuwayt	Constitutional Monarchy (Emirate)	Jabir al-Ahmad al-Jabir al-Sabah	2429	KW
-CYP	Cyprus	Asia	Middle East	9251	1960	754700	76.699997	9333.00	8246.00	K˝pros/Kibris	Republic	Glafkos Klerides	2430	CY
+CYP	Cyprus	Asia	Middle East	9251	1960	754700	76.699997	9333.00	8246.00	K√Ωpros/Kibris	Republic	Glafkos Klerides	2430	CY
 LAO	Laos	Asia	Southeast Asia	236800	1953	5433000	53.099998	1292.00	1746.00	Lao	Republic	Khamtay Siphandone	2432	LA
 LVA	Latvia	Europe	Baltic Countries	64589	1991	2424200	68.400002	6398.00	5639.00	Latvija	Republic	Vaira Vike-Freiberga	2434	LV
 LSO	Lesotho	Africa	Southern Africa	30355	1966	2153000	50.799999	1061.00	1161.00	Lesotho	Constitutional Monarchy	Letsie III	2437	LS
-LBN	Lebanon	Asia	Middle East	10400	1941	3282000	71.300003	17121.00	15129.00	Lubnan	Republic	…mile Lahoud	2438	LB
+LBN	Lebanon	Asia	Middle East	10400	1941	3282000	71.300003	17121.00	15129.00	Lubnan	Republic	√âmile Lahoud	2438	LB
 LBR	Liberia	Africa	Western Africa	111369	1847	3154000	51	2012.00	\N	Liberia	Republic	Charles Taylor	2440	LR
 LBY	Libyan Arab Jamahiriya	Africa	Northern Africa	1759540	1951	5605000	75.5	44806.00	40562.00	Libiya	Socialistic State	Muammar al-Qadhafi	2441	LY
 LIE	Liechtenstein	Europe	Western Europe	160	1806	32300	78.800003	1119.00	1084.00	Liechtenstein	Constitutional Monarchy	Hans-Adam II	2446	LI
 LTU	Lithuania	Europe	Baltic Countries	65301	1991	3698500	69.099998	10692.00	9585.00	Lietuva	Republic	Valdas Adamkus	2447	LT
-LUX	Luxembourg	Europe	Western Europe	2586	1867	435700	77.099998	16321.00	15519.00	Luxembourg/LÎtzebuerg	Constitutional Monarchy	Henri	2452	LU
+LUX	Luxembourg	Europe	Western Europe	2586	1867	435700	77.099998	16321.00	15519.00	Luxembourg/L√´tzebuerg	Constitutional Monarchy	Henri	2452	LU
 ESH	Western Sahara	Africa	Northern Africa	266000	\N	293000	49.799999	60.00	\N	As-Sahrawiya	Occupied by Marocco	Mohammed Abdel Aziz	2453	EH
 MAC	Macao	Asia	Eastern Asia	18	\N	473000	81.599998	5749.00	5940.00	Macau/Aomen	Special Administrative Region of China	Jiang Zemin	2454	MO
 MDG	Madagascar	Africa	Eastern Africa	587041	1960	15942000	55	3750.00	3545.00	Madagasikara/Madagascar	Federal Republic	Didier Ratsiraka	2455	MG
@@ -4255,51 +4255,51 @@ MKD	Macedonia	Europe	Southern Europe	25713	1991	2024000	73.800003	1694.00	1915.0
 MWI	Malawi	Africa	Eastern Africa	118484	1964	10925000	37.599998	1687.00	2527.00	Malawi	Republic	Bakili Muluzi	2462	MW
 MDV	Maldives	Asia	Southern and Central Asia	298	1965	286000	62.200001	199.00	\N	Dhivehi Raajje/Maldives	Republic	Maumoon Abdul Gayoom	2463	MV
 MYS	Malaysia	Asia	Southeast Asia	329758	1957	22244000	70.800003	69213.00	97884.00	Malaysia	Constitutional Monarchy, Federation	Salahuddin Abdul Aziz Shah Alhaj	2464	MY
-MLI	Mali	Africa	Western Africa	1240192	1960	11234000	46.700001	2642.00	2453.00	Mali	Republic	Alpha Oumar KonarÈ	2482	ML
+MLI	Mali	Africa	Western Africa	1240192	1960	11234000	46.700001	2642.00	2453.00	Mali	Republic	Alpha Oumar Konar√©	2482	ML
 MLT	Malta	Europe	Southern Europe	316	1964	380200	77.900002	3512.00	3338.00	Malta	Republic	Guido de Marco	2484	MT
 MAR	Morocco	Africa	Northern Africa	446550	1956	28351000	69.099998	36124.00	33514.00	Al-Maghrib	Constitutional Monarchy	Mohammed VI	2486	MA
 MHL	Marshall Islands	Oceania	Micronesia	181	1990	64000	65.5	97.00	\N	Marshall Islands/Majol	Republic	Kessai Note	2507	MH
 MTQ	Martinique	North America	Caribbean	1102	\N	395000	78.300003	2731.00	2559.00	Martinique	Overseas Department of France	Jacques Chirac	2508	MQ
-MRT	Mauritania	Africa	Western Africa	1025520	1960	2670000	50.799999	998.00	1081.00	Muritaniya/Mauritanie	Republic	Maaouiya Ould Sid¥Ahmad Taya	2509	MR
+MRT	Mauritania	Africa	Western Africa	1025520	1960	2670000	50.799999	998.00	1081.00	Muritaniya/Mauritanie	Republic	Maaouiya Ould Sid¬¥Ahmad Taya	2509	MR
 MUS	Mauritius	Africa	Eastern Africa	2040	1968	1158000	71	4251.00	4186.00	Mauritius	Republic	Cassam Uteem	2511	MU
 MYT	Mayotte	Africa	Eastern Africa	373	\N	149000	59.5	0.00	\N	Mayotte	Territorial Collectivity of France	Jacques Chirac	2514	YT
-MEX	Mexico	North America	Central America	1958201	1810	98881000	71.5	414972.00	401461.00	MÈxico	Federal Republic	Vicente Fox Quesada	2515	MX
+MEX	Mexico	North America	Central America	1958201	1810	98881000	71.5	414972.00	401461.00	M√©xico	Federal Republic	Vicente Fox Quesada	2515	MX
 FSM	Micronesia, Federated States of	Oceania	Micronesia	702	1990	119000	68.599998	212.00	\N	Micronesia	Federal Republic	Leo A. Falcam	2689	FM
 MDA	Moldova	Europe	Eastern Europe	33851	1991	4380000	64.5	1579.00	1872.00	Moldova	Republic	Vladimir Voronin	2690	MD
 MCO	Monaco	Europe	Western Europe	1.5	1861	34000	78.800003	776.00	\N	Monaco	Constitutional Monarchy	Rainier III	2695	MC
 MNG	Mongolia	Asia	Eastern Asia	1566500	1921	2662000	67.300003	1043.00	933.00	Mongol Uls	Republic	Natsagiin Bagabandi	2696	MN
 MSR	Montserrat	North America	Caribbean	102	\N	11000	78	109.00	\N	Montserrat	Dependent Territory of the UK	Elisabeth II	2697	MS
-MOZ	Mozambique	Africa	Eastern Africa	801590	1975	19680000	37.5	2891.00	2711.00	MoÁambique	Republic	JoaquÌm A. Chissano	2698	MZ
+MOZ	Mozambique	Africa	Eastern Africa	801590	1975	19680000	37.5	2891.00	2711.00	Mo√ßambique	Republic	Joaqu√≠m A. Chissano	2698	MZ
 MMR	Myanmar	Asia	Southeast Asia	676578	1948	45611000	54.900002	180375.00	171028.00	Myanma Pye	Republic	kenraali Than Shwe	2710	MM
 NAM	Namibia	Africa	Southern Africa	824292	1990	1726000	42.5	3101.00	3384.00	Namibia	Republic	Sam Nujoma	2726	NA
 NRU	Nauru	Oceania	Micronesia	21	1968	12000	60.799999	197.00	\N	Naoero/Nauru	Republic	Bernard Dowiyogo	2728	NR
 NPL	Nepal	Asia	Southern and Central Asia	147181	1769	23930000	57.799999	4768.00	4837.00	Nepal	Constitutional Monarchy	Gyanendra Bir Bikram	2729	NP
-NIC	Nicaragua	North America	Central America	130000	1838	5074000	68.699997	1988.00	2023.00	Nicaragua	Republic	Arnoldo Alem·n Lacayo	2734	NI
+NIC	Nicaragua	North America	Central America	130000	1838	5074000	68.699997	1988.00	2023.00	Nicaragua	Republic	Arnoldo Alem√°n Lacayo	2734	NI
 NER	Niger	Africa	Western Africa	1267000	1960	10730000	41.299999	1706.00	1580.00	Niger	Republic	Mamadou Tandja	2738	NE
 NGA	Nigeria	Africa	Western Africa	923768	1960	111506000	51.599998	65707.00	58623.00	Nigeria	Federal Republic	Olusegun Obasanjo	2754	NG
 NIU	Niue	Oceania	Polynesia	260	\N	2000	\N	0.00	\N	Niue	Nonmetropolitan Territory of New Zealand	Elisabeth II	2805	NU
 NFK	Norfolk Island	Oceania	Australia and New Zealand	36	\N	2000	\N	0.00	\N	Norfolk Island	Territory of Australia	Elisabeth II	2806	NF
 NOR	Norway	Europe	Nordic Countries	323877	1905	4478500	78.699997	145895.00	153370.00	Norge	Constitutional Monarchy	Harald V	2807	NO
-CIV	CÙte díIvoire	Africa	Western Africa	322463	1960	14786000	45.200001	11345.00	10285.00	CÙte díIvoire	Republic	Laurent Gbagbo	2814	CI
-OMN	Oman	Asia	Middle East	309500	1951	2542000	71.800003	16904.00	16153.00	¥Uman	Monarchy (Sultanate)	Qabus ibn Sa¥id	2821	OM
+CIV	C√¥te d‚ÄôIvoire	Africa	Western Africa	322463	1960	14786000	45.200001	11345.00	10285.00	C√¥te d‚ÄôIvoire	Republic	Laurent Gbagbo	2814	CI
+OMN	Oman	Asia	Middle East	309500	1951	2542000	71.800003	16904.00	16153.00	¬¥Uman	Monarchy (Sultanate)	Qabus ibn Sa¬¥id	2821	OM
 PAK	Pakistan	Asia	Southern and Central Asia	796095	1947	156483000	61.099998	61289.00	58549.00	Pakistan	Republic	Mohammad Rafiq Tarar	2831	PK
 PLW	Palau	Oceania	Micronesia	459	1994	19000	68.599998	105.00	\N	Belau/Palau	Republic	Kuniwo Nakamura	2881	PW
-PAN	Panama	North America	Central America	75517	1903	2856000	75.5	9131.00	8700.00	Panam·	Republic	Mireya Elisa Moscoso RodrÌguez	2882	PA
+PAN	Panama	North America	Central America	75517	1903	2856000	75.5	9131.00	8700.00	Panam√°	Republic	Mireya Elisa Moscoso Rodr√≠guez	2882	PA
 PNG	Papua New Guinea	Oceania	Melanesia	462840	1975	4807000	63.099998	4988.00	6328.00	Papua New Guinea/Papua Niugini	Constitutional Monarchy	Elisabeth II	2884	PG
-PRY	Paraguay	South America	South America	406752	1811	5496000	73.699997	8444.00	9555.00	Paraguay	Republic	Luis ¡ngel Gonz·lez Macchi	2885	PY
-PER	Peru	South America	South America	1285216	1821	25662000	70	64140.00	65186.00	Per˙/Piruw	Republic	Valentin Paniagua Corazao	2890	PE
+PRY	Paraguay	South America	South America	406752	1811	5496000	73.699997	8444.00	9555.00	Paraguay	Republic	Luis √Ångel Gonz√°lez Macchi	2885	PY
+PER	Peru	South America	South America	1285216	1821	25662000	70	64140.00	65186.00	Per√∫/Piruw	Republic	Valentin Paniagua Corazao	2890	PE
 PCN	Pitcairn	Oceania	Polynesia	49	\N	50	\N	0.00	\N	Pitcairn	Dependent Territory of the UK	Elisabeth II	2912	PN
 MNP	Northern Mariana Islands	Oceania	Micronesia	464	\N	78000	75.5	0.00	\N	Northern Mariana Islands	Commonwealth of the US	George W. Bush	2913	MP
-PRT	Portugal	Europe	Southern Europe	91982	1143	9997600	75.800003	105954.00	102133.00	Portugal	Republic	Jorge Samp„io	2914	PT
+PRT	Portugal	Europe	Southern Europe	91982	1143	9997600	75.800003	105954.00	102133.00	Portugal	Republic	Jorge SampƒÉio	2914	PT
 PRI	Puerto Rico	North America	Caribbean	8875	\N	3869000	75.599998	34100.00	32100.00	Puerto Rico	Commonwealth of the US	George W. Bush	2919	PR
 POL	Poland	Europe	Eastern Europe	323250	1918	38653600	73.199997	151697.00	135636.00	Polska	Republic	Aleksander Kwasniewski	2928	PL
 GNQ	Equatorial Guinea	Africa	Central Africa	28051	1968	453000	53.599998	283.00	542.00	Guinea Ecuatorial	Republic	Teodoro Obiang Nguema Mbasogo	2972	GQ
 QAT	Qatar	Asia	Middle East	11000	1971	599000	72.400002	9472.00	8920.00	Qatar	Monarchy	Hamad ibn Khalifa al-Thani	2973	QA
 FRA	France	Europe	Western Europe	551500	843	59225700	78.800003	1424285.00	1392448.00	France	Republic	Jacques Chirac	2974	FR
-GUF	French Guiana	South America	South America	90000	\N	181000	76.099998	681.00	\N	Guyane franÁaise	Overseas Department of France	Jacques Chirac	3014	GF
-PYF	French Polynesia	Oceania	Polynesia	4000	\N	235000	74.800003	818.00	781.00	PolynÈsie franÁaise	Nonmetropolitan Territory of France	Jacques Chirac	3016	PF
-REU	RÈunion	Africa	Eastern Africa	2510	\N	699000	72.699997	8287.00	7988.00	RÈunion	Overseas Department of France	Jacques Chirac	3017	RE
-ROM	Romania	Europe	Eastern Europe	238391	1878	22455500	69.900002	38158.00	34843.00	Rom‚nia	Republic	Ion Iliescu	3018	RO
+GUF	French Guiana	South America	South America	90000	\N	181000	76.099998	681.00	\N	Guyane fran√ßaise	Overseas Department of France	Jacques Chirac	3014	GF
+PYF	French Polynesia	Oceania	Polynesia	4000	\N	235000	74.800003	818.00	781.00	Polyn√©sie fran√ßaise	Nonmetropolitan Territory of France	Jacques Chirac	3016	PF
+REU	R√©union	Africa	Eastern Africa	2510	\N	699000	72.699997	8287.00	7988.00	R√©union	Overseas Department of France	Jacques Chirac	3017	RE
+ROM	Romania	Europe	Eastern Europe	238391	1878	22455500	69.900002	38158.00	34843.00	Rom√¢nia	Republic	Ion Iliescu	3018	RO
 RWA	Rwanda	Africa	Eastern Africa	26338	1962	7733000	39.299999	2036.00	1863.00	Rwanda/Urwanda	Republic	Paul Kagame	3047	RW
 SWE	Sweden	Europe	Nordic Countries	449964	836	8861400	79.599998	226492.00	227757.00	Sverige	Constitutional Monarchy	Carl XVI Gustaf	3048	SE
 SHN	Saint Helena	Africa	Western Africa	314	\N	6000	76.800003	0.00	\N	Saint Helena	Dependent Territory of the UK	Elisabeth II	3063	SH
@@ -4312,10 +4312,10 @@ SLB	Solomon Islands	Oceania	Melanesia	28896	1978	444000	71.300003	182.00	220.00	
 ZMB	Zambia	Africa	Eastern Africa	752618	1964	9169000	37.200001	3377.00	3922.00	Zambia	Republic	Frederick Chiluba	3162	ZM
 WSM	Samoa	Oceania	Polynesia	2831	1962	180000	69.199997	141.00	157.00	Samoa	Parlementary Monarchy	Malietoa Tanumafili II	3169	WS
 SMR	San Marino	Europe	Southern Europe	61	885	27000	81.099998	510.00	\N	San Marino	Republic	\N	3171	SM
-STP	Sao Tome and Principe	Africa	Central Africa	964	1975	147000	65.300003	6.00	\N	S„o TomÈ e PrÌncipe	Republic	Miguel Trovoada	3172	ST
-SAU	Saudi Arabia	Asia	Middle East	2149690	1932	21607000	67.800003	137635.00	146171.00	Al-¥Arabiya as-Sa¥udiya	Monarchy	Fahd ibn Abdul-Aziz al-Sa¥ud	3173	SA
-SEN	Senegal	Africa	Western Africa	196722	1960	9481000	62.200001	4787.00	4542.00	SÈnÈgal/Sounougal	Republic	Abdoulaye Wade	3198	SN
-SYC	Seychelles	Africa	Eastern Africa	455	1976	77000	70.400002	536.00	539.00	Sesel/Seychelles	Republic	France-Albert RenÈ	3206	SC
+STP	Sao Tome and Principe	Africa	Central Africa	964	1975	147000	65.300003	6.00	\N	SƒÉo Tom√© e Pr√≠ncipe	Republic	Miguel Trovoada	3172	ST
+SAU	Saudi Arabia	Asia	Middle East	2149690	1932	21607000	67.800003	137635.00	146171.00	Al-¬¥Arabiya as-Sa¬¥udiya	Monarchy	Fahd ibn Abdul-Aziz al-Sa¬¥ud	3173	SA
+SEN	Senegal	Africa	Western Africa	196722	1960	9481000	62.200001	4787.00	4542.00	S√©n√©gal/Sounougal	Republic	Abdoulaye Wade	3198	SN
+SYC	Seychelles	Africa	Eastern Africa	455	1976	77000	70.400002	536.00	539.00	Sesel/Seychelles	Republic	France-Albert Ren√©	3206	SC
 SLE	Sierra Leone	Africa	Western Africa	71740	1961	4854000	45.299999	746.00	858.00	Sierra Leone	Republic	Ahmed Tejan Kabbah	3207	SL
 SGP	Singapore	Asia	Southeast Asia	618	1965	3567000	80.099998	86503.00	96318.00	Singapore/Singapura/Xinjiapo/Singapur	Republic	Sellapan Rama Nathan	3208	SG
 SVK	Slovakia	Europe	Eastern Europe	49012	1993	5398700	73.699997	20594.00	19452.00	Slovensko	Republic	Rudolf Schuster	3209	SK
@@ -4328,47 +4328,47 @@ SUR	Suriname	South America	South America	163265	1975	417000	71.400002	870.00	706
 SWZ	Swaziland	Africa	Southern Africa	17364	1968	1008000	40.400002	1206.00	1312.00	kaNgwane	Monarchy	Mswati III	3244	SZ
 CHE	Switzerland	Europe	Western Europe	41284	1499	7160400	79.599998	264478.00	256092.00	Schweiz/Suisse/Svizzera/Svizra	Federation	Adolf Ogi	3248	CH
 SYR	Syria	Asia	Middle East	185180	1941	16125000	68.5	65984.00	64926.00	Suriya	Republic	Bashar al-Assad	3250	SY
-TJK	Tajikistan	Asia	Southern and Central Asia	143100	1991	6188000	64.099998	1990.00	1056.00	ToÁikiston	Republic	Emomali Rahmonov	3261	TJ
-TWN	Taiwan	Asia	Eastern Asia	36188	1945	22256000	76.400002	256254.00	263451.00	Tíai-wan	Republic	Chen Shui-bian	3263	TW
+TJK	Tajikistan	Asia	Southern and Central Asia	143100	1991	6188000	64.099998	1990.00	1056.00	To√ßikiston	Republic	Emomali Rahmonov	3261	TJ
+TWN	Taiwan	Asia	Eastern Asia	36188	1945	22256000	76.400002	256254.00	263451.00	T‚Äôai-wan	Republic	Chen Shui-bian	3263	TW
 TZA	Tanzania	Africa	Eastern Africa	883749	1961	33517000	52.299999	8005.00	7388.00	Tanzania	Republic	Benjamin William Mkapa	3306	TZ
 DNK	Denmark	Europe	Nordic Countries	43094	800	5330000	76.5	174099.00	169264.00	Danmark	Constitutional Monarchy	Margrethe II	3315	DK
 THA	Thailand	Asia	Southeast Asia	513115	1350	61399000	68.599998	116416.00	153907.00	Prathet Thai	Constitutional Monarchy	Bhumibol Adulyadej	3320	TH
-TGO	Togo	Africa	Western Africa	56785	1960	4629000	54.700001	1449.00	1400.00	Togo	Republic	GnassingbÈ EyadÈma	3332	TG
+TGO	Togo	Africa	Western Africa	56785	1960	4629000	54.700001	1449.00	1400.00	Togo	Republic	Gnassingb√© Eyad√©ma	3332	TG
 TKL	Tokelau	Oceania	Polynesia	12	\N	2000	\N	0.00	\N	Tokelau	Nonmetropolitan Territory of New Zealand	Elisabeth II	3333	TK
 TON	Tonga	Oceania	Polynesia	650	1970	99000	67.900002	146.00	170.00	Tonga	Monarchy	Taufa'ahau Tupou IV	3334	TO
 TTO	Trinidad and Tobago	North America	Caribbean	5130	1962	1295000	68	6232.00	5867.00	Trinidad and Tobago	Republic	Arthur N. R. Robinson	3336	TT
-TCD	Chad	Africa	Central Africa	1284000	1960	7651000	50.5	1208.00	1102.00	Tchad/Tshad	Republic	Idriss DÈby	3337	TD
-CZE	Czech Republic	Europe	Eastern Europe	78866	1993	10278100	74.5	55017.00	52037.00	∏esko	Republic	V·clav Havel	3339	CZ
+TCD	Chad	Africa	Central Africa	1284000	1960	7651000	50.5	1208.00	1102.00	Tchad/Tshad	Republic	Idriss D√©by	3337	TD
+CZE	Czech Republic	Europe	Eastern Europe	78866	1993	10278100	74.5	55017.00	52037.00	¬∏esko	Republic	V√°clav Havel	3339	CZ
 TUN	Tunisia	Africa	Northern Africa	163610	1956	9586000	73.699997	20026.00	18898.00	Tunis/Tunisie	Republic	Zine al-Abidine Ben Ali	3349	TN
-TUR	Turkey	Asia	Middle East	774815	1923	66591000	71	210721.00	189122.00	T¸rkiye	Republic	Ahmet Necdet Sezer	3358	TR
-TKM	Turkmenistan	Asia	Southern and Central Asia	488100	1991	4459000	60.900002	4397.00	2000.00	T¸rkmenostan	Republic	Saparmurad Nijazov	3419	TM
+TUR	Turkey	Asia	Middle East	774815	1923	66591000	71	210721.00	189122.00	T√ºrkiye	Republic	Ahmet Necdet Sezer	3358	TR
+TKM	Turkmenistan	Asia	Southern and Central Asia	488100	1991	4459000	60.900002	4397.00	2000.00	T√ºrkmenostan	Republic	Saparmurad Nijazov	3419	TM
 TCA	Turks and Caicos Islands	North America	Caribbean	430	\N	17000	73.300003	96.00	\N	The Turks and Caicos Islands	Dependent Territory of the UK	Elisabeth II	3423	TC
 TUV	Tuvalu	Oceania	Polynesia	26	1978	12000	66.300003	6.00	\N	Tuvalu	Constitutional Monarchy	Elisabeth II	3424	TV
 UGA	Uganda	Africa	Eastern Africa	241038	1962	21778000	42.900002	6313.00	6887.00	Uganda	Republic	Yoweri Museveni	3425	UG
-UKR	Ukraine	Europe	Eastern Europe	603700	1991	50456000	66	42168.00	49677.00	Ukrajina	Republic	Leonid Kutöma	3426	UA
-HUN	Hungary	Europe	Eastern Europe	93030	1918	10043200	71.400002	48267.00	45914.00	Magyarorsz·g	Republic	Ferenc M·dl	3483	HU
-URY	Uruguay	South America	South America	175016	1828	3337000	75.199997	20831.00	19967.00	Uruguay	Republic	Jorge Batlle Ib·Òez	3492	UY
-NCL	New Caledonia	Oceania	Melanesia	18575	\N	214000	72.800003	3563.00	\N	Nouvelle-CalÈdonie	Nonmetropolitan Territory of France	Jacques Chirac	3493	NC
+UKR	Ukraine	Europe	Eastern Europe	603700	1991	50456000	66	42168.00	49677.00	Ukrajina	Republic	Leonid Kut≈°ma	3426	UA
+HUN	Hungary	Europe	Eastern Europe	93030	1918	10043200	71.400002	48267.00	45914.00	Magyarorsz√°g	Republic	Ferenc M√°dl	3483	HU
+URY	Uruguay	South America	South America	175016	1828	3337000	75.199997	20831.00	19967.00	Uruguay	Republic	Jorge Batlle Ib√°≈Ñez	3492	UY
+NCL	New Caledonia	Oceania	Melanesia	18575	\N	214000	72.800003	3563.00	\N	Nouvelle-Cal√©donie	Nonmetropolitan Territory of France	Jacques Chirac	3493	NC
 NZL	New Zealand	Oceania	Australia and New Zealand	270534	1907	3862000	77.800003	54669.00	64960.00	New Zealand/Aotearoa	Constitutional Monarchy	Elisabeth II	3499	NZ
 UZB	Uzbekistan	Asia	Southern and Central Asia	447400	1991	24318000	63.700001	14194.00	21300.00	Uzbekiston	Republic	Islam Karimov	3503	UZ
-BLR	Belarus	Europe	Eastern Europe	207600	1991	10236000	68	13714.00	\N	Belarus	Republic	Aljaksandr Lukaöenka	3520	BY
+BLR	Belarus	Europe	Eastern Europe	207600	1991	10236000	68	13714.00	\N	Belarus	Republic	Aljaksandr Luka≈°enka	3520	BY
 WLF	Wallis and Futuna	Oceania	Polynesia	200	\N	15000	\N	0.00	\N	Wallis-et-Futuna	Nonmetropolitan Territory of France	Jacques Chirac	3536	WF
 VUT	Vanuatu	Oceania	Melanesia	12189	1980	190000	60.599998	261.00	246.00	Vanuatu	Republic	John Bani	3537	VU
-VAT	Holy See (Vatican City State)	Europe	Southern Europe	0.40000001	1929	1000	\N	9.00	\N	Santa Sede/Citt‡ del Vaticano	Independent Church State	Johannes Paavali II	3538	VA
-VEN	Venezuela	South America	South America	912050	1811	24170000	73.099998	95023.00	88434.00	Venezuela	Federal Republic	Hugo Ch·vez FrÌas	3539	VE
+VAT	Holy See (Vatican City State)	Europe	Southern Europe	0.40000001	1929	1000	\N	9.00	\N	Santa Sede/Citt≈ï del Vaticano	Independent Church State	Johannes Paavali II	3538	VA
+VEN	Venezuela	South America	South America	912050	1811	24170000	73.099998	95023.00	88434.00	Venezuela	Federal Republic	Hugo Ch√°vez Fr√≠as	3539	VE
 RUS	Russian Federation	Europe	Eastern Europe	17075400	1991	146934000	67.199997	276608.00	442989.00	Rossija	Federal Republic	Vladimir Putin	3580	RU
-VNM	Vietnam	Asia	Southeast Asia	331689	1945	79832000	69.300003	21929.00	22834.00	ViÍt Nam	Socialistic Republic	Tr‚n Duc Luong	3770	VN
+VNM	Vietnam	Asia	Southeast Asia	331689	1945	79832000	69.300003	21929.00	22834.00	Viƒôt Nam	Socialistic Republic	Tr√¢n Duc Luong	3770	VN
 EST	Estonia	Europe	Baltic Countries	45227	1991	1439200	69.5	5328.00	3371.00	Eesti	Republic	Lennart Meri	3791	EE
 USA	United States	North America	North America	9363520	1776	278357000	77.099998	8510700.00	8110900.00	United States	Federal Republic	George W. Bush	3813	US
 VIR	Virgin Islands, U.S.	North America	Caribbean	347	\N	93000	78.099998	0.00	\N	Virgin Islands of the United States	US Territory	George W. Bush	4067	VI
 ZWE	Zimbabwe	Africa	Eastern Africa	390757	1980	11669000	37.799999	5951.00	8670.00	Zimbabwe	Republic	Robert G. Mugabe	4068	ZW
 PSE	Palestine	Asia	Middle East	6257	\N	3101000	71.400002	4173.00	\N	Filastin	Autonomous Area	Yasser (Yasir) Arafat	4074	PS
-ATA	Antarctica	Antarctica	Antarctica	13120000	\N	0	\N	0.00	\N	ñ	Co-administrated		\N	AQ
-BVT	Bouvet Island	Antarctica	Antarctica	59	\N	0	\N	0.00	\N	Bouvet¯ya	Dependent Territory of Norway	Harald V	\N	BV
+ATA	Antarctica	Antarctica	Antarctica	13120000	\N	0	\N	0.00	\N	‚Äì	Co-administrated		\N	AQ
+BVT	Bouvet Island	Antarctica	Antarctica	59	\N	0	\N	0.00	\N	Bouvet≈ôya	Dependent Territory of Norway	Harald V	\N	BV
 IOT	British Indian Ocean Territory	Africa	Eastern Africa	78	\N	0	\N	0.00	\N	British Indian Ocean Territory	Dependent Territory of the UK	Elisabeth II	\N	IO
 SGS	South Georgia and the South Sandwich Islands	Antarctica	Antarctica	3903	\N	0	\N	0.00	\N	South Georgia and the South Sandwich Islands	Dependent Territory of the UK	Elisabeth II	\N	GS
 HMD	Heard Island and McDonald Islands	Antarctica	Antarctica	359	\N	0	\N	0.00	\N	Heard and McDonald Islands	Territory of Australia	Elisabeth II	\N	HM
-ATF	French Southern territories	Antarctica	Antarctica	7780	\N	0	\N	0.00	\N	Terres australes franÁaises	Nonmetropolitan Territory of France	Jacques Chirac	\N	TF
+ATF	French Southern territories	Antarctica	Antarctica	7780	\N	0	\N	0.00	\N	Terres australes fran√ßaises	Nonmetropolitan Territory of France	Jacques Chirac	\N	TF
 UMI	United States Minor Outlying Islands	Oceania	Micronesia/Caribbean	16	\N	0	\N	0.00	\N	United States Minor Outlying Islands	Dependent Territory of the US	George W. Bush	\N	UM
 \.
 
@@ -4509,7 +4509,7 @@ MHL	Marshallese	t	96.800003
 MTQ	Creole French	f	96.599998
 MRT	Hassaniya	f	81.699997
 MUS	Creole French	f	70.599998
-MYT	MahorÈ	f	41.900002
+MYT	Mahor√©	f	41.900002
 MEX	Spanish	t	92.099998
 FSM	Trukese	f	41.599998
 MDA	Romanian	t	61.900002
@@ -4634,7 +4634,7 @@ BEL	French	t	32.599998
 BLZ	Spanish	f	31.6
 BEN	Joruba	f	12.2
 BTN	Nepali	f	34.799999
-BOL	Ketöua	t	8.1000004
+BOL	Ket≈°ua	t	8.1000004
 BWA	Shona	f	12.3
 BRA	German	f	0.5
 GBR	Kymri	f	0.89999998
@@ -4648,7 +4648,7 @@ CRI	Creole English	f	2
 DJI	Afar	f	34.799999
 DMA	Creole French	f	0
 DOM	Creole French	f	2
-ECU	Ketöua	f	7
+ECU	Ket≈°ua	f	7
 EGY	Sinaberberi	f	0
 SLV	Nahua	f	0
 ERI	Tigre	f	31.700001
@@ -4666,7 +4666,7 @@ GIB	Arabic	f	7.4000001
 GRL	Danish	t	12.5
 GLP	French	t	0
 GUM	Chamorro	t	29.6
-GTM	QuichÈ	f	10.1
+GTM	Quich√©	f	10.1
 GIN	Malinke	f	23.200001
 GNB	Ful	f	16.6
 GUY	Caribbean	f	2.2
@@ -4734,7 +4734,7 @@ MTQ	French	t	0
 MRT	Wolof	f	6.5999999
 MUS	Bhojpuri	f	21.1
 MYT	French	t	20.299999
-MEX	N·huatl	f	1.8
+MEX	N√°huatl	f	1.8
 FSM	Pohnpei	f	23.799999
 MDA	Russian	f	23.200001
 MCO	Monegasque	f	16.1
@@ -4755,8 +4755,8 @@ PAK	Pashto	f	13.1
 PLW	Philippene Languages	f	9.1999998
 PAN	Creole English	f	14
 PNG	Malenasian Languages	f	20
-PRY	GuaranÌ	t	40.099998
-PER	Ketöua	t	16.4
+PRY	Guaran√≠	t	40.099998
+PER	Ket≈°ua	t	16.4
 MNP	Chamorro	f	30
 PRI	English	f	47.400002
 POL	German	f	1.3
@@ -4796,7 +4796,7 @@ TWN	Mandarin Chinese	t	20.1
 TZA	Swahili	t	8.8000002
 DNK	Turkish	f	0.80000001
 THA	Lao	f	26.9
-TGO	KabyÈ	t	13.8
+TGO	Kaby√©	t	13.8
 TKL	English	t	0
 TON	English	t	0
 TTO	Hindi	f	3.4000001
@@ -4839,7 +4839,7 @@ BEL	Italian	f	2.4000001
 BLZ	Maya Languages	f	9.6000004
 BEN	Adja	f	11.1
 BTN	Asami	f	15.2
-BOL	Aimar·	t	3.2
+BOL	Aimar√°	t	3.2
 BWA	San	f	3.5
 BRA	Italian	f	0.40000001
 GBR	Gaeli	f	0.1
@@ -4847,7 +4847,7 @@ BRN	Chinese	f	9.3000002
 BGR	Romani	f	3.7
 BFA	Gurma	f	5.6999998
 BDI	Swahili	f	0
-CHL	Aimar·	f	0.5
+CHL	Aimar√°	f	0.5
 CRI	Chibcha	f	0.30000001
 DJI	Arabic	t	10.6
 ERI	Afar	f	4.3000002
@@ -4882,7 +4882,7 @@ CAN	Chinese	f	2.5
 KAZ	Ukrainian	f	5
 KEN	Luo	f	12.8
 CAF	Mandjia	f	14.8
-CHN	Mantöu	f	0.89999998
+CHN	Mant≈°u	f	0.89999998
 KGZ	Uzbek	f	14.1
 COL	Creole English	f	0.1
 COM	Comorian-madagassi	f	5.5
@@ -4921,9 +4921,9 @@ NOR	Danish	f	0.40000001
 CIV	Malinke	f	11.4
 PAK	Sindhi	f	11.8
 PLW	English	t	3.2
-PAN	GuaymÌ	f	5.3000002
+PAN	Guaym√≠	f	5.3000002
 PRY	Portuguese	f	3.2
-PER	Aimar·	t	2.3
+PER	Aimar√°	t	2.3
 MNP	Chinese	f	7.0999999
 POL	Ukrainian	f	0.60000002
 FRA	Portuguese	f	1.2
@@ -4983,7 +4983,7 @@ BGD	Garo	f	0.1
 BEL	Arabic	f	1.6
 BLZ	Garifuna	f	6.8000002
 BEN	Aizo	f	8.6999998
-BOL	GuaranÌ	f	0.1
+BOL	Guaran√≠	f	0.1
 BWA	Khoekhoe	f	2.5
 BRA	Japanese	f	0.40000001
 BRN	English	f	3.0999999
@@ -5001,7 +5001,7 @@ GMB	Diola	f	9.1999998
 GEO	Azerbaijani	f	5.5
 GHA	Ga-adangme	f	7.8000002
 GUM	Korean	f	3.3
-GTM	KekchÌ	f	4.9000001
+GTM	Kekch√≠	f	4.9000001
 GIN	Kissi	f	6
 GNB	Portuguese	t	8.1000004
 HND	Miskito	f	0.2
@@ -5014,7 +5014,7 @@ ITA	French	f	0.5
 AUT	Hungarian	f	0.40000001
 JPN	English	f	0.1
 YUG	Romani	f	1.4
-KHM	Töam	f	2.4000001
+KHM	T≈°am	f	2.4000001
 CMR	Ful	f	9.6000004
 CAN	Italian	f	1.7
 KAZ	German	f	3.0999999
@@ -5216,7 +5216,7 @@ MYS	Dusun	f	1.1
 MLI	Songhai	f	6.9000001
 MRT	Zenaga	f	1.2
 MUS	Marathi	f	0.69999999
-MEX	OtomÌ	f	0.40000001
+MEX	Otom√≠	f	0.40000001
 FSM	Wolea	f	3.7
 MNG	Dariganga	f	1.4
 MOZ	Tswa	f	6

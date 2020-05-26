@@ -3,27 +3,11 @@
 
 package composed
 
-import scala.concurrent.ExecutionContext
-
-import cats.effect.{ ContextShift, IO }
-import cats.tests.CatsSuite
-import doobie.Transactor
-import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import io.circe.literal.JsonStringContext
 
-final class ComposedWorldSpec extends CatsSuite {
-  implicit def contextShift: ContextShift[IO] =
-    IO.contextShift(ExecutionContext.global)
+import utils.DatabaseSuite
 
-  implicit val log = Slf4jLogger.unsafeCreate[IO]
-
-  val xa = Transactor.fromDriverManager[IO](
-    "org.postgresql.Driver",
-    "jdbc:postgresql:world",
-    "user",
-    "password"
-  )
-
+final class ComposedWorldSpec extends DatabaseSuite {
   test("simple composed query") {
     val query = """
       query {
