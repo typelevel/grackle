@@ -105,21 +105,23 @@ case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) exte
   def isLeaf: Boolean = tpe.isLeaf
 
   def asLeaf: Result[Json] =
-    focus match {
-      case s: String => Json.fromString(s).rightIor
-      case i: Int => Json.fromInt(i).rightIor
-      case d: Double => Json.fromDouble(d) match {
-          case Some(j) => j.rightIor
-          case None => mkErrorResult(s"Unrepresentable double %d")
-        }
-      case b: Boolean => Json.fromBoolean(b).rightIor
+    mapped.mapping.leafMapping[Any](tpe).map(_.encoder(focus).rightIor).getOrElse(
+      focus match {
+        case s: String => Json.fromString(s).rightIor
+        case i: Int => Json.fromInt(i).rightIor
+        case d: Double => Json.fromDouble(d) match {
+            case Some(j) => j.rightIor
+            case None => mkErrorResult(s"Unrepresentable double %d")
+          }
+        case b: Boolean => Json.fromBoolean(b).rightIor
 
-      // This means we are looking at a column with no value because it's the result of a failed
-      // outer join. This is an implementation error.
-      case Row.FailedJoin => sys.error("Unhandled failed join.")
+        // This means we are looking at a column with no value because it's the result of a failed
+        // outer join. This is an implementation error.
+        case Row.FailedJoin => sys.error("Unhandled failed join.")
 
-      case _ => mkErrorResult("Not a leaf")
-    }
+        case _ => mkErrorResult("Not a leaf")
+      }
+    )
 
   def isList: Boolean =
     tpe match {

@@ -5,7 +5,7 @@ package edu.gemini.grackle
 
 import cats.Monad
 import cats.implicits._
-import io.circe.Json
+import io.circe.{Encoder, Json}
 
 import Query.{ PossiblyRenamedSelect, Select, Wrap }
 import QueryInterpreter.{ mkOneError, mkErrorResult, ProtoJson }
@@ -39,7 +39,8 @@ class DataTypeQueryInterpreter[F[_]: Monad](
   root:    PartialFunction[String, (Type, Any)],
   fields:  PartialFunction[(Any, String), Any],
   attrs:   PartialFunction[(Any, String), Any] = PartialFunction.empty,
-  narrows: PartialFunction[(Any, TypeRef), Any] = PartialFunction.empty
+  narrows: PartialFunction[(Any, TypeRef), Any] = PartialFunction.empty,
+  leaves:  Map[Type, Encoder[_]] = Map.empty
 ) extends QueryInterpreter[F] {
 
   def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]] =
@@ -47,7 +48,7 @@ class DataTypeQueryInterpreter[F[_]: Monad](
       case PossiblyRenamedSelect(Select(fieldName, _, child), resultName) =>
         if (root.isDefinedAt(fieldName)) {
           val (tpe, focus) = root(fieldName)
-          val cursor = DataTypeCursor(tpe, focus, fields, attrs, narrows)
+          val cursor = DataTypeCursor(tpe, focus, fields, attrs, narrows, leaves.asInstanceOf[Map[Type, Encoder[Any]]])
           runValue(Wrap(resultName, child), rootTpe.field(fieldName), cursor).pure[F]
         } else
           mkErrorResult(s"No root field '$fieldName'").pure[F]
@@ -64,23 +65,30 @@ case class DataTypeCursor(
   focus:   Any,
   fields:  PartialFunction[(Any, String), Any],
   attrs:   PartialFunction[(Any, String), Any],
-  narrows: PartialFunction[(Any, TypeRef), Any]
+  narrows: PartialFunction[(Any, TypeRef), Any],
+  leaves:  Map[Type, Encoder[Any]]
 ) extends Cursor {
-  def isLeaf: Boolean = (tpe.dealias, focus) match {
-    case (_: ScalarType, (_ : String | _ : Int | _ : Double | _ : Boolean | _ : Enumeration#Value)) => true
-    case _ => false
-  }
+  def isLeaf: Boolean =
+    tpe.dealias match {
+      case (_: ScalarType)|(_: EnumType) => true
+      case _ => leaves.contains(tpe.dealias)
+    }
 
-  def asLeaf: Result[Json] = (tpe.dealias, focus) match {
-    case (StringType,  s: String)  => Json.fromString(s).rightIor
-    case (IntType,     i: Int)     => Json.fromInt(i).rightIor
-    case (IntType,     l: Long)    => Json.fromLong(l).rightIor
-    case (FloatType,   f: Float)   => Json.fromFloat(f).toRightIor(mkOneError(s"Unrepresentable float %d"))
-    case (FloatType,   d: Double)  => Json.fromDouble(d).toRightIor(mkOneError(s"Unrepresentable double %d"))
-    case (BooleanType, b: Boolean) => Json.fromBoolean(b).rightIor
-    case (_: EnumType, e: Enumeration#Value) => Json.fromString(e.toString).rightIor
-    case _ => mkErrorResult(s"Expected Scalar type, found $tpe for focus ${focus}")
-  }
+  def asLeaf: Result[Json] =
+    leaves.get(tpe) match {
+      case Some(encoder) => encoder(focus).rightIor
+      case None =>
+        (tpe.dealias, focus) match {
+          case (StringType,  s: String)  => Json.fromString(s).rightIor
+          case (IntType,     i: Int)     => Json.fromInt(i).rightIor
+          case (IntType,     l: Long)    => Json.fromLong(l).rightIor
+          case (FloatType,   f: Float)   => Json.fromFloat(f).toRightIor(mkOneError(s"Unrepresentable float %d"))
+          case (FloatType,   d: Double)  => Json.fromDouble(d).toRightIor(mkOneError(s"Unrepresentable double %d"))
+          case (BooleanType, b: Boolean) => Json.fromBoolean(b).rightIor
+          case (_: EnumType, e: Enumeration#Value) => Json.fromString(e.toString).rightIor
+          case _ => mkErrorResult(s"Expected Scalar type, found $tpe for focus ${focus}")
+        }
+    }
 
   def isList: Boolean = (tpe, focus) match {
     case (_: ListType, _: List[_]) => true

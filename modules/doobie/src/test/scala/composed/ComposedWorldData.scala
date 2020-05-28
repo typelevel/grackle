@@ -123,6 +123,7 @@ object WorldData extends DoobieMapping {
     )
 
   val objectMappings = List(countryMapping, cityMapping, languageMapping)
+  val leafMappings = Nil
 }
 
 object WorldQueryInterpreter {
