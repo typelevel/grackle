@@ -76,14 +76,14 @@ lazy val doobie = project
     fork in Test := true,
     parallelExecution in Test := false,
     libraryDependencies ++= Seq(
-      "org.typelevel"      %% "cats-effect"                     % catsEffectVersion,
-      "io.chrisdavenport"  %% "log4cats-slf4j"                  % log4catsVersion,
-      "org.tpolecat"       %% "doobie-core"                     % doobieVersion,
+      "org.typelevel"     %% "cats-effect"            % catsEffectVersion,
+      "io.chrisdavenport" %% "log4cats-slf4j"         % log4catsVersion,
+      "org.tpolecat"      %% "doobie-core"            % doobieVersion,
 
-      "org.tpolecat"       %% "doobie-postgres"                 % doobieVersion % "test",
-      "ch.qos.logback"     %  "logback-classic"                 % logbackVersion % "test",
-      "com.dimafeng"       %% "testcontainers-scala-scalatest"  % testContainersVersion % "test",
-      "com.dimafeng"       %% "testcontainers-scala-postgresql" % testContainersVersion % "test",
+      "org.tpolecat"      %% "doobie-postgres"        % doobieVersion % "test",
+      "ch.qos.logback"    %  "logback-classic"        % logbackVersion % "test",
+      "com.dimafeng"      %% "testcontainers-scala-scalatest"  % testContainersVersion % "test",
+      "com.dimafeng"      %% "testcontainers-scala-postgresql" % testContainersVersion % "test",
     )
   )
 

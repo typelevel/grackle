@@ -612,8 +612,9 @@ object Value {
       case (InputObjectType(_, _, ivs), Some(ObjectValue(fs))) =>
         val obj = fs.toMap
         ivs.traverse(iv => checkValue(iv, obj.get(iv.name)).map(v => (iv.name, v))).map(ObjectValue)
-      case (tpe, Some(value)) => mkErrorResult(s"Expected $tpe found '$value' for '${iv.name}")
-      case (tpe, None) => mkErrorResult(s"Value of type $tpe required for '${iv.name}")
+      case (_: ScalarType, Some(value)) => value.rightIor
+      case (tpe, Some(value)) => mkErrorResult(s"Expected $tpe found '$value' for '${iv.name}'")
+      case (tpe, None) => mkErrorResult(s"Value of type $tpe required for '${iv.name}'")
     }
 
   def checkVarValue(iv: InputValue, value: Option[Json]): Result[Value] = {
@@ -648,8 +649,9 @@ object Value {
         }.map(vs => ListValue(vs.toList))
       case (InputObjectType(_, _, ivs), Some(jsonObject(obj))) =>
         ivs.traverse(iv => checkVarValue(iv, obj(iv.name)).map(v => (iv.name, v))).map(ObjectValue)
-      case (tpe, Some(value)) => mkErrorResult(s"Expected $tpe found '$value' for '${iv.name}")
-      case (tpe, None) => mkErrorResult(s"Value of type $tpe required for '${iv.name}")
+      //case (ScalarType, Some(value)) => value.rightIor
+      case (tpe, Some(value)) => mkErrorResult(s"Expected $tpe found '$value' for '${iv.name}'")
+      case (tpe, None) => mkErrorResult(s"Value of type $tpe required for '${iv.name}'")
     }
   }
 }

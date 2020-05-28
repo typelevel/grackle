@@ -11,6 +11,9 @@ import cats.kernel.Monoid
 import _root_.doobie.{ ConnectionIO, Fragment, Fragments, Get, Read }
 import _root_.doobie.implicits._
 import _root_.doobie.enum.Nullability._
+import _root_.doobie.util.fragment.Elem.Arg
+import _root_.doobie.util.meta.Meta
+import io.circe.Encoder
 
 import QueryCompiler._, ComponentElaborator.TrivialJoin
 import DoobieMapping._, FieldMapping._
@@ -22,6 +25,7 @@ import QueryInterpreter.mkErrorResult
 
 trait DoobieMapping {
   val objectMappings: List[ObjectMapping]
+  val leafMappings: List[LeafMapping[_]]
 
   def objectMapping(tpe: Type): Option[ObjectMapping] = {
     tpe match {
@@ -35,6 +39,22 @@ trait DoobieMapping {
       om <- objectMapping(tpe)
       fm <- om.fieldMapping(fieldName)
     } yield fm
+
+  def leafMapping[T](tpe: Type): Option[LeafMapping[T]] =
+    leafMappings.collectFirst { case lm if lm.tpe =:= tpe => lm.asInstanceOf[LeafMapping[T]] }
+
+  def typeToGet(tpe: Type): (Get[_], NullabilityKnown) =
+    leafMapping[Any](tpe).map(lm => (lm.meta.get, NoNulls)).getOrElse(
+      tpe match {
+        case NullableType(tpe) => (typeToGet(tpe)._1, Nullable)
+        case IntType => (Get[Int], NoNulls)
+        case FloatType => (Get[Double], NoNulls)
+        case StringType => (Get[String], NoNulls)
+        case BooleanType => (Get[Boolean], NoNulls)
+        case IDType => (Get[String], NoNulls)
+        case _ => sys.error(s"no Get instance for schema type $tpe") // FIXME
+      }
+    )
 
   def attributeMapping(tpe: Type, attrName: String): Option[AttributeMapping] =
     for {
@@ -202,7 +222,7 @@ trait DoobieMapping {
           def unapply(om: ObjectMapping): Option[(Boolean, (Get[_], NullabilityKnown))] =
             om.fieldMappings.collectFirst {
               case (fieldName, `col`) if mappings.contains(om) =>
-                val get = Row.typeToGet(mappings(om).field(fieldName))
+                val get = typeToGet(mappings(om).field(fieldName))
                 (isJoin(col), get)
             } orElse {
               om.attributeMappings.collectFirst {
@@ -260,6 +280,12 @@ object DoobieMapping {
 
       def toSql: String = s"LEFT JOIN ${child.table} ON ${parent.toSql} = ${child.toSql}"
     }
+  }
+
+  class LeafMapping[T](val tpe: Type, val encoder: Encoder[T], val meta: Meta[T])
+  object LeafMapping {
+    def apply[T](tpe: Type)(implicit encoder: Encoder[T], meta: Meta[T]) =
+      new LeafMapping(tpe, encoder, meta)
   }
 
   case class MappedQuery(
@@ -347,19 +373,8 @@ object DoobieMapping {
     def fetch: ConnectionIO[Table] =
       fragment.query[Row](Row.mkRead(gets)).to[List]
 
-    def mkColEquality[T](col: ColumnRef, value: T): Fragment = {
-      def rhs = Fragment.const(s"${col.toSql} =")
-      value match {
-        case s: String => rhs ++ fr0"$s"
-        case i: Int => rhs ++ fr0"$i"
-        case d: Double => rhs ++ fr0"$d"
-        case b: Boolean => rhs ++ fr0"$b"
-        case _ => Fragment.empty
-      }
-    }
-
     def fragmentForPred(tpe: Type, pred: Predicate): Fragment = {
-      def term[T](x: Term[T]): Fragment =
+      def term[T](x: Term[T], pt: Type): Fragment =
         x match {
           case path: Path =>
             mapping.primaryColumnForTerm(tpe, path) match {
@@ -370,20 +385,39 @@ object DoobieMapping {
           case Const(value: Int) => fr0"$value"
           case Const(value: Double) => fr0"$value"
           case Const(value: Boolean) => fr0"$value"
-          case _ => Fragment.empty
+          case Const(value) =>
+            mapping.leafMapping[Any](pt) match {
+              case Some(lm) =>
+                Fragment("?", List(Arg[Any](value, lm.meta.put)), None)
+              case _ =>
+                Fragment.empty
+            }
+        }
+
+      def unify[T](x: Term[T], y: Term[T]): Type =
+        (x, y) match {
+          case (path: Path, _) => tpe.path(path.path)
+          case (_, path: Path) => tpe.path(path.path)
+          case _ => NoType
         }
 
       def loop(pred: Predicate): Fragment =
         pred match {
           case And(x, y) => Fragments.and(loop(x), loop(y))
-          case Or(x, y) => Fragments.and(loop(x), loop(y))
+          case Or(x, y) => Fragments.or(loop(x), loop(y))
           case Not(x) => fr"NOT" ++ loop(x)
-          case Eql(x, y) => term(x) ++ fr0" = "++ term(y)
-          case Contains(x, y) => term(x) ++ fr0" = "++ term(y)
-          case Lt(x, y) => term(x) ++ fr0" < "++ term(y)
+          case Eql(x, y) =>
+            val pt = unify(x, y)
+            term(x, pt) ++ fr0" = "++ term(y, pt)
+          case Contains(x, y) =>
+            val pt = unify(x, y)
+            term(x, pt) ++ fr0" = "++ term(y, pt)
+          case Lt(x, y) =>
+            val pt = unify(x, y)
+            term(x, pt) ++ fr0" < "++ term(y, pt)
           case Like(x, pattern, caseInsensitive) =>
             val op = if(caseInsensitive) "ILIKE" else "LIKE"
-            term(x) ++ Fragment.const(s" $op ") ++ fr0"$pattern"
+            term(x, StringType) ++ Fragment.const(s" $op ") ++ fr0"$pattern"
           case _ => Fragment.empty
         }
 
@@ -465,16 +499,6 @@ case class Row(elems: List[Any]) {
 object Row {
   // Placeholder for nulls read from non-nullable columns introduced via an outer join.
   case object FailedJoin
-
-  def typeToGet(tpe: Type): (Get[_], NullabilityKnown) = tpe match {
-    case NullableType(tpe) => (typeToGet(tpe)._1, Nullable)
-    case IntType => (Get[Int], NoNulls)
-    case FloatType => (Get[Double], NoNulls)
-    case StringType => (Get[String], NoNulls)
-    case BooleanType => (Get[Boolean], NoNulls)
-    case IDType => (Get[String], NoNulls)
-    case _ => sys.error(s"no Get instance for schema type $tpe") // FIXME
-  }
 
   def mkRead(gets: List[(Boolean, (Get[_], NullabilityKnown))]): Read[Row] = {
     def unsafeGet(rs: ResultSet, n: Int): Row =
