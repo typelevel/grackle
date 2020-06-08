@@ -1,9 +1,10 @@
-// Copyright (c) 2016-2019 Association of Universities for Research in Astronomy, Inc. (AURA)
+// Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
 package demo
 
 import java.util.concurrent._
+import scala.concurrent.ExecutionContext.global
 
 import cats.effect.{ Blocker, ContextShift, ConcurrentEffect, ExitCode, IO, IOApp, Timer }
 import cats.implicits._
@@ -38,7 +39,7 @@ object DemoServer {
 
     // Spin up the server ...
     for {
-      exitCode <- BlazeServerBuilder[F]
+      exitCode <- BlazeServerBuilder[F](global)
         .bindHttp(8080, "0.0.0.0")
         .withHttpApp(httpApp)
         .serve
