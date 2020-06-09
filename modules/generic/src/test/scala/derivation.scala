@@ -246,7 +246,7 @@ final class DerivationSpec extends CatsSuite {
   test("types with a Circe Encoder instance have leaf cursor builders") {
     val z =
       for {
-        c <- DerivedLeafCursorBuilder[ZonedDateTime].build(ZonedDateTime.parse("2020-03-25T16:24:06.081Z"), StringType)
+        c <- CursorBuilder[ZonedDateTime].build(ZonedDateTime.parse("2020-03-25T16:24:06.081Z"), StringType)
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l

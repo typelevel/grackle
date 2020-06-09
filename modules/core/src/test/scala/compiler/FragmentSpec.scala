@@ -93,7 +93,7 @@ final class FragmentSuite extends CatsSuite {
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentQueryInterpreter.run(compiled.right.get, FragmentSchema.queryType)
+    val res = FragmentQueryInterpreter.run(compiled.right.get, FragmentData.schema.queryType)
     //println(res)
     assert(res == expectedResult)
   }
@@ -181,7 +181,7 @@ final class FragmentSuite extends CatsSuite {
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentQueryInterpreter.run(compiled.right.get, FragmentSchema.queryType)
+    val res = FragmentQueryInterpreter.run(compiled.right.get, FragmentData.schema.queryType)
     //println(res)
     assert(res == expectedResult)
   }
@@ -206,15 +206,15 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val User = FragmentSchema.ref("User")
-    val Page = FragmentSchema.ref("Page")
+    val User = FragmentData.schema.ref("User")
+    val Page = FragmentData.schema.ref("Page")
 
     val expected =
       Select("profiles",
         Nil,
         Group(List(
           Select("id", Nil, Empty),
-          Introspection(FragmentSchema, Select("__typename", Nil, Empty)),
+          Introspect(FragmentData.schema, Select("__typename", Nil, Empty)),
           Narrow(User, Select("name", Nil, Empty)),
           Narrow(Page, Select("title", Nil, Empty))
         ))
@@ -258,7 +258,7 @@ final class FragmentSuite extends CatsSuite {
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentQueryInterpreter.run(compiled.right.get, FragmentSchema.queryType)
+    val res = FragmentQueryInterpreter.run(compiled.right.get, FragmentData.schema.queryType)
     //println(res)
     assert(res == expectedResult)
   }
@@ -278,8 +278,8 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val User = FragmentSchema.ref("User")
-    val Page = FragmentSchema.ref("Page")
+    val User = FragmentData.schema.ref("User")
+    val Page = FragmentData.schema.ref("Page")
 
     val expected =
       Select("profiles", Nil,
@@ -323,7 +323,7 @@ final class FragmentSuite extends CatsSuite {
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentQueryInterpreter.run(compiled.right.get, FragmentSchema.queryType)
+    val res = FragmentQueryInterpreter.run(compiled.right.get, FragmentData.schema.queryType)
     //println(res)
     assert(res == expectedResult)
   }
@@ -358,8 +358,8 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val User = FragmentSchema.ref("User")
-    val Page = FragmentSchema.ref("Page")
+    val User = FragmentData.schema.ref("User")
+    val Page = FragmentData.schema.ref("Page")
 
     val expected =
       Group(List(
@@ -367,7 +367,7 @@ final class FragmentSuite extends CatsSuite {
           Unique(Eql(FieldPath(List("id")), Const("1")),
             Select("favourite", Nil,
               Group(List(
-                Introspection(FragmentSchema, Select("__typename", Nil, Empty)),
+                Introspect(FragmentData.schema, Select("__typename", Nil, Empty)),
                 Group(List(
                   Narrow(User, Select("id", Nil, Empty)),
                   Narrow(User, Select("name", Nil, Empty)))),
@@ -383,7 +383,7 @@ final class FragmentSuite extends CatsSuite {
           Unique(Eql(FieldPath(List("id")), Const("2")),
             Select("favourite", Nil,
               Group(List(
-                Introspection(FragmentSchema, Select("__typename", Nil, Empty)),
+                Introspect(FragmentData.schema, Select("__typename", Nil, Empty)),
                 Group(List(
                   Narrow(User, Select("id", Nil, Empty)),
                   Narrow(User, Select("name", Nil, Empty))
@@ -423,77 +423,15 @@ final class FragmentSuite extends CatsSuite {
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentQueryInterpreter.run(compiled.right.get, FragmentSchema.queryType)
+    val res = FragmentQueryInterpreter.run(compiled.right.get, FragmentData.schema.queryType)
     //println(res)
     assert(res == expectedResult)
   }
 }
 
-object FragmentSchema extends Schema {
-  import ScalarType._
-
-  val IdArg = InputValue("id", None, IDType, None)
-
-  val types = List(
-    ObjectType(
-      name = "Query",
-      description = None,
-      fields = List(
-        Field("user", None, List(IdArg), TypeRef("User"), false, None),
-        Field("profiles", None, Nil, ListType(TypeRef("Profile")), false, None)
-      ),
-      interfaces = Nil
-    ),
-    ObjectType(
-      name = "User",
-      description = None,
-      fields = List(
-        Field("id", None, Nil, StringType, false, None),
-        Field("name", None, Nil, StringType, false, None),
-        Field("profilePic", None, Nil, StringType, false, None),
-        Field("friends", None, Nil, ListType(TypeRef("User")), false, None),
-        Field("mutualFriends", None, Nil, ListType(TypeRef("User")), false, None),
-        Field("favourite", None, Nil, NullableType(TypeRef("UserOrPage")), false, None)
-      ),
-      interfaces = List(TypeRef("Profile"))
-    ),
-    ObjectType(
-      name = "Page",
-      description = None,
-      fields = List(
-        Field("id", None, Nil, StringType, false, None),
-        Field("title", None, Nil, StringType, false, None),
-        Field("likers", None, Nil, ListType(TypeRef("User")), false, None),
-      ),
-      interfaces = List(TypeRef("Profile"))
-    ),
-    UnionType(
-      name = "UserOrPage",
-      description = None,
-      members = List(
-        TypeRef("User"),
-        TypeRef("Page")
-      )
-    ),
-    InterfaceType(
-      name = "Profile",
-      description = None,
-      fields = List(
-        Field("id", None, Nil, StringType, false, None),
-      ),
-      interfaces = Nil
-    )
-  )
-
-  val directives = Nil
-
-  val User = ref("User")
-  val Page = ref("Page")
-}
-
-object FragmentCompiler extends QueryCompiler(FragmentSchema) {
+object FragmentCompiler extends QueryCompiler(FragmentData.schema) {
   val selectElaborator = new SelectElaborator(Map(
-    FragmentSchema.ref("Query") -> {
+    FragmentData.schema.ref("Query") -> {
       case Select("user", List(Binding("id", IDValue(id))), child) =>
         Select("user", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
       case sel@Select("profiles", _, _) =>
@@ -505,6 +443,36 @@ object FragmentCompiler extends QueryCompiler(FragmentSchema) {
 }
 
 object FragmentData {
+  val schema =
+    Schema(
+      """
+        type Query {
+          user(id: ID!): User!
+          profiles: [Profile!]!
+        }
+        type User implements Profile {
+          id: String!
+          name: String!
+          profilePic: String!
+          friends: [User!]!
+          mutualFriends: [User!]!
+          favourite: UserOrPage
+        }
+        type Page implements Profile {
+          id: String!
+          title: String!
+          likers: [User!]!
+        }
+        union UserOrPage = User | Page
+        interface Profile {
+          id: String!
+        }
+      """
+    ).right.get
+
+  val UserType = schema.ref("User")
+  val PageType = schema.ref("Page")
+
   sealed trait Profile {
     def id: String
   }
@@ -535,9 +503,9 @@ import FragmentData._
 object FragmentQueryInterpreter extends DataTypeQueryInterpreter[Id](
   {
     case "user" =>
-      (ListType(FragmentSchema.ref("User")), profiles.collect { case u: User => u })
+      (ListType(FragmentData.schema.ref("User")), profiles.collect { case u: User => u })
     case "profiles" =>
-      (ListType(FragmentSchema.ref("Profile")), profiles)
+      (ListType(FragmentData.schema.ref("Profile")), profiles)
   },
   {
     case (p: Profile, "id")         => p.id
@@ -550,7 +518,7 @@ object FragmentQueryInterpreter extends DataTypeQueryInterpreter[Id](
     case (p: Page, "likers")        => p.likers
   },
   narrows = {
-    case (u: User, FragmentSchema.User) => u
-    case (p: Page, FragmentSchema.Page) => p
+    case (u: User, UserType) => u
+    case (p: Page, PageType) => p
   }
 )

@@ -66,7 +66,7 @@ final class IntrospectionSuite extends CatsSuite {
     """
 
     val compiled = TestQueryCompiler.compile(text)
-    val res = TestQueryInterpreter.run(compiled.right.get, TestSchema.queryType)
+    val res = TestQueryInterpreter.run(compiled.right.get, TestData.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -223,7 +223,7 @@ final class IntrospectionSuite extends CatsSuite {
     """
 
     val compiled = TestQueryCompiler.compile(text)
-    val res = TestQueryInterpreter.run(compiled.right.get, TestSchema.queryType)
+    val res = TestQueryInterpreter.run(compiled.right.get, TestData.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -344,7 +344,7 @@ final class IntrospectionSuite extends CatsSuite {
     """
 
     val compiled = TestQueryCompiler.compile(text)
-    val res = TestQueryInterpreter.run(compiled.right.get, TestSchema.queryType)
+    val res = TestQueryInterpreter.run(compiled.right.get, TestData.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -431,7 +431,7 @@ final class IntrospectionSuite extends CatsSuite {
     """
 
     val compiled = TestQueryCompiler.compile(text)
-    val res = TestQueryInterpreter.run(compiled.right.get, TestSchema.queryType)
+    val res = TestQueryInterpreter.run(compiled.right.get, TestData.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -525,7 +525,7 @@ final class IntrospectionSuite extends CatsSuite {
     """
 
     val compiled = TestQueryCompiler.compile(text)
-    val res = TestQueryInterpreter.run(compiled.right.get, TestSchema.queryType)
+    val res = TestQueryInterpreter.run(compiled.right.get, TestData.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -615,7 +615,7 @@ final class IntrospectionSuite extends CatsSuite {
     """
 
     val compiled = TestQueryCompiler.compile(text)
-    val res = TestQueryInterpreter.run(compiled.right.get, TestSchema.queryType)
+    val res = TestQueryInterpreter.run(compiled.right.get, TestData.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -696,7 +696,7 @@ final class IntrospectionSuite extends CatsSuite {
     """
 
     val compiled = TestQueryCompiler.compile(text)
-    val res = TestQueryInterpreter.run(compiled.right.get, TestSchema.queryType)
+    val res = TestQueryInterpreter.run(compiled.right.get, TestData.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -787,7 +787,7 @@ final class IntrospectionSuite extends CatsSuite {
     """
 
     val compiled = TestQueryCompiler.compile(text)
-    val res = TestQueryInterpreter.run(compiled.right.get, TestSchema.queryType)
+    val res = TestQueryInterpreter.run(compiled.right.get, TestData.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -848,7 +848,7 @@ final class IntrospectionSuite extends CatsSuite {
     """
 
     val compiled = TestQueryCompiler.compile(text)
-    val res0 = TestQueryInterpreter.run(compiled.right.get, TestSchema.queryType)
+    val res0 = TestQueryInterpreter.run(compiled.right.get, TestData.schema.queryType)
     val res = stripStandardTypes(res0)
     //println(res)
     assert(res == expected)
@@ -1116,7 +1116,7 @@ final class IntrospectionSuite extends CatsSuite {
     """
 
     val compiled = SmallQueryCompiler.compile(text)
-    val res0 = SmallQueryInterpreter.run(compiled.right.get, SmallSchema.queryType)
+    val res0 = SmallQueryInterpreter.run(compiled.right.get, SmallData.schema.queryType)
     val res = stripStandardTypes(res0)
     //println(res)
     assert(res == expected)
@@ -1148,7 +1148,7 @@ final class IntrospectionSuite extends CatsSuite {
     """
 
     val compiled = SmallQueryCompiler.compile(text)
-    val res = SmallQueryInterpreter.run(compiled.right.get, SmallSchema.queryType)
+    val res = SmallQueryInterpreter.run(compiled.right.get, SmallData.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -1177,7 +1177,7 @@ final class IntrospectionSuite extends CatsSuite {
     """
 
     val compiled = SmallQueryCompiler.compile(text)
-    val res = SmallQueryInterpreter.run(compiled.right.get, SmallSchema.queryType)
+    val res = SmallQueryInterpreter.run(compiled.right.get, SmallData.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -1224,146 +1224,108 @@ final class IntrospectionSuite extends CatsSuite {
     """
 
     val compiled = SmallQueryCompiler.compile(text)
-    val res = SmallQueryInterpreter.run(compiled.right.get, SmallSchema.queryType)
+    val res = SmallQueryInterpreter.run(compiled.right.get, SmallData.schema.queryType)
     //println(res)
     assert(res == expected)
   }
 }
 
-object TestSchema extends Schema {
-  import ScalarType._
+object TestData {
+  val schema =
+    Schema(
+      """
+        type Query {
+          users: [User!]!
+        }
 
-  val types = List(
-    ObjectType(
-      name = "Query",
-      description = None,
-      fields = List(
-        Field("users", None, Nil, ListType(TypeRef("User")), false, None)
-      ),
-      interfaces = Nil
-    ),
-    ObjectType(
-      name = "User",
-      description = Some("User object type"),
-      fields = List(
-        Field("id", None, Nil, NullableType(StringType), false, None),
-        Field("name", None, Nil, NullableType(StringType), false, None),
-        Field("age", None, Nil, NullableType(IntType), true, Some("Use birthday instead")),
-        Field("birthday", None, Nil, NullableType(TypeRef("Date")), false, None),
-      ),
-      interfaces = List(TypeRef("Profile"))
-    ),
-    InterfaceType(
-      name = "Profile",
-      description = Some("Profile interface type"),
-      fields = List(
-        Field("id", None, Nil, NullableType(StringType), false, None)
-      ),
-      interfaces = Nil
-    ),
-    ObjectType(
-      name = "Date",
-      description = Some("Date object type"),
-      fields = List(
-        Field("day", None, Nil, NullableType(IntType), false, None),
-        Field("month", None, Nil, NullableType(IntType), false, None),
-        Field("year", None, Nil, NullableType(IntType), false, None)
-      ),
-      interfaces = Nil
-    ),
-    UnionType(
-      name = "Choice",
-      description = Some("Choice union type"),
-      members = List(TypeRef("User"), TypeRef("Date"))
-    ),
-    EnumType(
-      name = "Flags",
-      description = Some("Flags enum type"),
-      enumValues = List(
-        EnumValue("A", None),
-        EnumValue("B", None, true, Some("Deprecation test")),
-        EnumValue("C", None)
-      )
-    ),
-    ObjectType(
-      name = "KindTest",
-      description = None,
-      fields = List(
-        Field("scalar", Some("Scalar field"), Nil, NullableType(IntType), false, None),
-        Field("object", Some("Object field"), Nil, NullableType(TypeRef("User")), false, None),
-        Field("interface", Some("Interface field"), Nil, NullableType(TypeRef("Profile")), false, None),
-        Field("union", Some("Union field"), Nil, NullableType(TypeRef("Choice")), false, None),
-        Field("enum", Some("Enum field"), Nil, NullableType(TypeRef("Flags")), false, None),
-        Field("list", Some("List field"), Nil, NullableType(ListType(NullableType(IntType))), false, None),
-        Field("nonnull", Some("Nonnull field"), Nil, IntType, false, None),
-        Field("nonnulllistnonnull", Some("Nonnull list of nonnull field"), Nil, ListType(IntType), false, None)
-      ),
-      interfaces = Nil
-    ),
-    ObjectType(
-      name = "DeprecationTest",
-      description = None,
-      fields = List(
-        Field("user", None, Nil, NullableType(TypeRef("User")), false, None),
-        Field("flags", None, Nil, NullableType(TypeRef("Flags")), false, None)
-      ),
-      interfaces = Nil
-    )
-  )
+        "User object type"
+        type User implements Profile {
+          id: String
+          name: String
+          age: Int @deprecated(reason: "Use birthday instead")
+          birthday: Date
+        }
 
-  val directives = Nil
+        "Profile interface type"
+        interface Profile {
+          id: String
+        }
+
+        "Date object type"
+        type Date {
+          day: Int
+          month: Int
+          year: Int
+        }
+
+        "Choice union type"
+        union Choice = User | Date
+
+        "Flags enum type"
+        enum Flags {
+          A
+          B @deprecated(reason: "Deprecation test")
+          C
+        }
+
+        type KindTest {
+          "Scalar field"
+          scalar: Int
+          "Object field"
+          object: User
+          "Interface field"
+          interface: Profile
+          "Union field"
+          union: Choice
+          "Enum field"
+          enum: Flags
+          "List field"
+          list: [Int]
+          "Nonnull field"
+          nonnull: Int!
+          "Nonnull list of nonnull field"
+          nonnulllistnonnull: [Int!]!
+        }
+
+        type DeprecationTest {
+          user: User
+          flags: Flags
+        }
+      """
+    ).right.get
 }
 
-object TestQueryCompiler extends QueryCompiler(TestSchema) {
+object TestQueryCompiler extends QueryCompiler(TestData.schema) {
   val phases = List(new SelectElaborator(Map.empty))
 }
 
 object TestQueryInterpreter extends
   DataTypeQueryInterpreter[Id](PartialFunction.empty, PartialFunction.empty)
 
-object SmallSchema extends Schema {
-  import ScalarType._
-
-  val types = List(
-    ObjectType(
-      name = "Query",
-      description = None,
-      fields = List(
-        Field("users", None, Nil, ListType(TypeRef("User")), false, None),
-        Field("profiles", None, Nil, ListType(TypeRef("Profile")), false, None)
-      ),
-      interfaces = Nil
-    ),
-    InterfaceType(
-      name = "Profile",
-      description = Some("Profile interface type"),
-      fields = List(
-        Field("id", None, Nil, NullableType(StringType), false, None),
-      ),
-      interfaces = Nil
-    ),
-    ObjectType(
-      name = "User",
-      description = Some("User object type"),
-      fields = List(
-        Field("id", None, Nil, NullableType(StringType), false, None),
-        Field("name", None, Nil, NullableType(StringType), false, None),
-        Field("age", None, Nil, NullableType(IntType), false, None)
-      ),
-      interfaces = List(TypeRef("Profile"))
-    )
-  )
-
-  val directives = Nil
-
-  val User = ref("User")
-}
-
-object SmallQueryCompiler extends QueryCompiler(SmallSchema) {
-  val phases = List(new SelectElaborator(Map.empty))
-}
-
 object SmallData {
+  val schema =
+    Schema(
+      """
+        type Query {
+          users: [User!]!
+          profiles: [Profile!]!
+        }
+        "Profile interface type"
+        interface Profile {
+          id: String
+        }
+        "User object type"
+        type User implements Profile {
+          id: String
+          name: String
+          age: Int
+        }
+      """
+    ).right.get
+
+  val UserType = schema.ref("User")
+  val ProfileType = schema.ref("Profile")
+
   trait Profile {
     def id: Option[String]
   }
@@ -1373,12 +1335,16 @@ object SmallData {
   )
 }
 
+object SmallQueryCompiler extends QueryCompiler(SmallData.schema) {
+  val phases = List(new SelectElaborator(Map.empty))
+}
+
 import SmallData._
 
 object SmallQueryInterpreter extends DataTypeQueryInterpreter[Id](
   {
-    case "users" => (ListType(SmallSchema.ref("User")), users)
-    case "profiles" => (ListType(SmallSchema.ref("Profile")), users: List[Profile])
+    case "users" => (ListType(UserType), users)
+    case "profiles" => (ListType(ProfileType), users: List[Profile])
   },
   {
     case (u: User, "id")    => u.id
@@ -1387,6 +1353,6 @@ object SmallQueryInterpreter extends DataTypeQueryInterpreter[Id](
     case (p: Profile, "id") => p.id
   },
   narrows = {
-    case (u: User, SmallSchema.User) => u
+    case (u: User, SmallData.UserType) => u
   }
 )

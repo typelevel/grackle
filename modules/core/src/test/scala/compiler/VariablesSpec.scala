@@ -110,52 +110,32 @@ final class VariablesSuite extends CatsSuite {
   }
 }
 
-object VariablesSchema extends Schema {
-  import ScalarType._
-
-  val IdArg = InputValue("id", None, IDType, None)
-  val IdsArg = InputValue("ids", None, ListType(IDType), None)
-  val SizeArg = InputValue("size", None, NullableType(IntType), None)
-  val PatternArg = InputValue("pattern", None, TypeRef("Pattern"), None)
-
-  val types = List(
-    ObjectType(
-      name = "Query",
-      description = None,
-      fields = List(
-        Field("user", None, List(IdArg), TypeRef("User"), false, None),
-        Field("users", None, List(IdsArg), ListType(TypeRef("User")), false, None),
-        Field("search", None, List(PatternArg), ListType(TypeRef("User")), false, None),
-      ),
-      interfaces = Nil
-    ),
-    ObjectType(
-      name = "User",
-      description = None,
-      fields = List(
-        Field("id", None, Nil, StringType, false, None),
-        Field("name", None, Nil, StringType, false, None),
-        Field("profilePic", None, List(SizeArg), StringType, false, None),
-      ),
-      interfaces = Nil
-    ),
-    InputObjectType(
-      name = "Pattern",
-      description = None,
-      inputFields = List(
-        InputValue("name", None, NullableType(StringType), None),
-        InputValue("age", None, NullableType(IntType), None),
-        InputValue("id", None, NullableType(IDType), None),
-      )
-    )
-  )
-
-  val directives = Nil
+object VariablesData {
+  val schema =
+    Schema(
+      """
+        type Query {
+          user(id: ID!): User!
+          users(ids: [ID!]!): [User!]!
+          search(pattern: Pattern!): [User!]!
+        }
+        type User {
+          id: String!
+          name: String!
+          profilePic(size: Int): String!
+        }
+        input Pattern {
+          name: String
+          age: Int
+          id: ID
+        }
+      """
+    ).right.get
 }
 
-object VariablesCompiler extends QueryCompiler(VariablesSchema) {
+object VariablesCompiler extends QueryCompiler(VariablesData.schema) {
   val selectElaborator = new SelectElaborator(Map(
-    VariablesSchema.ref("Query") -> PartialFunction.empty
+    VariablesData.schema.ref("Query") -> PartialFunction.empty
   ))
 
   val phases = List(selectElaborator)

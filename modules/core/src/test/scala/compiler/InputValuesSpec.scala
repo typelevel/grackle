@@ -94,51 +94,32 @@ final class InputValuesSuite extends CatsSuite {
   }
 }
 
-object InputValuesSchema extends Schema {
-  import ScalarType._
-
-  val ArgArg = InputValue("arg", None, NullableType(IntType), None)
-  val ListArgArg = InputValue("arg", None, ListType(StringType), None)
-  val ObjectArgArg = InputValue("arg", None, TypeRef("InObj"), None)
-
-  val types = List(
-    ObjectType(
-      name = "Query",
-      description = None,
-      fields = List(
-        Field("field", None, List(ArgArg), TypeRef("Result"), false, None),
-        Field("listField", None, List(ListArgArg), TypeRef("Result"), false, None),
-        Field("objectField", None, List(ObjectArgArg), TypeRef("Result"), false, None),
-      ),
-      interfaces = Nil
-    ),
-    ObjectType(
-      name = "Result",
-      description = None,
-      fields = List(
-        Field("subfield", None, Nil, StringType, false, None),
-      ),
-      interfaces = Nil
-    ),
-    InputObjectType(
-      name = "InObj",
-      description = None,
-      inputFields = List(
-        InputValue("foo", None, IntType, None),
-        InputValue("bar", None, BooleanType, None),
-        InputValue("baz", None, StringType, None),
-        InputValue("defaulted", None, StringType, Some(StringValue("quux"))),
-        InputValue("nullable", None, NullableType(StringType), None)
-      )
-    )
-  )
-
-  val directives = Nil
+object InputValuesData {
+  val schema =
+    Schema(
+      """
+        type Query {
+          field(arg: Int): Result!
+          listField(arg: [String!]!): Result!
+          objectField(arg: InObj!): Result!
+        }
+        type Result {
+          subfield: String!
+        }
+        input InObj {
+          foo: Int!
+          bar: Boolean!
+          baz: String!
+          defaulted: String! = "quux"
+          nullable: String
+        }
+      """
+    ).right.get
 }
 
-object InputValuesCompiler extends QueryCompiler(InputValuesSchema) {
+object InputValuesCompiler extends QueryCompiler(InputValuesData.schema) {
   val selectElaborator = new SelectElaborator(Map(
-    InputValuesSchema.ref("Query") -> PartialFunction.empty
+    InputValuesData.schema.ref("Query") -> PartialFunction.empty
   ))
 
   val phases = List(selectElaborator)

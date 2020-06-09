@@ -14,6 +14,19 @@ import QueryInterpreter.mkErrorResult
 /* Currency component */
 
 object CurrencyData {
+  val schema =
+    Schema(
+      """
+        type Query {
+          fx(code: String): Currency
+        }
+        type Currency {
+          code: String!
+          exchangeRate: Float!
+        }
+      """
+    ).right.get
+
   case class Currency(
     code: String,
     exchangeRate: Double
@@ -24,7 +37,7 @@ object CurrencyData {
 
   val currencies = List(EUR, GBP)
 
-  val CurrencyType = CurrencySchema.ref("Currency")
+  val CurrencyType = schema.ref("Currency")
 }
 
 import CurrencyData.{ Currency, CurrencyType, currencies }
@@ -39,8 +52,8 @@ object CurrencyQueryInterpreter extends DataTypeQueryInterpreter[Id](
   }
 )
 
-object CurrencyQueryCompiler extends QueryCompiler(CurrencySchema) {
-  val QueryType = CurrencySchema.ref("Query")
+object CurrencyQueryCompiler extends QueryCompiler(CurrencyData.schema) {
+  val QueryType = CurrencyData.schema.ref("Query")
 
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
@@ -55,6 +68,20 @@ object CurrencyQueryCompiler extends QueryCompiler(CurrencySchema) {
 /* Country component */
 
 object CountryData {
+  val schema =
+    Schema(
+      """
+        type Query {
+          country(code: String): Country
+          countries: [Country!]!
+        }
+        type Country {
+          code: String!
+          name: String!
+        }
+      """
+    ).right.get
+
   case class Country(
     code: String,
     name: String,
@@ -67,7 +94,7 @@ object CountryData {
 
   val countries = List(DEU, FRA, GBR)
 
-  val CountryType = CountrySchema.ref("Country")
+  val CountryType = schema.ref("Country")
 }
 
 import CountryData.{ Country, CountryType, countries }
@@ -82,8 +109,8 @@ object CountryQueryInterpreter extends DataTypeQueryInterpreter[Id](
   }
 )
 
-object CountryQueryCompiler extends QueryCompiler(CountrySchema) {
-  val QueryType = CountrySchema.ref("Query")
+object CountryQueryCompiler extends QueryCompiler(CountryData.schema) {
+  val QueryType = CountryData.schema.ref("Query")
 
   val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
@@ -99,11 +126,33 @@ object CountryQueryCompiler extends QueryCompiler(CountrySchema) {
 
 /* Composition */
 
-object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
+object ComposedData {
+  val schema =
+    Schema(
+      """
+        type Query {
+          country(code: String): Country
+          fx(code: String): Currency
+          countries: [Country!]!
+        }
+        type Currency {
+          code: String!
+          exchangeRate: Float!
+        }
+        type Country {
+          code: String!
+          name: String!
+          currency: Currency!
+        }
+      """
+    ).right.get
+}
+
+object ComposedQueryCompiler extends QueryCompiler(ComposedData.schema) {
   import CountryData._
 
-  val QueryType = ComposedSchema.ref("Query")
-  val CountryType = ComposedSchema.ref("Country")
+  val QueryType = ComposedData.schema.ref("Query")
+  val CountryType = ComposedData.schema.ref("Country")
 
   val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {

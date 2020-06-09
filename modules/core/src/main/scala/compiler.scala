@@ -248,12 +248,12 @@ object QueryCompiler {
               }
           }
 
-        case i@Introspection(_, child) if tpe =:= schema.queryType =>
-          transform(child, env, SchemaSchema, SchemaSchema.queryType).map(ec => i.copy(child = ec))
+        case i@Introspect(_, child) if tpe =:= schema.queryType =>
+          transform(child, env, Introspection.schema, Introspection.schema.queryType).map(ec => i.copy(child = ec))
 
-        case i@Introspection(_, child) =>
+        case i@Introspect(_, child) =>
           val typenameTpe = ObjectType(s"__Typename", None, List(Field("__typename", None, Nil, StringType, false, None)), Nil)
-          transform(child, env, SchemaSchema, typenameTpe).map(ec => i.copy(child = ec))
+          transform(child, env, Introspection.schema, typenameTpe).map(ec => i.copy(child = ec))
 
         case n@Narrow(subtpe, child)  => transform(child, env, schema, subtpe).map(ec => n.copy(child = ec))
         case w@Wrap(_, child)         => transform(child, env, schema, tpe).map(ec => w.copy(child = ec))
@@ -273,7 +273,7 @@ object QueryCompiler {
     override def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] =
       query match {
         case s@PossiblyRenamedSelect(Select("__typename" | "__schema" | "__type", _, _), _) =>
-          Introspection(schema, s).rightIor
+          Introspect(schema, s).rightIor
         case _ => super.transform(query, env, schema, tpe)
       }
   }
@@ -364,7 +364,7 @@ object QueryCompiler {
       query match {
         case Select(fieldName, args, child) =>
           tpe.withUnderlyingField(fieldName) { childTpe =>
-            val mapping0 = if (schema eq SchemaSchema) introspectionMapping else mapping
+            val mapping0 = if (schema eq Introspection.schema) introspectionMapping else mapping
             val elaborator: Select => Result[Query] =
               schema.ref(tpe.underlyingObject).flatMap(mapping0.get) match {
               case Some(e) => (s: Select) => if (e.isDefinedAt(s)) e(s) else s.rightIor
@@ -396,11 +396,11 @@ object QueryCompiler {
   }
 
   val introspectionMapping: Map[TypeRef, PartialFunction[Select, Result[Query]]] = Map(
-    SchemaSchema.ref("Query") -> {
+    Introspection.schema.ref("Query") -> {
       case sel@Select("__type", List(Binding("name", StringValue(name))), _) =>
         sel.eliminateArgs(child => Unique(Eql(FieldPath(List("name")), Const(name)), child)).rightIor
     },
-    SchemaSchema.ref("__Type") -> {
+    Introspection.schema.ref("__Type") -> {
       case sel@Select("fields", List(Binding("includeDeprecated", BooleanValue(include))), _) =>
         sel.eliminateArgs(child => if (include) child else Filter(Eql(FieldPath(List("isDeprecated")), Const(false)), child)).rightIor
       case sel@Select("enumValues", List(Binding("includeDeprecated", BooleanValue(include))), _) =>

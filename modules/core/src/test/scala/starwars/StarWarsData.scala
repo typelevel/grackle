@@ -14,6 +14,43 @@ import QueryCompiler._
 import StarWarsData._
 
 object StarWarsData {
+  val schema =
+    Schema(
+      """
+        type Query {
+           hero(episode: Episode!): Character!
+           character(id: ID!): Character
+           human(id: ID!): Human
+           droid(id: ID!): Droid
+         }
+         enum Episode {
+           NEWHOPE
+           EMPIRE
+           JEDI
+         }
+         interface Character {
+           id: String!
+           name: String
+           friends: [Character!]
+           appearsIn: [Episode!]
+         }
+         type Human implements Character {
+           id: String!
+           name: String
+           friends: [Character!]
+           appearsIn: [Episode!]
+           homePlanet: String
+         }
+         type Droid implements Character {
+           id: String!
+           name: String
+           friends: [Character!]
+           appearsIn: [Episode!]
+           primaryFunction: String
+         }
+      """
+    ).right.get
+
   object Episode extends Enumeration {
     val NEWHOPE, EMPIRE, JEDI = Value
   }
@@ -106,9 +143,9 @@ object StarWarsData {
   )
 }
 
-object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
+object StarWarsQueryCompiler extends QueryCompiler(StarWarsData.schema) {
   val selectElaborator = new SelectElaborator(Map(
-    StarWarsSchema.ref("Query") -> {
+    StarWarsData.schema.ref("Query") -> {
       case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
         val episode = Episode.values.find(_.toString == e.name).get
         Select("hero", Nil, Unique(Eql(FieldPath(List("id")), Const(hero(episode).id)), child)).rightIor
@@ -122,9 +159,9 @@ object StarWarsQueryCompiler extends QueryCompiler(StarWarsSchema) {
 
 object StarWarsQueryInterpreter extends DataTypeQueryInterpreter[Id](
   {
-    case "hero" | "character" => (ListType(StarWarsSchema.ref("Character")), characters)
-    case "human" => (ListType(StarWarsSchema.ref("Human")), characters.collect { case h: Human => h })
-    case "droid" => (ListType(StarWarsSchema.ref("Droid")), characters.collect { case d: Droid => d })
+    case "hero" | "character" => (ListType(StarWarsData.schema.ref("Character")), characters)
+    case "human" => (ListType(StarWarsData.schema.ref("Human")), characters.collect { case h: Human => h })
+    case "droid" => (ListType(StarWarsData.schema.ref("Droid")), characters.collect { case d: Droid => d })
   },
   {
     case (c: Character, "id")          => c.id

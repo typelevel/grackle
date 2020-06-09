@@ -8,7 +8,6 @@ import scala.annotation.tailrec
 
 import cats.Monad
 import cats.implicits._
-import io.circe.{ Encoder, Json }
 import shapeless.{ Coproduct, Generic, ::, HList, HNil, Inl, Inr, LabelledGeneric, Typeable }
 import shapeless.ops.hlist.{ LiftAll => PLiftAll }
 import shapeless.ops.coproduct.{ LiftAll => CLiftAll }
@@ -20,7 +19,6 @@ import ShapelessUtils._
 
 object semiauto {
   final def deriveObjectCursorBuilder[T](implicit builder: => DerivedObjectCursorBuilder[T]): DerivedObjectCursorBuilder[T] = builder
-  final def deriveLeafCursorBuilder[T](implicit builder: DerivedLeafCursorBuilder[T]): DerivedLeafCursorBuilder[T] = builder
   final def deriveInterfaceCursorBuilder[T](implicit builder: DerivedInterfaceCursorBuilder[T]): DerivedInterfaceCursorBuilder[T] = builder
 }
 
@@ -29,22 +27,6 @@ trait ObjectCursorBuilder[T] extends CursorBuilder[T] {
   def renamedField(from: String, to: String): CursorBuilder[T]
   def transformFieldNames(f: String => String): CursorBuilder[T]
   def transformField[U](fieldName: String)(f: T => Result[U])(implicit cb: => CursorBuilder[U]): CursorBuilder[T]
-}
-
-trait DerivedLeafCursorBuilder[T] extends CursorBuilder[T]
-
-object DerivedLeafCursorBuilder {
-  def apply[T](implicit cb: DerivedLeafCursorBuilder[T]): DerivedLeafCursorBuilder[T] = cb
-
-  class LeafCursor[T](val focus: T, val tpe: Type, encoder: Encoder[T]) extends AbstractCursor[T] {
-    override def isLeaf: Boolean = true
-    override def asLeaf: Result[Json] = encoder(focus).rightIor
-  }
-
-  implicit def leafCursorBuilder[T](implicit encoder: Encoder[T]): DerivedLeafCursorBuilder[T] =
-    new DerivedLeafCursorBuilder[T] {
-      def build(focus: T, tpe: Type): Result[Cursor] = new LeafCursor(focus, tpe, encoder).rightIor
-    }
 }
 
 trait DerivedObjectCursorBuilder[T] extends ObjectCursorBuilder[T]
