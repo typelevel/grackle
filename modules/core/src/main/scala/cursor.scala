@@ -5,7 +5,7 @@ package edu.gemini.grackle
 
 import cats.data.Ior
 import cats.implicits._
-import io.circe.Json
+import io.circe.{Encoder, Json}
 
 import QueryInterpreter.{ mkErrorResult, mkOneError }
 
@@ -312,6 +312,17 @@ object CursorBuilder {
             focus.traverse(elem => elemBuilder.build(elem, elemTpe))
           }
         }.rightIor
+    }
+
+  class LeafCursor[T](val focus: T, val tpe: Type, encoder: Encoder[T]) extends AbstractCursor[T] {
+    override def isLeaf: Boolean = true
+    override def asLeaf: Result[Json] = encoder(focus).rightIor
+  }
+
+  implicit def fromEncoder[T](implicit encoder: Encoder[T]): CursorBuilder[T] =
+    new CursorBuilder[T] {
+      def build(focus: T, tpe: Type): Result[Cursor] =
+        new LeafCursor(focus, tpe, encoder).rightIor
     }
 }
 

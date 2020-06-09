@@ -19,8 +19,6 @@ import Query._, Predicate._, Value._
 import QueryCompiler._
 import semiauto._
 
-import MovieData._
-
 object MovieData {
   val schema =
     Schema(
@@ -87,7 +85,8 @@ object MovieData {
         case Comedy => "COMEDY"
       })
 
-    implicit val cursorBuilder: CursorBuilder[Genre] = deriveLeafCursorBuilder[Genre]
+    implicit val cursorBuilder: CursorBuilder[Genre] =
+      CursorBuilder.fromEncoder[Genre]
   }
 
   implicit val localDateOrder: Order[LocalDate] =
@@ -101,12 +100,6 @@ object MovieData {
 
   implicit val durationOrder: Order[Duration] =
     Order.fromComparable[Duration]
-
-  implicit val uuidCursorBuilder: CursorBuilder[UUID] = deriveLeafCursorBuilder[UUID]
-  implicit val localDateCursorBuilder: CursorBuilder[LocalDate] = deriveLeafCursorBuilder[LocalDate]
-  implicit val localTimeCursorBuilder: CursorBuilder[LocalTime] = deriveLeafCursorBuilder[LocalTime]
-  implicit val zonedDateTimeCursorBuilder: CursorBuilder[ZonedDateTime] = deriveLeafCursorBuilder[ZonedDateTime]
-  implicit val durationCursorBuilder: CursorBuilder[Duration] = deriveLeafCursorBuilder[Duration]
 
   import Genre.{Action, Comedy, Drama}
 
@@ -139,6 +132,8 @@ object MovieData {
       Movie(UUID.fromString("2f6dcb0a-4122-4a21-a1c6-534744dd6b85"), "Le Pont du Nord", Drama, LocalDate.parse("1982-01-13"), LocalTime.parse("20:45:00"), ZonedDateTime.parse("2020-05-11T20:45:00Z"), Duration.ofMillis(7620000))
     ).sortBy(_.id.toString)
 }
+
+import MovieData._
 
 object UUIDValue {
   def unapply(s: StringValue): Option[UUID] =
