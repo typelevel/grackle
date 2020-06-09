@@ -38,7 +38,7 @@ final class ComposedWorldSpec extends DatabaseSuite {
     """
 
     val compiledQuery = ComposedQueryCompiler.compile(query).right.get
-    val res = ComposedQueryInterpreter.fromTransactor(xa).run(compiledQuery, ComposedSchema.queryType).unsafeRunSync
+    val res = ComposedQueryInterpreter.fromTransactor(xa).run(compiledQuery, ComposedData.schema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -94,7 +94,7 @@ final class ComposedWorldSpec extends DatabaseSuite {
     """
 
     val compiledQuery = ComposedQueryCompiler.compile(query).right.get
-    val res = ComposedQueryInterpreter.fromTransactor(xa).run(compiledQuery, ComposedSchema.queryType).unsafeRunSync
+    val res = ComposedQueryInterpreter.fromTransactor(xa).run(compiledQuery, ComposedData.schema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -134,7 +134,7 @@ final class ComposedWorldSpec extends DatabaseSuite {
     """
 
     val compiledQuery = ComposedQueryCompiler.compile(query).right.get
-    val res = ComposedQueryInterpreter.fromTransactor(xa).run(compiledQuery, ComposedSchema.queryType).unsafeRunSync
+    val res = ComposedQueryInterpreter.fromTransactor(xa).run(compiledQuery, ComposedData.schema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)

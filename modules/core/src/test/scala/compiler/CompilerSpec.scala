@@ -216,38 +216,25 @@ final class CompilerSuite extends CatsSuite {
   }
 }
 
-object SimpleSchema extends Schema {
-  import ScalarType._
-
-  val IdArg = InputValue("id", None, StringType, None)
-
-  val types = List(
-    ObjectType(
-      name = "Query",
-      description = None,
-      fields = List(
-        Field("character", None, List(IdArg), NullableType(TypeRef("Character")), false, None),
-      ),
-      interfaces = Nil
-    ),
-    InterfaceType(
-      name = "Character",
-      description = None,
-      fields = List(
-        Field("id", None, Nil, StringType, false, None),
-        Field("name", None, Nil, NullableType(StringType), false, None),
-        Field("friends", None, Nil, NullableType(ListType(TypeRef("Character"))), false, None),
-      ),
-      interfaces = Nil
-    )
-  )
-
-  val directives = Nil
+object SimpleData {
+  val schema =
+    Schema(
+      """
+        type Query {
+          character(id: String!): Character
+        }
+        type Character {
+          id: String!
+          name: String
+          friends: [Character!]
+        }
+      """
+    ).right.get
 }
 
-object SimpleCompiler extends QueryCompiler(SimpleSchema) {
+object SimpleCompiler extends QueryCompiler(SimpleData.schema) {
   val selectElaborator = new SelectElaborator(Map(
-    SimpleSchema.ref("Query") -> {
+    SimpleData.schema.ref("Query") -> {
       case Select("character", List(Binding("id", StringValue(id))), child) =>
         Unique(Eql(FieldPath(List("id")), Const(id)), child).rightIor
     }
@@ -256,129 +243,38 @@ object SimpleCompiler extends QueryCompiler(SimpleSchema) {
   val phases = List(selectElaborator)
 }
 
-object SchemaA extends Schema {
-  import ScalarType._
-
-  val types = List(
-    ObjectType(
-      name = "FieldA2",
-      description = None,
-      fields = Nil,
-      interfaces = Nil
-    ),
-    ObjectType(
-      name = "ComponentA",
-      description = None,
-      fields = List(
-        Field("fielda1", None, Nil, StringType, false, None),
-        Field("fielda2", None, Nil, TypeRef("FieldA2"), false, None)
-      ),
-      interfaces = Nil
-    )
-  )
-
-  val directives = Nil
+object ComposedData {
+  val schema =
+    Schema(
+      """
+        type Query {
+          componenta: ComponentA!
+        }
+        type ComponentA {
+          fielda1: String!
+          fielda2: FieldA2
+        }
+        type FieldA2 {
+          componentb: ComponentB
+        }
+        type ComponentB {
+          fieldb1: String!
+          fieldb2: FieldB2
+        }
+        type FieldB2 {
+          componentc: ComponentC
+        }
+        type ComponentC {
+        }
+      """
+    ).right.get
 }
 
-object SchemaB extends Schema {
-  import ScalarType._
-
-  val types = List(
-    ObjectType(
-      name = "FieldB2",
-      description = None,
-      fields = Nil,
-      interfaces = Nil
-    ),
-    ObjectType(
-      name = "ComponentB",
-      description = None,
-      fields = List(
-        Field("fieldb1", None, Nil, StringType, false, None),
-        Field("fieldb2", None, Nil, TypeRef("FieldB2"), false, None)
-      ),
-      interfaces = Nil
-    )
-  )
-
-  val directives = Nil
-}
-
-object SchemaC extends Schema {
-  val types = List(
-    ObjectType(
-      name = "ComponentC",
-      description = None,
-      fields = Nil,
-      interfaces = Nil
-    )
-  )
-
-  val directives = Nil
-}
-
-object ComposedSchema extends Schema {
-  import ScalarType._
-
-  val types = List(
-    ObjectType(
-      name = "Query",
-      description = None,
-      fields = List(
-        Field("componenta", None, Nil, TypeRef("ComponentA"), false, None)
-      ),
-      interfaces = Nil
-    ),
-    ObjectType(
-      name = "ComponentA",
-      description = None,
-      fields = List(
-        Field("fielda1", None, Nil, StringType, false, None),
-        Field("fielda2", None, Nil, TypeRef("FieldA2"), false, None)
-      ),
-      interfaces = Nil
-    ),
-    ObjectType(
-      name = "FieldA2",
-      description = None,
-      fields = List(
-        Field("componentb", None, Nil, TypeRef("ComponentB"), false, None)
-      ),
-      interfaces = Nil
-    ),
-    ObjectType(
-      name = "ComponentB",
-      description = None,
-      fields = List(
-        Field("fieldb1", None, Nil, StringType, false, None),
-        Field("fieldb2", None, Nil, TypeRef("FieldB2"), false, None)
-      ),
-      interfaces = Nil
-    ),
-    ObjectType(
-      name = "FieldB2",
-      description = None,
-      fields = List(
-        Field("componentc", None, Nil, TypeRef("ComponentC"), false, None)
-      ),
-      interfaces = Nil
-    ),
-    ObjectType(
-      name = "ComponentC",
-      description = None,
-      fields = Nil,
-      interfaces = Nil
-    )
-  )
-
-  val directives = Nil
-}
-
-object ComposedCompiler extends QueryCompiler(ComposedSchema) {
+object ComposedCompiler extends QueryCompiler(ComposedData.schema) {
   val componentElaborator = ComponentElaborator(
-    Mapping(ComposedSchema.ref("Query"), "componenta", "ComponentA"),
-    Mapping(ComposedSchema.ref("FieldA2"), "componentb", "ComponentB"),
-    Mapping(ComposedSchema.ref("FieldB2"), "componentc", "ComponentC")
+    Mapping(ComposedData.schema.ref("Query"), "componenta", "ComponentA"),
+    Mapping(ComposedData.schema.ref("FieldA2"), "componentb", "ComponentB"),
+    Mapping(ComposedData.schema.ref("FieldB2"), "componentc", "ComponentC")
   )
 
   val phases = List(componentElaborator)

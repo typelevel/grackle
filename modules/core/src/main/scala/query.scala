@@ -75,7 +75,7 @@ object Query {
     def render = s"<component: $componentId ${child.render}>"
   }
 
-  case class Introspection(schema: Schema, child: Query) extends Query {
+  case class Introspect(schema: Schema, child: Query) extends Query {
     def render = s"<introspection: ${child.render}>"
   }
 
@@ -302,15 +302,15 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
         case query => List(query)
       }
 
-    val introQueries = rootQueries.collect { case i: Introspection => i }
+    val introQueries = rootQueries.collect { case i: Introspect => i }
     val introResults =
       introQueries.map {
-        case Introspection(schema, query) =>
-          val interp = IntrospectionQueryInterpreter(schema)
-          interp.runRootValue(query, SchemaSchema.queryType)
+        case Introspect(schema, query) =>
+          val interp = Introspection.interpreter(schema)
+          interp.runRootValue(query, Introspection.schema.queryType)
       }
 
-    val nonIntroQueries = rootQueries.filter { case _: Introspection => false ; case _ => true }
+    val nonIntroQueries = rootQueries.filter { case _: Introspect => false ; case _ => true }
     val nonIntroResults = runRootValues(nonIntroQueries.zip(Iterator.continually(rootTpe)))
 
     val mergedResults: F[Result[ProtoJson]] =
@@ -328,7 +328,7 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
           def merge(qs: List[Query], is: List[Result[ProtoJson]], nis: List[ProtoJson], acc: List[ProtoJson]): List[ProtoJson] =
             ((qs, is, nis): @unchecked) match {
               case (Nil, _, _) => acc
-              case ((_: Introspection) :: qs, i :: is, nis) =>
+              case ((_: Introspect) :: qs, i :: is, nis) =>
                 val acc0 = i.right match {
                   case Some(r) => r :: acc
                   case None => acc
@@ -407,7 +407,7 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
             fields <- runFields(child, tp1, c)
           } yield fields
 
-      case (Introspection(schema, PossiblyRenamedSelect(Select("__typename", Nil, Empty), resultName)), tpe: NamedType) =>
+      case (Introspect(schema, PossiblyRenamedSelect(Select("__typename", Nil, Empty), resultName)), tpe: NamedType) =>
         (tpe match {
           case o: ObjectType => Some(o.name)
           case i: InterfaceType =>

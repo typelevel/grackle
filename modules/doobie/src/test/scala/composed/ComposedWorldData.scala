@@ -19,6 +19,17 @@ import DoobiePredicate._
 /* Currency component */
 
 object CurrencyData {
+  val schema =
+    Schema(
+      """
+        type Currency {
+          code: String!
+          exchangeRate: Float!
+          countryCode: String!
+        }
+      """
+    ).right.get
+
   case class Currency(
     code: String,
     exchangeRate: Double,
@@ -35,7 +46,7 @@ object CurrencyData {
 object CurrencyQueryInterpreter {
   import CurrencyData._
 
-  val CurrencyType = CurrencySchema.ref("Currency")
+  val CurrencyType = CurrencyData.schema.ref("Currency")
 
   def apply[F[_]: Monad] = new DataTypeQueryInterpreter[F](
     {
@@ -53,6 +64,47 @@ object CurrencyQueryInterpreter {
 
 object WorldData extends DoobieMapping {
   import DoobieMapping._, FieldMapping._
+
+  val schema =
+    Schema(
+      """
+        type Query {
+          cities(namePattern: String = "%"): [City!]
+          country(code: String): Country
+          countries: [Country!]
+        }
+        type City {
+          name: String!
+          country: Country!
+          district: String!
+          population: Int!
+        }
+        type Language {
+          language: String!
+          isOfficial: Boolean!
+          percentage: Float!
+          countries: [Country!]!
+        }
+        type Country {
+          name: String!
+          continent: String!
+          region: String!
+          surfacearea: Float!
+          indepyear: Int
+          population: Int!
+          lifeexpectancy: Float
+          gnp: String
+          gnpold: String
+          localname: String!
+          governmentform: String!
+          headofstate: String
+          capitalId: Int
+          code2: String!
+          cities: [City!]!
+          languages: [Language!]!
+        }
+      """
+    ).right.get
 
   val countryMapping =
     ObjectMapping(
@@ -134,9 +186,60 @@ object WorldQueryInterpreter {
 
 /* Composition */
 
-object ComposedQueryCompiler extends QueryCompiler(ComposedSchema) {
-  val QueryType = ComposedSchema.ref("Query")
-  val CountryType = ComposedSchema.ref("Country")
+object ComposedData {
+  val schema =
+    Schema(
+      """
+        type Query {
+          cities(namePattern: String = "%"): [City!]
+          country(code: String): Country
+          countries: [Country!]
+          currencies: [Currency!]!
+        }
+        type City {
+          name: String!
+          country: Country!
+          district: String!
+          population: Int!
+        }
+        type Language {
+          language: String!
+          isOfficial: Boolean!
+          percentage: Float!
+          countries: [Country!]!
+        }
+        type Currency {
+          code: String!
+          exchangeRate: Float!
+          countryCode: String!
+        }
+        type Country {
+          name: String!
+          continent: String!
+          region: String!
+          surfacearea: Float!
+          indepyear: Int
+          population: Int!
+          lifeexpectancy: Float
+          gnp: String
+          gnpold: String
+          localname: String!
+          governmentform: String!
+          headofstate: String
+          capitalId: Int
+          code2: String!
+          cities: [City!]!
+          languages: [Language!]!
+          currencies: [Currency!]!
+        }
+      """
+    ).right.get
+
+}
+
+object ComposedQueryCompiler extends QueryCompiler(ComposedData.schema) {
+  val QueryType = ComposedData.schema.ref("Query")
+  val CountryType = ComposedData.schema.ref("Country")
 
   val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {

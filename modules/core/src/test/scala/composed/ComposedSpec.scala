@@ -29,7 +29,7 @@ final class ComposedSpec extends CatsSuite {
     """
 
     val compiledQuery = CurrencyQueryCompiler.compile(query).right.get
-    val res = CurrencyQueryInterpreter.run(compiledQuery, CurrencySchema.queryType)
+    val res = CurrencyQueryInterpreter.run(compiledQuery, CurrencyData.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -55,7 +55,7 @@ final class ComposedSpec extends CatsSuite {
     """
 
     val compiledQuery = CountryQueryCompiler.compile(query).right.get
-    val res = CountryQueryInterpreter.run(compiledQuery, CountrySchema.queryType)
+    val res = CountryQueryInterpreter.run(compiledQuery, CountryData.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -89,7 +89,7 @@ final class ComposedSpec extends CatsSuite {
     """
 
     val compiledQuery = ComposedQueryCompiler.compile(query).right.get
-    val res = ComposedQueryInterpreter.run(compiledQuery, ComposedSchema.queryType)
+    val res = ComposedQueryInterpreter.run(compiledQuery, ComposedData.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -139,7 +139,7 @@ final class ComposedSpec extends CatsSuite {
     """
 
     val compiledQuery = ComposedQueryCompiler.compile(query).right.get
-    val res = ComposedQueryInterpreter.run(compiledQuery, ComposedSchema.queryType)
+    val res = ComposedQueryInterpreter.run(compiledQuery, ComposedData.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -183,7 +183,7 @@ final class ComposedSpec extends CatsSuite {
     """
 
     val compiledQuery = ComposedQueryCompiler.compile(query).right.get
-    val res = ComposedQueryInterpreter.run(compiledQuery, ComposedSchema.queryType)
+    val res = ComposedQueryInterpreter.run(compiledQuery, ComposedData.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -217,7 +217,7 @@ final class ComposedSpec extends CatsSuite {
     """
 
     val compiledQuery = ComposedQueryCompiler.compile(query).right.get
-    val res = ComposedQueryInterpreter.run(compiledQuery, ComposedSchema.queryType)
+    val res = ComposedQueryInterpreter.run(compiledQuery, ComposedData.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -255,7 +255,7 @@ final class ComposedSpec extends CatsSuite {
     """
 
     val compiledQuery = ComposedQueryCompiler.compile(query).right.get
-    val res = ComposedQueryInterpreter.run(compiledQuery, ComposedSchema.queryType)
+    val res = ComposedQueryInterpreter.run(compiledQuery, ComposedData.schema.queryType)
     //println(res)
 
     assert(res == expected)

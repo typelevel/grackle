@@ -239,32 +239,21 @@ final class SkipIncludeSuite extends CatsSuite {
   }
 }
 
-object SkipIncludeSchema extends Schema {
-  import ScalarType._
-
-  val types = List(
-    ObjectType(
-      name = "Query",
-      description = None,
-      fields = List(
-        Field("field", None, Nil, TypeRef("Value"), false, None),
-      ),
-      interfaces = Nil
-    ),
-    ObjectType(
-      name = "Value",
-      description = None,
-      fields = List(
-        Field("subfieldA", None, Nil, StringType, false, None),
-        Field("subfieldB", None, Nil, StringType, false, None),
-      ),
-      interfaces = Nil
-    )
-  )
-
-  val directives = Nil
+object SkipIncludeData {
+  val schema =
+    Schema(
+      """
+        type Query {
+          field: Value!
+        }
+        type Value {
+          subfieldA: String
+          subfieldB: String
+        }
+      """
+    ).right.get
 }
 
-object SkipIncludeCompiler extends QueryCompiler(SkipIncludeSchema) {
+object SkipIncludeCompiler extends QueryCompiler(SkipIncludeData.schema) {
   val phases = Nil
 }
