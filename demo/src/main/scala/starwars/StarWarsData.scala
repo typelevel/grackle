@@ -176,7 +176,7 @@ object StarWarsData {
   val Some(r2d2) = characters.find(_.id == "2001")
 
   // Mapping from Episode to its hero Character
-  lazy val hero: Map[Value, Character] = Map(
+  val hero: Map[Value, Character] = Map(
     NEWHOPE -> r2d2,
     EMPIRE -> lukeSkywalker,
     JEDI -> r2d2

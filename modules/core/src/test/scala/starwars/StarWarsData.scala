@@ -59,87 +59,93 @@ object StarWarsData {
     def id: String
     def name: Option[String]
     def appearsIn: Option[List[Episode.Value]]
-    def friends: Option[List[Character]]
+    def friends: Option[List[String]]
   }
 
-  case class Human private (id: String, name: Option[String], appearsIn: Option[List[Episode.Value]], homePlanet: Option[String])
-    (friends0: => Option[List[Character]]) extends Character {
-    lazy val friends = friends0
-  }
-  object Human {
-    def apply(id: String, name: Option[String], appearsIn: Option[List[Episode.Value]], friends: => Option[List[Character]], homePlanet: Option[String]) =
-      new Human(id, name, appearsIn, homePlanet)(friends)
-  }
+  case class Human(
+    id: String,
+    name: Option[String],
+    appearsIn: Option[List[Episode.Value]],
+    friends: Option[List[String]],
+    homePlanet: Option[String]
+  ) extends Character
 
-  case class Droid private (id: String, name: Option[String], appearsIn: Option[List[Episode.Value]], primaryFunction: Option[String])
-    (friends0: => Option[List[Character]]) extends Character {
-    lazy val friends = friends0
-  }
-  object Droid {
-    def apply(id: String, name: Option[String], appearsIn: Option[List[Episode.Value]], friends: => Option[List[Character]], primaryFunction: Option[String]) =
-      new Droid(id, name, appearsIn, primaryFunction)(friends)
-  }
+  case class Droid(
+    id: String,
+    name: Option[String],
+    appearsIn: Option[List[Episode.Value]],
+    friends: Option[List[String]],
+    primaryFunction: Option[String]
+  ) extends Character
 
-  val characters = List(
-    LukeSkywalker, DarthVader, HanSolo, LeiaOrgana, WilhuffTarkin, C3PO, R2D2
-  )
+  def resolveFriends(c: Character): Option[List[Character]] =
+    c.friends match {
+      case None => None
+      case Some(ids) =>
+        ids.traverse(id => characters.find(_.id == id))
+    }
 
-  lazy val LukeSkywalker: Character =
+  val characters: List[Character] = List(
     Human(
       id = "1000",
       name = Some("Luke Skywalker"),
-      friends = Some(List(HanSolo, LeiaOrgana, C3PO, R2D2)),
+      friends = Some(List("1002", "1003", "2000", "2001")),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
-      homePlanet = Some("Tatooine"))
-  lazy val DarthVader: Character =
+      homePlanet = Some("Tatooine")
+    ),
     Human(
       id = "1001",
       name = Some("Darth Vader"),
-      friends = Some(List(WilhuffTarkin)),
+      friends = Some(List("1004")),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
-      homePlanet = Some("Tatooine"))
-  lazy val HanSolo: Character =
+      homePlanet = Some("Tatooine")
+    ),
     Human(
       id = "1002",
       name = Some("Han Solo"),
-      friends = Some(List(LukeSkywalker, LeiaOrgana, R2D2)),
+      friends = Some(List("1000", "1003", "2001")),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
-      homePlanet = None)
-  lazy val LeiaOrgana: Character =
+      homePlanet = None
+    ),
     Human(
       id = "1003",
       name = Some("Leia Organa"),
-      friends = Some(List(LukeSkywalker, HanSolo, C3PO, R2D2)),
+      friends = Some(List("1000", "1002", "2000", "2001")),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
-      homePlanet = Some("Alderaan"))
-  lazy val WilhuffTarkin: Character =
+      homePlanet = Some("Alderaan")
+    ),
     Human(
       id = "1004",
       name = Some("Wilhuff Tarkin"),
-      friends = Some(List(DarthVader)),
+      friends = Some(List("1001")),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
-      homePlanet = None)
-  lazy val C3PO: Character =
+      homePlanet = None
+    ),
     Droid(
       id = "2000",
       name = Some("C-3PO"),
-      friends = Some(List(LukeSkywalker, HanSolo, LeiaOrgana, R2D2)),
+      friends = Some(List("1000", "1002", "1003", "2001")),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
-      primaryFunction = Some("Protocol"))
-  lazy val R2D2: Character =
+      primaryFunction = Some("Protocol")
+    ),
     Droid(
       id = "2001",
       name = Some("R2-D2"),
-      friends = Some(List(LukeSkywalker, HanSolo, LeiaOrgana)),
+      friends = Some(List("1000", "1002", "1003")),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
-      primaryFunction = Some("Astromech"))
+      primaryFunction = Some("Astromech")
+    )
+  )
 
   import Episode._
 
-  lazy val hero: Map[Value, Character] = Map(
-    NEWHOPE -> R2D2,
-    EMPIRE -> LukeSkywalker,
-    JEDI -> R2D2
+  val Some(lukeSkywalker) = characters.find(_.id == "1000")
+  val Some(r2d2) = characters.find(_.id == "2001")
+
+  val hero: Map[Value, Character] = Map(
+    NEWHOPE -> r2d2,
+    EMPIRE -> lukeSkywalker,
+    JEDI -> r2d2
   )
 }
 
@@ -167,7 +173,7 @@ object StarWarsQueryInterpreter extends DataTypeQueryInterpreter[Id](
     case (c: Character, "id")          => c.id
     case (c: Character, "name")        => c.name
     case (c: Character, "appearsIn")   => c.appearsIn
-    case (c: Character, "friends")     => c.friends
+    case (c: Character, "friends")     => resolveFriends(c)
     case (h: Human, "homePlanet")      => h.homePlanet
     case (d: Droid, "primaryFunction") => d.primaryFunction
   }
