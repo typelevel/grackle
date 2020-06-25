@@ -42,7 +42,7 @@ final class SkipIncludeSuite extends CatsSuite {
         Rename("c", Select("field", Nil, Select("subfieldA", Nil, Empty)))
       ))
 
-    val compiled = SkipIncludeCompiler.compile(text, Some(variables))
+    val compiled = SkipIncludeMapping.compiler.compile(text, Some(variables))
     //println(compiled)
     assert(compiled == Ior.Right(expected))
   }
@@ -99,7 +99,7 @@ final class SkipIncludeSuite extends CatsSuite {
         Rename("d", Select("field", Nil, Empty))
       ))
 
-    val compiled = SkipIncludeCompiler.compile(text, Some(variables))
+    val compiled = SkipIncludeMapping.compiler.compile(text, Some(variables))
     //println(compiled)
     assert(compiled == Ior.Right(expected))
   }
@@ -135,7 +135,7 @@ final class SkipIncludeSuite extends CatsSuite {
         ))
       )
 
-    val compiled = SkipIncludeCompiler.compile(text, Some(variables))
+    val compiled = SkipIncludeMapping.compiler.compile(text, Some(variables))
     //println(compiled)
     assert(compiled == Ior.Right(expected))
   }
@@ -199,7 +199,7 @@ final class SkipIncludeSuite extends CatsSuite {
         Rename("d", Select("field", Nil, Empty))
       ))
 
-    val compiled = SkipIncludeCompiler.compile(text, Some(variables))
+    val compiled = SkipIncludeMapping.compiler.compile(text, Some(variables))
     //println(compiled)
     assert(compiled == Ior.Right(expected))
   }
@@ -233,13 +233,13 @@ final class SkipIncludeSuite extends CatsSuite {
         ))
       )
 
-    val compiled = SkipIncludeCompiler.compile(text, Some(variables))
+    val compiled = SkipIncludeMapping.compiler.compile(text, Some(variables))
     //println(compiled)
     assert(compiled == Ior.Right(expected))
   }
 }
 
-object SkipIncludeData {
+object SkipIncludeMapping {
   val schema =
     Schema(
       """
@@ -252,8 +252,6 @@ object SkipIncludeData {
         }
       """
     ).right.get
-}
 
-object SkipIncludeCompiler extends QueryCompiler(SkipIncludeData.schema) {
-  val phases = Nil
+  val compiler = new QueryCompiler(schema, Nil)
 }

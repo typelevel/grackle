@@ -71,8 +71,8 @@ object Query {
    *  `join` is applied to the current cursor and `child` yielding a continuation query which will be
    *  evaluated by the interpreter identified by `componentId`.
    */
-  case class Component(componentId: String, join: (Cursor, Query) => Result[Query], child: Query) extends Query {
-    def render = s"<component: $componentId ${child.render}>"
+  case class Component[F[_]](mapping: Mapping[F], join: (Cursor, Query) => Result[Query], child: Query) extends Query {
+    def render = s"<component: $mapping ${child.render}>"
   }
 
   case class Introspect(schema: Schema, child: Query) extends Query {
@@ -275,7 +275,7 @@ object Predicate {
   }
 }
 
-abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
+class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
 
   /** Interpret `query` with expected type `rootTpe`.
    *
@@ -347,7 +347,7 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
       }
     (for {
       pvalue <- IorT(mergedResults)
-      value  <- IorT(complete(pvalue))
+      value  <- IorT(QueryInterpreter.complete[F](pvalue))
     } yield value).value
   }
 
@@ -358,7 +358,18 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
    *
    *  Errors are accumulated on the `Left` of the result.
    */
-  def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]]
+  def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]] =
+    query match {
+      case PossiblyRenamedSelect(Select(fieldName, _, child), resultName) =>
+        (for {
+          cursor <- IorT(mapping.rootCursor(rootTpe, fieldName, child))
+          value  <- IorT(runValue(Wrap(resultName, child), rootTpe.field(fieldName), cursor).pure[F])
+        } yield value).value
+      case Wrap(_, Component(mapping, _, child)) =>
+        mapping.asInstanceOf[Mapping[F]].interpreter.runRootValue(child, rootTpe)
+      case _ =>
+        mkErrorResult(s"Bad root query '${query.render}' in UniformQueryInterpreter").pure[F]
+    }
 
   /** Interpret multiple queries with respect to their expected types.
    *
@@ -460,16 +471,13 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
    * of the result.
    */
   def runValue(query: Query, tpe: Type, cursor: Cursor): Result[ProtoJson] = {
-    def joinType(localName: String, componentName: String, tpe: Type): Type =
-      ObjectType(s"Join-$localName-$componentName", None, List(Field(componentName, None, Nil, tpe, false, None)), Nil)
-
     def mkResult[T](ot: Option[T]): Result[T] = ot match {
       case Some(t) => t.rightIor
       case None => mkErrorResult(s"Join continuation has unexpected shape")
     }
 
     (query, tpe.dealias) match {
-      case (Wrap(_, _: Component), ListType(tpe)) =>
+      case (Wrap(_, Component(_, _, _)), ListType(tpe)) =>
         // Keep the wrapper with the component when going under the list
         cursor.asList.flatMap(lc =>
           lc.traverse(c => runValue(query, tpe, c)).map(ProtoJson.fromValues)
@@ -480,7 +488,8 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
           pvalue <- runValue(child, tpe, cursor)
         } yield ProtoJson.fromFields(List((fieldName, pvalue)))
 
-      case (Component(cid, join, PossiblyRenamedSelect(child, resultName)), tpe) =>
+      case (Component(mapping, join, PossiblyRenamedSelect(child, resultName)), tpe) =>
+        val interpreter = mapping.interpreter
         join(cursor, child).flatMap {
           case GroupList(conts) =>
             conts.traverse { case cont =>
@@ -488,7 +497,7 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
                 componentName <- mkResult(rootName(cont))
               } yield
                 ProtoJson.select(
-                  ProtoJson.component(cid, cont, joinType(child.name, componentName, tpe.field(child.name).item)),
+                  ProtoJson.staged(interpreter, cont, JoinType(componentName, tpe.field(child.name).item)),
                   componentName
                 )
             }.map(ProtoJson.fromValues)
@@ -497,7 +506,7 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
             for {
               componentName <- mkResult(rootName(cont))
               renamedCont   <- mkResult(renameRoot(cont, resultName))
-            } yield ProtoJson.component(cid, renamedCont, joinType(child.name, componentName, tpe.field(child.name)))
+            } yield ProtoJson.staged(interpreter, renamedCont, JoinType(componentName, tpe.field(child.name)))
         }
 
       case (Defer(join, child), _) =>
@@ -551,9 +560,6 @@ abstract class QueryInterpreter[F[_]](implicit val F: Monad[F]) {
         mkErrorResult(s"Stuck at type $tpe for ${query.render}")
     }
   }
-
-  protected def complete(pj: ProtoJson): F[Result[Json]] =
-    QueryInterpreter.complete[F](pj, Map.empty)
 }
 
 object QueryInterpreter {
@@ -568,9 +574,7 @@ object QueryInterpreter {
 
   object ProtoJson {
     private[QueryInterpreter] sealed trait DeferredJson
-    // A result which is delegated to another component of a composite interpreter.
-    private[QueryInterpreter] case class ComponentJson(componentId: String, query: Query, rootTpe: Type) extends DeferredJson
-    // A result which is deferred to the next stage of this interpreter.
+    // A result which is deferred to the next stage or component of this interpreter.
     private[QueryInterpreter] case class StagedJson[F[_]](interpreter: QueryInterpreter[F], query: Query, rootTpe: Type) extends DeferredJson
     // A partially constructed object which has at least one deferred subtree.
     private[QueryInterpreter] case class ProtoObject(fields: List[(String, ProtoJson)])
@@ -580,17 +584,8 @@ object QueryInterpreter {
     private[QueryInterpreter] case class ProtoSelect(elem: ProtoJson, fieldName: String)
 
     /**
-     * Delegate `query` to the componet interpreter idenitfied by
-     * `componentId`. When evaluated by that interpreter the query will
-     * have expected type `rootTpe`.
-     */
-    def component(componentId: String, query: Query, rootTpe: Type): ProtoJson =
-      wrap(ComponentJson(componentId, query, rootTpe))
-
-    /**
-     * Delegate `query` to the componet interpreter idenitfied by
-     * `componentId`. When evaluated by that interpreter the query will
-     * have expected type `rootTpe`.
+     * Delegate `query` to the interpreter `interpreter`. When evaluated by
+     * that interpreter the query will have expected type `rootTpe`.
      */
     def staged[F[_]](interpreter: QueryInterpreter[F], query: Query, rootTpe: Type): ProtoJson =
       wrap(StagedJson(interpreter, query, rootTpe))
@@ -678,8 +673,8 @@ object QueryInterpreter {
    * Completes a single possibly partial result as described for
    * `completeAll`.
    */
-  def complete[F[_]: Monad](pj: ProtoJson, mapping: Map[String, QueryInterpreter[F]]): F[Result[Json]] =
-    completeAll(List(pj), mapping).map {
+  def complete[F[_]: Monad](pj: ProtoJson): F[Result[Json]] =
+    completeAll[F](List(pj)).map {
       case (errors, List(value)) =>
         NonEmptyChain.fromChain(errors) match {
           case Some(errors) => Ior.Both(errors, value)
@@ -703,7 +698,7 @@ object QueryInterpreter {
    *  Errors are aggregated across all the results and are accumulated
    *  on the `Left` of the result.
    */
-  def completeAll[F[_]: Monad](pjs: List[ProtoJson], mapping: Map[String, QueryInterpreter[F]]): F[(Chain[Json], List[Json])] = {
+  def completeAll[F[_]: Monad](pjs: List[ProtoJson]): F[(Chain[Json], List[Json])] = {
     def gatherDeferred(pj: ProtoJson): List[DeferredJson] = {
       @tailrec
       def loop(pending: Chain[ProtoJson], acc: List[DeferredJson]): List[DeferredJson] =
@@ -752,13 +747,6 @@ object QueryInterpreter {
 
     val (good, bad, errors0) =
       collected.foldLeft((List.empty[(DeferredJson, QueryInterpreter[F], (Query, Type))], List.empty[DeferredJson], Chain.empty[Json])) {
-        case ((good, bad, errors), d@ComponentJson(cid, query, rootTpe)) =>
-          mapping.get(cid) match {
-            case Some(interpreter) =>
-              ((d, interpreter, (query, rootTpe)) :: good, bad, errors)
-            case None =>
-              (good, d :: bad, mkError(s"No interpreter for query '${query.render}' which maps to component '$cid'") +: errors)
-          }
         case ((good, bad, errors), d@StagedJson(interpreter, query, rootTpe)) =>
           ((d, interpreter.asInstanceOf[QueryInterpreter[F]], (query, rootTpe)) :: good, bad, errors)
       }
@@ -771,7 +759,7 @@ object QueryInterpreter {
           val (ds, qs) = dq.unzip
           for {
             pnext <- i.runRootValues(qs)
-            next  <- completeAll(pnext._2, mapping)
+            next  <- completeAll[F](pnext._2)
           } yield (pnext._1 ++ next._1, ds.zip(next._2))
       }).map(Monoid.combineAll(_))
 
@@ -836,24 +824,4 @@ object QueryInterpreter {
   /** Construct a GraphQL error object as the left hand side of a `Result` */
   def mkErrorResult[T](message: String, locations: List[(Int, Int)] = Nil, path: List[String] = Nil): Result[T] =
     Ior.leftNec(mkError(message, locations, path))
-}
-
-/**
- * A query interpreter composed from the supplied `Map` of labelled
- * component interpreters.
- */
-class ComposedQueryInterpreter[F[_]: Monad](mapping: Map[String, QueryInterpreter[F]])
-  extends QueryInterpreter[F] {
-
-  override def complete(pj: ProtoJson): F[Result[Json]] =
-    QueryInterpreter.complete(pj, mapping)
-
-  def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]] = query match {
-    case Wrap(_, Component(cid, _, child)) =>
-      mapping.get(cid) match {
-        case Some(interpreter) => interpreter.runRootValue(child, rootTpe)
-        case None => mkErrorResult(s"No interpreter for query '${query.render}' which maps to component '$cid'").pure[F]
-      }
-    case _ => mkErrorResult(s"Bad root query '${query.render}' in ComposedQueryInterpreter").pure[F]
-  }
 }

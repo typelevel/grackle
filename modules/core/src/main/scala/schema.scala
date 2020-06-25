@@ -126,6 +126,13 @@ sealed trait Type {
       case _ => false
     }
 
+  def nominal_=:=(other: Type): Boolean =
+    this =:= other ||
+      ((this.dealias, other.dealias) match {
+        case (nt1: NamedType, nt2: NamedType) => nt1.name == nt2.name
+        case _ => false
+      })
+
   /**
    * This type if it isn't `NoType`, `other` otherwise.
    */
@@ -148,7 +155,7 @@ sealed trait Type {
    */
   def field(fieldName: String): Type = this match {
     case NullableType(tpe) => tpe.field(fieldName)
-    case TypeRef(_, _) => dealias.field(fieldName)
+    case TypeRef(_, _) if exists => dealias.field(fieldName)
     case ObjectType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
     case InterfaceType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
     case _ => NoType
@@ -221,6 +228,9 @@ sealed trait Type {
   /** Strip off aliases */
   def dealias: Type = this
 
+  /** true if a non-TypeRef or a TypeRef to a defined type */
+  def exists: Boolean = true
+
   /** Is this type nullable? */
   def isNullable: Boolean = this match {
     case NullableType(_) => true
@@ -261,6 +271,13 @@ sealed trait Type {
     case NullableType(tpe) => tpe.item
     case ListType(tpe) => tpe
     case _ => NoType
+  }
+
+  /** This type if it is a (nullable) list, `ListType(this)` otherwise. */
+  def list: Type = this match {
+    case l: ListType => l
+    case NullableType(tpe) => NullableType(tpe.list)
+    case tpe => ListType(tpe)
   }
 
   /**
@@ -351,10 +368,24 @@ sealed trait NamedType extends Type {
 case object NoType extends Type
 
 /**
+ * A synthetic type representing the join between a component/stage and its
+ * parent object.
+ */
+object JoinType {
+  def apply(fieldName: String, tpe: Type): ObjectType =
+    ObjectType(s"<$fieldName:$tpe>", None, List(Field(fieldName, None, Nil, tpe, false, None)), Nil)
+
+  def unapply(ot: ObjectType): Option[(String, Type)] = ot match {
+    case ObjectType(nme, None, List(Field(fieldName, None, Nil, tpe, false, None)), Nil) if nme == s"<$fieldName:$tpe>" =>
+      Some((fieldName, tpe))
+  }
+}
+/**
  * A by name reference to a type defined in `schema`.
  */
 case class TypeRef(schema: Schema, name: String) extends NamedType {
   override def dealias: NamedType = schema.definition(name).getOrElse(this)
+  override def exists: Boolean = schema.definition(name).isDefined
   def description: Option[String] = dealias.description
 }
 

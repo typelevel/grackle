@@ -16,51 +16,10 @@ import io.circe.literal.JsonStringContext
 import Query._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.{ mkErrorResult, mkOneError }
-import ScalarType._
 import semiauto._
 
 object StarWarsData {
-  val schema =
-    Schema(
-      """
-        type Query {
-           hero(episode: Episode!): Character!
-           character(id: ID!): Character
-           human(id: ID!): Human
-           droid(id: ID!): Droid
-         }
-         enum Episode {
-           NEWHOPE
-           EMPIRE
-           JEDI
-         }
-         interface Character {
-           id: String!
-           name: String
-           friends: [Character!]
-           appearsIn: [Episode!]
-         }
-         type Human implements Character {
-           id: String!
-           name: String
-           friends: [Character!]
-           appearsIn: [Episode!]
-           homePlanet: String
-         }
-         type Droid implements Character {
-           id: String!
-           name: String
-           friends: [Character!]
-           appearsIn: [Episode!]
-           primaryFunction: String
-         }
-      """
-    ).right.get
-
-  val QueryType = schema.ref("Query")
-  val CharacterType = schema.ref("Character")
-  val HumanType = schema.ref("Human")
-  val DroidType = schema.ref("Droid")
+  import StarWarsMapping.{CharacterType, DroidType, HumanType}
 
   object Episode extends Enumeration {
     val NEWHOPE, EMPIRE, JEDI = Value
@@ -75,8 +34,15 @@ object StarWarsData {
 
   object Character {
     implicit val cursorBuilder: CursorBuilder[Character] =
-      deriveInterfaceCursorBuilder[Character]
+      deriveInterfaceCursorBuilder[Character](CharacterType)
   }
+
+  def resolveFriends(c: Character): Result[Option[List[Character]]] =
+    c.friends match {
+      case None => None.rightIor
+      case Some(ids) =>
+        ids.traverse(id => characters.find(_.id == id).toRightIor(mkOneError(s"Bad id '$id'"))).map(_.some)
+    }
 
   case class Human(
     id: String,
@@ -88,12 +54,8 @@ object StarWarsData {
 
   object Human {
     implicit val cursorBuilder: CursorBuilder[Human] =
-      deriveObjectCursorBuilder[Human]
-        .transformField("friends")(_.friends match {
-          case None => None.rightIor
-          case Some(ids) =>
-            ids.traverse(id => characters.find(_.id == id).toRightIor(mkOneError(s"Bad id '$id'"))).map(_.some)
-        })
+      deriveObjectCursorBuilder[Human](HumanType)
+        .transformField("friends")(resolveFriends)
   }
 
   case class Droid(
@@ -106,12 +68,8 @@ object StarWarsData {
 
   object Droid {
     implicit val cursorBuilder: CursorBuilder[Droid] =
-      deriveObjectCursorBuilder[Droid]
-        .transformField("friends")(_.friends match {
-          case None => None.rightIor
-          case Some(ids) =>
-            ids.traverse(id => characters.find(_.id == id).toRightIor(mkOneError(s"Bad id '$id'"))).map(_.some)
-        })
+      deriveObjectCursorBuilder[Droid](DroidType)
+        .transformField("friends")(resolveFriends)
   }
 
   val characters: List[Character] = List(
@@ -179,10 +137,67 @@ object StarWarsData {
   )
 }
 
-import StarWarsData._
+object StarWarsMapping extends GenericMapping[Id] {
+  import StarWarsData.{characters, hero, Droid, Human, Episode}
 
-object StarWarsQueryCompiler extends QueryCompiler(schema) {
-  val selectElaborator = new SelectElaborator(Map(
+  val schema =
+    Schema(
+      """
+        type Query {
+           hero(episode: Episode!): Character!
+           character(id: ID!): Character
+           human(id: ID!): Human
+           droid(id: ID!): Droid
+         }
+         enum Episode {
+           NEWHOPE
+           EMPIRE
+           JEDI
+         }
+         interface Character {
+           id: String!
+           name: String
+           friends: [Character!]
+           appearsIn: [Episode!]
+         }
+         type Human implements Character {
+           id: String!
+           name: String
+           friends: [Character!]
+           appearsIn: [Episode!]
+           homePlanet: String
+         }
+         type Droid implements Character {
+           id: String!
+           name: String
+           friends: [Character!]
+           appearsIn: [Episode!]
+           primaryFunction: String
+         }
+      """
+    ).right.get
+
+  val QueryType = schema.ref("Query")
+  val EpisodeType = schema.ref("Episode")
+  val CharacterType = schema.ref("Character")
+  val HumanType = schema.ref("Human")
+  val DroidType = schema.ref("Droid")
+
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            GenericRoot("hero", characters),
+            GenericRoot("character", characters),
+            GenericRoot("human", characters.collect { case h: Human => h }),
+            GenericRoot("droid", characters.collect { case d: Droid => d })
+          )
+      )
+    )
+
+  override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
         Episode.values.find(_.toString == e.name).map { episode =>
@@ -193,26 +208,15 @@ object StarWarsQueryCompiler extends QueryCompiler(schema) {
         Select(f, Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
     }
   ))
-
-  val phases = List(selectElaborator)
 }
 
-object StarWarsQueryInterpreter extends GenericQueryInterpreter[Id](
-  {
-    case "hero" | "character" =>
-      CursorBuilder[List[Character]].build(characters, ListType(CharacterType))
-    case "human" =>
-      CursorBuilder[List[Human]].build(characters.collect { case h: Human => h }, ListType(HumanType))
-    case "droid" =>
-      CursorBuilder[List[Droid]].build(characters.collect { case d: Droid => d }, ListType(DroidType))
-  },
-)
+import StarWarsData._, StarWarsMapping._
 
 final class DerivationSpec extends CatsSuite {
   test("primitive types have leaf cursor builders") {
     val i =
       for {
-        c <- CursorBuilder[Int].build(23, IntType)
+        c <- CursorBuilder[Int].build(23)
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -220,7 +224,7 @@ final class DerivationSpec extends CatsSuite {
 
     val s =
       for {
-        c <- CursorBuilder[String].build("foo", StringType)
+        c <- CursorBuilder[String].build("foo")
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -228,7 +232,7 @@ final class DerivationSpec extends CatsSuite {
 
     val b =
       for {
-        c <- CursorBuilder[Boolean].build(true, BooleanType)
+        c <- CursorBuilder[Boolean].build(true)
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -236,7 +240,7 @@ final class DerivationSpec extends CatsSuite {
 
     val f =
       for {
-        c <- CursorBuilder[Double].build(13.0, FloatType)
+        c <- CursorBuilder[Double].build(13.0)
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -246,17 +250,17 @@ final class DerivationSpec extends CatsSuite {
   test("types with a Circe Encoder instance have leaf cursor builders") {
     val z =
       for {
-        c <- CursorBuilder[ZonedDateTime].build(ZonedDateTime.parse("2020-03-25T16:24:06.081Z"), StringType)
+        c <- CursorBuilder.leafCursorBuilder[ZonedDateTime].build(ZonedDateTime.parse("2020-03-25T16:24:06.081Z"))
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
     assert(z == Ior.Right(Json.fromString("2020-03-25T16:24:06.081Z")))
   }
 
-  test("enumeration types have leaf cursor builders") {
+  test("Scala Enumeration types have leaf cursor builders") {
     val e =
       for {
-        c <- CursorBuilder[Episode.Value].build(Episode.JEDI, StringType)
+        c <- CursorBuilder.enumerationCursorBuilder[Episode.Value].build(Episode.JEDI)
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -266,7 +270,7 @@ final class DerivationSpec extends CatsSuite {
   test("product types have cursor builders") {
     val name =
       for {
-        c <- CursorBuilder[Human].build(lukeSkywalker, HumanType)
+        c <- CursorBuilder[Human].build(lukeSkywalker)
         f <- c.field("name")
         n <- f.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
         l <- n.asLeaf
@@ -277,7 +281,7 @@ final class DerivationSpec extends CatsSuite {
   test("cursor builders can be resolved for nested types") {
     val appearsIn =
       for {
-        c <- CursorBuilder[Character].build(lukeSkywalker, HumanType)
+        c <- CursorBuilder[Character].build(lukeSkywalker)
         f <- c.field("appearsIn")
         n <- f.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
         l <- n.asList
@@ -289,7 +293,7 @@ final class DerivationSpec extends CatsSuite {
   test("default cursor builders can be customised by mapping fields") {
     val friends =
       for {
-        c <- CursorBuilder[Human].build(lukeSkywalker, HumanType)
+        c <- CursorBuilder[Human].build(lukeSkywalker)
         f <- c.field("friends")
         n <- f.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
         l <- n.asList
@@ -303,7 +307,7 @@ final class DerivationSpec extends CatsSuite {
   test("sealed ADTs have narrowable cursor builders") {
     val homePlanets =
       for {
-        c <- CursorBuilder[Character].build(lukeSkywalker, HumanType)
+        c <- CursorBuilder[Character].build(lukeSkywalker)
         h <- c.narrow(HumanType)
         m <- h.field("homePlanet")
         n <- m.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
@@ -331,8 +335,8 @@ final class DerivationSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
-    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsData.schema.queryType)
+    val compiledQuery = StarWarsMapping.compiler.compile(query).right.get
+    val res = StarWarsMapping.interpreter.run(compiledQuery, StarWarsMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -359,8 +363,8 @@ final class DerivationSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
-    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsData.schema.queryType)
+    val compiledQuery = StarWarsMapping.compiler.compile(query).right.get
+    val res = StarWarsMapping.interpreter.run(compiledQuery, StarWarsMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -402,8 +406,8 @@ final class DerivationSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
-    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsData.schema.queryType)
+    val compiledQuery = StarWarsMapping.compiler.compile(query).right.get
+    val res = StarWarsMapping.interpreter.run(compiledQuery, StarWarsMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -454,8 +458,8 @@ final class DerivationSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
-    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsData.schema.queryType)
+    val compiledQuery = StarWarsMapping.compiler.compile(query).right.get
+    val res = StarWarsMapping.interpreter.run(compiledQuery, StarWarsMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)

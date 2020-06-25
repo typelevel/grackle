@@ -15,6 +15,41 @@ import QueryInterpreter.mkOneError
 import semiauto._
 
 object MutualRecursionData {
+  import MutualRecursionMapping._
+
+  case class Programme(id: String, productions: Option[List[String]])
+  object Programme {
+    implicit val cursorBuilder: CursorBuilder[Programme] =
+      deriveObjectCursorBuilder[Programme](ProgrammeType)
+        .transformField("productions")(resolveProductions)
+
+    def resolveProductions(p: Programme): Result[Option[List[Production]]] =
+      p.productions match {
+        case None => None.rightIor
+        case Some(ids) =>
+          ids.traverse(id => productions.find(_.id == id).toRightIor(mkOneError(s"Bad id '$id'"))).map(_.some)
+      }
+  }
+
+  case class Production(id: String, programme: String)
+  object Production {
+    implicit val cursorBuilder: CursorBuilder[Production] =
+      deriveObjectCursorBuilder[Production](ProductionType)
+        .transformField("programme")(resolveProgramme)
+
+    def resolveProgramme(p: Production): Result[Programme] = {
+      val id = p.programme
+      programmes.find(_.id == id).toRightIor(mkOneError(s"Bad id '$id'"))
+    }
+  }
+
+  val programmes = List(Programme("prog1", Some(List("prod1"))))
+  val productions = List(Production("prod1", "prog1"))
+}
+
+object MutualRecursionMapping extends GenericMapping[Id] {
+  import MutualRecursionData._
+
   val schema =
     Schema(
       """
@@ -37,55 +72,25 @@ object MutualRecursionData {
   val ProgrammeType = schema.ref("Programme")
   val ProductionType = schema.ref("Production")
 
-  case class Programme(id: String, productions: Option[List[String]])
-  object Programme {
-    implicit val cursorBuilder: CursorBuilder[Programme] =
-      deriveObjectCursorBuilder[Programme].transformField("productions")(resolveProductions)
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            GenericRoot("programmeById", programmes),
+            GenericRoot("productionById", productions)
+          )
+      )
+    )
 
-    def resolveProductions(p: Programme): Result[Option[List[Production]]] =
-      p.productions match {
-        case None => None.rightIor
-        case Some(ids) =>
-          ids.traverse(id => productions.find(_.id == id).toRightIor(mkOneError(s"Bad id '$id'"))).map(_.some)
-      }
-  }
-
-  case class Production(id: String, programme: String)
-  object Production {
-    implicit val cursorBuilder: CursorBuilder[Production] =
-      deriveObjectCursorBuilder[Production].transformField("programme")(resolveProgramme)
-
-    def resolveProgramme(p: Production): Result[Programme] = {
-      val id = p.programme
-      programmes.find(_.id == id).toRightIor(mkOneError(s"Bad id '$id'"))
-    }
-  }
-
-  val programmes = List(Programme("prog1", Some(List("prod1"))))
-  val productions = List(Production("prod1", "prog1"))
-}
-
-import MutualRecursionData._
-
-object MutualRecursionQueryCompiler extends QueryCompiler(schema) {
-  val selectElaborator = new SelectElaborator(Map(
+  override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select(f@("programmeById" | "productionById"), List(Binding("id", IDValue(id))), child) =>
         Select(f, Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
     }
   ))
-
-  val phases = List(selectElaborator)
 }
-
-object MutualRecursionQueryInterpreter extends GenericQueryInterpreter[Id](
-  {
-    case "programmeById" =>
-      CursorBuilder[List[Programme]].build(programmes, ListType(ProgrammeType))
-    case "productionById" =>
-      CursorBuilder[List[Production]].build(productions, ListType(ProductionType))
-  },
-)
 
 final class MutualRecursionSpec extends CatsSuite {
   test("simple query") {
@@ -107,8 +112,8 @@ final class MutualRecursionSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MutualRecursionQueryCompiler.compile(query).right.get
-    val res = MutualRecursionQueryInterpreter.run(compiledQuery, MutualRecursionData.schema.queryType)
+    val compiledQuery = MutualRecursionMapping.compiler.compile(query).right.get
+    val res = MutualRecursionMapping.interpreter.run(compiledQuery, MutualRecursionMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -141,8 +146,8 @@ final class MutualRecursionSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MutualRecursionQueryCompiler.compile(query).right.get
-    val res = MutualRecursionQueryInterpreter.run(compiledQuery, MutualRecursionData.schema.queryType)
+    val compiledQuery = MutualRecursionMapping.compiler.compile(query).right.get
+    val res = MutualRecursionMapping.interpreter.run(compiledQuery, MutualRecursionMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -179,8 +184,8 @@ final class MutualRecursionSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MutualRecursionQueryCompiler.compile(query).right.get
-    val res = MutualRecursionQueryInterpreter.run(compiledQuery, MutualRecursionData.schema.queryType)
+    val compiledQuery = MutualRecursionMapping.compiler.compile(query).right.get
+    val res = MutualRecursionMapping.interpreter.run(compiledQuery, MutualRecursionMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -225,8 +230,8 @@ final class MutualRecursionSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MutualRecursionQueryCompiler.compile(query).right.get
-    val res = MutualRecursionQueryInterpreter.run(compiledQuery, MutualRecursionData.schema.queryType)
+    val compiledQuery = MutualRecursionMapping.compiler.compile(query).right.get
+    val res = MutualRecursionMapping.interpreter.run(compiledQuery, MutualRecursionMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -257,8 +262,8 @@ final class MutualRecursionSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MutualRecursionQueryCompiler.compile(query).right.get
-    val res = MutualRecursionQueryInterpreter.run(compiledQuery, MutualRecursionData.schema.queryType)
+    val compiledQuery = MutualRecursionMapping.compiler.compile(query).right.get
+    val res = MutualRecursionMapping.interpreter.run(compiledQuery, MutualRecursionMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -297,8 +302,8 @@ final class MutualRecursionSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MutualRecursionQueryCompiler.compile(query).right.get
-    val res = MutualRecursionQueryInterpreter.run(compiledQuery, MutualRecursionData.schema.queryType)
+    val compiledQuery = MutualRecursionMapping.compiler.compile(query).right.get
+    val res = MutualRecursionMapping.interpreter.run(compiledQuery, MutualRecursionMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)

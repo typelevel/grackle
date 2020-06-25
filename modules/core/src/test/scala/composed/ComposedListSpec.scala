@@ -10,11 +10,22 @@ import io.circe.literal.JsonStringContext
 
 import edu.gemini.grackle._
 import Query._, Predicate._, Value._
-import QueryCompiler._, ComponentElaborator.Mapping
+import QueryCompiler._
 import QueryInterpreter.mkErrorResult
 
-object ComposedListData {
-  val collectionSchema =
+object CollectionData {
+  case class Collection(name: String, itemIds: List[String])
+  val collections =
+    List(
+      Collection("AB", List("A", "B")),
+      Collection("BC", List("B", "C"))
+    )
+}
+
+object CollectionMapping extends ValueMapping[Id] {
+  import CollectionData._
+
+  val schema =
     Schema(
       """
         type Query {
@@ -29,7 +40,47 @@ object ComposedListData {
       """
     ).right.get
 
-  val itemSchema =
+  val QueryType = schema.ref("Query")
+  val CollectionType = schema.ref("Collection")
+
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            ValueRoot("collection", collections.head),
+            ValueRoot("collections", collections),
+            ValueRoot("collectionByName", collections)
+          )
+      ),
+      ValueObjectMapping[Collection](
+        tpe = CollectionType,
+        fieldMappings =
+          List(
+            ValueField("name", _.name),
+            ValueField("itemIds", _.itemIds)
+          )
+      )
+    )
+
+  override val selectElaborator = new SelectElaborator(Map(
+    QueryType -> {
+      case Select("collectionByName", List(Binding("name", StringValue(name))), child) =>
+        Select("collectionByName", Nil, Unique(Eql(FieldPath(List("name")), Const(name)), child)).rightIor
+    }
+  ))
+}
+
+object ItemData {
+  case class Item(id: String, name: String)
+  val items = List(Item("A", "foo"), Item("B", "bar"), Item("C", "baz"))
+}
+
+object ItemMapping extends ValueMapping[Id] {
+  import ItemData._
+
+  val schema =
     Schema(
       """
         type Query {
@@ -42,7 +93,38 @@ object ComposedListData {
       """
     ).right.get
 
-  val composedSchema =
+  val QueryType = schema.ref("Query")
+  val ItemType = schema.ref("Item")
+
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            ValueRoot("itemById", items)
+          )
+      ),
+      ValueObjectMapping[Item](
+        tpe = ItemType,
+        fieldMappings =
+          List(
+            ValueField("id", _.id),
+            ValueField("name", _.name)
+          )
+      )
+    )
+
+  override val selectElaborator = new SelectElaborator(Map(
+    QueryType -> {
+      case Select("itemById", List(Binding("id", IDValue(id))), child) =>
+        Select("itemById", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
+    }
+  ))
+}
+
+object ComposedListMapping extends SimpleMapping[Id] {
+  val schema =
     Schema(
       """
         type Query {
@@ -63,72 +145,31 @@ object ComposedListData {
       """
     ).right.get
 
-  case class Collection(name: String, itemIds: List[String])
-  val collections =
+  val QueryType = schema.ref("Query")
+  val CollectionType = schema.ref("Collection")
+
+  val typeMappings =
     List(
-      Collection("AB", List("A", "B")),
-      Collection("BC", List("B", "C"))
-    )
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            Delegate("collection", CollectionMapping),
+            Delegate("collections", CollectionMapping),
+            Delegate("collectionByName", CollectionMapping),
+            Delegate("itemById", ItemMapping)
+          )
+      ),
+      ObjectMapping(
+        tpe = CollectionType,
+        fieldMappings =
+          List(
+            Delegate("items", ItemMapping, collectionItemJoin)
+          )
+      )
+  )
 
-  case class Item(id: String, name: String)
-  val items = List(Item("A", "foo"), Item("B", "bar"), Item("C", "baz"))
-}
-
-import ComposedListData._
-
-object CollectionQueryCompiler extends QueryCompiler(collectionSchema) {
-  val QueryType = collectionSchema.ref("Query")
-
-  val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("collectionByName", List(Binding("name", StringValue(name))), child) =>
-        Select("collectionByName", Nil, Unique(Eql(FieldPath(List("name")), Const(name)), child)).rightIor
-    }
-  ))
-
-  val phases = List(selectElaborator)
-}
-
-object CollectionQueryInterpreter extends DataTypeQueryInterpreter[Id](
-  {
-    case "collection" => (collectionSchema.ref("Collection"), collections.head)
-    case "collections" => (ListType(collectionSchema.ref("Collection")), collections)
-    case "collectionByName" => (ListType(collectionSchema.ref("Collection")), collections)
-  },
-  {
-    case (c: Collection, "name") => c.name
-    case (c: Collection, "itemIds") => c.itemIds
-  }
-)
-
-object ItemQueryCompiler extends QueryCompiler(itemSchema) {
-  val QueryType = itemSchema.ref("Query")
-
-  val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("itemById", List(Binding("id", IDValue(id))), child) =>
-        Select("itemById", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
-    }
-  ))
-
-  val phases = List(selectElaborator)
-}
-
-object ItemQueryInterpreter extends DataTypeQueryInterpreter[Id](
-  {
-    case "itemById" => (ListType(itemSchema.ref("Item")), items)
-  },
-  {
-    case (i: Item, "id")   => i.id
-    case (i: Item, "name") => i.name
-  }
-)
-
-object ComposedListQueryCompiler extends QueryCompiler(composedSchema) {
-  val QueryType = composedSchema.ref("Query")
-  val CollectionType = composedSchema.ref("Collection")
-
-  val selectElaborator =  new SelectElaborator(Map(
+  override val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {
       case Select("itemById", List(Binding("id", IDValue(id))), child) =>
         Select("itemById", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
@@ -137,30 +178,14 @@ object ComposedListQueryCompiler extends QueryCompiler(composedSchema) {
     }
   ))
 
-  val collectionItemJoin = (c: Cursor, q: Query) =>
+  def collectionItemJoin(c: Cursor, q: Query): Result[Query] =
     (c.focus, q) match {
-      case (c: Collection, Select("items", _, child)) =>
+      case (c: CollectionData.Collection, Select("items", _, child)) =>
         GroupList(c.itemIds.map(id => Select("itemById", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)))).rightIor
       case _ =>
         mkErrorResult(s"Unexpected cursor focus type in collectionItemJoin")
     }
-
-  val componentElaborator = ComponentElaborator(
-    Mapping(QueryType, "collection", "CollectionComponent"),
-    Mapping(QueryType, "collections", "CollectionComponent"),
-    Mapping(QueryType, "collectionByName", "CollectionComponent"),
-    Mapping(QueryType, "itemById", "ItemComponent"),
-    Mapping(CollectionType, "items", "ItemComponent", collectionItemJoin)
-  )
-
-  val phases = List(componentElaborator, selectElaborator)
 }
-
-object ComposedListQueryInterpreter extends
-  ComposedQueryInterpreter[Id](Map(
-    "CollectionComponent" -> CollectionQueryInterpreter,
-    "ItemComponent"       -> ItemQueryInterpreter
-  ))
 
 final class ComposedListSpec extends CatsSuite {
   test("simple outer query") {
@@ -185,8 +210,8 @@ final class ComposedListSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = CollectionQueryCompiler.compile(query).right.get
-    val res = CollectionQueryInterpreter.run(compiledQuery, collectionSchema.queryType)
+    val compiledQuery = CollectionMapping.compiler.compile(query).right.get
+    val res = CollectionMapping.interpreter.run(compiledQuery, CollectionMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -213,8 +238,8 @@ final class ComposedListSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = ItemQueryCompiler.compile(query).right.get
-    val res = ItemQueryInterpreter.run(compiledQuery, itemSchema.queryType)
+    val compiledQuery = ItemMapping.compiler.compile(query).right.get
+    val res = ItemMapping.interpreter.run(compiledQuery, ItemMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -256,8 +281,8 @@ final class ComposedListSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = ComposedListQueryCompiler.compile(query).right.get
-    val res = ComposedListQueryInterpreter.run(compiledQuery, composedSchema.queryType)
+    val compiledQuery = ComposedListMapping.compiler.compile(query).right.get
+    val res = ComposedListMapping.interpreter.run(compiledQuery, ComposedListMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -294,8 +319,8 @@ final class ComposedListSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = ComposedListQueryCompiler.compile(query).right.get
-    val res = ComposedListQueryInterpreter.run(compiledQuery, composedSchema.queryType)
+    val compiledQuery = ComposedListMapping.compiler.compile(query).right.get
+    val res = ComposedListMapping.interpreter.run(compiledQuery, ComposedListMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -344,8 +369,8 @@ final class ComposedListSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = ComposedListQueryCompiler.compile(query).right.get
-    val res = ComposedListQueryInterpreter.run(compiledQuery, composedSchema.queryType)
+    val compiledQuery = ComposedListMapping.compiler.compile(query).right.get
+    val res = ComposedListMapping.interpreter.run(compiledQuery, ComposedListMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -391,8 +416,8 @@ final class ComposedListSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = ComposedListQueryCompiler.compile(query).right.get
-    val res = ComposedListQueryInterpreter.run(compiledQuery, composedSchema.queryType)
+    val compiledQuery = ComposedListMapping.compiler.compile(query).right.get
+    val res = ComposedListMapping.interpreter.run(compiledQuery, ComposedListMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)

@@ -38,7 +38,7 @@ final class VariablesSuite extends CatsSuite {
         ))
       )
 
-    val compiled = VariablesCompiler.compile(text, Some(variables))
+    val compiled = VariablesMapping.compiler.compile(text, Some(variables))
     //println(compiled)
     assert(compiled == Ior.Right(expected))
   }
@@ -64,7 +64,7 @@ final class VariablesSuite extends CatsSuite {
         Select("name", Nil, Empty)
       )
 
-    val compiled = VariablesCompiler.compile(text, Some(variables))
+    val compiled = VariablesMapping.compiler.compile(text, Some(variables))
     //println(compiled)
     assert(compiled == Ior.Right(expected))
   }
@@ -104,13 +104,13 @@ final class VariablesSuite extends CatsSuite {
         ))
       )
 
-    val compiled = VariablesCompiler.compile(text, Some(variables))
+    val compiled = VariablesMapping.compiler.compile(text, Some(variables))
     //println(compiled)
     assert(compiled == Ior.Right(expected))
   }
 }
 
-object VariablesData {
+object VariablesMapping {
   val schema =
     Schema(
       """
@@ -131,12 +131,12 @@ object VariablesData {
         }
       """
     ).right.get
-}
 
-object VariablesCompiler extends QueryCompiler(VariablesData.schema) {
+  val QueryType = schema.ref("Query")
+
   val selectElaborator = new SelectElaborator(Map(
-    VariablesData.schema.ref("Query") -> PartialFunction.empty
+    QueryType -> PartialFunction.empty
   ))
 
-  val phases = List(selectElaborator)
+  val compiler = new QueryCompiler(schema, List(selectElaborator))
 }

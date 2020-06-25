@@ -16,52 +16,9 @@ import edu.gemini.grackle._
 import Query._, Predicate._, Value._
 import QueryCompiler._
 
-import MovieData._
 import io.circe.Encoder
 
 object MovieData {
-  val schema =
-    Schema(
-      """
-        type Query {
-          movieById(id: UUID!): Movie
-          moviesByGenre(genre: Genre!): [Movie!]!
-          moviesReleasedBetween(from: Date!, to: Date!): [Movie!]!
-          moviesLongerThan(duration: Interval!): [Movie!]!
-          moviesShownLaterThan(time: Time!): [Movie!]!
-          moviesShownBetween(from: DateTime!, to: DateTime!): [Movie!]!
-        }
-        scalar UUID
-        scalar Time
-        scalar Date
-        scalar DateTime
-        scalar Interval
-        enum Genre {
-          DRAMA
-          ACTION
-          COMEDY
-        }
-        type Movie {
-          id: UUID!
-          title: String!
-          genre: Genre!
-          releaseDate: Date!
-          showTime: Time!
-          nextShowing: DateTime!
-          duration: Interval!
-        }
-      """
-    ).right.get
-
-  val QueryType = schema.ref("Query")
-  val MovieType = schema.ref("Movie")
-  val UUIDType = schema.ref("UUID")
-  val GenreType = schema.ref("Genre")
-  val TimeType = schema.ref("Time")
-  val DateType = schema.ref("Date")
-  val DateTimeType = schema.ref("DateTime")
-  val IntervalType = schema.ref("Interval")
-
   sealed trait Genre extends Product with Serializable
   object Genre {
     case object Drama extends Genre
@@ -125,38 +82,117 @@ object MovieData {
     ).sortBy(_.id.toString)
 }
 
-object UUIDValue {
-  def unapply(s: StringValue): Option[UUID] =
-    Try(UUID.fromString(s.value)).toOption
-}
+object MovieMapping extends ValueMapping[Id] {
+  import MovieData._
 
-object GenreValue {
-  def unapply(e: TypedEnumValue): Option[Genre] =
-    Genre.fromString(e.value.name)
-}
+  val schema =
+    Schema(
+      """
+        type Query {
+          movieById(id: UUID!): Movie
+          moviesByGenre(genre: Genre!): [Movie!]!
+          moviesReleasedBetween(from: Date!, to: Date!): [Movie!]!
+          moviesLongerThan(duration: Interval!): [Movie!]!
+          moviesShownLaterThan(time: Time!): [Movie!]!
+          moviesShownBetween(from: DateTime!, to: DateTime!): [Movie!]!
+        }
+        scalar UUID
+        scalar Time
+        scalar Date
+        scalar DateTime
+        scalar Interval
+        enum Genre {
+          DRAMA
+          ACTION
+          COMEDY
+        }
+        type Movie {
+          id: UUID!
+          title: String!
+          genre: Genre!
+          releaseDate: Date!
+          showTime: Time!
+          nextShowing: DateTime!
+          duration: Interval!
+        }
+      """
+    ).right.get
 
-object DateValue {
-  def unapply(s: StringValue): Option[LocalDate] =
-    Try(LocalDate.parse(s.value)).toOption
-}
+  val QueryType = schema.ref("Query")
+  val MovieType = schema.ref("Movie")
+  val UUIDType = schema.ref("UUID")
+  val GenreType = schema.ref("Genre")
+  val TimeType = schema.ref("Time")
+  val DateType = schema.ref("Date")
+  val DateTimeType = schema.ref("DateTime")
+  val IntervalType = schema.ref("Interval")
 
-object TimeValue {
-  def unapply(s: StringValue): Option[LocalTime] =
-    Try(LocalTime.parse(s.value)).toOption
-}
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            ValueRoot("movieById", movies),
+            ValueRoot("moviesByGenre", movies),
+            ValueRoot("moviesReleasedBetween", movies),
+            ValueRoot("moviesLongerThan", movies),
+            ValueRoot("moviesShownLaterThan", movies),
+            ValueRoot("moviesShownBetween", movies)
+          )
+      ),
+      ValueObjectMapping[Movie](
+        tpe = MovieType,
+        fieldMappings =
+          List(
+            ValueField("id", _.id),
+            ValueField("title", _.title),
+            ValueField("genre", _.genre),
+            ValueField("releaseDate", _.releaseDate),
+            ValueField("showTime", _.showTime),
+            ValueField("nextShowing", _.nextShowing),
+            ValueField("duration", _.duration)
+          )
+      ),
+      LeafMapping[UUID](UUIDType),
+      LeafMapping[Genre](GenreType),
+      LeafMapping[LocalDate](DateType),
+      LeafMapping[LocalTime](TimeType),
+      LeafMapping[ZonedDateTime](DateTimeType),
+      LeafMapping[Duration](IntervalType)
+    )
 
-object DateTimeValue {
-  def unapply(s: StringValue): Option[ZonedDateTime] =
-    Try(ZonedDateTime.parse(s.value)).toOption
-}
+  object UUIDValue {
+    def unapply(s: StringValue): Option[UUID] =
+      Try(UUID.fromString(s.value)).toOption
+  }
 
-object IntervalValue {
-  def unapply(s: StringValue): Option[Duration] =
-    Try(Duration.parse(s.value)).toOption
-}
+  object GenreValue {
+    def unapply(e: TypedEnumValue): Option[Genre] =
+      Genre.fromString(e.value.name)
+  }
 
-object MovieQueryCompiler extends QueryCompiler(schema) {
-  val selectElaborator = new SelectElaborator(Map(
+  object DateValue {
+    def unapply(s: StringValue): Option[LocalDate] =
+      Try(LocalDate.parse(s.value)).toOption
+  }
+
+  object TimeValue {
+    def unapply(s: StringValue): Option[LocalTime] =
+      Try(LocalTime.parse(s.value)).toOption
+  }
+
+  object DateTimeValue {
+    def unapply(s: StringValue): Option[ZonedDateTime] =
+      Try(ZonedDateTime.parse(s.value)).toOption
+  }
+
+  object IntervalValue {
+    def unapply(s: StringValue): Option[Duration] =
+      Try(Duration.parse(s.value)).toOption
+  }
+
+  override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("movieById", List(Binding("id", UUIDValue(id))), child) =>
         Select("movieById", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
@@ -198,34 +234,7 @@ object MovieQueryCompiler extends QueryCompiler(schema) {
         ).rightIor
     }
   ))
-
-  val phases = List(selectElaborator)
 }
-
-object MovieQueryInterpreter extends DataTypeQueryInterpreter[Id](
-  {
-    case "movieById"|"moviesByGenre"|"moviesReleasedBetween"|"moviesLongerThan"|"moviesShownLaterThan"|"moviesShownBetween" =>
-      (ListType(MovieType), movies)
-  },
-  {
-    case (m: Movie, "id") => m.id
-    case (m: Movie, "title") => m.title
-    case (m: Movie, "genre") => m.genre
-    case (m: Movie, "releaseDate") => m.releaseDate
-    case (m: Movie, "showTime") => m.showTime
-    case (m: Movie, "nextShowing") => m.nextShowing
-    case (m: Movie, "duration") => m.duration
-  },
-  leaves =
-    Map(
-      UUIDType -> Encoder[UUID],
-      GenreType -> Encoder[Genre],
-      DateType -> Encoder[LocalDate],
-      TimeType -> Encoder[LocalTime],
-      DateTimeType -> Encoder[ZonedDateTime],
-      IntervalType -> Encoder[Duration]
-    )
-)
 
 final class ScalarsSpec extends CatsSuite {
   test("query with UUID argument and custom scalar results") {
@@ -259,8 +268,8 @@ final class ScalarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MovieQueryCompiler.compile(query).right.get
-    val res = MovieQueryInterpreter.run(compiledQuery, MovieData.QueryType)
+    val compiledQuery = MovieMapping.compiler.compile(query).right.get
+    val res = MovieMapping.interpreter.run(compiledQuery, MovieMapping.QueryType)
     //println(res)
 
     assert(res == expected)
@@ -297,8 +306,8 @@ final class ScalarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MovieQueryCompiler.compile(query).right.get
-    val res = MovieQueryInterpreter.run(compiledQuery, MovieData.QueryType)
+    val compiledQuery = MovieMapping.compiler.compile(query).right.get
+    val res = MovieMapping.interpreter.run(compiledQuery, MovieMapping.QueryType)
     //println(res)
 
     assert(res == expected)
@@ -335,8 +344,8 @@ final class ScalarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MovieQueryCompiler.compile(query).right.get
-    val res = MovieQueryInterpreter.run(compiledQuery, MovieData.QueryType)
+    val compiledQuery = MovieMapping.compiler.compile(query).right.get
+    val res = MovieMapping.interpreter.run(compiledQuery, MovieMapping.QueryType)
     //println(res)
 
     assert(res == expected)
@@ -369,8 +378,8 @@ final class ScalarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MovieQueryCompiler.compile(query).right.get
-    val res = MovieQueryInterpreter.run(compiledQuery, MovieData.QueryType)
+    val compiledQuery = MovieMapping.compiler.compile(query).right.get
+    val res = MovieMapping.interpreter.run(compiledQuery, MovieMapping.QueryType)
     //println(res)
 
     assert(res == expected)
@@ -407,8 +416,8 @@ final class ScalarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MovieQueryCompiler.compile(query).right.get
-    val res = MovieQueryInterpreter.run(compiledQuery, MovieData.QueryType)
+    val compiledQuery = MovieMapping.compiler.compile(query).right.get
+    val res = MovieMapping.interpreter.run(compiledQuery, MovieMapping.QueryType)
     //println(res)
 
     assert(res == expected)
@@ -445,8 +454,8 @@ final class ScalarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MovieQueryCompiler.compile(query).right.get
-    val res = MovieQueryInterpreter.run(compiledQuery, MovieData.QueryType)
+    val compiledQuery = MovieMapping.compiler.compile(query).right.get
+    val res = MovieMapping.interpreter.run(compiledQuery, MovieMapping.QueryType)
     //println(res)
 
     assert(res == expected)

@@ -11,46 +11,7 @@ import edu.gemini.grackle._
 import Query._, Predicate._, Value._
 import QueryCompiler._
 
-import StarWarsData._
-
 object StarWarsData {
-  val schema =
-    Schema(
-      """
-        type Query {
-           hero(episode: Episode!): Character!
-           character(id: ID!): Character
-           human(id: ID!): Human
-           droid(id: ID!): Droid
-         }
-         enum Episode {
-           NEWHOPE
-           EMPIRE
-           JEDI
-         }
-         interface Character {
-           id: String!
-           name: String
-           friends: [Character!]
-           appearsIn: [Episode!]
-         }
-         type Human implements Character {
-           id: String!
-           name: String
-           friends: [Character!]
-           appearsIn: [Episode!]
-           homePlanet: String
-         }
-         type Droid implements Character {
-           id: String!
-           name: String
-           friends: [Character!]
-           appearsIn: [Episode!]
-           primaryFunction: String
-         }
-      """
-    ).right.get
-
   object Episode extends Enumeration {
     val NEWHOPE, EMPIRE, JEDI = Value
   }
@@ -149,9 +110,91 @@ object StarWarsData {
   )
 }
 
-object StarWarsQueryCompiler extends QueryCompiler(StarWarsData.schema) {
-  val selectElaborator = new SelectElaborator(Map(
-    StarWarsData.schema.ref("Query") -> {
+object StarWarsMapping extends ValueMapping[Id] {
+  import StarWarsData.{characters, hero, resolveFriends, Character, Droid, Episode, Human}
+
+  val schema =
+    Schema(
+      """
+        type Query {
+           hero(episode: Episode!): Character!
+           character(id: ID!): Character
+           human(id: ID!): Human
+           droid(id: ID!): Droid
+         }
+         enum Episode {
+           NEWHOPE
+           EMPIRE
+           JEDI
+         }
+         interface Character {
+           id: String!
+           name: String
+           friends: [Character!]
+           appearsIn: [Episode!]
+         }
+         type Human implements Character {
+           id: String!
+           name: String
+           friends: [Character!]
+           appearsIn: [Episode!]
+           homePlanet: String
+         }
+         type Droid implements Character {
+           id: String!
+           name: String
+           friends: [Character!]
+           appearsIn: [Episode!]
+           primaryFunction: String
+         }
+      """
+    ).right.get
+
+  val QueryType = schema.ref("Query")
+  val CharacterType = schema.ref("Character")
+  val HumanType = schema.ref("Human")
+  val DroidType = schema.ref("Droid")
+
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            ValueRoot("hero", characters),
+            ValueRoot("character", characters),
+            ValueRoot("human", characters.collect { case h: Human => h }),
+            ValueRoot("droid", characters.collect { case d: Droid => d })
+          )
+      ),
+      ValueObjectMapping[Character](
+        tpe = CharacterType,
+        fieldMappings =
+          List(
+            ValueField("id", _.id),
+            ValueField("name", _.name),
+            ValueField("appearsIn", _.appearsIn),
+            ValueField("friends", resolveFriends _),
+          )
+      ),
+      ValueObjectMapping[Human](
+        tpe = HumanType,
+        fieldMappings =
+          List(
+            ValueField("homePlanet", _.homePlanet)
+          )
+      ),
+      ValueObjectMapping[Droid](
+        tpe = DroidType,
+        fieldMappings =
+          List(
+            ValueField("primaryFunction", _.primaryFunction)
+          )
+      )
+    )
+
+  override val selectElaborator = new SelectElaborator(Map(
+    QueryType -> {
       case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
         val episode = Episode.values.find(_.toString == e.name).get
         Select("hero", Nil, Unique(Eql(FieldPath(List("id")), Const(hero(episode).id)), child)).rightIor
@@ -159,22 +202,4 @@ object StarWarsQueryCompiler extends QueryCompiler(StarWarsData.schema) {
         Select(f, Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
     }
   ))
-
-  val phases = List(selectElaborator)
 }
-
-object StarWarsQueryInterpreter extends DataTypeQueryInterpreter[Id](
-  {
-    case "hero" | "character" => (ListType(StarWarsData.schema.ref("Character")), characters)
-    case "human" => (ListType(StarWarsData.schema.ref("Human")), characters.collect { case h: Human => h })
-    case "droid" => (ListType(StarWarsData.schema.ref("Droid")), characters.collect { case d: Droid => d })
-  },
-  {
-    case (c: Character, "id")          => c.id
-    case (c: Character, "name")        => c.name
-    case (c: Character, "appearsIn")   => c.appearsIn
-    case (c: Character, "friends")     => resolveFriends(c)
-    case (h: Human, "homePlanet")      => h.homePlanet
-    case (d: Droid, "primaryFunction") => d.primaryFunction
-  }
-)

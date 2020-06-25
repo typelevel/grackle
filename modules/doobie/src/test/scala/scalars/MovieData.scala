@@ -8,7 +8,7 @@ import java.util.UUID
 import scala.util.Try
 
 import cats.{Eq, Order}
-import cats.effect.Bracket
+import cats.effect.Sync
 import cats.implicits._
 import doobie.Transactor
 import doobie.implicits.javatime.JavaLocalTimeMeta
@@ -22,68 +22,8 @@ import io.circe.Encoder
 import edu.gemini.grackle._, doobie._
 import Query._, Predicate._, Value._
 import QueryCompiler._
-import DoobieMapping._, FieldMapping._
 
-object MovieData extends DoobieMapping {
-  val schema =
-    Schema(
-      """
-        type Query {
-          movieById(id: UUID!): Movie
-          moviesByGenre(genre: Genre!): [Movie!]!
-          moviesReleasedBetween(from: Date!, to: Date!): [Movie!]!
-          moviesLongerThan(duration: Interval!): [Movie!]!
-          moviesShownLaterThan(time: Time!): [Movie!]!
-          moviesShownBetween(from: DateTime!, to: DateTime!): [Movie!]!
-        }
-        scalar UUID
-        scalar Time
-        scalar Date
-        scalar DateTime
-        scalar Interval
-        enum Genre {
-          DRAMA
-          ACTION
-          COMEDY
-        }
-        type Movie {
-          id: UUID!
-          title: String!
-          genre: Genre!
-          releaseDate: Date!
-          showTime: Time!
-          nextShowing: DateTime!
-          duration: Interval!
-        }
-      """
-    ).right.get
-
-  val QueryType = schema.ref("Query")
-  val MovieType = schema.ref("Movie")
-  val UUIDType = schema.ref("UUID")
-  val TimeType = schema.ref("Time")
-  val DateType = schema.ref("Date")
-  val DateTimeType = schema.ref("DateTime")
-  val IntervalType = schema.ref("Interval")
-  val GenreType = schema.ref("Genre")
-
-  val movieMapping =
-    ObjectMapping(
-      tpe = "Movie",
-      key = List(ColumnRef("movies", "id")),
-      fieldMappings =
-        List(
-          "id" -> ColumnRef("movies", "id"),
-          "title" -> ColumnRef("movies", "title"),
-          "genre" -> ColumnRef("movies", "genre"),
-          "releaseDate" -> ColumnRef("movies", "releasedate"),
-          "showTime" -> ColumnRef("movies", "showtime"),
-          "nextShowing" -> ColumnRef("movies", "nextshowing"),
-          "duration" -> ColumnRef("movies", "duration")
-        ),
-      Nil
-    )
-
+object MovieData {
   sealed trait Genre extends Product with Serializable
   object Genre {
     case object Drama extends Genre
@@ -136,54 +76,137 @@ object MovieData extends DoobieMapping {
 
   implicit val durationOrder: Order[Duration] =
     Order.fromComparable[Duration]
-
-  val uuidMapping = LeafMapping[UUID](UUIDType)
-  val timeMapping = LeafMapping[LocalTime](TimeType)
-  val dateMapping = LeafMapping[LocalDate](DateType)
-  val dateTimeMapping = LeafMapping[ZonedDateTime](DateTimeType)
-  val intervalMapping = LeafMapping[Duration](IntervalType)
-  val genreMapping = LeafMapping[Genre](GenreType)
-
-  val objectMappings = List(movieMapping)
-  val leafMappings = List(uuidMapping, timeMapping, dateMapping, dateTimeMapping, intervalMapping, genreMapping)
 }
 
-import MovieData._
+class MovieMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger[F]) extends DoobieMapping[F] {
+  import MovieData._
 
-object UUIDValue {
-  def unapply(s: StringValue): Option[UUID] =
-    Try(UUID.fromString(s.value)).toOption
-}
+  val schema =
+    Schema(
+      """
+        type Query {
+          movieById(id: UUID!): Movie
+          moviesByGenre(genre: Genre!): [Movie!]!
+          moviesReleasedBetween(from: Date!, to: Date!): [Movie!]!
+          moviesLongerThan(duration: Interval!): [Movie!]!
+          moviesShownLaterThan(time: Time!): [Movie!]!
+          moviesShownBetween(from: DateTime!, to: DateTime!): [Movie!]!
+          longMovies: [Movie!]!
+        }
+        scalar UUID
+        scalar Time
+        scalar Date
+        scalar DateTime
+        scalar Interval
+        enum Genre {
+          DRAMA
+          ACTION
+          COMEDY
+        }
+        type Movie {
+          id: UUID!
+          title: String!
+          genre: Genre!
+          releaseDate: Date!
+          showTime: Time!
+          nextShowing: DateTime!
+          nextEnding: DateTime!
+          duration: Interval!
+        }
+      """
+    ).right.get
 
-object DateValue {
-  def unapply(s: StringValue): Option[LocalDate] =
-    Try(LocalDate.parse(s.value)).toOption
-}
+  val QueryType = schema.ref("Query")
+  val MovieType = schema.ref("Movie")
+  val UUIDType = schema.ref("UUID")
+  val TimeType = schema.ref("Time")
+  val DateType = schema.ref("Date")
+  val DateTimeType = schema.ref("DateTime")
+  val IntervalType = schema.ref("Interval")
+  val GenreType = schema.ref("Genre")
 
-object TimeValue {
-  def unapply(s: StringValue): Option[LocalTime] =
-    Try(LocalTime.parse(s.value)).toOption
-}
+  import DoobieFieldMapping._
 
-object DateTimeValue {
-  def unapply(s: StringValue): Option[ZonedDateTime] =
-    Try(ZonedDateTime.parse(s.value)).toOption
-}
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            DoobieRoot("movieById"),
+            DoobieRoot("moviesByGenre"),
+            DoobieRoot("moviesReleasedBetween"),
+            DoobieRoot("moviesLongerThan"),
+            DoobieRoot("moviesShownLaterThan"),
+            DoobieRoot("moviesShownBetween"),
+            DoobieRoot("longMovies")
+          )
+      ),
+      ObjectMapping(
+        tpe = MovieType,
+        fieldMappings =
+          List(
+            DoobieField("id", ColumnRef("movies", "id"), key = true),
+            DoobieField("title", ColumnRef("movies", "title")),
+            DoobieField("genre", ColumnRef("movies", "genre")),
+            DoobieField("releaseDate", ColumnRef("movies", "releasedate")),
+            DoobieField("showTime", ColumnRef("movies", "showtime")),
+            DoobieField("nextShowing", ColumnRef("movies", "nextshowing")),
+            CursorField("nextEnding", nextEnding),
+            DoobieField("duration", ColumnRef("movies", "duration")),
+            CursorAttribute("isLong", isLong)
+          )
+      ),
+      DoobieLeafMapping[UUID](UUIDType),
+      DoobieLeafMapping[LocalTime](TimeType),
+      DoobieLeafMapping[LocalDate](DateType),
+      DoobieLeafMapping[ZonedDateTime](DateTimeType),
+      DoobieLeafMapping[Duration](IntervalType),
+      DoobieLeafMapping[Genre](GenreType)
+    )
 
-object IntervalValue {
-  def unapply(s: StringValue): Option[Duration] =
-    Try(Duration.parse(s.value)).toOption
-}
+  def nextEnding(c: Cursor): Result[ZonedDateTime] =
+    for {
+      nextShowing <- c.fieldAs[ZonedDateTime]("nextShowing")
+      duration    <- c.fieldAs[Duration]("duration")
+    } yield nextShowing.plus(duration)
 
-object GenreValue {
-  def unapply(e: TypedEnumValue): Option[Genre] =
-    Genre.fromString(e.value.name)
-}
+  def isLong(c: Cursor): Result[Boolean] =
+    for {
+      duration    <- c.fieldAs[Duration]("duration")
+    } yield duration.toHours >= 3
 
-object MovieQueryCompiler extends QueryCompiler(MovieData.schema) {
-  val QueryType = MovieData.schema.ref("Query")
+  object UUIDValue {
+    def unapply(s: StringValue): Option[UUID] =
+      Try(UUID.fromString(s.value)).toOption
+  }
 
-  val selectElaborator = new SelectElaborator(Map(
+  object DateValue {
+    def unapply(s: StringValue): Option[LocalDate] =
+      Try(LocalDate.parse(s.value)).toOption
+  }
+
+  object TimeValue {
+    def unapply(s: StringValue): Option[LocalTime] =
+      Try(LocalTime.parse(s.value)).toOption
+  }
+
+  object DateTimeValue {
+    def unapply(s: StringValue): Option[ZonedDateTime] =
+      Try(ZonedDateTime.parse(s.value)).toOption
+  }
+
+  object IntervalValue {
+    def unapply(s: StringValue): Option[Duration] =
+      Try(Duration.parse(s.value)).toOption
+  }
+
+  object GenreValue {
+    def unapply(e: TypedEnumValue): Option[Genre] =
+      Genre.fromString(e.value.name)
+  }
+
+  override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("movieById", List(Binding("id", UUIDValue(id))), child) =>
         Select("movieById", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
@@ -223,16 +246,13 @@ object MovieQueryCompiler extends QueryCompiler(MovieData.schema) {
             child
           )
         ).rightIor
+      case Select("longMovies", Nil, child) =>
+        Select("longMovies", Nil, Filter(Eql(AttrPath(List("isLong")), Const(true)), child)).rightIor
     }
   ))
-
-  val stagingElaborator = new StagingElaborator(MovieData)
-
-  val phases = List(selectElaborator, stagingElaborator)
 }
 
-object MovieQueryInterpreter {
-  def fromTransactor[F[_]](xa: Transactor[F])
-    (implicit brkt: Bracket[F, Throwable], logger: Logger[F]): DoobieQueryInterpreter[F] =
-      new DoobieQueryInterpreter[F](MovieData, xa, logger)
+object MovieMapping {
+  def fromTransactor[F[_] : Sync : Logger](transactor: Transactor[F]): MovieMapping[F] =
+    new MovieMapping[F](transactor, Logger[F])
 }
