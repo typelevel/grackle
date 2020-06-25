@@ -190,24 +190,24 @@ object StarWarsMapping extends GenericMapping[Id] {
 
   val typeMappings =
     List(
+      // #root
       ObjectMapping(
         tpe = QueryType,
         fieldMappings =
-          // #root
           List(
             GenericRoot("hero", characters),
             GenericRoot("character", characters),
             GenericRoot("human", characters.collect { case h: Human => h }),
             GenericRoot("droid", characters.collect { case d: Droid => d })
           )
-          // #root
       )
+      // #root
     )
 
   // #elaborator
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
-      // The hero selector take an Episode argument and yields a single value. We use the
+      // The hero selector takes an Episode argument and yields a single value. We use the
       // Unique operator to pick out the target using the FieldEquals predicate.
       case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
         Episode.values.find(_.toString == e.name).map { episode =>

@@ -151,8 +151,7 @@ The API is backed by values of an ordinary Scala data types with no Grackle depe
 
 @@snip [StarWarsData.scala](/demo/src/main/scala/starwars/StarWarsData.scala) { #model_types }
 
-The data structure is slightly complicated by the use of by-name arguments for the `friends` members: this is to
-support cycles of friendship, eg.,
+The data structure is slightly complicated by the need to support support cycles of friendship, eg.,
 
 ```json
 query {
@@ -191,7 +190,8 @@ yields,
 
 Here the root of the result is "Luke Skywalker" and we loop back to Luke through the mutual friendship with Han Solo.
 
-The values of these data types are created in the usual way for cyclic data structures in Scala, using lazy vals,
+The data type is not itself recursive, instead friend are identified by their ids. When traversing through the list of
+friends the `resolveFriends` method is used to locate the next `Character` value to visit.
 
 @@snip [StarWarsData.scala](/demo/src/main/scala/starwars/StarWarsData.scala) { #model_values }
 
@@ -210,11 +210,17 @@ sealed trait Query {
 object Query {
   case class Select(name: String, args: List[Binding], child: Query = Empty) extends Query
   case class Group(queries: List[Query]) extends Query
+  case class GroupList(queries: List[Query]) extends Query
   case class Unique(pred: Predicate, child: Query) extends Query
   case class Filter(pred: Predicate, child: Query) extends Query
-  case class Component(componentId: String, join: (Cursor, Query) => Result[Query], child: Query) extends Query
+  case class Component(mapping: Mapping[F], join: (Cursor, Query) => Result[Query], child: Query) extends Query
+  case class Introspect(schema: Schema, child: Query) extends Query
   case class Defer(join: (Cursor, Query) => Result[Query], child: Query) extends Query
   case class Wrap(name: String, child: Query) extends Query
+  case class Rename(name: String, child: Query) extends Query
+  case class UntypedNarrow(tpnme: String, child: Query) extends Query
+  case class Narrow(subtpe: TypeRef, child: Query) extends Query
+  case class Skip(sense: Boolean, cond: Value, child: Query) extends Query
   case object Empty extends Query
 }
 ```
@@ -250,15 +256,15 @@ the model) is specific to this model, so we have to provide that semantic via so
 Extracting out the case for the `character` selector,
 
 ```scala
-case Select("character", List(IDBinding("id", id)), child) =>
-  Select("character", Nil, Unique(FieldEquals("id", id), child)).rightIor
+case Select("character", List(Binding("id", IDValue(id))), child) =>
+  Select("character", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
 ```
 
 we can see that this transforms the previous term as follows,
 
 ```scala
 Select("character", Nil,
-  Unique(FieldEquals("id", 1000), Select("name", Nil)))
+  Unique(Eql(FieldPath(List("id")), Const("1000")), Select("name", Nil))
 )
 ```
 
@@ -273,20 +279,18 @@ The data required to construct the response to a query is determined by the stru
 more or less arbitrary traversal of the model. To support this Grackle provides a functional `Cursor` abstraction
 which points into the model and can nativigate through GraphQL fields, arrays and values as required by a given query.
 
-For in-memory models this abstraction is implemented by `DataTypeCursor` which handles most of the navigation in a
-generic way and is customized with a pair of `PartialFunctions`, one to set the starting point in the model for the
-root of a given query, and the other to handle navigation through fields.
-
 For in-memory models where the structure of the model ADT closely matches the GraphQL schema a `Cursor` can be derived
-automatically by a `GenericQueryInterpreter` which only needs to be supplemented with a root `PartialFunction`.
+automatically by a `GenericMapping` which only needs to be supplemented with a specification of the root mappings for
+the top level fields of the GraphQL schema. The root mappings enable the query interpreter to construct an appropriate
+initial `Cursor` for the query being evaluated.
 
-For the Star Wars model the root `PartialFunction` is of the following form,
+For the Star Wars model the root definitions are of the following form,
 
 @@snip [StarWarsData.scala](/demo/src/main/scala/starwars/StarWarsData.scala) { #root }
 
-The left hand sides of the case expressions correspond to the top-level selection of the query (see the schema above)
-and the right hand side yields a pair, consisting of the GraphQL type, and the Scala value which form the root for the
-query. When the query is executed, navigation will start from that point and with that expected GraphQL type.
+The the first argument of the `GenericRoot` constructor correspond to the top-level selection of the query (see the
+schema above) and the second argument is the initial model value for which a `Cursor` will be derived.  When the query
+is executed, navigation will start with that `Cursor` and the corresponding GraphQL type.
 
 ## The service
 
