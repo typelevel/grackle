@@ -33,7 +33,7 @@ final class InputValuesSuite extends CatsSuite {
         Select("field", List(Binding("arg", IntValue(23))), Select("subfield", Nil, Empty))
       ))
 
-    val compiled = InputValuesCompiler.compile(text, None)
+    val compiled = InputValuesMapping.compiler.compile(text, None)
     //println(compiled)
     assert(compiled == Ior.Right(expected))
   }
@@ -60,7 +60,7 @@ final class InputValuesSuite extends CatsSuite {
         )
       ))
 
-    val compiled = InputValuesCompiler.compile(text, None)
+    val compiled = InputValuesMapping.compiler.compile(text, None)
     //println(compiled)
     assert(compiled == Ior.Right(expected))
   }
@@ -88,13 +88,13 @@ final class InputValuesSuite extends CatsSuite {
         Select("subfield", Nil, Empty)
       )
 
-    val compiled = InputValuesCompiler.compile(text, None)
+    val compiled = InputValuesMapping.compiler.compile(text, None)
     //println(compiled)
     assert(compiled == Ior.Right(expected))
   }
 }
 
-object InputValuesData {
+object InputValuesMapping {
   val schema =
     Schema(
       """
@@ -115,12 +115,12 @@ object InputValuesData {
         }
       """
     ).right.get
-}
 
-object InputValuesCompiler extends QueryCompiler(InputValuesData.schema) {
+  val QueryType = schema.ref("Query")
+
   val selectElaborator = new SelectElaborator(Map(
-    InputValuesData.schema.ref("Query") -> PartialFunction.empty
+    QueryType -> PartialFunction.empty
   ))
 
-  val phases = List(selectElaborator)
+  val compiler = new QueryCompiler(schema, List(selectElaborator))
 }

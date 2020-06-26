@@ -10,7 +10,6 @@ import io.circe.literal.JsonStringContext
 import io.circe.optics.JsonPath.root
 
 import edu.gemini.grackle._
-import QueryCompiler._
 
 final class IntrospectionSuite extends CatsSuite {
   def standardTypeName(name: String): Boolean = name match {
@@ -65,8 +64,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestQueryCompiler.compile(text)
-    val res = TestQueryInterpreter.run(compiled.right.get, TestData.schema.queryType)
+    val compiled = TestMapping.compiler.compile(text)
+    val res = TestMapping.interpreter.run(compiled.right.get, TestMapping.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -222,8 +221,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestQueryCompiler.compile(text)
-    val res = TestQueryInterpreter.run(compiled.right.get, TestData.schema.queryType)
+    val compiled = TestMapping.compiler.compile(text)
+    val res = TestMapping.interpreter.run(compiled.right.get, TestMapping.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -343,8 +342,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestQueryCompiler.compile(text)
-    val res = TestQueryInterpreter.run(compiled.right.get, TestData.schema.queryType)
+    val compiled = TestMapping.compiler.compile(text)
+    val res = TestMapping.interpreter.run(compiled.right.get, TestMapping.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -430,8 +429,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestQueryCompiler.compile(text)
-    val res = TestQueryInterpreter.run(compiled.right.get, TestData.schema.queryType)
+    val compiled = TestMapping.compiler.compile(text)
+    val res = TestMapping.interpreter.run(compiled.right.get, TestMapping.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -524,8 +523,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestQueryCompiler.compile(text)
-    val res = TestQueryInterpreter.run(compiled.right.get, TestData.schema.queryType)
+    val compiled = TestMapping.compiler.compile(text)
+    val res = TestMapping.interpreter.run(compiled.right.get, TestMapping.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -614,8 +613,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestQueryCompiler.compile(text)
-    val res = TestQueryInterpreter.run(compiled.right.get, TestData.schema.queryType)
+    val compiled = TestMapping.compiler.compile(text)
+    val res = TestMapping.interpreter.run(compiled.right.get, TestMapping.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -695,8 +694,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestQueryCompiler.compile(text)
-    val res = TestQueryInterpreter.run(compiled.right.get, TestData.schema.queryType)
+    val compiled = TestMapping.compiler.compile(text)
+    val res = TestMapping.interpreter.run(compiled.right.get, TestMapping.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -786,8 +785,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestQueryCompiler.compile(text)
-    val res = TestQueryInterpreter.run(compiled.right.get, TestData.schema.queryType)
+    val compiled = TestMapping.compiler.compile(text)
+    val res = TestMapping.interpreter.run(compiled.right.get, TestMapping.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -847,8 +846,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestQueryCompiler.compile(text)
-    val res0 = TestQueryInterpreter.run(compiled.right.get, TestData.schema.queryType)
+    val compiled = TestMapping.compiler.compile(text)
+    val res0 = TestMapping.interpreter.run(compiled.right.get, TestMapping.schema.queryType)
     val res = stripStandardTypes(res0)
     //println(res)
     assert(res == expected)
@@ -1115,8 +1114,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = SmallQueryCompiler.compile(text)
-    val res0 = SmallQueryInterpreter.run(compiled.right.get, SmallData.schema.queryType)
+    val compiled = SmallMapping.compiler.compile(text)
+    val res0 = SmallMapping.interpreter.run(compiled.right.get, SmallMapping.schema.queryType)
     val res = stripStandardTypes(res0)
     //println(res)
     assert(res == expected)
@@ -1147,8 +1146,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = SmallQueryCompiler.compile(text)
-    val res = SmallQueryInterpreter.run(compiled.right.get, SmallData.schema.queryType)
+    val compiled = SmallMapping.compiler.compile(text)
+    val res = SmallMapping.interpreter.run(compiled.right.get, SmallMapping.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -1176,8 +1175,8 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = SmallQueryCompiler.compile(text)
-    val res = SmallQueryInterpreter.run(compiled.right.get, SmallData.schema.queryType)
+    val compiled = SmallMapping.compiler.compile(text)
+    val res = SmallMapping.interpreter.run(compiled.right.get, SmallMapping.schema.queryType)
     //println(res)
     assert(res == expected)
   }
@@ -1223,14 +1222,14 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = SmallQueryCompiler.compile(text)
-    val res = SmallQueryInterpreter.run(compiled.right.get, SmallData.schema.queryType)
+    val compiled = SmallMapping.compiler.compile(text)
+    val res = SmallMapping.interpreter.run(compiled.right.get, SmallMapping.schema.queryType)
     //println(res)
     assert(res == expected)
   }
 }
 
-object TestData {
+object TestMapping extends SimpleMapping[Id] {
   val schema =
     Schema(
       """
@@ -1293,16 +1292,23 @@ object TestData {
         }
       """
     ).right.get
-}
 
-object TestQueryCompiler extends QueryCompiler(TestData.schema) {
-  val phases = List(new SelectElaborator(Map.empty))
+  val typeMappings = Nil
 }
-
-object TestQueryInterpreter extends
-  DataTypeQueryInterpreter[Id](PartialFunction.empty, PartialFunction.empty)
 
 object SmallData {
+  trait Profile {
+    def id: Option[String]
+  }
+  case class User(id: Option[String], name: Option[String], age: Option[Int]) extends Profile
+  val users = List(
+    User(Some("1000"), Some("Luke Skywalker"), Some(30))
+  )
+}
+
+object SmallMapping extends ValueMapping[Id] {
+  import SmallData._
+
   val schema =
     Schema(
       """
@@ -1323,36 +1329,34 @@ object SmallData {
       """
     ).right.get
 
+  val QueryType = schema.queryType
   val UserType = schema.ref("User")
   val ProfileType = schema.ref("Profile")
 
-  trait Profile {
-    def id: Option[String]
-  }
-  case class User(id: Option[String], name: Option[String], age: Option[Int]) extends Profile
-  val users = List(
-    User(Some("1000"), Some("Luke Skywalker"), Some(30))
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            ValueRoot("users", users),
+            ValueRoot("profiles", users)
+          )
+      ),
+      ValueObjectMapping[User](
+        tpe = UserType,
+        fieldMappings =
+          List(
+            ValueField("name", _.name),
+            ValueField("age", _.age)
+          )
+      ),
+      ValueObjectMapping[Profile](
+        tpe = ProfileType,
+        fieldMappings =
+          List(
+            ValueField("id", _.id)
+          )
+      )
   )
 }
-
-object SmallQueryCompiler extends QueryCompiler(SmallData.schema) {
-  val phases = List(new SelectElaborator(Map.empty))
-}
-
-import SmallData._
-
-object SmallQueryInterpreter extends DataTypeQueryInterpreter[Id](
-  {
-    case "users" => (ListType(UserType), users)
-    case "profiles" => (ListType(ProfileType), users: List[Profile])
-  },
-  {
-    case (u: User, "id")    => u.id
-    case (u: User, "name")  => u.name
-    case (u: User, "age")   => u.age
-    case (p: Profile, "id") => p.id
-  },
-  narrows = {
-    case (u: User, SmallData.UserType) => u
-  }
-)

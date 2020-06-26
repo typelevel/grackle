@@ -7,9 +7,10 @@ import io.circe.literal.JsonStringContext
 import io.circe.optics.JsonPath.root
 
 import utils.DatabaseSuite
-import WorldData.schema.queryType
 
 final class WorldSpec extends DatabaseSuite {
+  lazy val mapping = WorldMapping.fromTransactor(xa)
+
   test("simple query") {
     val query = """
       query {
@@ -21,8 +22,8 @@ final class WorldSpec extends DatabaseSuite {
 
     val expected = 239
 
-    val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, queryType).unsafeRunSync
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
     //println(res)
 
     val resSize = root.data.countries.arr.getOption(res).map(_.size)
@@ -49,8 +50,8 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, queryType).unsafeRunSync
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -123,8 +124,8 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, queryType).unsafeRunSync
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -155,8 +156,8 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, queryType).unsafeRunSync
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -243,8 +244,8 @@ final class WorldSpec extends DatabaseSuite {
     }
     """
 
-    val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, queryType).unsafeRunSync
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -393,8 +394,8 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, queryType).unsafeRunSync
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -447,8 +448,8 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, queryType).unsafeRunSync
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -511,8 +512,8 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, queryType).unsafeRunSync
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -585,8 +586,8 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, queryType).unsafeRunSync
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -615,8 +616,8 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, queryType).unsafeRunSync
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -634,8 +635,8 @@ final class WorldSpec extends DatabaseSuite {
         }
       }
     """
-    val cquery    = WorldQueryCompiler.compile(query).right.get
-    val json      = WorldQueryInterpreter.fromTransactor(xa).run(cquery, queryType).unsafeRunSync
+    val cquery    = mapping.compiler.compile(query).right.get
+    val json      = mapping.interpreter.run(cquery, mapping.schema.queryType).unsafeRunSync
     val countries = root.data.countries.arr.getOption(json).get
     val map       = countries.map(j => root.name.string.getOption(j).get -> root.cities.arr.getOption(j).get.length).toMap
     assert(map("Kazakstan")  == 21)
@@ -662,8 +663,8 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, queryType).unsafeRunSync
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -690,8 +691,8 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = WorldQueryCompiler.compile(query)
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery.right.get, queryType).unsafeRunSync
+    val compiledQuery = mapping.compiler.compile(query)
+    val res = mapping.interpreter.run(compiledQuery.right.get, mapping.schema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -718,8 +719,8 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, queryType).unsafeRunSync
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -746,8 +747,8 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, queryType).unsafeRunSync
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -774,8 +775,8 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, queryType).unsafeRunSync
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -816,8 +817,8 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = WorldQueryCompiler.compile(query).right.get
-    val res = WorldQueryInterpreter.fromTransactor(xa).run(compiledQuery, queryType).unsafeRunSync
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
     //println(res)
 
     assert(res == expected)

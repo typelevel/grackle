@@ -5,31 +5,20 @@ package composed
 
 import cats.Monad
 import cats.data.Ior
-import cats.effect.Bracket
+import cats.effect.Sync
 import cats.implicits._
 import doobie.Transactor
 import edu.gemini.grackle._, doobie._
 import io.chrisdavenport.log4cats.Logger
 
 import Query._, Predicate._, Value._
-import QueryCompiler._, ComponentElaborator.Mapping
+import QueryCompiler._
 import QueryInterpreter.mkErrorResult
 import DoobiePredicate._
 
 /* Currency component */
 
 object CurrencyData {
-  val schema =
-    Schema(
-      """
-        type Currency {
-          code: String!
-          exchangeRate: Float!
-          countryCode: String!
-        }
-      """
-    ).right.get
-
   case class Currency(
     code: String,
     exchangeRate: Double,
@@ -41,29 +30,58 @@ object CurrencyData {
   val GBP = Currency("GBP", 1.25, "GBR")
 
   val currencies = List(BRL, EUR, GBP)
+
 }
 
-object CurrencyQueryInterpreter {
+class CurrencyMapping[F[_] : Monad] extends ValueMapping[F] {
   import CurrencyData._
 
-  val CurrencyType = CurrencyData.schema.ref("Currency")
+  val schema =
+    Schema(
+      """
+        type Query {
+          allCurrencies: [Currency!]!
+        }
+        type Currency {
+          code: String!
+          exchangeRate: Float!
+          countryCode: String!
+        }
+      """
+    ).right.get
 
-  def apply[F[_]: Monad] = new DataTypeQueryInterpreter[F](
-    {
-      case "currencies" => (ListType(CurrencyType), currencies)
-    },
-    {
-      case (c: Currency, "code")         => c.code
-      case (c: Currency, "exchangeRate") => c.exchangeRate
-      case (c: Currency, "countryCode")  => c.countryCode
-    }
+  val QueryType = schema.ref("Query")
+  val CurrencyType = schema.ref("Currency")
+
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            ValueRoot("allCurrencies", currencies)
+          )
+      ),
+      ValueObjectMapping[Currency](
+        tpe = CurrencyType,
+        fieldMappings =
+          List(
+            ValueField("code", _.code),
+            ValueField("exchangeRate", _.exchangeRate),
+            ValueField("countryCode", _.countryCode)
+          )
+      )
   )
+}
+
+object CurrencyMapping {
+  def apply[F[_] : Monad]: CurrencyMapping[F] = new CurrencyMapping[F]
 }
 
 /* World component */
 
-object WorldData extends DoobieMapping {
-  import DoobieMapping._, FieldMapping._
+class WorldMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger[F]) extends DoobieMapping[F] {
+  import DoobieFieldMapping._
 
   val schema =
     Schema(
@@ -106,87 +124,84 @@ object WorldData extends DoobieMapping {
       """
     ).right.get
 
-  val countryMapping =
-    ObjectMapping(
-      tpe = "Country",
-      key = List(ColumnRef("country", "code")),
-      fieldMappings =
-        List(
-          "name" -> ColumnRef("country", "name"),
-          "continent" -> ColumnRef("country", "continent"),
-          "region" -> ColumnRef("country", "region"),
-          "surfacearea" -> ColumnRef("country", "surfacearea"),
-          "indepyear" -> ColumnRef("country", "indepyear"),
-          "population" -> ColumnRef("country", "population"),
-          "lifeexpectancy" -> ColumnRef("country", "lifeexpectancy"),
-          "gnp" -> ColumnRef("country", "gnp"),
-          "gnpold" -> ColumnRef("country", "gnpold"),
-          "localname" -> ColumnRef("country", "localname"),
-          "governmentform" -> ColumnRef("country", "governmentform"),
-          "headofstate" -> ColumnRef("country", "headofstate"),
-          "capitalId" -> ColumnRef("country", "capitalId"),
-          "code2" -> ColumnRef("country", "code2"),
-          "cities" -> Subobject(
-            List(Join(ColumnRef("country", "code"), ColumnRef("city", "countrycode")))),
-          "languages" -> Subobject(
-            List(Join(ColumnRef("country", "code"), ColumnRef("countryLanguage", "countrycode"))))
-        ),
-      attributeMappings =
-        List(
-          "code" -> Attr[String](ColumnRef("country", "code"))
-        )
-    )
+  val QueryType = schema.ref("Query")
+  val CountryType = schema.ref("Country")
+  val CityType = schema.ref("City")
+  val LanguageType = schema.ref("Language")
 
-  val cityMapping =
-    ObjectMapping(
-      tpe = "City",
-      key = List(ColumnRef("city", "id")),
-      fieldMappings =
-        List(
-          "name" -> ColumnRef("city", "name"),
-          "country" -> Subobject(
-            List(Join(ColumnRef("city", "countrycode"), ColumnRef("country", "code")))),
-          "district" -> ColumnRef("city", "district"),
-          "population" -> ColumnRef("city", "population")
-        ),
-      attributeMappings =
-        List(
-          "id" -> Attr[Int](ColumnRef("city", "id")),
-          "countrycode" -> Attr[String](ColumnRef("city", "countrycode")),
-        )
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            DoobieRoot("cities"),
+            DoobieRoot("country"),
+            DoobieRoot("countries")
+          )
+      ),
+      ObjectMapping(
+        tpe = CountryType,
+        fieldMappings =
+          List(
+            DoobieAttribute[String]("code", ColumnRef("country", "code"), key = true),
+            DoobieField("name", ColumnRef("country", "name")),
+            DoobieField("continent", ColumnRef("country", "continent")),
+            DoobieField("region", ColumnRef("country", "region")),
+            DoobieField("surfacearea", ColumnRef("country", "surfacearea")),
+            DoobieField("indepyear", ColumnRef("country", "indepyear")),
+            DoobieField("population", ColumnRef("country", "population")),
+            DoobieField("lifeexpectancy", ColumnRef("country", "lifeexpectancy")),
+            DoobieField("gnp", ColumnRef("country", "gnp")),
+            DoobieField("gnpold", ColumnRef("country", "gnpold")),
+            DoobieField("localname", ColumnRef("country", "localname")),
+            DoobieField("governmentform", ColumnRef("country", "governmentform")),
+            DoobieField("headofstate", ColumnRef("country", "headofstate")),
+            DoobieField("capitalId", ColumnRef("country", "capitalId")),
+            DoobieField("code2", ColumnRef("country", "code2")),
+            DoobieObject("cities", Subobject(
+              List(Join(ColumnRef("country", "code"), ColumnRef("city", "countrycode"))))),
+            DoobieObject("languages", Subobject(
+              List(Join(ColumnRef("country", "code"), ColumnRef("countryLanguage", "countrycode")))))
+          )
+      ),
+      ObjectMapping(
+        tpe = CityType,
+        fieldMappings =
+          List(
+            DoobieAttribute[Int]("id", ColumnRef("city", "id"), key = true),
+            DoobieAttribute[String]("countrycode", ColumnRef("city", "countrycode")),
+            DoobieField("name", ColumnRef("city", "name")),
+            DoobieObject("country", Subobject(
+              List(Join(ColumnRef("city", "countrycode"), ColumnRef("country", "code"))))),
+            DoobieField("district", ColumnRef("city", "district")),
+            DoobieField("population", ColumnRef("city", "population"))
+          )
+      ),
+      ObjectMapping(
+        tpe = LanguageType,
+        fieldMappings =
+          List(
+            DoobieField("language", ColumnRef("countryLanguage", "language"), key = true),
+            DoobieField("isOfficial", ColumnRef("countryLanguage", "isOfficial")),
+            DoobieField("percentage", ColumnRef("countryLanguage", "percentage")),
+            DoobieAttribute[String]("countrycode", ColumnRef("countryLanguage", "countrycode")),
+            DoobieObject("countries", Subobject(
+              List(Join(ColumnRef("countryLanguage", "countrycode"), ColumnRef("country", "code")))))
+          )
+      )
     )
-
-  val languageMapping =
-    ObjectMapping(
-      tpe = "Language",
-      key = List(ColumnRef("countryLanguage", "language")),
-      fieldMappings =
-        List(
-          "language" -> ColumnRef("countryLanguage", "language"),
-          "isOfficial" -> ColumnRef("countryLanguage", "isOfficial"),
-          "percentage" -> ColumnRef("countryLanguage", "percentage"),
-          "countries" -> Subobject(
-            List(Join(ColumnRef("countryLanguage", "countrycode"), ColumnRef("country", "code"))))
-        ),
-      attributeMappings =
-        List(
-          "countrycode" -> Attr[String](ColumnRef("countryLanguage", "countrycode"))
-        )
-    )
-
-  val objectMappings = List(countryMapping, cityMapping, languageMapping)
-  val leafMappings = Nil
 }
 
-object WorldQueryInterpreter {
-  def fromTransactor[F[_]](xa: Transactor[F])
-    (implicit brkt: Bracket[F, Throwable], logger: Logger[F]): DoobieQueryInterpreter[F] =
-      new DoobieQueryInterpreter[F](WorldData, xa, logger)
+object WorldMapping {
+  def fromTransactor[F[_] : Sync : Logger](transactor: Transactor[F]): WorldMapping[F] =
+    new WorldMapping[F](transactor, Logger[F])
 }
 
 /* Composition */
 
-object ComposedData {
+class ComposedMapping[F[_] : Monad]
+  (world: Mapping[F], currency: Mapping[F]) extends SimpleMapping[F] {
   val schema =
     Schema(
       """
@@ -235,13 +250,37 @@ object ComposedData {
       """
     ).right.get
 
-}
+  val QueryType = schema.ref("Query")
+  val CountryType = schema.ref("Country")
 
-object ComposedQueryCompiler extends QueryCompiler(ComposedData.schema) {
-  val QueryType = ComposedData.schema.ref("Query")
-  val CountryType = ComposedData.schema.ref("Country")
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            Delegate("country", world),
+            Delegate("countries", world),
+            Delegate("cities", world)
+          )
+      ),
+      ObjectMapping(
+        tpe = CountryType,
+        fieldMappings =
+          List(
+            Delegate("currencies", currency, countryCurrencyJoin)
+          )
+      )
+    )
 
-  val selectElaborator =  new SelectElaborator(Map(
+  def countryCurrencyJoin(c: Cursor, q: Query): Result[Query] =
+    (c.attribute("code"), q) match {
+      case (Ior.Right(countryCode: String), Select("currencies", _, child)) =>
+        Select("allCurrencies", Nil, Filter(Eql(FieldPath(List("countryCode")), Const(countryCode)), child)).rightIor
+      case _ => mkErrorResult(s"Expected 'code' attribute at ${c.tpe}")
+    }
+
+  override val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {
       case Select("country", List(Binding("code", StringValue(code))), child) =>
         Select("country", Nil, Unique(Eql(AttrPath(List("code")), Const(code)), child)).rightIor
@@ -251,31 +290,9 @@ object ComposedQueryCompiler extends QueryCompiler(ComposedData.schema) {
         Select("cities", Nil, Filter(Like(FieldPath(List("name")), namePattern, true), child)).rightIor
     }
   ))
-
-  val countryCurrencyJoin = (c: Cursor, q: Query) =>
-    (c.attribute("code"), q) match {
-      case (Ior.Right(countryCode: String), Select("currencies", _, child)) =>
-        Select("currencies", Nil, Filter(Eql(FieldPath(List("countryCode")), Const(countryCode)), child)).rightIor
-      case _ => mkErrorResult(s"Expected 'code' attribute at ${c.tpe}")
-    }
-
-  val componentElaborator = ComponentElaborator(
-    Mapping(QueryType, "country", "WorldComponent"),
-    Mapping(QueryType, "countries", "WorldComponent"),
-    Mapping(QueryType, "cities", "WorldComponent"),
-    Mapping(CountryType, "currencies", "CurrencyComponent", countryCurrencyJoin)
-  )
-
-  val phases = List(componentElaborator, selectElaborator)
 }
 
-object ComposedQueryInterpreter {
-  def fromTransactor[F[_]](xa: Transactor[F])
-    (implicit brkt: Bracket[F, Throwable], logger0: Logger[F]): ComposedQueryInterpreter[F] = {
-      val mapping: Map[String, QueryInterpreter[F]] = Map(
-        "WorldComponent"    -> WorldQueryInterpreter.fromTransactor(xa),
-        "CurrencyComponent" -> CurrencyQueryInterpreter[F]
-      )
-      new ComposedQueryInterpreter(mapping)
-  }
+object ComposedMapping {
+  def fromTransactor[F[_] : Sync : Logger](xa: Transactor[F]): ComposedMapping[F] =
+    new ComposedMapping[F](WorldMapping.fromTransactor(xa), CurrencyMapping[F])
 }

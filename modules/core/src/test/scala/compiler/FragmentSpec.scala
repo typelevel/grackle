@@ -89,11 +89,11 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val compiled = FragmentCompiler.compile(text)
+    val compiled = FragmentMapping.compiler.compile(text)
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentQueryInterpreter.run(compiled.right.get, FragmentData.schema.queryType)
+    val res = FragmentMapping.interpreter.run(compiled.right.get, FragmentMapping.schema.queryType)
     //println(res)
     assert(res == expectedResult)
   }
@@ -177,11 +177,11 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val compiled = FragmentCompiler.compile(text)
+    val compiled = FragmentMapping.compiler.compile(text)
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentQueryInterpreter.run(compiled.right.get, FragmentData.schema.queryType)
+    val res = FragmentMapping.interpreter.run(compiled.right.get, FragmentMapping.schema.queryType)
     //println(res)
     assert(res == expectedResult)
   }
@@ -206,15 +206,15 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val User = FragmentData.schema.ref("User")
-    val Page = FragmentData.schema.ref("Page")
+    val User = FragmentMapping.schema.ref("User")
+    val Page = FragmentMapping.schema.ref("Page")
 
     val expected =
       Select("profiles",
         Nil,
         Group(List(
           Select("id", Nil, Empty),
-          Introspect(FragmentData.schema, Select("__typename", Nil, Empty)),
+          Introspect(FragmentMapping.schema, Select("__typename", Nil, Empty)),
           Narrow(User, Select("name", Nil, Empty)),
           Narrow(Page, Select("title", Nil, Empty))
         ))
@@ -254,11 +254,11 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val compiled = FragmentCompiler.compile(text)
+    val compiled = FragmentMapping.compiler.compile(text)
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentQueryInterpreter.run(compiled.right.get, FragmentData.schema.queryType)
+    val res = FragmentMapping.interpreter.run(compiled.right.get, FragmentMapping.schema.queryType)
     //println(res)
     assert(res == expectedResult)
   }
@@ -278,8 +278,8 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val User = FragmentData.schema.ref("User")
-    val Page = FragmentData.schema.ref("Page")
+    val User = FragmentMapping.schema.ref("User")
+    val Page = FragmentMapping.schema.ref("Page")
 
     val expected =
       Select("profiles", Nil,
@@ -319,11 +319,11 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val compiled = FragmentCompiler.compile(text)
+    val compiled = FragmentMapping.compiler.compile(text)
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentQueryInterpreter.run(compiled.right.get, FragmentData.schema.queryType)
+    val res = FragmentMapping.interpreter.run(compiled.right.get, FragmentMapping.schema.queryType)
     //println(res)
     assert(res == expectedResult)
   }
@@ -358,16 +358,16 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val User = FragmentData.schema.ref("User")
-    val Page = FragmentData.schema.ref("Page")
+    val User = FragmentMapping.schema.ref("User")
+    val Page = FragmentMapping.schema.ref("Page")
 
     val expected =
       Group(List(
-        Rename("user", Select("user", Nil,
+        Select("user", Nil,
           Unique(Eql(FieldPath(List("id")), Const("1")),
             Select("favourite", Nil,
               Group(List(
-                Introspect(FragmentData.schema, Select("__typename", Nil, Empty)),
+                Introspect(FragmentMapping.schema, Select("__typename", Nil, Empty)),
                 Group(List(
                   Narrow(User, Select("id", Nil, Empty)),
                   Narrow(User, Select("name", Nil, Empty)))),
@@ -378,12 +378,12 @@ final class FragmentSuite extends CatsSuite {
               ))
             )
           )
-        )),
+        ),
         Rename("page", Select("user", Nil,
           Unique(Eql(FieldPath(List("id")), Const("2")),
             Select("favourite", Nil,
               Group(List(
-                Introspect(FragmentData.schema, Select("__typename", Nil, Empty)),
+                Introspect(FragmentMapping.schema, Select("__typename", Nil, Empty)),
                 Group(List(
                   Narrow(User, Select("id", Nil, Empty)),
                   Narrow(User, Select("name", Nil, Empty))
@@ -419,30 +419,47 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val compiled = FragmentCompiler.compile(text)
+    val compiled = FragmentMapping.compiler.compile(text)
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentQueryInterpreter.run(compiled.right.get, FragmentData.schema.queryType)
+    val res = FragmentMapping.interpreter.run(compiled.right.get, FragmentMapping.schema.queryType)
     //println(res)
     assert(res == expectedResult)
   }
 }
 
-object FragmentCompiler extends QueryCompiler(FragmentData.schema) {
-  val selectElaborator = new SelectElaborator(Map(
-    FragmentData.schema.ref("Query") -> {
-      case Select("user", List(Binding("id", IDValue(id))), child) =>
-        Select("user", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
-      case sel@Select("profiles", _, _) =>
-        sel.rightIor
-    }
-  ))
+object FragmentData {
+  sealed trait Profile {
+    def id: String
+  }
 
-  val phases = List(selectElaborator)
+  case class User(id: String, name: String, profilePic: String, friendIds: List[String], favouriteId: Option[String]) extends Profile {
+    def friends: List[User] =
+      friendIds.flatMap(fid => profiles.collect { case u: User if u.id == fid => u })
+    def mutualFriends: List[User] =
+      friendIds.flatMap(fid => profiles.collect { case u: User if u.id == fid && u.friendIds.contains(id) => u })
+    def favourite: Option[Profile] =
+      favouriteId.flatMap(id => profiles.find(_.id == id))
+  }
+
+  case class Page(id: String, title: String, likerIds: List[String]) extends Profile {
+    def likers: List[User] =
+      likerIds.flatMap(lid => profiles.collect { case u: User if u.id == lid => u })
+  }
+
+  val profiles = List(
+    User("1", "Alice", "A", List("2", "3"), Some("2")),
+    User("2", "Bob", "B", List("1"), Some("4")),
+    User("3", "Carol", "C", List("1", "2"), None),
+    Page("4", "GraphQL", List("1", "3")),
+    Page("5", "Scala", List("2"))
+  )
 }
 
-object FragmentData {
+object FragmentMapping extends ValueMapping[Id] {
+  import FragmentData._
+
   val schema =
     Schema(
       """
@@ -470,55 +487,55 @@ object FragmentData {
       """
     ).right.get
 
+  val QueryType = schema.ref("Query")
+  val ProfileType = schema.ref("Profile")
   val UserType = schema.ref("User")
   val PageType = schema.ref("Page")
 
-  sealed trait Profile {
-    def id: String
-  }
-  case class User(id: String, name: String, profilePic: String, friendIds: List[String], favouriteId: Option[String]) extends Profile {
-    def friends: List[User] =
-      friendIds.flatMap(fid => profiles.collect { case u: User if u.id == fid => u })
-    def mutualFriends: List[User] =
-      friendIds.flatMap(fid => profiles.collect { case u: User if u.id == fid && u.friendIds.contains(id) => u })
-    def favourite: Option[Profile] =
-      favouriteId.flatMap(id => profiles.find(_.id == id))
-  }
-  case class Page(id: String, title: String, likerIds: List[String]) extends Profile {
-    def likers: List[User] =
-      likerIds.flatMap(lid => profiles.collect { case u: User if u.id == lid => u })
-  }
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            ValueRoot("user", profiles.collect { case u: User => u }),
+            ValueRoot("profiles", profiles)
+          )
+      ),
+      ValueObjectMapping[Profile](
+        tpe = ProfileType,
+        fieldMappings =
+          List(
+            ValueField("id", _.id)
+          )
+      ),
+      ValueObjectMapping[User](
+        tpe = UserType,
+        fieldMappings =
+          List(
+            ValueField("name", _.name),
+            ValueField("profilePic", _.profilePic),
+            ValueField("friends", _.friends),
+            ValueField("mutualFriends", _.mutualFriends),
+            ValueField("favourite", _.favourite),
+          )
+      ),
+      ValueObjectMapping[Page](
+        tpe = PageType,
+        fieldMappings =
+          List(
+            ValueField("title", _.title),
+            ValueField("likers", _.likers)
+          )
+      )
+    )
 
-  val profiles = List(
-    User("1", "Alice", "A", List("2", "3"), Some("2")),
-    User("2", "Bob", "B", List("1"), Some("4")),
-    User("3", "Carol", "C", List("1", "2"), None),
-    Page("4", "GraphQL", List("1", "3")),
-    Page("5", "Scala", List("2"))
-  )
+  override val selectElaborator = new SelectElaborator(Map(
+    QueryType -> {
+      case Select("user", List(Binding("id", IDValue(id))), child) =>
+        Select("user", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
+      case sel@Select("profiles", _, _) =>
+        sel.rightIor
+    }
+  ))
 }
-
-import FragmentData._
-
-object FragmentQueryInterpreter extends DataTypeQueryInterpreter[Id](
-  {
-    case "user" =>
-      (ListType(FragmentData.schema.ref("User")), profiles.collect { case u: User => u })
-    case "profiles" =>
-      (ListType(FragmentData.schema.ref("Profile")), profiles)
-  },
-  {
-    case (p: Profile, "id")         => p.id
-    case (u: User, "name")          => u.name
-    case (u: User, "profilePic")    => u.profilePic
-    case (u: User, "friends")       => u.friends
-    case (u: User, "mutualFriends") => u.mutualFriends
-    case (u: User, "favourite")     => u.favourite
-    case (p: Page, "title")         => p.title
-    case (p: Page, "likers")        => p.likers
-  },
-  narrows = {
-    case (u: User, UserType) => u
-    case (p: Page, PageType) => p
-  }
-)

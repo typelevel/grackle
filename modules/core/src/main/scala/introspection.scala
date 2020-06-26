@@ -112,105 +112,153 @@ object Introspection {
       """
     ).right.get
 
+  val QueryType = schema.queryType
+  val __SchemaType = schema.ref("__Schema")
+  val __TypeType =  schema.ref("__Type")
+  val __FieldType =  schema.ref("__Field")
+  val __InputValueType =  schema.ref("__InputValue")
+  val __EnumValueType =  schema.ref("__EnumValue")
+  val __DirectiveType =  schema.ref("__Directive")
+
   object TypeKind extends Enumeration {
     val SCALAR, OBJECT, INTERFACE, UNION, ENUM, INPUT_OBJECT, LIST, NON_NULL = Value
   }
 
   case class NonNullType(tpe: Type)
 
-  val flipNullityDealias: PartialFunction[(Any, String), Any] = {
-    case (NullableType(tpe), field) => (tpe.dealias, field)
-    case (tpe: Type, field)         => (NonNullType(tpe), field)
-    case (other, field)             => (other, field)
+  val flipNullityDealias: PartialFunction[Type, Any] = {
+    case NullableType(tpe) => tpe.dealias
+    case tpe               => NonNullType(tpe)
   }
 
   val defaultTypes =
     schema.types.filterNot(_ =:= schema.queryType) ++
     List(BooleanType, IntType, FloatType, StringType, IDType)
 
-  def interpreter(schema: Schema): QueryInterpreter[Id] = {
-    val allTypes = schema.types ++ defaultTypes
+  def interpreter(targetSchema: Schema): QueryInterpreter[Id] =
+    new IntrospectionMapping(targetSchema).interpreter
 
-    new DataTypeQueryInterpreter[Id](
-      {
-        case "__schema" =>
-          (Introspection.schema.ref("__Schema"), schema)
-        case "__type" =>
-          (ListType(Introspection.schema.ref("__Type")), allTypes.map(_.nullable))
-      },
-      flipNullityDealias andThen {
-        case (_: Schema, "types")                => allTypes.map(_.nullable)
-        case (_: Schema, "queryType")            => schema.queryType.dealias.nullable
-        case (_: Schema, "mutationType")         => schema.mutationType.map(_.dealias.nullable)
-        case (_: Schema, "subscriptionType")     => schema.mutationType.map(_.dealias.nullable)
-        case (_: Schema, "directives")           => schema.directives
+  class IntrospectionMapping(targetSchema: Schema) extends ValueMapping[Id] {
+    val allTypes = targetSchema.types ++ defaultTypes
 
-        case (_: ScalarType, "kind")             => TypeKind.SCALAR
-        case (_: ObjectType, "kind")             => TypeKind.OBJECT
-        case (_: UnionType, "kind")              => TypeKind.UNION
-        case (_: InterfaceType, "kind")          => TypeKind.INTERFACE
-        case (_: EnumType, "kind")               => TypeKind.ENUM
-        case (_: InputObjectType, "kind")        => TypeKind.INPUT_OBJECT
-        case (_: ListType, "kind")               => TypeKind.LIST
-        case (_: NonNullType, "kind")            => TypeKind.NON_NULL
+    val schema = Introspection.schema
 
-        case (t: NamedType, "name")              => Some(t.name)
-        case (_: NonNullType, "name")            => None
-        case (_: Type, "name")                   => None
-
-        case (t: NamedType, "description")       => t.description
-        case (_: NonNullType, "description")     => None
-        case (_: Type, "description")            => None
-
-        case (t: TypeWithFields, "fields")       => Some(t.fields)
-        case (_: NonNullType, "fields")          => None
-        case (_: Type, "fields")                 => None
-
-        case (o: ObjectType, "interfaces")       => Some(o.interfaces.map(_.nullable))
-        case (_: NonNullType, "interfaces")      => None
-        case (_: Type, "interfaces")             => None
-
-        case (u: UnionType, "possibleTypes")     => Some(u.members.map(_.nullable))
-        case (u: InterfaceType, "possibleTypes") =>
-          Some(allTypes.collect {
-            case o: ObjectType if o.interfaces.exists(_ =:= u) => NullableType(o)
-          })
-        case (_: NonNullType, "possibleTypes")   => None
-        case (_: Type, "possibleTypes")          => None
-
-        case (e: EnumType, "enumValues")         => Some(e.enumValues)
-        case (_: NonNullType, "enumValues")      => None
-        case (_: Type, "enumValues")             => None
-
-        case (i: InputObjectType, "inputFields") => Some(i.inputFields)
-        case (_: Type, "inputFields")            => None
-
-        case (l: ListType, "ofType")             => Some(l.ofType)
-        case (NonNullType(t: Type), "ofType")    => Some(NullableType(t))
-        case (_: Type, "ofType")                 => None
-
-        case (f: Field, "name")                  => f.name
-        case (f: Field, "description")           => f.description
-        case (f: Field, "args")                  => f.args
-        case (f: Field, "type")                  => f.tpe.dealias
-        case (f: Field, "isDeprecated")          => f.isDeprecated
-        case (f: Field, "deprecationReason")     => f.deprecationReason
-
-        case (i: InputValue, "name")             => i.name
-        case (i: InputValue, "description")      => i.description
-        case (i: InputValue, "type")             => i.tpe.dealias
-        case (i: InputValue, "defaultValue")     => i.defaultValue.map(SchemaRenderer.renderValue)
-
-        case (e: EnumValue, "name")              => e.name
-        case (e: EnumValue, "description")       => e.description
-        case (e: EnumValue, "isDeprecated")      => e.isDeprecated
-        case (e: EnumValue, "deprecationReason") => e.deprecationReason
-
-        case (d: Directive, "name")              => d.name
-        case (d: Directive, "description")       => d.description
-        case (d: Directive, "locations")         => d.locations
-        case (d: Directive, "args")              => d.args
-      }
+    val typeMappings =
+      List(
+        ObjectMapping(
+          tpe = QueryType,
+          fieldMappings =
+            List(
+              ValueRoot("__schema",  targetSchema),
+              ValueRoot("__type", allTypes.map(_.nullable))
+            )
+        ),
+        ValueObjectMapping[Schema](
+          tpe = __SchemaType,
+          fieldMappings =
+            List(
+              ValueField("types", _ => allTypes.map(_.nullable)),
+              ValueField("queryType", _.queryType.dealias.nullable),
+              ValueField("mutationType", _.mutationType.map(_.dealias.nullable)),
+              ValueField("subscriptionType", _.mutationType.map(_.dealias.nullable)),
+              ValueField("directives", _.directives)
+            )
+        ),
+        ValueObjectMapping[Type](
+          tpe = __TypeType,
+          fieldMappings =
+            List(
+              ValueField("kind", flipNullityDealias andThen {
+                case _: ScalarType      => TypeKind.SCALAR
+                case _: ObjectType      => TypeKind.OBJECT
+                case _: UnionType       => TypeKind.UNION
+                case _: InterfaceType   => TypeKind.INTERFACE
+                case _: EnumType        => TypeKind.ENUM
+                case _: InputObjectType => TypeKind.INPUT_OBJECT
+                case _: ListType        => TypeKind.LIST
+                case _: NonNullType     => TypeKind.NON_NULL
+              }),
+              ValueField("name", flipNullityDealias andThen {
+                case nt: NamedType      => Some(nt.name)
+                case _ => None
+              }),
+              ValueField("description", flipNullityDealias andThen {
+                case nt: NamedType      => nt.description
+                case _ => None
+              }),
+              ValueField("fields", flipNullityDealias andThen {
+                case tf: TypeWithFields => Some(tf.fields)
+                case _ => None
+              }),
+              ValueField("interfaces", flipNullityDealias andThen {
+                case ot: ObjectType     => Some(ot.interfaces.map(_.nullable))
+                case _ => None
+              }),
+              ValueField("possibleTypes", flipNullityDealias andThen {
+                case u: UnionType       => Some(u.members.map(_.nullable))
+                case i: InterfaceType   =>
+                  Some(allTypes.collect {
+                    case o: ObjectType if o.interfaces.exists(_ =:= i) => NullableType(o)
+                  })
+                case _ => None
+              }),
+              ValueField("enumValues", flipNullityDealias andThen {
+                case e: EnumType        => Some(e.enumValues)
+                case _ => None
+              }),
+              ValueField("inputFields", flipNullityDealias andThen {
+                case i: InputObjectType => Some(i.inputFields)
+                case _ => None
+              }),
+              ValueField("ofType", flipNullityDealias andThen {
+                case l: ListType        => Some(l.ofType)
+                case NonNullType(t)     => Some(NullableType(t))
+                case _ => None
+              })
+            )
+        ),
+        ValueObjectMapping[Field](
+          tpe = __FieldType,
+          fieldMappings =
+            List(
+              ValueField("name", _.name),
+              ValueField("description", _.description),
+              ValueField("args", _.args),
+              ValueField("type", _.tpe.dealias),
+              ValueField("isDeprecated", _.isDeprecated),
+              ValueField("deprecationReason", _.deprecationReason)
+            )
+        ),
+        ValueObjectMapping[InputValue](
+          tpe = __InputValueType,
+          fieldMappings =
+            List(
+              ValueField("name", _.name),
+              ValueField("description", _.description),
+              ValueField("type", _.tpe.dealias),
+              ValueField("defaultValue", _.defaultValue.map(SchemaRenderer.renderValue))
+            )
+        ),
+        ValueObjectMapping[EnumValue](
+          tpe = __EnumValueType,
+          fieldMappings =
+            List(
+              ValueField("name", _.name),
+              ValueField("description", _.description),
+              ValueField("isDeprecated", _.isDeprecated),
+              ValueField("deprecationReason", _.deprecationReason)
+            )
+        ),
+        ValueObjectMapping[Directive](
+          tpe = __DirectiveType,
+          fieldMappings =
+            List(
+              ValueField("name", _.name),
+              ValueField("description", _.description),
+              ValueField("locations", _.locations),
+              ValueField("args", _.args)
+            )
+        )
     )
   }
 }

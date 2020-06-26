@@ -8,12 +8,26 @@ import cats.implicits._
 
 import edu.gemini.grackle._
 import Query._, Predicate._, Value._
-import QueryCompiler._, ComponentElaborator.Mapping
+import QueryCompiler._
 import QueryInterpreter.mkErrorResult
 
 /* Currency component */
 
 object CurrencyData {
+  case class Currency(
+    code: String,
+    exchangeRate: Double
+  )
+
+  val EUR = Currency("EUR", 1.12)
+  val GBP = Currency("GBP", 1.25)
+
+  val currencies = List(EUR, GBP)
+}
+
+object CurrencyMapping extends ValueMapping[Id] {
+  import CurrencyData._
+
   val schema =
     Schema(
       """
@@ -27,47 +41,55 @@ object CurrencyData {
       """
     ).right.get
 
-  case class Currency(
-    code: String,
-    exchangeRate: Double
-  )
-
-  val EUR = Currency("EUR", 1.12)
-  val GBP = Currency("GBP", 1.25)
-
-  val currencies = List(EUR, GBP)
-
+  val QueryType = schema.ref("Query")
   val CurrencyType = schema.ref("Currency")
-}
 
-import CurrencyData.{ Currency, CurrencyType, currencies }
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            ValueRoot("fx", currencies)
+          )
+      ),
+      ValueObjectMapping[Currency](
+        tpe = CurrencyType,
+        fieldMappings =
+          List(
+            ValueField("code", _.code),
+            ValueField("exchangeRate", _.exchangeRate)
+          )
+      )
+    )
 
-object CurrencyQueryInterpreter extends DataTypeQueryInterpreter[Id](
-  {
-    case "fx" => (ListType(CurrencyType), currencies)
-  },
-  {
-    case (c: Currency, "code")         => c.code
-    case (c: Currency, "exchangeRate") => c.exchangeRate
-  }
-)
-
-object CurrencyQueryCompiler extends QueryCompiler(CurrencyData.schema) {
-  val QueryType = CurrencyData.schema.ref("Query")
-
-  val selectElaborator = new SelectElaborator(Map(
+  override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("fx", List(Binding("code", StringValue(code))), child) =>
         Select("fx", Nil, Unique(Eql(FieldPath(List("code")), Const(code)), child)).rightIor
     }
   ))
-
-  val phases = List(selectElaborator)
 }
 
 /* Country component */
 
 object CountryData {
+  case class Country(
+    code: String,
+    name: String,
+    currencyCode: String
+  )
+
+  val DEU = Country("DEU", "Germany", "EUR")
+  val FRA = Country("FRA", "France", "EUR")
+  val GBR = Country("GBR", "United Kingdom", "GBP")
+
+  val countries = List(DEU, FRA, GBR)
+}
+
+object CountryMapping extends ValueMapping[Id] {
+  import CountryData._
+
   val schema =
     Schema(
       """
@@ -82,37 +104,30 @@ object CountryData {
       """
     ).right.get
 
-  case class Country(
-    code: String,
-    name: String,
-    currencyCode: String
-  )
-
-  val DEU = Country("DEU", "Germany", "EUR")
-  val FRA = Country("FRA", "France", "EUR")
-  val GBR = Country("GBR", "United Kingdom", "GBP")
-
-  val countries = List(DEU, FRA, GBR)
-
+  val QueryType = schema.ref("Query")
   val CountryType = schema.ref("Country")
-}
 
-import CountryData.{ Country, CountryType, countries }
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            ValueRoot("country", countries),
+            ValueRoot("countries", countries)
+          )
+      ),
+      ValueObjectMapping[Country](
+        tpe = CountryType,
+        fieldMappings =
+          List(
+            ValueField("code", _.code),
+            ValueField("name", _.name)
+          )
+      )
+    )
 
-object CountryQueryInterpreter extends DataTypeQueryInterpreter[Id](
-  {
-    case "country" | "countries"  => (ListType(CountryType), countries)
-  },
-  {
-    case (c: Country, "code") => c.code
-    case (c: Country, "name") => c.name
-  }
-)
-
-object CountryQueryCompiler extends QueryCompiler(CountryData.schema) {
-  val QueryType = CountryData.schema.ref("Query")
-
-  val selectElaborator = new SelectElaborator(Map(
+  override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("country", List(Binding("code", StringValue(code))), child) =>
         Select("country", Nil, Unique(Eql(FieldPath(List("code")), Const(code)), child)).rightIor
@@ -120,13 +135,11 @@ object CountryQueryCompiler extends QueryCompiler(CountryData.schema) {
         Select("countries", Nil, child).rightIor
     }
   ))
-
-  val phases = List(selectElaborator)
 }
 
 /* Composition */
 
-object ComposedData {
+object ComposedMapping extends SimpleMapping[Id] {
   val schema =
     Schema(
       """
@@ -146,15 +159,11 @@ object ComposedData {
         }
       """
     ).right.get
-}
 
-object ComposedQueryCompiler extends QueryCompiler(ComposedData.schema) {
-  import CountryData._
+  val QueryType = schema.ref("Query")
+  val CountryType = schema.ref("Country")
 
-  val QueryType = ComposedData.schema.ref("Query")
-  val CountryType = ComposedData.schema.ref("Country")
-
-  val selectElaborator =  new SelectElaborator(Map(
+  override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("fx", List(Binding("code", StringValue(code))), child) =>
         Select("fx", Nil, Unique(Eql(FieldPath(List("code")), Const(code)), child)).rightIor
@@ -165,26 +174,31 @@ object ComposedQueryCompiler extends QueryCompiler(ComposedData.schema) {
     }
   ))
 
-  val countryCurrencyJoin = (c: Cursor, q: Query) =>
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            Delegate("country", CountryMapping),
+            Delegate("countries", CountryMapping),
+            Delegate("fx", CurrencyMapping)
+          )
+        ),
+      ObjectMapping(
+        tpe = CountryType,
+        fieldMappings =
+          List(
+            Delegate("currency", CurrencyMapping, countryCurrencyJoin)
+          )
+      )
+    )
+
+  def countryCurrencyJoin(c: Cursor, q: Query): Result[Query] =
     (c.focus, q) match {
-      case (c: Country, Select("currency", _, child)) =>
+      case (c: CountryData.Country, Select("currency", _, child)) =>
         Select("fx", Nil, Unique(Eql(FieldPath(List("code")), Const(c.currencyCode)), child)).rightIor
       case _ =>
         mkErrorResult(s"Unexpected cursor focus type in countryCurrencyJoin")
     }
-
-  val componentElaborator = ComponentElaborator(
-    Mapping(QueryType, "country", "CountryComponent"),
-    Mapping(QueryType, "countries", "CountryComponent"),
-    Mapping(QueryType, "fx", "CurrencyComponent"),
-    Mapping(CountryType, "currency", "CurrencyComponent", countryCurrencyJoin)
-  )
-
-  val phases = List(componentElaborator, selectElaborator)
 }
-
-object ComposedQueryInterpreter extends
-  ComposedQueryInterpreter[Id](Map(
-    "CountryComponent"  -> CountryQueryInterpreter,
-    "CurrencyComponent" -> CurrencyQueryInterpreter
-  ))

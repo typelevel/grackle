@@ -5,7 +5,9 @@ package edu.gemini.grackle
 package doobie
 
 import java.sql.ResultSet
+import scala.util.matching.Regex
 
+import cats.effect.Sync
 import cats.implicits._
 import cats.kernel.Monoid
 import _root_.doobie.{ ConnectionIO, Fragment, Fragments, Get, Read }
@@ -13,38 +15,35 @@ import _root_.doobie.implicits._
 import _root_.doobie.enum.Nullability._
 import _root_.doobie.util.fragment.Elem.Arg
 import _root_.doobie.util.meta.Meta
-import io.circe.Encoder
+import _root_.doobie.util.transactor.Transactor
+import io.chrisdavenport.log4cats.Logger
+import io.circe.{ Encoder, Json }
 
 import QueryCompiler._, ComponentElaborator.TrivialJoin
-import DoobieMapping._, FieldMapping._
 import DoobiePredicate._
 import Predicate._
 import Query._
 import ScalarType._
 import QueryInterpreter.mkErrorResult
 
-trait DoobieMapping {
-  val objectMappings: List[ObjectMapping]
-  val leafMappings: List[LeafMapping[_]]
+trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
+  type Table = List[Row]
 
-  def objectMapping(tpe: Type): Option[ObjectMapping] = {
-    tpe match {
-      case nt: NamedType => objectMappings.find(_.tpe == nt.name)
-      case _ => None
+  val transactor: Transactor[F]
+  val logger: Logger[F]
+
+  import DoobieFieldMapping._
+
+  override def rootMapping(tpe: Type, fieldName: String): Option[RootMapping] =
+    super.rootMapping(schema.queryType, fieldName).map(_.withParent(tpe))
+
+  def doobieLeafMapping[T](tpe: Type): Option[DoobieLeafMapping[T]] =
+    leafMapping[T](tpe).collectFirst {
+      case dlm: DoobieLeafMapping[T] => dlm.asInstanceOf[DoobieLeafMapping[T]]
     }
-  }
-
-  def fieldMapping(tpe: Type, fieldName: String): Option[FieldMapping] =
-    for {
-      om <- objectMapping(tpe)
-      fm <- om.fieldMapping(fieldName)
-    } yield fm
-
-  def leafMapping[T](tpe: Type): Option[LeafMapping[T]] =
-    leafMappings.collectFirst { case lm if lm.tpe =:= tpe => lm.asInstanceOf[LeafMapping[T]] }
 
   def typeToGet(tpe: Type): (Get[_], NullabilityKnown) =
-    leafMapping[Any](tpe).map(lm => (lm.meta.get, NoNulls)).getOrElse(
+    doobieLeafMapping[Any](tpe).map(lm => (lm.meta.get, NoNulls)).getOrElse(
       tpe match {
         case NullableType(tpe) => (typeToGet(tpe)._1, Nullable)
         case IntType => (Get[Int], NoNulls)
@@ -56,17 +55,17 @@ trait DoobieMapping {
       }
     )
 
-  def attributeMapping(tpe: Type, attrName: String): Option[AttributeMapping] =
-    for {
-      om <- objectMapping(tpe)
-      am <- om.attributeMapping(attrName)
-    } yield am
+  def attributeMapping(tpe: Type, attrName: String): Option[DoobieAttribute] =
+    fieldMapping(tpe, attrName) match {
+      case Some(am: DoobieAttribute) => Some(am)
+      case _ => None
+    }
 
   def columnsForField(tpe: Type, fieldName: String): List[ColumnRef] = {
     val obj = tpe.underlyingObject
     fieldMapping(obj, fieldName) match {
-      case Some(cr: ColumnRef) => List(cr)
-      case Some(Subobject(joins, _)) => joins.map(_.parent) ++ joins.map(_.child)
+      case Some(DoobieField(_, cr, _)) => List(cr)
+      case Some(DoobieObject(_, Subobject(joins, _))) => joins.map(_.parent) ++ joins.map(_.child)
       case _ => Nil
     }
   }
@@ -74,7 +73,7 @@ trait DoobieMapping {
   def joinsForField(tpe: Type, fieldName: String): List[Join] = {
     val obj = tpe.underlyingObject
     fieldMapping(obj, fieldName) match {
-      case Some(Subobject(joins, _)) => joins
+      case Some(DoobieObject(_, Subobject(joins, _))) => joins
       case _ => Nil
     }
   }
@@ -82,7 +81,7 @@ trait DoobieMapping {
   def columnForAttribute(tpe: Type, attrName: String): Option[ColumnRef] = {
     val obj = tpe.underlyingObject
     attributeMapping(obj, attrName) match {
-      case Some(AttributeMapping(cr, _)) => Some(cr)
+      case Some(DoobieAttribute(_, cr, _, _)) => Some(cr)
       case _ => None
     }
   }
@@ -90,7 +89,7 @@ trait DoobieMapping {
   def primaryColumnForField(tpe: Type, fieldName: String): Option[ColumnRef] = {
     val obj = tpe.underlyingObject
     fieldMapping(obj, fieldName) match {
-      case Some(cr: ColumnRef) => Some(cr)
+      case Some(DoobieField(_, cr, _)) => Some(cr)
       case _ => None
     }
   }
@@ -109,10 +108,16 @@ trait DoobieMapping {
           columnForAttribute(parent, name)
     }
 
+  def key(om: ObjectMapping): List[ColumnRef] =
+    om.fieldMappings.collect {
+      case cm: DoobieField if cm.key => cm.columnRef
+      case am: DoobieAttribute if am.key => am.col
+    }
+
   def keyColumnsForType(tpe: Type): List[ColumnRef] = {
     val obj = tpe.underlyingObject
     objectMapping(obj) match {
-      case Some(om) => om.key
+      case Some(om) => key(om)
       case _ => Nil
     }
   }
@@ -143,10 +148,14 @@ trait DoobieMapping {
           if (isField(path)) {
             loop(mkSelects(path.path), obj, acc)
           } else {
-            val pcol = columnForAttribute(parent, name).getOrElse(sys.error(s"No attribute '$name' for type $parent"))
-            val keyCols = keyColumnsForType(obj)
-            val omt = objectMapping(obj).map(om => (om, obj)).toList
-            (pcol :: keyCols, List.empty[Join], List.empty[(Type, Predicate)], omt) |+| loop(mkSelects(prefix), obj, acc)
+            columnForAttribute(parent, name) match {
+              case Some(pcol) =>
+                val keyCols = keyColumnsForType(obj)
+                val omt = objectMapping(obj).map(om => (om, obj)).toList
+                (pcol :: keyCols, List.empty[Join], List.empty[(Type, Predicate)], omt) |+| loop(mkSelects(prefix), obj, acc)
+              case _ =>
+                loop(mkSelects(prefix), obj, acc)
+            }
           }
         }
 
@@ -181,7 +190,7 @@ trait DoobieMapping {
           queries.foldLeft(acc) {
             case (acc, sibling) => loop(sibling, obj, acc)
           }
-        case Empty | (_: Component) | (_: Introspect) | (_: Defer) | (_: UntypedNarrow) | (_: Skip) => acc
+        case Empty | Query.Component(_, _, _) | (_: Introspect) | (_: Defer) | (_: UntypedNarrow) | (_: Skip) => acc
       }
     }
 
@@ -221,18 +230,15 @@ trait DoobieMapping {
         object Target {
           def unapply(om: ObjectMapping): Option[(Boolean, (Get[_], NullabilityKnown))] =
             om.fieldMappings.collectFirst {
-              case (fieldName, `col`) if mappings.contains(om) =>
+              case DoobieField(fieldName, `col`, _) if mappings.contains(om) =>
                 val get = typeToGet(mappings(om).field(fieldName))
                 (isJoin(col), get)
-            } orElse {
-              om.attributeMappings.collectFirst {
-                case (_, AttributeMapping(`col`, get)) =>
-                  (isJoin(col), (get, NoNulls)) // support nullable attributes?
-              }
+              case DoobieAttribute(_, `col`, get, _) =>
+                (isJoin(col), (get, NoNulls)) // support nullable attributes?
             }
         }
 
-        (objectMappings.collectFirst {
+        (typeMappings.collectFirst {
           case Target(ij, get) => (ij, get)
         }).getOrElse(sys.error(s"No Get for $col"))
       }
@@ -240,52 +246,61 @@ trait DoobieMapping {
       columns.map(getForColumn)
     }
 
-    new MappedQuery(rootTable, columns, gets, predicates, orderedJoins, this)
-  }
-}
-
-object DoobieMapping {
-  case class ObjectMapping(
-    tpe: String,
-    key: List[ColumnRef],
-    fieldMappings: List[(String, FieldMapping)],
-    attributeMappings: List[(String, AttributeMapping)]
-  ) {
-    def fieldMapping(fieldName: String): Option[FieldMapping] =
-      fieldMappings.find(_._1 == fieldName).map(_._2)
-
-    def attributeMapping(attrName: String): Option[AttributeMapping] =
-      attributeMappings.find(_._1 == attrName).map(_._2)
+    new MappedQuery(rootTable, columns, gets, predicates, orderedJoins)
   }
 
-  case class AttributeMapping(col: ColumnRef, get: Get[_])
+  case class DoobieRoot(fieldName: String, rootTpe: Type = NoType) extends RootMapping {
+    def cursor(query: Query): F[Result[Cursor]] = {
+      val fieldTpe = rootTpe.field(fieldName)
+      val mapped = mapQuery(query, fieldTpe)
 
-  def Attr[T](col: ColumnRef)(implicit get: Get[T]): AttributeMapping =
-    new AttributeMapping(col, get)
+      val cursorType = fieldTpe.list
 
-  sealed trait FieldMapping
-  object FieldMapping {
-    case class ColumnRef(table: String, column: String) extends FieldMapping {
-      def toSql: String = s"$table.$column"
+      for {
+        table <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(transactor)
+      } yield DoobieCursor(cursorType, table, mapped).rightIor
     }
-    case class Subobject(joins: List[Join], stagingJoin: (Cursor, Query) => Result[Query] = TrivialJoin) extends FieldMapping
-
-    case class Join(parent: ColumnRef, child: ColumnRef) {
-      def normalize: Join = {
-        if (parent.table > child.table) this
-        else if (parent.table == child.table && parent.column >= child.column) this
-        else Join(child, parent)
-      }
-      def swap: Join = Join(child, parent)
-
-      def toSql: String = s"LEFT JOIN ${child.table} ON ${parent.toSql} = ${child.toSql}"
-    }
+    def withParent(tpe: Type): DoobieRoot =
+      copy(rootTpe = tpe)
   }
 
-  class LeafMapping[T](val tpe: Type, val encoder: Encoder[T], val meta: Meta[T])
-  object LeafMapping {
+  case class DoobieAttribute(fieldName: String, col: ColumnRef, get: Get[_], key: Boolean) extends FieldMapping {
+    def withParent(tpe: Type): FieldMapping = this
+  }
+
+  def DoobieAttribute[T](fieldName: String, col: ColumnRef, key: Boolean = false)(implicit get: Get[T]): DoobieAttribute =
+    new DoobieAttribute(fieldName, col, get, key)
+
+  sealed trait DoobieFieldMapping extends FieldMapping {
+    def withParent(tpe: Type): FieldMapping = this
+  }
+
+  object DoobieFieldMapping {
+    case class DoobieField(fieldName: String, columnRef: ColumnRef, key: Boolean = false) extends DoobieFieldMapping
+    case class DoobieObject(fieldName: String, subobject: Subobject) extends DoobieFieldMapping
+  }
+
+  class DoobieLeafMapping[T](val tpe: Type, val encoder: Encoder[T], val meta: Meta[T]) extends LeafMapping[T]
+  object DoobieLeafMapping {
     def apply[T](tpe: Type)(implicit encoder: Encoder[T], meta: Meta[T]) =
-      new LeafMapping(tpe, encoder, meta)
+      new DoobieLeafMapping(tpe, encoder, meta)
+  }
+
+  case class ColumnRef(table: String, column: String) {
+    def toSql: String = s"$table.$column"
+  }
+
+  case class Subobject(joins: List[Join], stagingJoin: (Cursor, Query) => Result[Query] = TrivialJoin)
+
+  case class Join(parent: ColumnRef, child: ColumnRef) {
+    def normalize: Join = {
+      if (parent.table > child.table) this
+      else if (parent.table == child.table && parent.column >= child.column) this
+      else Join(child, parent)
+    }
+    def swap: Join = Join(child, parent)
+
+    def toSql: String = s"LEFT JOIN ${child.table} ON ${parent.toSql} = ${child.toSql}"
   }
 
   case class MappedQuery(
@@ -293,8 +308,7 @@ object DoobieMapping {
     columns: List[ColumnRef],
     gets: List[(Boolean, (Get[_], NullabilityKnown))],
     predicates: List[(Type, Predicate)],
-    joins: List[Join],
-    mapping: DoobieMapping
+    joins: List[Join]
   ) {
     override def toString: String = {
       columns.toString
@@ -311,87 +325,51 @@ object DoobieMapping {
 
     def hasField(tpe: Type, fieldName: String): Boolean = {
       val obj = tpe.dealias
-      mapping.fieldMapping(obj, fieldName).map(_ => true).getOrElse(false)
-    }
-
-    def columnOfField(tpe: Type, fieldName: String): ColumnRef = {
-      val obj = tpe.dealias
-      val Some(col: ColumnRef) = mapping.fieldMapping(obj, fieldName)
-      col
+      fieldMapping(obj, fieldName).map(_ => true).getOrElse(false)
     }
 
     def selectField(row: Row, tpe: Type, fieldName: String): Any = {
       val obj = tpe.dealias
-      val Some(col: ColumnRef) = mapping.fieldMapping(obj, fieldName)
+      val Some(DoobieField(_, col: ColumnRef, _)) = fieldMapping(obj, fieldName)
       select(row, col)
     }
 
     def hasAttribute(tpe: Type, attrName: String): Boolean = {
       val obj = tpe.dealias
-      mapping.attributeMapping(obj, attrName).map(_ => true).getOrElse(false)
-    }
-
-    def columnOfAttribute(tpe: Type, attrName: String): ColumnRef = {
-      val obj = tpe.dealias
-      val Some(col: ColumnRef) = mapping.attributeMapping(obj, attrName).map(_.col)
-      col
+      attributeMapping(obj, attrName).map(_ => true).getOrElse(false)
     }
 
     def selectAttribute(row: Row, tpe: Type, attrName: String): Any = {
       val obj = tpe.dealias
-      val Some(col: ColumnRef) = mapping.attributeMapping(obj, attrName).map(_.col)
+      val Some(col: ColumnRef) = attributeMapping(obj, attrName).map(_.col)
       select(row, col)
     }
 
-    def hasSubobject(tpe: Type): Boolean = {
-      tpe.dealias match {
-        case nt: NamedType => mapping.objectMappings.exists(_.tpe == nt.name)
-        case _ => false
-      }
-    }
+    def hasSubobject(tpe: Type): Boolean = objectMapping(tpe).isDefined
 
     def group(table: Table, cols: List[ColumnRef]): List[Table] =
       table.groupBy(row => project(row, cols)).to(List).sortBy(_._1.toString).map(_._2)
 
     def group(table: Table, tpe: Type): List[Table] =
-      mapping.objectMapping(tpe) match {
-        case Some(om) if om.key.nonEmpty => group(table, om.key)
+      objectMapping(tpe) match {
+        case Some(om) if key(om).nonEmpty => group(table, key(om))
         case None => table.map(List(_))
       }
-
-    def rootCursorType(rootType: Type): Type = {
-      def loop(tpe: Type): Type =
-        tpe match {
-          case tpe@ListType(_) => tpe
-          case NullableType(tpe) => NullableType(loop(tpe))
-          case tpe => ListType(tpe)
-        }
-
-      loop(rootType)
-    }
 
     def fetch: ConnectionIO[Table] =
       fragment.query[Row](Row.mkRead(gets)).to[List]
 
-    def fragmentForPred(tpe: Type, pred: Predicate): Fragment = {
-      def term[T](x: Term[T], pt: Type): Fragment =
+    def fragmentForPred(tpe: Type, pred: Predicate): Option[Fragment] = {
+      def term[T](x: Term[T], pt: Type): Option[Fragment] =
         x match {
           case path: Path =>
-            mapping.primaryColumnForTerm(tpe, path) match {
-              case Some(col) => Fragment.const(s"${col.toSql}")
-              case None => Fragment.empty
-            }
-          case Const(value: String) => fr0"$value"
-          case Const(value: Int) => fr0"$value"
-          case Const(value: Double) => fr0"$value"
-          case Const(value: Boolean) => fr0"$value"
+            primaryColumnForTerm(tpe, path).map(col => Fragment.const(s"${col.toSql}"))
+          case Const(value: String) => Some(fr0"$value")
+          case Const(value: Int) => Some(fr0"$value")
+          case Const(value: Double) => Some(fr0"$value")
+          case Const(value: Boolean) => Some(fr0"$value")
           case Const(value) =>
-            mapping.leafMapping[Any](pt) match {
-              case Some(lm) =>
-                Fragment("?", List(Arg[Any](value, lm.meta.put)), None)
-              case _ =>
-                Fragment.empty
-            }
+            doobieLeafMapping[Any](pt).map(lm => Fragment("?", List(Arg[Any](value, lm.meta.put)), None))
         }
 
       def unify[T](x: Term[T], y: Term[T]): Type =
@@ -401,24 +379,33 @@ object DoobieMapping {
           case _ => NoType
         }
 
-      def loop(pred: Predicate): Fragment =
+      def loop(pred: Predicate): Option[Fragment] =
         pred match {
-          case And(x, y) => Fragments.and(loop(x), loop(y))
-          case Or(x, y) => Fragments.or(loop(x), loop(y))
-          case Not(x) => fr"NOT" ++ loop(x)
+          case And(x, y) => Some(Fragments.andOpt(loop(x), loop(y)))
+          case Or(x, y) => Some(Fragments.orOpt(loop(x), loop(y)))
+          case Not(x) => loop(x).map(x => fr"NOT" ++ x)
           case Eql(x, y) =>
             val pt = unify(x, y)
-            term(x, pt) ++ fr0" = "++ term(y, pt)
+            for {
+              x <- term(x, pt)
+              y <- term(y, pt)
+            } yield x ++ fr0" = "++ y
           case Contains(x, y) =>
             val pt = unify(x, y)
-            term(x, pt) ++ fr0" = "++ term(y, pt)
+            for {
+              x <- term(x, pt)
+              y <- term(y, pt)
+            } yield x ++ fr0" = "++ y
           case Lt(x, y) =>
             val pt = unify(x, y)
-            term(x, pt) ++ fr0" < "++ term(y, pt)
+            for {
+              x <- term(x, pt)
+              y <- term(y, pt)
+            } yield x ++ fr0" < "++ y
           case Like(x, pattern, caseInsensitive) =>
             val op = if(caseInsensitive) "ILIKE" else "LIKE"
-            term(x, StringType) ++ Fragment.const(s" $op ") ++ fr0"$pattern"
-          case _ => Fragment.empty
+            term(x, StringType).map(x => x ++ Fragment.const(s" $op ") ++ fr0"$pattern")
+          case _ => None
         }
 
       loop(pred)
@@ -428,7 +415,7 @@ object DoobieMapping {
       val cols = columns.map(_.toSql)
 
       val preds = predicates.map((fragmentForPred _).tupled)
-      val where = Fragments.whereAnd(preds: _*)
+      val where = Fragments.whereAndOpt(preds: _*)
 
       val select =
         Fragment.const0(
@@ -442,12 +429,12 @@ object DoobieMapping {
     }
   }
 
-  class StagingElaborator(mapping: DoobieMapping) extends Phase {
+  class StagingElaborator extends Phase {
     val stagingJoin = (c: Cursor, q: Query) => q match {
       case Select(fieldName, _, _) =>
         val obj = c.tpe.underlyingObject
 
-        val osj = mapping.fieldMapping(obj, fieldName).collect { case so: Subobject => so.stagingJoin }
+        val osj = fieldMapping(obj, fieldName).collect { case DoobieObject(_, so: Subobject) => so.stagingJoin }
 
         osj match {
           case Some(stagingJoin) => stagingJoin(c, q)
@@ -477,7 +464,7 @@ object DoobieMapping {
           case g@GroupList(queries)    => queries.traverse(q => loop(q, tpe, filtered)).map(eqs => g.copy(queries = eqs))
           case u@Unique(_, child)      => loop(child, tpe.nonNull, filtered + tpe.underlyingObject).map(ec => u.copy(child = ec))
           case f@Filter(_, child)      => loop(child, tpe.item, filtered + tpe.underlyingObject).map(ec => f.copy(child = ec))
-          case c: Component            => c.rightIor
+          case c@Query.Component(_, _, _) => c.rightIor
           case i: Introspect           => i.rightIor
           case d: Defer                => d.rightIor
           case Empty                   => Empty.rightIor
@@ -489,6 +476,176 @@ object DoobieMapping {
 
       loop(query, tpe, Set.empty)
     }
+  }
+
+  override def compilerPhases: List[QueryCompiler.Phase] = (new StagingElaborator) :: super.compilerPhases
+
+  case class DoobieCursor(val tpe: Type, val focus: Any, mapped: MappedQuery) extends Cursor {
+    def asTable: Result[Table] = focus match {
+      case table@((_: Row) :: _ | Nil) => table.asInstanceOf[Table].rightIor
+      case _ => mkErrorResult(s"Not a table")
+    }
+
+    def isUnstructured(tpe: Type): Boolean =
+      tpe match {
+        case NullableType(tpe) => isUnstructured(tpe)
+        case ListType(tpe) => isUnstructured(tpe)
+        case TypeRef(_, _) => tpe.dealias.isLeaf
+        case _: ScalarType => true
+        case _: EnumType => true
+        case _ => false
+      }
+
+    def isLeaf: Boolean = tpe.isLeaf
+
+    def asLeaf: Result[Json] =
+      leafMapping[Any](tpe).map(_.encoder(focus).rightIor).getOrElse(
+        focus match {
+          case s: String => Json.fromString(s).rightIor
+          case i: Int => Json.fromInt(i).rightIor
+          case d: Double => Json.fromDouble(d) match {
+              case Some(j) => j.rightIor
+              case None => mkErrorResult(s"Unrepresentable double %d")
+            }
+          case b: Boolean => Json.fromBoolean(b).rightIor
+
+          // This means we are looking at a column with no value because it's the result of a failed
+          // outer join. This is an implementation error.
+          case Row.FailedJoin => sys.error("Unhandled failed join.")
+
+          case _ => mkErrorResult("Not a leaf")
+        }
+      )
+
+    def isList: Boolean =
+      tpe match {
+        case ListType(_) => true
+        case _ => false
+      }
+
+    def asList: Result[List[Cursor]] =
+      if (!tpe.isList) mkErrorResult(s"Not a list: $tpe")
+      else {
+        val itemTpe = tpe.item.dealias
+        asTable.map { table =>
+
+          // The object mapping for `tpe`.
+          val objectMapping0: ObjectMapping =
+            objectMapping(itemTpe).getOrElse(sys.error(s"No ObjectMapping for $itemTpe"))
+
+          // If this mapping is a list of child objects then its fields came from an outer join. If
+          // there are no children then all keys defined in the mapping will have the `FailedJoin`
+          // value.
+          val isEmpty: Boolean =
+            key(objectMapping0).forall { cr =>
+              val ix = mapped.index(cr)
+              table.forall(r => r(ix) == Row.FailedJoin)
+            }
+
+          // Sanity check: isEmpty implies that we had zero rows, or one row with failed joins.
+          if (isEmpty)
+            assert(table.length <= 1)
+
+          // Done!
+          if (isEmpty) Nil
+          else mapped.group(table, itemTpe).map(table => copy(tpe = itemTpe, focus = table))
+        }
+      }
+
+    def isNullable: Boolean =
+      tpe match {
+        case NullableType(_) => true
+        case _ => false
+      }
+
+    def asNullable: Result[Option[Cursor]] =
+      (tpe, focus) match {
+        case (NullableType(_), None) => None.rightIor
+        case (NullableType(tpe), Some(v)) => Some(copy(tpe = tpe, focus = v)).rightIor
+        case (NullableType(tpe), _) => Some(copy(tpe = tpe)).rightIor // non-nullable column as nullable schema type (ok)
+        case _ => mkErrorResult("Not nullable")
+      }
+
+    def narrowsTo(subtpe: TypeRef): Boolean = false
+
+    def narrow(subtpe: TypeRef): Result[Cursor] =
+      mkErrorResult(s"Cannot narrow $tpe to $subtpe")
+
+    def hasField(fieldName: String): Boolean = {
+      val fieldTpe = tpe.field(fieldName)
+      if (fieldTpe.isLeaf)
+        mapped.hasField(tpe, fieldName)
+      else
+        mapped.hasSubobject(fieldTpe.underlyingObject)
+    }
+
+    def field(fieldName: String): Result[Cursor] = {
+      val fieldTpe = tpe.field(fieldName)
+      fieldMapping(tpe.underlyingObject, fieldName) match {
+        case Some(CursorField(_, f, _)) =>
+          f(this).map(res => copy(tpe = fieldTpe, focus = res))
+        case _ =>
+          if (isUnstructured(fieldTpe))
+            asTable.map(table => copy(tpe = fieldTpe, focus = mapped.selectField(table.head, tpe, fieldName)))
+          else
+            copy(tpe = fieldTpe).rightIor
+          }
+    }
+
+    def hasAttribute(attributeName: String): Boolean =
+      fieldMapping(tpe, attributeName) match {
+        case Some(CursorAttribute(_, _)) => true
+        case _ => mapped.hasAttribute(tpe, attributeName)
+      }
+
+    def attribute(attributeName: String): Result[Any] =
+      fieldMapping(tpe, attributeName) match {
+        case Some(CursorAttribute(_, f)) => f(this)
+        case _ =>
+          asTable.map(table => mapped.selectAttribute(table.head, tpe, attributeName))
+      }
+  }
+}
+
+object DoobiePredicate {
+  def paths(pred: Predicate): List[Path] = {
+    def path[T](term: Term[T]): List[Path] =
+      term match {
+        case p: Path => List(p)
+        case _ => Nil
+      }
+    pred match {
+      case And(x, y) => paths(x) ++ paths(y)
+      case Or(x, y) => paths(x) ++ paths(y)
+      case Not(x) => paths(x)
+      case Eql(x, y) => path(x) ++ path(y)
+      case Contains(x, y) => path(x) ++ path(y)
+      case Lt(x, y) => path(x) ++ path(y)
+      case Matches(x, _) => path(x)
+      case Like(x, _, _) => path(x)
+      case _ => Nil
+    }
+  }
+
+  def isField(p: Path): Boolean =
+    p match {
+      case FieldPath(_) => true
+      case _ => false
+    }
+
+  def likeToRegex(pattern: String, caseInsensitive: Boolean): Regex = {
+    val csr = ("^"+pattern.replace("%", ".*").replace("_", ".")+"$")
+    (if (caseInsensitive) s"(?i:$csr)" else csr).r
+  }
+
+  case class Like(x: Term[String], pattern: String, caseInsensitive: Boolean) extends Prop {
+    lazy val r = likeToRegex(pattern, caseInsensitive)
+
+    def apply(c: Cursor): Boolean =
+      x(c) match {
+        case List(x0) => r.matches(x0)
+        case _ => false
+      }
   }
 }
 

@@ -170,10 +170,7 @@ object QueryParser {
  * applies a collection of transformation phases in sequence, yielding a
  * query algebra term which can be directly interpreted.
  */
-abstract class QueryCompiler(schema: Schema) {
-  /** The phase of this compiler */
-  val phases: List[Phase]
-
+class QueryCompiler(schema: Schema, phases: List[Phase]) {
   /**
    * Compiles the GraphQL query `text` to a query algebra term which
    * can be directly executed.
@@ -434,15 +431,15 @@ object QueryCompiler {
    *    interpreter the subquery can be parameterised with values derived
    *    from the parent query.
    */
-  class ComponentElaborator private (mapping: Map[(Type, String), (String, (Cursor, Query) => Result[Query])]) extends Phase {
+  class ComponentElaborator[F[_]] private (cmapping: Map[(Type, String), (Mapping[F], (Cursor, Query) => Result[Query])]) extends Phase {
     override def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] =
       query match {
         case PossiblyRenamedSelect(Select(fieldName, args, child), resultName) =>
           tpe.withUnderlyingField(fieldName) { childTpe =>
-            schema.ref(tpe.underlyingObject).flatMap(ref => mapping.get((ref, fieldName))) match {
-              case Some((cid, join)) =>
+            schema.ref(tpe.underlyingObject).flatMap(ref => cmapping.get((ref, fieldName))) match {
+              case Some((mapping, join)) =>
                 transform(child, env, schema, childTpe).map { elaboratedChild =>
-                  Wrap(resultName, Component(cid, join, PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)))
+                  Wrap(resultName, Component(mapping, join, PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)))
                 }
               case None =>
                 transform(child, env, schema, childTpe).map { elaboratedChild =>
@@ -458,9 +455,9 @@ object QueryCompiler {
   object ComponentElaborator {
     val TrivialJoin = (_: Cursor, q: Query) => q.rightIor
 
-    case class Mapping(tpe: TypeRef, fieldName: String, componentId: String, join: (Cursor, Query) => Result[Query] = TrivialJoin)
+    case class ComponentMapping[F[_]](tpe: TypeRef, fieldName: String, mapping: Mapping[F], join: (Cursor, Query) => Result[Query] = TrivialJoin)
 
-    def apply(mappings: Mapping*): ComponentElaborator =
-      new ComponentElaborator(mappings.map(m => ((m.tpe, m.fieldName), (m.componentId, m.join))).toMap)
+    def apply[F[_]](mappings: List[ComponentMapping[F]]): ComponentElaborator[F] =
+      new ComponentElaborator(mappings.map(m => ((m.tpe, m.fieldName), (m.mapping, m.join))).toMap)
   }
 }

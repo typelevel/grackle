@@ -60,9 +60,9 @@ object StarWarsService {
   def service[F[_]](implicit F: Applicative[F]): StarWarsService[F] =
     new StarWarsService[F]{
       def runQuery(op: Option[String], vars: Option[Json], query: String): F[Json] =
-        StarWarsQueryCompiler.compile(query, vars) match {
+        StarWarsMapping.compiler.compile(query, vars) match {
           case Ior.Right(compiledQuery) =>
-            StarWarsQueryInterpreter.run(compiledQuery, StarWarsData.QueryType).pure[F]
+            StarWarsMapping.interpreter.run(compiledQuery, StarWarsMapping.QueryType).pure[F]
           case invalid =>
             QueryInterpreter.mkInvalidResponse(invalid).pure[F]
         }

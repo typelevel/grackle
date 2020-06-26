@@ -27,8 +27,8 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
-    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsData.schema.queryType)
+    val compiledQuery = StarWarsMapping.compiler.compile(query).right.get
+    val res = StarWarsMapping.interpreter.run(compiledQuery, StarWarsMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -55,8 +55,8 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
-    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsData.schema.queryType)
+    val compiledQuery = StarWarsMapping.compiler.compile(query).right.get
+    val res = StarWarsMapping.interpreter.run(compiledQuery, StarWarsMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -98,8 +98,8 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
-    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsData.schema.queryType)
+    val compiledQuery = StarWarsMapping.compiler.compile(query).right.get
+    val res = StarWarsMapping.interpreter.run(compiledQuery, StarWarsMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -167,8 +167,8 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
-    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsData.schema.queryType)
+    val compiledQuery = StarWarsMapping.compiler.compile(query).right.get
+    val res = StarWarsMapping.interpreter.run(compiledQuery, StarWarsMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -193,8 +193,8 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
-    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsData.schema.queryType)
+    val compiledQuery = StarWarsMapping.compiler.compile(query).right.get
+    val res = StarWarsMapping.interpreter.run(compiledQuery, StarWarsMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)
@@ -219,8 +219,8 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
-    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsData.schema.queryType)
+    val compiledQuery = StarWarsMapping.compiler.compile(query).right.get
+    val res = StarWarsMapping.interpreter.run(compiledQuery, StarWarsMapping.schema.queryType)
 
     assert(res == expected)
   }
@@ -250,8 +250,8 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsQueryCompiler.compile(query).right.get
-    val res = StarWarsQueryInterpreter.run(compiledQuery, StarWarsData.schema.queryType)
+    val compiledQuery = StarWarsMapping.compiler.compile(query).right.get
+    val res = StarWarsMapping.interpreter.run(compiledQuery, StarWarsMapping.schema.queryType)
     //println(res)
 
     assert(res == expected)

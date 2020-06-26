@@ -3,9 +3,11 @@
 
 package edu.gemini.grackle
 
+import scala.reflect.{classTag, ClassTag}
+
 import cats.data.Ior
 import cats.implicits._
-import io.circe.{Encoder, Json}
+import io.circe.Json
 
 import QueryInterpreter.{ mkErrorResult, mkOneError }
 
@@ -18,6 +20,17 @@ trait Cursor {
   def focus: Any
   /** The GraphQL type of the value at the position represented by this `Cursor`. */
   def tpe: Type
+
+  /**
+   * Yield the value at this `Cursor` as a value of type `T` if possible,
+   * an error or the left hand side otherwise.
+   */
+  def as[T: ClassTag]: Result[T] =
+    if (classTag[T].runtimeClass.isInstance(focus))
+      focus.asInstanceOf[T].rightIor
+    else
+      mkErrorResult(s"Expected value of type ${classTag[T]} for focus of type $tpe, found $focus")
+
 
   /** Is the value at this `Cursor` of a scalar or enum type? */
   def isLeaf: Boolean
@@ -69,6 +82,13 @@ trait Cursor {
    */
   def field(fieldName: String): Result[Cursor]
 
+  /**
+   * Yield the value of the field `fieldName` of this `Cursor` as a value of
+   * type `T` if possible, an error or the left hand side otherwise.
+   */
+  def fieldAs[T: ClassTag](fieldName: String): Result[T] =
+    field(fieldName).flatMap(_.as[T])
+
   /** Does the value at this `Cursor` have an attribute named `attributeName`? */
   def hasAttribute(attributeName: String): Boolean
 
@@ -77,6 +97,18 @@ trait Cursor {
    * `Cursor`, or an error on the left hand side if there is no such attribute.
    */
   def attribute(attributeName: String): Result[Any]
+
+  /**
+   * Yield the value of the attribute `attributeName` of this `Cursor` as a
+   * value of type `T` if possible, an error or the left hand side otherwise.
+   */
+  def attributeAs[T: ClassTag](attributeName: String): Result[T] =
+    attribute(attributeName).flatMap { attr =>
+      if (classTag[T].runtimeClass.isInstance(attr))
+        attr.asInstanceOf[T].rightIor
+      else
+        mkErrorResult(s"Expected value of type ${classTag[T]} for field '$attributeName' found $attr")
+    }
 
   /**
    * Does the possibly nullable value at this `Cursor` have an attributed named
@@ -199,165 +231,28 @@ trait Cursor {
    */
   def attrListPath(fns: List[String]): Result[List[Any]] = {
     fns match {
-    case Nil => mkOneError("Unresolved path").leftIor
-    case List(attrName) if hasAttribute(attrName) =>
-      attribute(attrName).map(List(_))
-    case fieldName :: rest =>
-      if (isNullable)
-        asNullable match {
-          case Ior.Right(Some(c)) => c.attrListPath(fns)
-          case Ior.Right(None) => Nil.rightIor
-          case Ior.Left(es) => es.leftIor
-          case Ior.Both(es, _) => es.leftIor
-        }
-      else if (isList)
-        asList match {
-          case Ior.Right(cs) => cs.flatTraverse(_.attrListPath(fns))
-          case other => other
-        }
-      else
-        field(fieldName) match {
-          case Ior.Right(c) => c.attrListPath(rest)
-          case Ior.Left(es) => es.leftIor
-          case Ior.Both(es, _) => es.leftIor
-        }
-  }
-  }
-}
-
-trait CursorBuilder[T] {
-  def build(focus: T, tpe: Type): Result[Cursor]
-}
-
-object CursorBuilder {
-  def apply[T](implicit cb: CursorBuilder[T]): CursorBuilder[T] = cb
-
-  implicit val stringCursorBuilder: CursorBuilder[String] =
-    new CursorBuilder[String] {
-      def build(focus: String, tpe: Type): Result[Cursor] =
-        new PrimitiveCursor(focus, tpe) {
-          override def asLeaf: Result[Json] = Json.fromString(focus).rightIor
-        }.rightIor
-    }
-  implicit val intCursorBuilder: CursorBuilder[Int] =
-    new CursorBuilder[Int] {
-      def build(focus: Int, tpe: Type): Result[Cursor] =
-        new PrimitiveCursor(focus, tpe) {
-          override def asLeaf: Result[Json] = Json.fromInt(focus).rightIor
-        }.rightIor
-    }
-  implicit val longCursorBuilder: CursorBuilder[Long] =
-    new CursorBuilder[Long] {
-      def build(focus: Long, tpe: Type): Result[Cursor] =
-        new PrimitiveCursor(focus, tpe) {
-          override def asLeaf: Result[Json] = Json.fromLong(focus).rightIor
-        }.rightIor
-    }
-  implicit val floatCursorBuilder: CursorBuilder[Float] =
-    new CursorBuilder[Float] {
-      def build(focus: Float, tpe: Type): Result[Cursor] =
-        new PrimitiveCursor(focus, tpe) {
-          override def asLeaf: Result[Json] =
-            Json.fromFloat(focus).toRightIor(mkOneError(s"Unrepresentable float %focus"))
-        }.rightIor
-    }
-  implicit val doubleCursorBuilder: CursorBuilder[Double] =
-    new CursorBuilder[Double] {
-      def build(focus: Double, tpe: Type): Result[Cursor] =
-        new PrimitiveCursor(focus, tpe) {
-          override def asLeaf: Result[Json] =
-            Json.fromDouble(focus).toRightIor(mkOneError(s"Unrepresentable double %focus"))
-        }.rightIor
-    }
-  implicit val booleanCursorBuilder: CursorBuilder[Boolean] =
-    new CursorBuilder[Boolean] {
-      def build(focus: Boolean, tpe: Type): Result[Cursor] =
-        new PrimitiveCursor(focus, tpe) {
-          override def asLeaf: Result[Json] = Json.fromBoolean(focus).rightIor
-        }.rightIor
-    }
-  implicit def enumCursorBuilder[T <: Enumeration#Value]: CursorBuilder[T] =
-    new CursorBuilder[T] {
-      def build(focus: T, tpe: Type): Result[Cursor] =
-        new PrimitiveCursor(focus, tpe) {
-          override def asLeaf: Result[Json] = Json.fromString(focus.toString).rightIor
-        }.rightIor
-    }
-
-  implicit def optionCursorBuiler[T](implicit elemBuilder: CursorBuilder[T]): CursorBuilder[Option[T]] =
-    new CursorBuilder[Option[T]] {
-      def build(focus0: Option[T], tpe0: Type): Result[Cursor] =
-        new AbstractCursor[Option[T]] {
-          def focus = focus0
-          def tpe = tpe0
-
-          override def isNullable: Boolean = true
-          override def asNullable: Result[Option[Cursor]] = {
-            val elemTpe = tpe.nonNull
-            focus.traverse(elem => elemBuilder.build(elem, elemTpe))
+      case Nil => mkOneError("Unresolved path").leftIor
+      case List(attrName) if hasAttribute(attrName) =>
+        attribute(attrName).map(List(_))
+      case fieldName :: rest =>
+        if (isNullable)
+          asNullable match {
+            case Ior.Right(Some(c)) => c.attrListPath(fns)
+            case Ior.Right(None) => Nil.rightIor
+            case Ior.Left(es) => es.leftIor
+            case Ior.Both(es, _) => es.leftIor
           }
-        }.rightIor
-    }
-
-  implicit def listCursorBuiler[T](implicit elemBuilder: CursorBuilder[T]): CursorBuilder[List[T]] =
-    new CursorBuilder[List[T]] {
-      def build(focus0: List[T], tpe0: Type): Result[Cursor] =
-        new AbstractCursor[List[T]] {
-          def focus = focus0
-          def tpe = tpe0
-
-          override def isList: Boolean = true
-          override def asList: Result[List[Cursor]] = {
-            val elemTpe = tpe.item
-            focus.traverse(elem => elemBuilder.build(elem, elemTpe))
+        else if (isList)
+          asList match {
+            case Ior.Right(cs) => cs.flatTraverse(_.attrListPath(fns))
+            case other => other
           }
-        }.rightIor
+        else
+          field(fieldName) match {
+            case Ior.Right(c) => c.attrListPath(rest)
+            case Ior.Left(es) => es.leftIor
+            case Ior.Both(es, _) => es.leftIor
+          }
     }
-
-  class LeafCursor[T](val focus: T, val tpe: Type, encoder: Encoder[T]) extends AbstractCursor[T] {
-    override def isLeaf: Boolean = true
-    override def asLeaf: Result[Json] = encoder(focus).rightIor
   }
-
-  implicit def fromEncoder[T](implicit encoder: Encoder[T]): CursorBuilder[T] =
-    new CursorBuilder[T] {
-      def build(focus: T, tpe: Type): Result[Cursor] =
-        new LeafCursor(focus, tpe, encoder).rightIor
-    }
-}
-
-abstract class AbstractCursor[T] extends Cursor {
-  def isLeaf: Boolean = false
-
-  def asLeaf: Result[Json] =
-    mkErrorResult(s"Expected Scalar type, found $tpe for focus ${focus}")
-
-  def isList: Boolean = false
-
-  def asList: Result[List[Cursor]] =
-    mkErrorResult(s"Expected List type, found $tpe")
-
-  def isNullable: Boolean = false
-
-  def asNullable: Result[Option[Cursor]] =
-    mkErrorResult(s"Expected Nullable type, found $focus for $tpe")
-
-  def narrowsTo(subtpe: TypeRef): Boolean = false
-
-  def narrow(subtpe: TypeRef): Result[Cursor] =
-    mkErrorResult(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
-
-  def hasField(fieldName: String): Boolean = false
-
-  def field(fieldName: String): Result[Cursor] =
-    mkErrorResult(s"No field '$fieldName' for type $tpe")
-
-  def hasAttribute(attributeName: String): Boolean = false
-
-  def attribute(attributeName: String): Result[Any] =
-    mkErrorResult(s"No attribute '$attributeName' for type $tpe")
-}
-
-abstract class PrimitiveCursor[T](val focus: T, val tpe: Type) extends AbstractCursor[T] {
-  override def isLeaf: Boolean = true
 }

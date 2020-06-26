@@ -3,13 +3,14 @@
 
 package compiler
 
+import cats.Id
 import cats.data.Ior
 import cats.implicits._
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle._
 import Query._, Predicate._, Value._
-import QueryCompiler._, ComponentElaborator.{ Mapping, TrivialJoin }
+import QueryCompiler._, ComponentElaborator.TrivialJoin
 
 final class CompilerSuite extends CatsSuite {
   test("simple query") {
@@ -163,7 +164,7 @@ final class CompilerSuite extends CatsSuite {
           )
       )
 
-    val res = SimpleCompiler.compile(text)
+    val res = SimpleMapping.compiler.compile(text)
 
     assert(res == Ior.Right(expected))
   }
@@ -187,17 +188,17 @@ final class CompilerSuite extends CatsSuite {
 
     val expected =
       Wrap("componenta",
-        Component("ComponentA", TrivialJoin,
+        Component(ComponentA, TrivialJoin,
           Select("componenta", Nil,
             Select("fielda1", Nil) ~
             Select("fielda2", Nil,
               Wrap("componentb",
-                Component("ComponentB", TrivialJoin,
+                Component(ComponentB, TrivialJoin,
                   Select("componentb", Nil,
                     Select("fieldb1", Nil) ~
                     Select("fieldb2", Nil,
                       Wrap("componentc",
-                        Component("ComponentC", TrivialJoin,
+                        Component(ComponentC, TrivialJoin,
                           Select("componentc", Nil, Empty)
                         )
                       )
@@ -210,13 +211,13 @@ final class CompilerSuite extends CatsSuite {
         )
       )
 
-    val res = ComposedCompiler.compile(text)
+    val res = ComposedMapping.compiler.compile(text)
 
     assert(res == Ior.Right(expected))
   }
 }
 
-object SimpleData {
+object SimpleMapping {
   val schema =
     Schema(
       """
@@ -230,20 +231,29 @@ object SimpleData {
         }
       """
     ).right.get
-}
 
-object SimpleCompiler extends QueryCompiler(SimpleData.schema) {
+  val QueryType = schema.ref("Query")
+
   val selectElaborator = new SelectElaborator(Map(
-    SimpleData.schema.ref("Query") -> {
+    QueryType -> {
       case Select("character", List(Binding("id", StringValue(id))), child) =>
         Unique(Eql(FieldPath(List("id")), Const(id)), child).rightIor
     }
   ))
 
-  val phases = List(selectElaborator)
+  val compiler = new QueryCompiler(schema, List(selectElaborator))
 }
 
-object ComposedData {
+trait DummyComponent extends SimpleMapping[Id] {
+  val schema = Schema("type Query {}").right.get
+  val typeMappings = Nil
+}
+
+object ComponentA extends DummyComponent
+object ComponentB extends DummyComponent
+object ComponentC extends DummyComponent
+
+object ComposedMapping extends SimpleMapping[Id] {
   val schema =
     Schema(
       """
@@ -268,14 +278,33 @@ object ComposedData {
         }
       """
     ).right.get
-}
 
-object ComposedCompiler extends QueryCompiler(ComposedData.schema) {
-  val componentElaborator = ComponentElaborator(
-    Mapping(ComposedData.schema.ref("Query"), "componenta", "ComponentA"),
-    Mapping(ComposedData.schema.ref("FieldA2"), "componentb", "ComponentB"),
-    Mapping(ComposedData.schema.ref("FieldB2"), "componentc", "ComponentC")
-  )
+  val QueryType = schema.ref("Query")
+  val FieldA2Type = schema.ref("FieldA2")
+  val FieldB2Type = schema.ref("FieldB2")
 
-  val phases = List(componentElaborator)
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            Delegate("componenta", ComponentA)
+          )
+      ),
+      ObjectMapping(
+        tpe = FieldA2Type,
+        fieldMappings =
+          List(
+            Delegate("componentb", ComponentB)
+          )
+      ),
+      ObjectMapping(
+        tpe = FieldB2Type,
+        fieldMappings =
+          List(
+            Delegate("componentc", ComponentC)
+          )
+      )
+    )
 }

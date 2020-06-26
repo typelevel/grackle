@@ -13,55 +13,9 @@ import QueryCompiler._
 import QueryInterpreter.{ mkErrorResult, mkOneError }
 import generic._, semiauto._
 
-import StarWarsData._
-
 // The types and values for the in-memory Star Wars example.
-// These are all ordinary Scala types with no Grackle dependencies.
-//
 object StarWarsData {
-  // #schema
-  val schema =
-    Schema(
-      """
-        type Query {
-           hero(episode: Episode!): Character!
-           character(id: ID!): Character
-           human(id: ID!): Human
-           droid(id: ID!): Droid
-         }
-         enum Episode {
-           NEWHOPE
-           EMPIRE
-           JEDI
-         }
-         interface Character {
-           id: String!
-           name: String
-           friends: [Character!]
-           appearsIn: [Episode!]
-         }
-         type Human implements Character {
-           id: String!
-           name: String
-           friends: [Character!]
-           appearsIn: [Episode!]
-           homePlanet: String
-         }
-         type Droid implements Character {
-           id: String!
-           name: String
-           friends: [Character!]
-           appearsIn: [Episode!]
-           primaryFunction: String
-         }
-      """
-    ).right.get
-  // #schema
-
-  val QueryType = schema.ref("Query")
-  val CharacterType = schema.ref("Character")
-  val HumanType = schema.ref("Human")
-  val DroidType = schema.ref("Droid")
+  import StarWarsMapping.{CharacterType, DroidType, HumanType}
 
   // #model_types
   object Episode extends Enumeration {
@@ -77,7 +31,7 @@ object StarWarsData {
 
   object Character {
     implicit val cursorBuilder: CursorBuilder[Character] =
-      deriveInterfaceCursorBuilder[Character]
+      deriveInterfaceCursorBuilder[Character](CharacterType)
   }
 
   case class Human(
@@ -90,7 +44,8 @@ object StarWarsData {
 
   object Human {
     implicit val cursorBuilder: CursorBuilder[Human] =
-      deriveObjectCursorBuilder[Human].transformField("friends")(resolveFriends)
+      deriveObjectCursorBuilder[Human](HumanType)
+        .transformField("friends")(resolveFriends)
   }
 
   case class Droid(
@@ -103,7 +58,8 @@ object StarWarsData {
 
   object Droid {
     implicit val cursorBuilder: CursorBuilder[Droid] =
-      deriveObjectCursorBuilder[Droid].transformField("friends")(resolveFriends)
+      deriveObjectCursorBuilder[Droid](DroidType)
+        .transformField("friends")(resolveFriends)
   }
 
   def resolveFriends(c: Character): Result[Option[List[Character]]] =
@@ -181,13 +137,77 @@ object StarWarsData {
     EMPIRE -> lukeSkywalker,
     JEDI -> r2d2
   )
+
 }
 
-object StarWarsQueryCompiler extends QueryCompiler(schema) {
+object StarWarsMapping extends GenericMapping[Id] {
+  import StarWarsData.{characters, hero, Droid, Episode, Human}
+
+  // #schema
+  val schema =
+    Schema(
+      """
+        type Query {
+           hero(episode: Episode!): Character!
+           character(id: ID!): Character
+           human(id: ID!): Human
+           droid(id: ID!): Droid
+         }
+         enum Episode {
+           NEWHOPE
+           EMPIRE
+           JEDI
+         }
+         interface Character {
+           id: String!
+           name: String
+           friends: [Character!]
+           appearsIn: [Episode!]
+         }
+         type Human implements Character {
+           id: String!
+           name: String
+           friends: [Character!]
+           appearsIn: [Episode!]
+           homePlanet: String
+         }
+         type Droid implements Character {
+           id: String!
+           name: String
+           friends: [Character!]
+           appearsIn: [Episode!]
+           primaryFunction: String
+         }
+      """
+    ).right.get
+  // #schema
+
+  val QueryType = schema.ref("Query")
+  val EpisodeType = schema.ref("Episode")
+  val CharacterType = schema.ref("Character")
+  val HumanType = schema.ref("Human")
+  val DroidType = schema.ref("Droid")
+
+  val typeMappings =
+    List(
+      // #root
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            GenericRoot("hero", characters),
+            GenericRoot("character", characters),
+            GenericRoot("human", characters.collect { case h: Human => h }),
+            GenericRoot("droid", characters.collect { case d: Droid => d })
+          )
+      )
+      // #root
+    )
+
   // #elaborator
-  val selectElaborator = new SelectElaborator(Map(
+  override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
-      // The hero selector take an Episode argument and yields a single value. We use the
+      // The hero selector takes an Episode argument and yields a single value. We use the
       // Unique operator to pick out the target using the FieldEquals predicate.
       case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
         Episode.values.find(_.toString == e.name).map { episode =>
@@ -202,22 +222,4 @@ object StarWarsQueryCompiler extends QueryCompiler(schema) {
     }
   ))
   // #elaborator
-
-  val phases = List(selectElaborator)
 }
-
-object StarWarsQueryInterpreter extends GenericQueryInterpreter[Id](
-  // #root
-  {
-    // hero and character both start with [Character] and the full character database
-    case "hero" | "character" =>
-      CursorBuilder[List[Character]].build(characters, ListType(CharacterType))
-    // human starts with [Human] and just the characters of type Human
-    case "human" =>
-      CursorBuilder[List[Human]].build(characters.collect { case h: Human => h }, ListType(HumanType))
-    // droid starts with [Droid] and just the characters of type Droid
-    case "droid" =>
-      CursorBuilder[List[Droid]].build(characters.collect { case d: Droid => d }, ListType(DroidType))
-  },
-  // #root
-)

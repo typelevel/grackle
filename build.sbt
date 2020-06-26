@@ -110,7 +110,7 @@ lazy val generic = project
 lazy val demo = project
   .in(file("demo"))
   .enablePlugins(AutomateHeaderPlugin)
-  .dependsOn(core, doobie, generic)
+  .dependsOn(core, generic)
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-demo",
