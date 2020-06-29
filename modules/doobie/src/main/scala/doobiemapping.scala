@@ -280,9 +280,9 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
     case class DoobieObject(fieldName: String, subobject: Subobject) extends DoobieFieldMapping
   }
 
-  class DoobieLeafMapping[T](val tpe: Type, val encoder: Encoder[T], val meta: Meta[T]) extends LeafMapping[T]
+  case class DoobieLeafMapping[T](val tpe: Type, val encoder: Encoder[T], val meta: Meta[T]) extends LeafMapping[T]
   object DoobieLeafMapping {
-    def apply[T](tpe: Type)(implicit encoder: Encoder[T], meta: Meta[T]) =
+    def apply[T](tpe: Type)(implicit encoder: Encoder[T], meta: Meta[T], dummy: DummyImplicit) =
       new DoobieLeafMapping(tpe, encoder, meta)
   }
 

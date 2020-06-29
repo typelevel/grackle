@@ -59,7 +59,7 @@ trait Mapping[F[_]] {
       case lm@LeafMapping(tpe0, _) if tpe0 =:= tpe => lm.asInstanceOf[LeafMapping[T]]
     }
 
-  trait TypeMapping {
+  trait TypeMapping extends Product with Serializable {
     def tpe: Type
   }
 
@@ -67,14 +67,13 @@ trait Mapping[F[_]] {
     def fieldMappings: List[FieldMapping]
   }
   object ObjectMapping {
-    def apply(tpe: Type, fieldMappings: List[FieldMapping]): ObjectMapping = {
-      val tpe0 = tpe
-      val fieldMappings0 = fieldMappings.map(_.withParent(tpe))
-      new ObjectMapping { val tpe = tpe0; val fieldMappings = fieldMappings0 }
-    }
+    case class DefaultObjectMapping(tpe: Type, fieldMappings: List[FieldMapping]) extends ObjectMapping
+
+    def apply(tpe: Type, fieldMappings: List[FieldMapping]): ObjectMapping =
+      DefaultObjectMapping(tpe, fieldMappings.map(_.withParent(tpe)))
   }
 
-  trait FieldMapping {
+  trait FieldMapping extends Product with Serializable {
     def fieldName: String
     def withParent(tpe: Type): FieldMapping
   }
@@ -89,11 +88,10 @@ trait Mapping[F[_]] {
     def encoder: Encoder[T]
   }
   object LeafMapping {
-    def apply[T](tpe0: Type)(implicit encoder0: Encoder[T]): LeafMapping[T] =
-      new LeafMapping[T] {
-        val tpe = tpe0
-        val encoder = encoder0
-      }
+    case class DefaultLeafMapping[T](tpe: Type, encoder: Encoder[T]) extends LeafMapping[T]
+
+    def apply[T](tpe: Type)(implicit encoder: Encoder[T]): LeafMapping[T] =
+      DefaultLeafMapping(tpe, encoder)
 
     def unapply[T](lm: LeafMapping[T]): Option[(Type, Encoder[T])] =
       Some((lm.tpe, lm.encoder))

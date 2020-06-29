@@ -18,15 +18,15 @@ import QueryInterpreter.{ mkErrorResult, mkOneError }
 import ShapelessUtils._
 
 trait GenericMapping[F[_]] extends AbstractMapping[Monad, F] {
-  class GenericRoot[T](val tpe: Type, val fieldName: String, t: T, cb: => CursorBuilder[T]) extends RootMapping {
-    lazy val cursorBuilder = cb
+  case class GenericRoot[T](val tpe: Type, val fieldName: String, t: T, cb: () => CursorBuilder[T]) extends RootMapping {
+    lazy val cursorBuilder = cb()
     def cursor(query: Query): F[Result[Cursor]] = cursorBuilder.build(t).pure[F]
     def withParent(tpe: Type): GenericRoot[T] =
-      new GenericRoot(tpe, fieldName, t, cursorBuilder)
+      new GenericRoot(tpe, fieldName, t, cb)
   }
 
   def GenericRoot[T](fieldName: String, t: T)(implicit cb: => CursorBuilder[T]): GenericRoot[T] =
-    new GenericRoot(NoType, fieldName, t, cb)
+    new GenericRoot(NoType, fieldName, t, () => cb)
 }
 
 object semiauto {
