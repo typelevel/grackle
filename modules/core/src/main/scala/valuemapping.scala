@@ -14,8 +14,8 @@ import ScalarType._
 
 trait ValueMapping[F[_]] extends AbstractMapping[Monad, F] {
 
-  class ValueRoot(val tpe: Type, val fieldName: String, root0: => Any) extends RootMapping {
-    lazy val root: Any = root0
+  case class ValueRoot(val tpe: Type, val fieldName: String, root0: () => Any) extends RootMapping {
+    lazy val root: Any = root0()
     def cursor(query: Query): F[Result[Cursor]] = {
       val fieldTpe = tpe.field(fieldName)
       val cursorTpe = query match {
@@ -30,7 +30,7 @@ trait ValueMapping[F[_]] extends AbstractMapping[Monad, F] {
 
   object ValueRoot {
     def apply(fieldName: String, root: => Any): ValueRoot =
-      new ValueRoot(NoType, fieldName, root)
+      new ValueRoot(NoType, fieldName, () => root)
   }
 
   sealed trait ValueField0[T] extends FieldMapping
