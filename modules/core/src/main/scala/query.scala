@@ -83,7 +83,7 @@ object Query {
    *  `join` is applied to the current cursor and `child` yielding a continuation query which will be
    *  evaluated by the current interpreter in its next stage.
    */
-  case class Defer(join: (Cursor, Query) => Result[Query], child: Query) extends Query {
+  case class Defer(join: (Cursor, Query) => Result[Query], child: Query, rootTpe: Type) extends Query {
     def render = s"<defer: ${child.render}>"
   }
 
@@ -451,6 +451,11 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
           value <- runValue(child, tpe.field(fieldName), c)
         } yield List((resultName, value))
 
+      case (Rename(resultName, Wrap(_, child)), tpe) =>
+        for {
+          value <- runValue(child, tpe, cursor)
+        } yield List((resultName, value))
+
       case (Wrap(fieldName, child), tpe) =>
         for {
           value <- runValue(child, tpe, cursor)
@@ -483,6 +488,12 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
           lc.traverse(c => runValue(query, tpe, c)).map(ProtoJson.fromValues)
         )
 
+      case (Wrap(fieldName, Defer(join, child, rootTpe)), _) =>
+        for {
+          cont        <- join(cursor, child)
+          renamedCont <- mkResult(renameRoot(cont, fieldName))
+        } yield ProtoJson.staged(this, renamedCont, rootTpe)
+
       case (Wrap(fieldName, child), _) =>
         for {
           pvalue <- runValue(child, tpe, cursor)
@@ -509,10 +520,10 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
             } yield ProtoJson.staged(interpreter, renamedCont, JoinType(componentName, tpe.field(child.name)))
         }
 
-      case (Defer(join, child), _) =>
+      case (Defer(join, child, rootTpe), _) =>
         for {
           cont <- join(cursor, child)
-        } yield ProtoJson.staged(this, cont, tpe)
+        } yield ProtoJson.staged(this, cont, rootTpe)
 
       case (Unique(pred, child), _) =>
         val cursors =
@@ -728,7 +739,12 @@ object QueryInterpreter {
             val newFields: List[(String, Json)] =
               fields.flatMap { case (label, pvalue) =>
                 val value = loop(pvalue)
-                if (isDeferred(pvalue) && value.isObject) value.asObject.get.toList
+                if (isDeferred(pvalue) && value.isObject) {
+                  value.asObject.get.toList match {
+                    case List((_, value)) => List((label, value))
+                    case other => other
+                  }
+                }
                 else List((label, value))
               }
             Json.fromFields(newFields)
