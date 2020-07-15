@@ -344,6 +344,8 @@ sealed trait Type {
   def isNamed: Boolean = false
 
   def asNamed: Option[NamedType] = None
+
+  def isInterface: Boolean = false
 }
 
 // Move all below into object Type?
@@ -482,7 +484,9 @@ case class InterfaceType(
   description: Option[String],
   fields:      List[Field],
   interfaces:  List[NamedType]
-) extends Type with TypeWithFields
+) extends Type with TypeWithFields {
+  override def isInterface: Boolean = true
+}
 
 /**
  * Object types represent concrete instantiations of sets of fields.

@@ -593,6 +593,93 @@ final class WorldSpec extends DatabaseSuite {
     assert(res == expected)
   }
 
+  test("recursive query (6)") {
+    val query = """
+      query {
+        cities(namePattern: "Monte-Carlo") {
+          name
+          a: country {
+            name
+            b: cities {
+              name
+              c: country {
+                name
+                d: cities {
+                  name
+                  e: country {
+                    name
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+    {
+      "data" : {
+        "cities" : [
+          {
+            "name" : "Monte-Carlo",
+            "a" : {
+              "name" : "Monaco",
+              "b" : [
+                {
+                  "name" : "Monte-Carlo",
+                  "c" : {
+                    "name" : "Monaco",
+                    "d" : [
+                      {
+                        "name" : "Monte-Carlo",
+                        "e" : {
+                          "name" : "Monaco"
+                        }
+                      },
+                      {
+                        "name" : "Monaco-Ville",
+                        "e" : {
+                          "name" : "Monaco"
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name" : "Monaco-Ville",
+                  "c" : {
+                    "name" : "Monaco",
+                    "d" : [
+                      {
+                        "name" : "Monte-Carlo",
+                        "e" : {
+                          "name" : "Monaco"
+                        }
+                      },
+                      {
+                        "name" : "Monaco-Ville",
+                        "e" : {
+                          "name" : "Monaco"
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+    """
+
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
   test("country with no cities") {
     val query = """
       query {

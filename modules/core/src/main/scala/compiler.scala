@@ -260,7 +260,7 @@ object QueryCompiler {
         case u@Unique(_, child)       => transform(child, env, schema, tpe.nonNull).map(ec => u.copy(child = ec))
         case f@Filter(_, child)       => transform(child, env, schema, tpe.item).map(ec => f.copy(child = ec))
         case c@Component(_, _, child) => transform(child, env, schema, tpe).map(ec => c.copy(child = ec))
-        case d@Defer(_, child)        => transform(child, env, schema, tpe).map(ec => d.copy(child = ec))
+        case d@Defer(_, child, _)     => transform(child, env, schema, tpe).map(ec => d.copy(child = ec))
         case s@Skip(_, _, child)      => transform(child, env, schema, tpe).map(ec => s.copy(child = ec))
         case Empty                    => Empty.rightIor
       }

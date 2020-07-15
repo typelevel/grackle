@@ -10,9 +10,10 @@ import scala.util.matching.Regex
 import cats.effect.Sync
 import cats.implicits._
 import cats.kernel.Monoid
-import _root_.doobie.{ ConnectionIO, Fragment, Fragments, Get, Read }
+import _root_.doobie.{ ConnectionIO, Fragment, Fragments, Read }
 import _root_.doobie.implicits._
 import _root_.doobie.enum.Nullability._
+import _root_.doobie.util.Put
 import _root_.doobie.util.fragment.Elem.Arg
 import _root_.doobie.util.meta.Meta
 import _root_.doobie.util.transactor.Transactor
@@ -23,8 +24,9 @@ import QueryCompiler._, ComponentElaborator.TrivialJoin
 import DoobiePredicate._
 import Predicate._
 import Query._
-import ScalarType._
 import QueryInterpreter.mkErrorResult
+import Row.FailedJoin
+import ScalarType._
 
 trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
   type Table = List[Row]
@@ -42,15 +44,15 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
       case dlm: DoobieLeafMapping[T] => dlm.asInstanceOf[DoobieLeafMapping[T]]
     }
 
-  def typeToGet(tpe: Type): (Get[_], NullabilityKnown) =
-    doobieLeafMapping[Any](tpe).map(lm => (lm.meta.get, NoNulls)).getOrElse(
+  def typeToMeta(tpe: Type): (Meta[_], NullabilityKnown) =
+    doobieLeafMapping[Any](tpe).map(lm => (lm.meta, NoNulls)).getOrElse(
       tpe match {
-        case NullableType(tpe) => (typeToGet(tpe)._1, Nullable)
-        case IntType => (Get[Int], NoNulls)
-        case FloatType => (Get[Double], NoNulls)
-        case StringType => (Get[String], NoNulls)
-        case BooleanType => (Get[Boolean], NoNulls)
-        case IDType => (Get[String], NoNulls)
+        case NullableType(tpe) => (typeToMeta(tpe)._1, Nullable)
+        case IntType => (Meta[Int], NoNulls)
+        case FloatType => (Meta[Double], NoNulls)
+        case StringType => (Meta[String], NoNulls)
+        case BooleanType => (Meta[Boolean], NoNulls)
+        case IDType => (Meta[String], NoNulls)
         case _ => sys.error(s"no Get instance for schema type $tpe") // FIXME
       }
     )
@@ -81,7 +83,7 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
   def columnForAttribute(tpe: Type, attrName: String): Option[ColumnRef] = {
     val obj = tpe.underlyingObject
     attributeMapping(obj, attrName) match {
-      case Some(DoobieAttribute(_, cr, _, _)) => Some(cr)
+      case Some(DoobieAttribute(_, cr, _, _, _)) => Some(cr)
       case _ => None
     }
   }
@@ -221,20 +223,20 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
       orderJoins(Set(rootTable), joins, Nil).reverse
     }
 
-    val gets = {
-      def getForColumn(col: ColumnRef): (Boolean, (Get[_], NullabilityKnown)) = {
+    val metas = {
+      def getForColumn(col: ColumnRef): (Boolean, (Meta[_], NullabilityKnown)) = {
         // A column is the product of an outer join (and may therefore be null even if it's non-nullable
         // in the schema) if its table introduced on the child side of a `Join`.
         def isJoin(cr: ColumnRef): Boolean = childTables(cr.table)
 
         object Target {
-          def unapply(om: ObjectMapping): Option[(Boolean, (Get[_], NullabilityKnown))] =
+          def unapply(om: ObjectMapping): Option[(Boolean, (Meta[_], NullabilityKnown))] =
             om.fieldMappings.collectFirst {
               case DoobieField(fieldName, `col`, _) if mappings.contains(om) =>
-                val get = typeToGet(mappings(om).field(fieldName))
-                (isJoin(col), get)
-              case DoobieAttribute(_, `col`, get, _) =>
-                (isJoin(col), (get, NoNulls)) // support nullable attributes?
+                val meta = typeToMeta(mappings(om).field(fieldName))
+                (isJoin(col), meta)
+              case DoobieAttribute(_, `col`, meta, _, nullable) =>
+                (isJoin(col), (meta, if (nullable) Nullable else NoNulls))
             }
         }
 
@@ -246,7 +248,7 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
       columns.map(getForColumn)
     }
 
-    new MappedQuery(rootTable, columns, gets, predicates, orderedJoins)
+    new MappedQuery(rootTable, columns, metas, predicates, orderedJoins)
   }
 
   case class DoobieRoot(fieldName: String, rootTpe: Type = NoType) extends RootMapping {
@@ -264,12 +266,12 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
       copy(rootTpe = tpe)
   }
 
-  case class DoobieAttribute(fieldName: String, col: ColumnRef, get: Get[_], key: Boolean) extends FieldMapping {
+  case class DoobieAttribute(fieldName: String, col: ColumnRef, meta: Meta[_], key: Boolean, nullable: Boolean) extends FieldMapping {
     def withParent(tpe: Type): FieldMapping = this
   }
 
-  def DoobieAttribute[T](fieldName: String, col: ColumnRef, key: Boolean = false)(implicit get: Get[T]): DoobieAttribute =
-    new DoobieAttribute(fieldName, col, get, key)
+  def DoobieAttribute[T](fieldName: String, col: ColumnRef, key: Boolean = false, nullable: Boolean = false)(implicit meta: Meta[T]): DoobieAttribute =
+    new DoobieAttribute(fieldName, col, meta, key, nullable)
 
   sealed trait DoobieFieldMapping extends FieldMapping {
     def withParent(tpe: Type): FieldMapping = this
@@ -306,7 +308,7 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
   case class MappedQuery(
     table: String,
     columns: List[ColumnRef],
-    gets: List[(Boolean, (Get[_], NullabilityKnown))],
+    metas: List[(Boolean, (Meta[_], NullabilityKnown))],
     predicates: List[(Type, Predicate)],
     joins: List[Join]
   ) {
@@ -347,37 +349,70 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
 
     def hasSubobject(tpe: Type): Boolean = objectMapping(tpe).isDefined
 
-    def group(table: Table, cols: List[ColumnRef]): List[Table] =
-      table.groupBy(row => project(row, cols)).to(List).sortBy(_._1.toString).map(_._2)
+    def stripNulls(table: Table, tpe: Type): Table =
+      objectMapping(tpe.nonNull) match {
+        case Some(om) if key(om).nonEmpty =>
+          val cols = key(om)
+          table.filterNot(row => project(row, cols).elems.exists(_ == FailedJoin))
+        case _ => table
+      }
+
+    def narrowsTo(table: Table, tpe: Type): Boolean =
+      objectMapping(tpe.nonNull) match {
+        case Some(om) if key(om).nonEmpty =>
+          val cols = key(om)
+          !table.exists(row => project(row, cols).elems.exists(_ == FailedJoin))
+        case _ => false
+      }
 
     def group(table: Table, tpe: Type): List[Table] =
       objectMapping(tpe) match {
-        case Some(om) if key(om).nonEmpty => group(table, key(om))
-        case None => table.map(List(_))
+        case Some(om) if key(om).nonEmpty =>
+          val cols = key(om)
+          val nonNull = table.filterNot(row => project(row, cols).elems.exists(_ == FailedJoin))
+          nonNull.groupBy(row => project(row, cols)).to(List).sortBy(_._1.toString).map(_._2)
+        case _ => table.map(List(_))
       }
 
     def fetch: ConnectionIO[Table] =
-      fragment.query[Row](Row.mkRead(gets)).to[List]
+      fragment.query[Row](Row.mkRead(metas)).to[List]
 
     def fragmentForPred(tpe: Type, pred: Predicate): Option[Fragment] = {
-      def term[T](x: Term[T], pt: Type): Option[Fragment] =
+      def term[T](x: Term[T], put: Put[T]): Option[Fragment] =
         x match {
           case path: Path =>
             primaryColumnForTerm(tpe, path).map(col => Fragment.const(s"${col.toSql}"))
-          case Const(value: String) => Some(fr0"$value")
-          case Const(value: Int) => Some(fr0"$value")
-          case Const(value: Double) => Some(fr0"$value")
-          case Const(value: Boolean) => Some(fr0"$value")
-          case Const(value) =>
-            doobieLeafMapping[Any](pt).map(lm => Fragment("?", List(Arg[Any](value, lm.meta.put)), None))
+          case Const(value) => Some(Fragment("?", List(Arg[T](value, put)), None))
         }
 
-      def unify[T](x: Term[T], y: Term[T]): Type =
+      def unify[T](x: Term[T], y: Term[T]): Option[Put[T]] = {
+        def putForPath(p: List[String]) =
+          (p match {
+            case init :+ last =>
+              val parentTpe = tpe.path(init).underlyingObject
+              if (parentTpe.hasField(last)) {
+                val fieldTpe = parentTpe.field(last).nonNull
+                doobieLeafMapping[T](fieldTpe).map(_.meta.put).orElse(
+                  fieldTpe match {
+                    case StringType => Some(Put[String])
+                    case IntType => Some(Put[Int])
+                    case FloatType => Some(Put[Double])
+                    case BooleanType => Some(Put[Boolean])
+                    case _ => None
+                  }
+                )
+              } else if (hasAttribute(parentTpe, last))
+                attributeMapping(parentTpe, last).map(_.meta.put)
+              else None
+            case Nil => doobieLeafMapping[T](tpe.nonNull).map(_.meta.put)
+          }).map(_.asInstanceOf[Put[T]])
+
         (x, y) match {
-          case (path: Path, _) => tpe.path(path.path)
-          case (_, path: Path) => tpe.path(path.path)
-          case _ => NoType
+          case (path: Path, _) => putForPath(path.path)
+          case (_, path: Path) => putForPath(path.path)
+          case _ => None
         }
+      }
 
       def loop(pred: Predicate): Option[Fragment] =
         pred match {
@@ -385,26 +420,26 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
           case Or(x, y) => Some(Fragments.orOpt(loop(x), loop(y)))
           case Not(x) => loop(x).map(x => fr"NOT" ++ x)
           case Eql(x, y) =>
-            val pt = unify(x, y)
             for {
-              x <- term(x, pt)
-              y <- term(y, pt)
+              p <- unify(x, y)
+              x <- term(x, p)
+              y <- term(y, p)
             } yield x ++ fr0" = "++ y
           case Contains(x, y) =>
-            val pt = unify(x, y)
             for {
-              x <- term(x, pt)
-              y <- term(y, pt)
+              p <- unify(x, y)
+              x <- term(x, p)
+              y <- term(y, p)
             } yield x ++ fr0" = "++ y
           case Lt(x, y) =>
-            val pt = unify(x, y)
             for {
-              x <- term(x, pt)
-              y <- term(y, pt)
+              p <- unify(x, y)
+              x <- term(x, p)
+              y <- term(y, p)
             } yield x ++ fr0" < "++ y
           case Like(x, pattern, caseInsensitive) =>
             val op = if(caseInsensitive) "ILIKE" else "LIKE"
-            term(x, StringType).map(x => x ++ Fragment.const(s" $op ") ++ fr0"$pattern")
+            term(x, Put[String]).map(x => x ++ Fragment.const(s" $op ") ++ fr0"$pattern")
           case _ => None
         }
 
@@ -451,7 +486,10 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
             tpe.withUnderlyingField(fieldName) { childTpe =>
               if(filtered(childTpe.underlyingObject)) {
                 val elaboratedSelect = loop(child, childTpe, Set.empty).map(ec => s.copy(child = ec))
-                elaboratedSelect.map(ec => Wrap(fieldName, Defer(stagingJoin, ec)))
+                elaboratedSelect.map(ec => Wrap(fieldName, Defer(stagingJoin, ec, tpe.underlyingObject)))
+              } else if(childTpe.dealias.isInterface) {
+                val elaboratedSelect = loop(child, childTpe, Set.empty).map(ec => s.copy(child = ec))
+                elaboratedSelect.map(ec => Wrap(fieldName, Defer(stagingJoin, ec, schema.queryType)))
               } else {
                 loop(child, childTpe, filtered + tpe.underlyingObject).map(ec => s.copy(child = ec))
               }
@@ -561,15 +599,18 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
     def asNullable: Result[Option[Cursor]] =
       (tpe, focus) match {
         case (NullableType(_), None) => None.rightIor
+        case (NullableType(_), Nil) => None.rightIor
         case (NullableType(tpe), Some(v)) => Some(copy(tpe = tpe, focus = v)).rightIor
         case (NullableType(tpe), _) => Some(copy(tpe = tpe)).rightIor // non-nullable column as nullable schema type (ok)
         case _ => mkErrorResult("Not nullable")
       }
 
-    def narrowsTo(subtpe: TypeRef): Boolean = false
+    def narrowsTo(subtpe: TypeRef): Boolean =
+      asTable.map(table => mapped.narrowsTo(table, subtpe)).right.getOrElse(false)
 
     def narrow(subtpe: TypeRef): Result[Cursor] =
-      mkErrorResult(s"Cannot narrow $tpe to $subtpe")
+      if (narrowsTo(subtpe)) copy(tpe = subtpe).rightIor
+      else mkErrorResult(s"Cannot narrow $tpe to $subtpe")
 
     def hasField(fieldName: String): Boolean = {
       val fieldTpe = tpe.field(fieldName)
@@ -588,8 +629,8 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
           if (isUnstructured(fieldTpe))
             asTable.map(table => copy(tpe = fieldTpe, focus = mapped.selectField(table.head, tpe, fieldName)))
           else
-            copy(tpe = fieldTpe).rightIor
-          }
+            asTable.map(table => copy(tpe = fieldTpe, focus = mapped.stripNulls(table, fieldTpe)))
+      }
     }
 
     def hasAttribute(attributeName: String): Boolean =
@@ -657,17 +698,17 @@ object Row {
   // Placeholder for nulls read from non-nullable columns introduced via an outer join.
   case object FailedJoin
 
-  def mkRead(gets: List[(Boolean, (Get[_], NullabilityKnown))]): Read[Row] = {
+  def mkRead(metas: List[(Boolean, (Meta[_], NullabilityKnown))]): Read[Row] = {
     def unsafeGet(rs: ResultSet, n: Int): Row =
       Row {
-        gets.zipWithIndex.map {
-          case ((isJoin, (g, NoNulls)),  i) =>
-            if (isJoin) g.unsafeGetNullable(rs, n+i).getOrElse(FailedJoin)
-            else g.unsafeGetNonNullable(rs, n+i)
-          case ((_, (g, Nullable)), i) => g.unsafeGetNullable(rs, n+i)
+        metas.zipWithIndex.map {
+          case ((isJoin, (m, NoNulls)),  i) =>
+            if (isJoin) m.get.unsafeGetNullable(rs, n+i).getOrElse(FailedJoin)
+            else m.get.unsafeGetNonNullable(rs, n+i)
+          case ((_, (m, Nullable)), i) => m.get.unsafeGetNullable(rs, n+i)
         }
       }
 
-    new Read(gets.map(_._2), unsafeGet)
+    new Read(metas.map { case (_, (m, n)) => (m.get, n) }, unsafeGet)
   }
 }
