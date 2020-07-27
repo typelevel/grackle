@@ -5,6 +5,7 @@ package edu.gemini.grackle
 package doobie
 
 import java.sql.ResultSet
+import scala.reflect.ClassTag
 import scala.util.matching.Regex
 
 import cats.effect.Sync
@@ -13,6 +14,7 @@ import cats.kernel.Monoid
 import _root_.doobie.{ ConnectionIO, Fragment, Fragments, Read }
 import _root_.doobie.implicits._
 import _root_.doobie.enum.Nullability._
+import _root_.doobie.postgres.implicits._
 import _root_.doobie.util.Put
 import _root_.doobie.util.fragment.Elem.Arg
 import _root_.doobie.util.meta.Meta
@@ -44,18 +46,44 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
       case dlm: DoobieLeafMapping[T] => dlm.asInstanceOf[DoobieLeafMapping[T]]
     }
 
-  def typeToMeta(tpe: Type): (Meta[_], NullabilityKnown) =
-    doobieLeafMapping[Any](tpe).map(lm => (lm.meta, NoNulls)).getOrElse(
-      tpe match {
-        case NullableType(tpe) => (typeToMeta(tpe)._1, Nullable)
-        case IntType => (Meta[Int], NoNulls)
-        case FloatType => (Meta[Double], NoNulls)
-        case StringType => (Meta[String], NoNulls)
-        case BooleanType => (Meta[Boolean], NoNulls)
-        case IDType => (Meta[String], NoNulls)
-        case _ => sys.error(s"no Get instance for schema type $tpe") // FIXME
-      }
-    )
+  def typeToMeta(tpe: Type): (Meta[_], NullabilityKnown) = {
+    def simpleTypeToMeta(tpe: Type): Meta[_] =
+      doobieLeafMapping[Any](tpe).map(_.meta).getOrElse(
+        (tpe: @unchecked) match {
+          case IntType => Meta[Int]
+          case FloatType => Meta[Double]
+          case StringType => Meta[String]
+          case BooleanType => Meta[Boolean]
+          case IDType => Meta[String]
+        }
+      )
+
+    def listMeta[T: ClassTag](implicit m: Meta[Array[T]]): Meta[List[T]] =
+      m.imap(_.toList)(_.toArray)
+
+    def listTypeToMeta(tpe: Type): Meta[_] =
+      doobieLeafMapping[Any](ListType(tpe)).map(_.meta).getOrElse(
+        (tpe: @unchecked) match {
+          case IntType => listMeta[Int]
+          case FloatType => listMeta[Double]
+          case StringType => listMeta[String]
+          case BooleanType => listMeta[Boolean]
+          case IDType => listMeta[String]
+          case NullableType(IntType) => listMeta[Option[Int]]
+          case NullableType(FloatType) => listMeta[Option[Double]]
+          case NullableType(StringType) => listMeta[Option[String]]
+          case NullableType(BooleanType) => listMeta[Option[Boolean]]
+          case NullableType(IDType) => listMeta[Option[String]]
+        }
+      )
+
+    tpe match {
+      case ListType(tpe) => (listTypeToMeta(tpe), NoNulls)
+      case NullableType(ListType(tpe)) => (listTypeToMeta(tpe), Nullable)
+      case NullableType(tpe) => (simpleTypeToMeta(tpe), Nullable)
+      case tpe => (simpleTypeToMeta(tpe), NoNulls)
+    }
+  }
 
   def attributeMapping(tpe: Type, attrName: String): Option[DoobieAttribute] =
     fieldMapping(tpe, attrName) match {
@@ -534,26 +562,9 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
         case _ => false
       }
 
-    def isLeaf: Boolean = tpe.isLeaf
-
+    def isLeaf: Boolean = false
     def asLeaf: Result[Json] =
-      leafMapping[Any](tpe).map(_.encoder(focus).rightIor).getOrElse(
-        focus match {
-          case s: String => Json.fromString(s).rightIor
-          case i: Int => Json.fromInt(i).rightIor
-          case d: Double => Json.fromDouble(d) match {
-              case Some(j) => j.rightIor
-              case None => mkErrorResult(s"Unrepresentable double %d")
-            }
-          case b: Boolean => Json.fromBoolean(b).rightIor
-
-          // This means we are looking at a column with no value because it's the result of a failed
-          // outer join. This is an implementation error.
-          case Row.FailedJoin => sys.error("Unhandled failed join.")
-
-          case _ => mkErrorResult("Not a leaf")
-        }
-      )
+      mkErrorResult("Not a leaf")
 
     def isList: Boolean =
       tpe match {
@@ -598,9 +609,7 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
 
     def asNullable: Result[Option[Cursor]] =
       (tpe, focus) match {
-        case (NullableType(_), None) => None.rightIor
         case (NullableType(_), Nil) => None.rightIor
-        case (NullableType(tpe), Some(v)) => Some(copy(tpe = tpe, focus = v)).rightIor
         case (NullableType(tpe), _) => Some(copy(tpe = tpe)).rightIor // non-nullable column as nullable schema type (ok)
         case _ => mkErrorResult("Not nullable")
       }
@@ -624,10 +633,10 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
       val fieldTpe = tpe.field(fieldName)
       fieldMapping(tpe.underlyingObject, fieldName) match {
         case Some(CursorField(_, f, _)) =>
-          f(this).map(res => copy(tpe = fieldTpe, focus = res))
+          f(this).map(res => LeafCursor(tpe = fieldTpe, focus = res))
         case _ =>
           if (isUnstructured(fieldTpe))
-            asTable.map(table => copy(tpe = fieldTpe, focus = mapped.selectField(table.head, tpe, fieldName)))
+            asTable.map(table => LeafCursor(tpe = fieldTpe, focus = mapped.selectField(table.head, tpe, fieldName)))
           else
             asTable.map(table => copy(tpe = fieldTpe, focus = mapped.stripNulls(table, fieldTpe)))
       }
@@ -645,6 +654,65 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
         case _ =>
           asTable.map(table => mapped.selectAttribute(table.head, tpe, attributeName))
       }
+  }
+
+  case class LeafCursor(tpe: Type, focus: Any) extends Cursor {
+    def isLeaf: Boolean = tpe.isLeaf
+
+    def asLeaf: Result[Json] =
+      leafMapping[Any](tpe).map(_.encoder(focus).rightIor).getOrElse(
+        focus match {
+          case s: String => Json.fromString(s).rightIor
+          case i: Int => Json.fromInt(i).rightIor
+          case d: Double => Json.fromDouble(d) match {
+              case Some(j) => j.rightIor
+              case None => mkErrorResult(s"Unrepresentable double %d")
+            }
+          case b: Boolean => Json.fromBoolean(b).rightIor
+
+          // This means we are looking at a column with no value because it's the result of a failed
+          // outer join. This is an implementation error.
+          case Row.FailedJoin => sys.error("Unhandled failed join.")
+
+          case _ => mkErrorResult("Not a leaf")
+        }
+      )
+
+    def isList: Boolean =
+      tpe match {
+        case ListType(_) => true
+        case _ => false
+      }
+
+    def asList: Result[List[Cursor]] = (tpe, focus) match {
+      case (ListType(tpe), it: List[_]) => it.map(f => copy(tpe = tpe, focus = f)).rightIor
+      case _ => mkErrorResult(s"Expected List type, found $tpe")
+    }
+
+    def isNullable: Boolean =
+      tpe match {
+        case NullableType(_) => true
+        case _ => false
+      }
+
+    def asNullable: Result[Option[Cursor]] =
+      (tpe, focus) match {
+        case (NullableType(_), None) => None.rightIor
+        case (NullableType(tpe), Some(v)) => Some(copy(tpe = tpe, focus = v)).rightIor
+        case _ => mkErrorResult("Not nullable")
+      }
+
+    def narrowsTo(subtpe: TypeRef): Boolean = false
+    def narrow(subtpe: TypeRef): Result[Cursor] =
+      mkErrorResult(s"Cannot narrow $tpe to $subtpe")
+
+    def hasField(fieldName: String): Boolean = false
+    def field(fieldName: String): Result[Cursor] =
+      mkErrorResult(s"Cannot select field '$fieldName' from leaf type $tpe")
+
+    def hasAttribute(attributeName: String): Boolean = false
+    def attribute(attributeName: String): Result[Any] =
+      mkErrorResult(s"Cannot read attribute '$attributeName' from leaf type $tpe")
   }
 }
 
