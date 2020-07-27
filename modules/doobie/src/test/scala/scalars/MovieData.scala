@@ -59,11 +59,28 @@ object MovieData {
       }
   }
 
+  sealed trait Feature
+  object Feature {
+    case object HD extends Feature
+    case object HLS extends Feature
+
+    def fromString(s: String): Feature = (s.trim.toUpperCase: @unchecked) match {
+      case "HD" => HD
+      case "HLS" => HLS
+    }
+
+    implicit def featureEncoder: Encoder[Feature] =
+      Encoder[String].contramap(_.toString)
+  }
+
   implicit val durationMeta: Meta[Duration] =
     Meta[Long].timap(Duration.ofMillis)(_.toMillis)
 
   implicit val zonedDateTimeMeta: Meta[ZonedDateTime] =
     Meta[Instant].timap(i => ZonedDateTime.ofInstant(i, ZoneOffset.UTC))(_.toInstant)
+
+  implicit val featureListMeta: Meta[List[Feature]] =
+    Meta.Advanced.array[String]("VARCHAR", "_VARCHAR").imap(_.toList.map(Feature.fromString))(_.map(_.toString).toArray)
 
   implicit val localDateOrder: Order[LocalDate] =
     Order.from(_.compareTo(_))
@@ -103,6 +120,10 @@ class MovieMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
           ACTION
           COMEDY
         }
+        enum Feature {
+          HD
+          HLS
+        }
         type Movie {
           id: UUID!
           title: String!
@@ -112,6 +133,8 @@ class MovieMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
           nextShowing: DateTime!
           nextEnding: DateTime!
           duration: Interval!
+          categories: [String!]!
+          features: [Feature!]!
         }
       """
     ).right.get
@@ -124,6 +147,7 @@ class MovieMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
   val DateTimeType = schema.ref("DateTime")
   val IntervalType = schema.ref("Interval")
   val GenreType = schema.ref("Genre")
+  val FeatureType = schema.ref("Feature")
 
   import DoobieFieldMapping._
 
@@ -154,6 +178,8 @@ class MovieMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
             DoobieField("nextShowing", ColumnRef("movies", "nextshowing")),
             CursorField("nextEnding", nextEnding),
             DoobieField("duration", ColumnRef("movies", "duration")),
+            DoobieField("categories", ColumnRef("movies", "categories")),
+            DoobieField("features", ColumnRef("movies", "features")),
             CursorAttribute("isLong", isLong)
           )
       ),
@@ -162,7 +188,9 @@ class MovieMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
       DoobieLeafMapping[LocalDate](DateType),
       DoobieLeafMapping[ZonedDateTime](DateTimeType),
       DoobieLeafMapping[Duration](IntervalType),
-      DoobieLeafMapping[Genre](GenreType)
+      DoobieLeafMapping[Genre](GenreType),
+      LeafMapping[Feature](FeatureType),
+      DoobieLeafMapping[List[Feature]](ListType(FeatureType))
     )
 
   def nextEnding(c: Cursor): Result[ZonedDateTime] =
