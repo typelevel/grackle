@@ -39,7 +39,8 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
   import DoobieFieldMapping._
 
   override def rootMapping(tpe: Type, fieldName: String): Option[RootMapping] =
-    super.rootMapping(schema.queryType, fieldName).map(_.withParent(tpe))
+    if (tpe =:= schema.queryType) super.rootMapping(tpe, fieldName)
+    else Some(DoobieRoot(fieldName, tpe))
 
   def doobieLeafMapping[T](tpe: Type): Option[DoobieLeafMapping[T]] =
     leafMapping[T](tpe).collectFirst {
@@ -508,39 +509,81 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
     }
 
     override def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] = {
-      def loop(query: Query, tpe: Type, filtered: Set[Type]): Result[Query] = {
-        query match {
+      def nonLeafList(tpe: Type, fieldName: String): Boolean = {
+        val fieldTpe = tpe.underlyingField(fieldName).nonNull
+        fieldTpe.isList &&
+          (fieldMapping(tpe.underlyingObject, fieldName) match {
+            case Some(DoobieObject(_, Subobject(joins, _))) if joins.nonEmpty => true
+            case _ => false
+          })
+      }
+
+      case class Seen[T](context: T, seenTypes: Set[Type], seenList: Boolean) {
+        def map[U](f: T => U): Seen[U] = copy(context = f(context))
+        def withQuery(q: Query): Seen[Query] = copy(context = q)
+        def withType(q: Query, tpe: Type): Seen[Query] = copy(context = q, seenTypes = seenTypes + tpe.underlyingObject)
+        def withList(q: Query, seen: => Boolean) = copy(context = q, seenList = seenList || seen)
+        def forGroup: Seen[List[Query]] = copy(context = List.empty)
+      }
+
+      object Seen {
+        def apply(q: Query): Seen[Query] = new Seen(q, Set.empty, false)
+      }
+
+      def loop(tpe: Type, seen: Seen[Query]): Result[Seen[Query]] = {
+        seen.context match {
           case s@Select(fieldName, _, child) =>
             tpe.withUnderlyingField(fieldName) { childTpe =>
-              if(filtered(childTpe.underlyingObject)) {
-                val elaboratedSelect = loop(child, childTpe, Set.empty).map(ec => s.copy(child = ec))
-                elaboratedSelect.map(ec => Wrap(fieldName, Defer(stagingJoin, ec, tpe.underlyingObject)))
+              if(seen.seenTypes(childTpe.underlyingObject) || (seen.seenList && nonLeafList(tpe, fieldName))) {
+                val elaboratedSelect = loop(childTpe, Seen(child)).map(ec => s.copy(child = ec.context))
+                elaboratedSelect.map(ec => seen.withQuery(Wrap(fieldName, Defer(stagingJoin, ec, tpe.underlyingObject))))
               } else if(childTpe.dealias.isInterface) {
-                val elaboratedSelect = loop(child, childTpe, Set.empty).map(ec => s.copy(child = ec))
-                elaboratedSelect.map(ec => Wrap(fieldName, Defer(stagingJoin, ec, schema.queryType)))
+                val elaboratedSelect = loop(childTpe, Seen(child)).map(ec => s.copy(child = ec.context))
+                elaboratedSelect.map(ec => seen.withQuery(Wrap(fieldName, Defer(stagingJoin, ec, schema.queryType))))
               } else {
-                loop(child, childTpe, filtered + tpe.underlyingObject).map(ec => s.copy(child = ec))
+                val elaboratedSelect = loop(childTpe, seen.withType(child, tpe))
+                elaboratedSelect.map(ec => ec.withList(s.copy(child = ec.context), nonLeafList(tpe, fieldName)))
               }
             }
 
-          case n@Narrow(subtpe, child) => loop(child, subtpe, filtered).map(ec => n.copy(child = ec))
-          case w@Wrap(_, child)        => loop(child, tpe, filtered).map(ec => w.copy(child = ec))
-          case r@Rename(_, child)      => loop(child, tpe, filtered).map(ec => r.copy(child = ec))
-          case g@Group(queries)        => queries.traverse(q => loop(q, tpe, filtered)).map(eqs => g.copy(queries = eqs))
-          case g@GroupList(queries)    => queries.traverse(q => loop(q, tpe, filtered)).map(eqs => g.copy(queries = eqs))
-          case u@Unique(_, child)      => loop(child, tpe.nonNull, filtered + tpe.underlyingObject).map(ec => u.copy(child = ec))
-          case f@Filter(_, child)      => loop(child, tpe.item, filtered + tpe.underlyingObject).map(ec => f.copy(child = ec))
-          case c@Query.Component(_, _, _) => c.rightIor
-          case i: Introspect           => i.rightIor
-          case d: Defer                => d.rightIor
-          case Empty                   => Empty.rightIor
+          case n@Narrow(subtpe, child) => loop(subtpe, seen.withQuery(child)).map(_.map(q => n.copy(child = q)))
+          case w@Wrap(_, child)        => loop(tpe, seen.withQuery(child)).map(_.map(q => w.copy(child = q)))
+          case r@Rename(_, child)      => loop(tpe, seen.withQuery(child)).map(_.map(q => r.copy(child = q)))
+
+          case g@Group(queries)        =>
+            queries.foldM(seen.forGroup) {
+              case (acc, q) => loop(tpe, acc.withQuery(q)).map(_.map(q => q :: acc.context))
+            }.map(_.map(qs => g.copy(queries = qs.reverse)))
+
+          case g@GroupList(queries)    =>
+            queries.foldM(seen.forGroup) {
+              case (acc, q) => loop(tpe, acc.withQuery(q)).map(_.map(q => q :: acc.context))
+            }.map(_.map(qs => g.copy(queries = qs.reverse)))
+
+          case u@Unique(_, child)      =>
+            loop(tpe.nonNull, seen.withType(child, tpe)).map(_.map(q => u.copy(child = q)))
+
+          case f@Filter(_, child)      =>
+            loop(tpe.item, seen.withType(child, tpe)).map(_.map(q => f.copy(child = q)))
+
+          case c@Query.Component(_, _, _) => seen.withQuery(c).rightIor
+          case i: Introspect           => seen.withQuery(i).rightIor
+          case d: Defer                => seen.withQuery(d).rightIor
+          case Empty                   => seen.withQuery(Empty).rightIor
 
           case s: Skip                 => mkErrorResult(s"Unexpected Skip ${s.render}")
           case n: UntypedNarrow        => mkErrorResult(s"Unexpected UntypeNarrow ${n.render}")
         }
       }
 
-      loop(query, tpe, Set.empty)
+      query match {
+        case g@Group(queries) =>
+          queries.traverse(q => loop(tpe, Seen(q))).map(eqs => g.copy(queries = eqs.map(_.context)))
+        case g@GroupList(queries) =>
+          queries.traverse(q => loop(tpe, Seen(q))).map(eqs => g.copy(queries = eqs.map(_.context)))
+        case other =>
+          loop(tpe, Seen(other)).map(_.context)
+      }
     }
   }
 

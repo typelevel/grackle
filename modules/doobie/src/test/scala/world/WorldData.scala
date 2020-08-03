@@ -23,7 +23,6 @@ class WorldMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
           country(code: String): Country
           countries: [Country!]
           language(language: String): Language
-          languages: [Language!]
           search(minPopulation: Int!, indepSince: Int!): [Country!]!
         }
         type City {
@@ -76,7 +75,6 @@ class WorldMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
             DoobieRoot("country"),
             DoobieRoot("countries"),
             DoobieRoot("language"),
-            DoobieRoot("languages"),
             DoobieRoot("search")
           )
       ),
@@ -182,8 +180,6 @@ class WorldMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
         Select("cities", Nil, Filter(Like(FieldPath(List("name")), namePattern, true), child)).rightIor
       case Select("language", List(Binding("language", StringValue(language))), child) =>
         Select("language", Nil, Unique(Eql(FieldPath(List("language")), Const(language)), child)).rightIor
-      case Select("languages", Nil, child) =>
-        Select("languages", Nil, child).rightIor
       case Select("search", List(Binding("minPopulation", IntValue(min)), Binding("indepSince", IntValue(year))), child) =>
         Select("search", Nil,
           Filter(
