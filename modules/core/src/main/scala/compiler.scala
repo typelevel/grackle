@@ -177,10 +177,11 @@ class QueryCompiler(schema: Schema, phases: List[Phase]) {
    *
    * Any errors are accumulated on the left.
    */
-  def compile(text: String, untypedEnv: Option[Json] = None): Result[Query] = {
+  def compile(text: String, untypedEnv: Option[Json] = None, useIntrospection: Boolean = true): Result[Query] = {
     val queryType = schema.queryType
 
-    val allPhases = IntrospectionElaborator :: VariablesAndSkipElaborator :: phases
+    val allPhases =
+      if (useIntrospection) IntrospectionElaborator :: VariablesAndSkipElaborator :: phases else VariablesAndSkipElaborator :: phases
 
     for {
       parsed  <- QueryParser.parseText(text)
