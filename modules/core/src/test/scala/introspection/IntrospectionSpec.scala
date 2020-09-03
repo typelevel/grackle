@@ -1227,6 +1227,26 @@ final class IntrospectionSuite extends CatsSuite {
     //println(res)
     assert(res == expected)
   }
+
+  test("introspection disabled") {
+    val text = """
+      {
+        __type(name: "User") {
+          name
+          fields {
+            name
+            type {
+              name
+            }
+          }
+        }
+      }
+    """
+
+    val compiled = TestMapping.compiler.compile(text, None, useIntrospection = false)
+    //println(res)
+    assert(compiled.isLeft)
+  }
 }
 
 object TestMapping extends SimpleMapping[Id] {
