@@ -910,4 +910,76 @@ final class WorldSpec extends DatabaseSuite {
 
     assert(res == expected)
   }
+
+  test("simple query with limit") {
+    val query = """
+      query {
+        countries(limit: 3) {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "countries" : [
+            {
+              "name" : "Aruba"
+            },
+            {
+              "name" : "Afghanistan"
+            },
+            {
+              "name" : "Angola"
+            }
+          ]
+        }
+      }
+    """
+
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("simple query with limit, filter and ordering") {
+    val query = """
+      query {
+        countries(limit: 3, minPopulation: 1, byPopulation: true) {
+          name
+          population
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "countries" : [
+            {
+              "name" : "Pitcairn",
+              "population" : 50
+            },
+            {
+              "name" : "Cocos (Keeling) Islands",
+              "population" : 600
+            },
+            {
+              "name" : "Holy See (Vatican City State)",
+              "population" : 1000
+            }
+          ]
+        }
+      }
+    """
+
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
 }

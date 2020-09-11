@@ -73,7 +73,7 @@ object ItemMapping extends ValueMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("itemByTag", List(Binding("tag", IDValue(tag))), child) =>
-        Select("itemByTag", Nil, Filter(Contains(FieldPath(List("tags")), Const(tag)), child)).rightIor
+        Select("itemByTag", Nil, Filter(Contains(CollectFieldPath(List("tags")), Const(tag)), child)).rightIor
       case Select("itemByTagCount", List(Binding("count", IntValue(count))), child) =>
         Select("itemByTagCount", Nil, Filter(Eql(FieldPath(List("tagCount")), Const(count)), child)).rightIor
       case Select("itemByTagCountVA", List(Binding("count", IntValue(count))), child) =>

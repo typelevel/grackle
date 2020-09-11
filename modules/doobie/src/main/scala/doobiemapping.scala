@@ -221,6 +221,11 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
           queries.foldLeft(acc) {
             case (acc, sibling) => loop(sibling, obj, acc)
           }
+        case Limit(_, child) =>
+          loop(child, obj, acc)
+        case OrderBy(_, child) =>
+          loop(child, obj, acc)
+
         case Empty | Query.Component(_, _, _) | (_: Introspect) | (_: Defer) | (_: UntypedNarrow) | (_: Skip) => acc
       }
     }
@@ -409,9 +414,9 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
     def fragmentForPred(tpe: Type, pred: Predicate): Option[Fragment] = {
       def term[T](x: Term[T], put: Put[T]): Option[Fragment] =
         x match {
-          case path: Path =>
-            primaryColumnForTerm(tpe, path).map(col => Fragment.const(s"${col.toSql}"))
           case Const(value) => Some(Fragment("?", List(Arg[T](value, put)), None))
+          case other =>
+            primaryColumnForTerm(tpe, other).map(col => Fragment.const(s"${col.toSql}"))
         }
 
       def unify[T](x: Term[T], y: Term[T]): Option[Put[T]] = {
@@ -443,32 +448,93 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
         }
       }
 
-      def loop(pred: Predicate): Option[Fragment] =
-        pred match {
-          case And(x, y) => Some(Fragments.andOpt(loop(x), loop(y)))
-          case Or(x, y) => Some(Fragments.orOpt(loop(x), loop(y)))
-          case Not(x) => loop(x).map(x => fr"NOT" ++ x)
+      def loop(exp: Term[_]): Option[Fragment] =
+        exp match {
+          case And(x, y) =>
+            Some(Fragments.andOpt(loop(x), loop(y)))
+          case Or(x, y) =>
+            Some(Fragments.orOpt(loop(x), loop(y)))
+          case Not(x) =>
+            loop(x).map(x => fr"NOT" ++ x)
+
           case Eql(x, y) =>
             for {
               p <- unify(x, y)
               x <- term(x, p)
               y <- term(y, p)
             } yield x ++ fr0" = "++ y
-          case Contains(x, y) =>
+          case NEql(x, y) =>
             for {
               p <- unify(x, y)
               x <- term(x, p)
               y <- term(y, p)
+            } yield x ++ fr0" != "++ y
+
+          case Contains(x, y) =>
+            for {
+              p <- unify(x.asInstanceOf[Term[Any]], y)
+              x <- term(x.asInstanceOf[Term[Any]], p)
+              y <- term(y, p)
             } yield x ++ fr0" = "++ y
+
           case Lt(x, y) =>
             for {
               p <- unify(x, y)
               x <- term(x, p)
               y <- term(y, p)
             } yield x ++ fr0" < "++ y
+          case LtEql(x, y) =>
+            for {
+              p <- unify(x, y)
+              x <- term(x, p)
+              y <- term(y, p)
+            } yield x ++ fr0" <= "++ y
+          case Gt(x, y) =>
+            for {
+              p <- unify(x, y)
+              x <- term(x, p)
+              y <- term(y, p)
+            } yield x ++ fr0" > "++ y
+          case GtEql(x, y) =>
+            for {
+              p <- unify(x, y)
+              x <- term(x, p)
+              y <- term(y, p)
+            } yield x ++ fr0" >= "++ y
+
+          case AndB(x, y) =>
+            for {
+              p <- unify(x, y)
+              x <- term(x, p)
+              y <- term(y, p)
+            } yield x ++ fr0" & "++ y
+          case OrB(x, y) =>
+            for {
+              p <- unify(x, y)
+              x <- term(x, p)
+              y <- term(y, p)
+            } yield x ++ fr0" | "++ y
+          case XorB(x, y) =>
+            for {
+              p <- unify(x, y)
+              x <- term(x, p)
+              y <- term(y, p)
+            } yield x ++ fr0" # "++ y
+          case NotB(x) =>
+            loop(x).map(x => fr"~" ++ x)
+
+          case StartsWith(x, prefix) =>
+            for {
+              x <- term(x, Put[String])
+            } yield x ++ Fragment.const(s" LIKE ") ++ fr0"${prefix+"%"}"
+          case ToUpperCase(x) =>
+            loop(x).map(x => fr"upper(" ++ x ++ fr")")
+          case ToLowerCase(x) =>
+            loop(x).map(x => fr"lower(" ++ x ++ fr")")
           case Like(x, pattern, caseInsensitive) =>
             val op = if(caseInsensitive) "ILIKE" else "LIKE"
             term(x, Put[String]).map(x => x ++ Fragment.const(s" $op ") ++ fr0"$pattern")
+
           case _ => None
         }
 
@@ -565,6 +631,12 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
 
           case f@Filter(_, child)      =>
             loop(tpe.item, seen.withType(child, tpe)).map(_.map(q => f.copy(child = q)))
+
+          case l@Limit(_, child)      =>
+            loop(tpe.item, seen.withType(child, tpe)).map(_.map(q => l.copy(child = q)))
+
+          case s@OrderBy(_, child)      =>
+            loop(tpe.item, seen.withType(child, tpe)).map(_.map(q => s.copy(child = q)))
 
           case c@Query.Component(_, _, _) => seen.withQuery(c).rightIor
           case i: Introspect           => seen.withQuery(i).rightIor
@@ -760,28 +832,34 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
 }
 
 object DoobiePredicate {
-  def paths(pred: Predicate): List[Path] = {
-    def path[T](term: Term[T]): List[Path] =
-      term match {
-        case p: Path => List(p)
-        case _ => Nil
-      }
-    pred match {
+  def paths(t: Term[_]): List[Path] =
+    t match {
+      case p: Path => List(p)
       case And(x, y) => paths(x) ++ paths(y)
       case Or(x, y) => paths(x) ++ paths(y)
       case Not(x) => paths(x)
-      case Eql(x, y) => path(x) ++ path(y)
-      case Contains(x, y) => path(x) ++ path(y)
-      case Lt(x, y) => path(x) ++ path(y)
-      case Matches(x, _) => path(x)
-      case Like(x, _, _) => path(x)
+      case Eql(x, y) => paths(x) ++ paths(y)
+      case NEql(x, y) => paths(x) ++ paths(y)
+      case Contains(x, y) => paths(x) ++ paths(y)
+      case Lt(x, y) => paths(x) ++ paths(y)
+      case LtEql(x, y) => paths(x) ++ paths(y)
+      case Gt(x, y) => paths(x) ++ paths(y)
+      case GtEql(x, y) => paths(x) ++ paths(y)
+      case AndB(x, y) => paths(x) ++ paths(y)
+      case OrB(x, y) => paths(x) ++ paths(y)
+      case XorB(x, y) => paths(x) ++ paths(y)
+      case NotB(x) => paths(x)
+      case StartsWith(x, _) => paths(x)
+      case ToUpperCase(x) => paths(x)
+      case ToLowerCase(x) => paths(x)
+      case Matches(x, _) => paths(x)
+      case Like(x, _, _) => paths(x)
       case _ => Nil
     }
-  }
 
   def isField(p: Path): Boolean =
     p match {
-      case FieldPath(_) => true
+      case FieldPath(_) | CollectFieldPath(_) => true
       case _ => false
     }
 
@@ -790,14 +868,10 @@ object DoobiePredicate {
     (if (caseInsensitive) s"(?i:$csr)" else csr).r
   }
 
-  case class Like(x: Term[String], pattern: String, caseInsensitive: Boolean) extends Prop {
+  case class Like(x: Term[String], pattern: String, caseInsensitive: Boolean) extends Predicate {
     lazy val r = likeToRegex(pattern, caseInsensitive)
 
-    def apply(c: Cursor): Boolean =
-      x(c) match {
-        case List(x0) => r.matches(x0)
-        case _ => false
-      }
+    def apply(c: Cursor): Result[Boolean] = x(c).map(r.matches(_))
   }
 }
 
