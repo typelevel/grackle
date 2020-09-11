@@ -6,18 +6,17 @@ package edu.gemini.grackle
 import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-import scala.runtime.ScalaRunTime
 import scala.util.matching.Regex
 
-import cats.{ Monad, Monoid }
-import cats.data.{ Chain, Ior, IorT, NonEmptyChain }
+import cats.{ Apply, Monad, Monoid }
+import cats.data.{ Chain, Ior, IorT, Kleisli, NonEmptyChain }
+import cats.kernel.{ Eq, Order }
 import cats.implicits._
 import io.circe.Json
 import io.circe.literal.JsonStringContext
 
 import Query._
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
-import cats.kernel.{Eq, Order}
 
 /** GraphQL query Algebra */
 sealed trait Query {
@@ -76,7 +75,7 @@ object Query {
   }
 
   case class Introspect(schema: Schema, child: Query) extends Query {
-    def render = s"<introspection: ${child.render}>"
+    def render = s"<introspect: ${child.render}>"
   }
 
   /** A deferred query.
@@ -125,6 +124,53 @@ object Query {
     def render = s"<skip: $sense $cond ${child.render}>"
   }
 
+  case class Limit(num: Int, child: Query) extends Query {
+    def render = s"<limit: $num ${child.render}>"
+  }
+
+  case class OrderBy(selections: OrderSelections, child: Query) extends Query {
+    def render = s"<order-by: $selections ${child.render}>"
+  }
+
+  case class OrderSelections(selections: List[OrderSelection[_]]) {
+    def order(lc: List[Cursor]): List[Cursor] = {
+      def cmp(x: Cursor, y: Cursor): Int = {
+        @tailrec
+        def loop(sels: List[OrderSelection[_]]): Int =
+          sels match {
+            case Nil => 0
+            case hd :: tl =>
+              hd(x, y) match {
+                case 0 => loop(tl)
+                case ord => ord
+              }
+          }
+
+        loop(selections)
+      }
+
+      lc.sortWith((x, y) => cmp(x, y) < 0)
+    }
+  }
+
+  case class OrderSelection[T: Order](t: Term[T], ascending: Boolean = true, nullsLast: Boolean = true) {
+    def apply(x: Cursor, y: Cursor): Int = {
+      def deref(c: Cursor): Option[T] =
+        if (c.isNullable) c.asNullable.getOrElse(None).flatMap(t(_).toOption)
+        else t(c).toOption
+
+      (deref(x), deref(y)) match {
+        case (None, None) => 0
+        case (_, None) => (if (nullsLast) -1 else 1)
+        case (None, _) => (if (nullsLast) 1 else -1)
+        case (Some(x0), Some(y0)) =>
+          val ord = Order[T].compare(x0, y0)
+          if (ascending) ord
+          else -ord
+      }
+    }
+  }
+
   /** The terminal query */
   case object Empty extends Query {
     def render = ""
@@ -171,19 +217,20 @@ object Query {
     case Rename(name, _)          => Some(name)
     case _                        => None
   }
-
 }
 
 /**
- * A reified predicate over a `Cursor`.
+ * A reified function over a `Cursor`.
  *
  * Query interpreters will typically need to introspect predicates (eg. in the doobie module
  * we need to be able to construct where clauses from predicates over fields/attributes), so
  * these cannot be arbitrary functions `Cursor => Boolean`.
  */
-trait Predicate extends Product with (Cursor => Boolean) {
-  override def toString = ScalaRunTime._toString(this)
+trait Term[T] extends Product with Serializable {
+  def apply(c: Cursor): Result[T]
 }
+
+trait Predicate extends Term[Boolean]
 
 object Predicate {
   object ScalarFocus {
@@ -197,12 +244,42 @@ object Predicate {
       else None
   }
 
-  sealed trait Term[T] {
-    def apply(c: Cursor): List[T]
+  case object True extends Predicate {
+    def apply(c: Cursor): Result[Boolean] = true.rightIor
+  }
+
+  case object False extends Predicate {
+    def apply(c: Cursor): Result[Boolean] = false.rightIor
+  }
+
+  def and(props: List[Predicate]): Predicate = {
+    @tailrec
+    def loop(props: List[Predicate], acc: Predicate): Predicate =
+      props match {
+        case Nil => acc
+        case False :: _ => False
+        case True :: tl => loop(tl, acc)
+        case hd :: tl if acc == True => loop(tl, hd)
+        case hd :: tl => loop(tl, And(hd, acc))
+      }
+    loop(props, True)
+  }
+
+  def or(props: List[Predicate]): Predicate = {
+    @tailrec
+    def loop(props: List[Predicate], acc: Predicate): Predicate =
+      props match {
+        case Nil => acc
+        case True :: _ => True
+        case False :: tl => loop(tl, acc)
+        case hd :: tl if acc == False => loop(tl, hd)
+        case hd :: tl => loop(tl, Or(hd, acc))
+      }
+    loop(props, False)
   }
 
   case class Const[T](v: T) extends Term[T] {
-    def apply(c: Cursor): List[T] = List(v)
+    def apply(c: Cursor): Result[T] = v.rightIor
   }
 
   sealed trait Path {
@@ -210,68 +287,101 @@ object Predicate {
   }
 
   case class FieldPath[T](val path: List[String]) extends Term[T] with Path {
-    def apply(c: Cursor): List[T] =
-      c.flatListPath(path) match {
-        case Ior.Right(cs) =>
-          cs.collect { case ScalarFocus(focus) => focus.asInstanceOf[T] }
-        case _ => Nil
+    def apply(c: Cursor): Result[T] =
+      c.listPath(path) match {
+        case Ior.Right(List(ScalarFocus(a: T @unchecked))) => a.rightIor
+        case _ => mkErrorResult(s"Expected exactly one element for path $path")
       }
   }
 
   case class AttrPath[T](val path: List[String]) extends Term[T] with Path {
-    def apply(c: Cursor): List[T] =
+    def apply(c: Cursor): Result[T] =
       c.attrListPath(path) match {
-        case Ior.Right(cs) => cs.map(_.asInstanceOf[T])
-        case _ => Nil
+        case Ior.Right(List(a: T @unchecked)) => a.rightIor
+        case _ => mkErrorResult(s"Expected exactly one element for path $path")
       }
   }
 
-  trait Prop extends Predicate {
-    def apply(c: Cursor): Boolean
+  case class CollectFieldPath[T](val path: List[String]) extends Term[List[T]] with Path {
+    def apply(c: Cursor): Result[List[T]] =
+      c.flatListPath(path).map(_.map { case ScalarFocus(f: T @unchecked) => f })
   }
 
-  case class And(x: Prop, y: Prop) extends Prop {
-    def apply(c: Cursor): Boolean = x(c) && y(c)
+  case class CollectAttrPath[T](val path: List[String]) extends Term[List[T]] with Path {
+    def apply(c: Cursor): Result[List[T]] =
+      c.attrListPath(path).map(_.asInstanceOf[List[T]])
   }
 
-  case class Or(x: Prop, y: Prop) extends Prop {
-    def apply(c: Cursor): Boolean = x(c) || y(c)
+  case class And(x: Predicate, y: Predicate) extends Predicate {
+    def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_ && _)
   }
 
-  case class Not(x: Prop) extends Prop {
-    def apply(c: Cursor): Boolean = !x(c)
+  case class Or(x: Predicate, y: Predicate) extends Predicate {
+    def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_ || _)
   }
 
-  case class Eql[T: Eq](x: Term[T], y: Term[T]) extends Prop {
-    def apply(c: Cursor): Boolean =
-      (x(c), y(c)) match {
-        case (List(x0), List(y0)) => x0 === y0
-        case _ => false
-      }
+  case class Not(x: Predicate) extends Predicate {
+    def apply(c: Cursor): Result[Boolean] = x(c).map(! _)
   }
 
-  case class Contains[T: Eq](x: Term[T], y: Term[T]) extends Prop {
-    def apply(c: Cursor): Boolean =
-      (x(c), y(c)) match {
-        case (xs, List(y0)) => xs.exists(_ === y0)
-        case _ => false
-      }
+  case class Eql[T: Eq](x: Term[T], y: Term[T]) extends Predicate {
+    def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_ === _)
   }
 
-  case class Lt[T: Order](x: Term[T], y: Term[T]) extends Prop {
-    def apply(c: Cursor): Boolean =
-      (x(c), y(c)) match {
-        case (List(x0), List(y0)) => Order[T].compare(x0, y0) < 0
-        case _ => false
-      }
+  case class NEql[T: Eq](x: Term[T], y: Term[T]) extends Predicate {
+    def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_ =!= _)
   }
 
-  case class Matches(x: Term[String], r: Regex) extends Prop {
-    def apply(c: Cursor): Boolean =
-      x(c) match {
-        case List(x0) => r.matches(x0)
-        case _ => false
-      }
+  case class Contains[T: Eq](x: Term[List[T]], y: Term[T]) extends Predicate {
+    def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))((xs, y0) => xs.exists(_ === y0))
+  }
+
+  case class Lt[T: Order](x: Term[T], y: Term[T]) extends Predicate {
+    def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_.compare(_) < 0)
+  }
+
+  case class LtEql[T: Order](x: Term[T], y: Term[T]) extends Predicate {
+    def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_.compare(_) <= 0)
+  }
+
+  case class Gt[T: Order](x: Term[T], y: Term[T]) extends Predicate {
+    def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_.compare(_) > 0)
+  }
+
+  case class GtEql[T: Order](x: Term[T], y: Term[T]) extends Predicate {
+    def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_.compare(_) >= 0)
+  }
+
+  case class AndB(x: Term[Int], y: Term[Int]) extends Term[Int] {
+    def apply(c: Cursor): Result[Int] = Apply[Result].map2(x(c), y(c))(_ & _)
+  }
+
+  case class OrB(x: Term[Int], y: Term[Int]) extends Term[Int] {
+    def apply(c: Cursor): Result[Int] = Apply[Result].map2(x(c), y(c))(_ | _)
+  }
+
+  case class XorB(x: Term[Int], y: Term[Int]) extends Term[Int] {
+    def apply(c: Cursor): Result[Int] = Apply[Result].map2(x(c), y(c))(_ ^ _)
+  }
+
+  case class NotB(x: Term[Int]) extends Term[Int] {
+    def apply(c: Cursor): Result[Int] = x(c).map(~ _)
+  }
+
+  case class Matches(x: Term[String], r: Regex) extends Predicate {
+    def apply(c: Cursor): Result[Boolean] = x(c).map(r.matches(_))
+  }
+
+  case class StartsWith(x: Term[String], prefix: String) extends Predicate {
+    def apply(c: Cursor): Result[Boolean] = x(c).map(_.startsWith(prefix))
+  }
+
+  case class ToUpperCase(x: Term[String]) extends Term[String] {
+    def apply(c: Cursor): Result[String] = x(c).map(_.toUpperCase)
+  }
+
+  case class ToLowerCase(x: Term[String]) extends Term[String] {
+    def apply(c: Cursor): Result[String] = x(c).map(_.toLowerCase)
   }
 }
 
@@ -465,9 +575,27 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
         siblings.flatTraverse(query => runFields(query, tpe, cursor))
 
       case _ =>
+        Thread.dumpStack
         mkErrorResult(s"failed: { ${query.render} } $tpe")
     }
   }
+
+  def runList(query: Query, tpe: Type, cursor: Cursor, f: Kleisli[Result, List[Cursor], List[Cursor]]): Result[ProtoJson] =
+    query match {
+      case Filter(pred, child) =>
+        runList(child, tpe, cursor, f.compose(_.filterA(pred(_))))
+
+      case Limit(num, child) =>
+        runList(child, tpe, cursor, f.compose(_.take(num).rightIor))
+
+      case OrderBy(selections, child) =>
+        runList(child, tpe, cursor, f.compose(selections.order(_).rightIor))
+
+      case _ =>
+        cursor.asList.flatMap(f.run).flatMap(lc =>
+          lc.traverse(c => runValue(query, tpe, c)).map(ProtoJson.fromValues)
+        )
+    }
 
   /**
    * Interpret `query` against `cursor` with expected type `tpe`.
@@ -534,7 +662,7 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
             }
           else cursor.asList
 
-        cursors.map(_.filter(pred)).flatMap(lc =>
+        cursors.flatMap(_.filterA(pred(_))).flatMap(lc =>
           lc match {
             case List(c) => runValue(child, tpe.nonNull, c)
             case Nil if tpe.isNullable => ProtoJson.fromJson(Json.Null).rightIor
@@ -543,10 +671,8 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
           }
         )
 
-      case (Filter(pred, child), ListType(tpe)) =>
-        cursor.asList.map(_.filter(pred)).flatMap(lc =>
-          lc.traverse(c => runValue(child, tpe, c)).map(ProtoJson.fromValues)
-        )
+      case (_, ListType(tpe)) =>
+        runList(query, tpe, cursor, Kleisli(_.rightIor))
 
       case (_, NullableType(tpe)) =>
         cursor.asNullable.sequence.map { rc =>
@@ -555,11 +681,6 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
             value <- runValue(query, tpe, c)
           } yield value
         }.getOrElse(ProtoJson.fromJson(Json.Null).rightIor)
-
-      case (_, ListType(tpe)) =>
-        cursor.asList.flatMap(lc =>
-          lc.traverse(c => runValue(query, tpe, c)).map(ProtoJson.fromValues)
-        )
 
       case (_, (_: ScalarType) | (_: EnumType)) =>
         cursor.asLeaf.map(ProtoJson.fromJson)

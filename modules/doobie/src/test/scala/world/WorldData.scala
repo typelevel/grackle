@@ -21,7 +21,7 @@ class WorldMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
         type Query {
           cities(namePattern: String = "%"): [City!]
           country(code: String): Country
-          countries: [Country!]
+          countries(limit: Int = -1, minPopulation: Int = 0, byPopulation: Boolean = false): [Country!]
           language(language: String): Language
           search(minPopulation: Int!, indepSince: Int!): [Country!]!
         }
@@ -165,7 +165,7 @@ class WorldMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
   def languageCountryJoin(c: Cursor, q: Query): Result[Query] = q match {
     case Select("countries", Nil, child) =>
       c.field("language").map { case ScalarFocus(language: String) =>
-        Select("countries", Nil, Filter(Contains(FieldPath(List("languages", "language")), Const(language)), child))
+        Select("countries", Nil, Filter(Contains(CollectFieldPath(List("languages", "language")), Const(language)), child))
       }
     case _ => mkErrorResult("Bad staging join")
   }
@@ -174,8 +174,22 @@ class WorldMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
     QueryType -> {
       case Select("country", List(Binding("code", StringValue(code))), child) =>
         Select("country", Nil, Unique(Eql(AttrPath(List("code")), Const(code)), child)).rightIor
-      case Select("countries", Nil, child) =>
-        Select("countries", Nil, child).rightIor
+
+      case Select("countries", List(Binding("limit", IntValue(num)), Binding("minPopulation", IntValue(min)), Binding("byPopulation", BooleanValue(byPop))), child) =>
+        def limit(query: Query): Query =
+          if (num < 1) query
+          else Limit(num, query)
+
+        def order(query: Query): Query =
+          if (byPop) OrderBy(OrderSelections(List(OrderSelection(FieldPath[Int](List("population"))))), query)
+          else query
+
+        def filter(query: Query): Query =
+          if (min == 0) query
+          else Filter(GtEql(FieldPath(List("population")), Const(min)), query)
+
+        Select("countries", Nil, limit(order(filter(child)))).rightIor
+
       case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
         Select("cities", Nil, Filter(Like(FieldPath(List("name")), namePattern, true), child)).rightIor
       case Select("language", List(Binding("language", StringValue(language))), child) =>

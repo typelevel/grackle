@@ -263,6 +263,8 @@ object QueryCompiler {
         case c@Component(_, _, child) => transform(child, env, schema, tpe).map(ec => c.copy(child = ec))
         case d@Defer(_, child, _)     => transform(child, env, schema, tpe).map(ec => d.copy(child = ec))
         case s@Skip(_, _, child)      => transform(child, env, schema, tpe).map(ec => s.copy(child = ec))
+        case l@Limit(_, child)        => transform(child, env, schema, tpe).map(ec => l.copy(child = ec))
+        case o@OrderBy(_, child)      => transform(child, env, schema, tpe).map(ec => o.copy(child = ec))
         case Empty                    => Empty.rightIor
       }
   }
