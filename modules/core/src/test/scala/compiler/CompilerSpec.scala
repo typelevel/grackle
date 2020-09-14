@@ -9,7 +9,7 @@ import cats.implicits._
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle._
-import Query._, Predicate._, Value._
+import Query._, Predicate._, Value._, UntypedOperation._
 import QueryCompiler._, ComponentElaborator.TrivialJoin
 
 final class CompilerSuite extends CatsSuite {
@@ -28,7 +28,47 @@ final class CompilerSuite extends CatsSuite {
       )
 
     val res = QueryParser.parseText(text)
-    assert(res == Ior.Right((expected, Nil)))
+    assert(res == Ior.Right(UntypedQuery(expected, Nil)))
+  }
+
+ test("simple mutation") {
+    val text = """
+      mutation {
+        update_character(id: "1000", name: "Luke") {
+          character {
+            name
+          }
+        }
+      }
+    """
+
+    val expected =
+      Select("update_character", List(Binding("id", StringValue("1000")), Binding("name", StringValue("Luke"))),
+        Select("character", Nil,
+          Select("name", Nil)
+        )
+      )
+
+    val res = QueryParser.parseText(text)
+    assert(res == Ior.Right(UntypedMutation(expected, Nil)))
+  }
+
+  test("simple subscription") {
+    val text = """
+      subscription {
+        character(id: "1000") {
+          name
+        }
+      }
+    """
+
+    val expected =
+      Select("character", List(Binding("id", StringValue("1000"))),
+        Select("name", Nil)
+      )
+
+    val res = QueryParser.parseText(text)
+    assert(res == Ior.Right(UntypedSubscription(expected, Nil)))
   }
 
   test("simple nested query") {
@@ -54,7 +94,7 @@ final class CompilerSuite extends CatsSuite {
       )
 
     val res = QueryParser.parseText(text)
-    assert(res == Ior.Right((expected, Nil)))
+    assert(res == Ior.Right(UntypedQuery(expected, Nil)))
   }
 
   test("shorthand query") {
@@ -85,7 +125,7 @@ final class CompilerSuite extends CatsSuite {
       )
 
     val res = QueryParser.parseText(text)
-    assert(res == Ior.Right((expected, Nil)))
+    assert(res == Ior.Right(UntypedQuery(expected, Nil)))
   }
 
   test("field alias") {
@@ -111,7 +151,7 @@ final class CompilerSuite extends CatsSuite {
       )
 
     val res = QueryParser.parseText(text)
-    assert(res == Ior.Right((expected, Nil)))
+    assert(res == Ior.Right(UntypedQuery(expected, Nil)))
   }
 
   test("introspection query") {
@@ -140,7 +180,7 @@ final class CompilerSuite extends CatsSuite {
       )
 
     val res = QueryParser.parseText(text)
-    assert(res == Ior.Right((expected, Nil)))
+    assert(res == Ior.Right(UntypedQuery(expected, Nil)))
   }
 
   test("simple selector elaborated query") {

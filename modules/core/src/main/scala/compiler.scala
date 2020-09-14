@@ -8,7 +8,7 @@ import cats.data.Ior
 import cats.implicits._
 import io.circe.Json
 
-import Query._, Predicate._, Value._
+import Query._, Predicate._, Value._, UntypedOperation._
 import QueryCompiler._
 import QueryInterpreter.{ mkErrorResult, mkOneError }
 import ScalarType._
@@ -17,14 +17,14 @@ import ScalarType._
  * GraphQL query parser
  */
 object QueryParser {
-  import Ast.{ Type => _, Value => _, _ }, OperationDefinition._, OperationType._, Selection._
+  import Ast.{ Type => _, Value => _, _ }, OperationDefinition._, Selection._
 
   /**
    *  Parse a query String to a query algebra term.
    *
    *  Yields a Query value on the right and accumulates errors on the left.
    */
-  def parseText(text: String, name: Option[String] = None): Result[(Query, UntypedVarDefs)] = {
+  def parseText(text: String, name: Option[String] = None): Result[UntypedOperation] = {
     def toResult[T](pr: Either[String, T]): Result[T] =
       Ior.fromEither(pr).leftMap(mkOneError(_))
 
@@ -34,7 +34,7 @@ object QueryParser {
     } yield query
   }
 
-  def parseDocument(doc: Document, name: Option[String]): Result[(Query, UntypedVarDefs)] = {
+  def parseDocument(doc: Document, name: Option[String]): Result[UntypedOperation] = {
     val ops = doc.collect { case op: OperationDefinition => op }
     val fragments = doc.collect { case frag: FragmentDefinition => (frag.name.value, frag) }.toMap
 
@@ -57,18 +57,24 @@ object QueryParser {
     }
   }
 
-  def parseOperation(op: Operation, fragments: Map[String, FragmentDefinition]): Result[(Query, UntypedVarDefs)] = op match {
-    case Operation(Query, _, vds, _, sels) =>
+  def parseOperation(op: Operation, fragments: Map[String, FragmentDefinition]): Result[UntypedOperation] = op match {
+    case Operation(opType, _, vds, _, sels) =>
       val q = parseSelections(sels, None, fragments)
       val vs = vds.map {
         case VariableDefinition(nme, tpe, _, _) => UntypedVarDef(nme.value, tpe, None)
       }
-      q.map(q => (q, vs))
+      q.map(q => 
+        opType match {
+          case OperationType.Query => UntypedQuery(q, vs)
+          case OperationType.Mutation => UntypedMutation(q, vs)
+          case OperationType.Subscription => UntypedSubscription(q, vs)
+        }
+      )
     case _ => mkErrorResult("Selection required")
   }
 
-  def parseQueryShorthand(qs: QueryShorthand, fragments: Map[String, FragmentDefinition]): Result[(Query, UntypedVarDefs)] = qs match {
-    case QueryShorthand(sels) => parseSelections(sels, None, fragments).map(q => (q, Nil))
+  def parseQueryShorthand(qs: QueryShorthand, fragments: Map[String, FragmentDefinition]): Result[UntypedOperation] = qs match {
+    case QueryShorthand(sels) => parseSelections(sels, None, fragments).map(q => UntypedQuery(q, Nil))
     case _ => mkErrorResult("Selection required")
   }
 
@@ -185,9 +191,9 @@ class QueryCompiler(schema: Schema, phases: List[Phase]) {
 
     for {
       parsed  <- QueryParser.parseText(text)
-      varDefs <- compileVarDefs(parsed._2)
+      varDefs <- compileVarDefs(parsed.variables)
       env     <- compileEnv(varDefs, untypedEnv)
-      query   <- allPhases.foldLeftM(parsed._1) { (acc, phase) => phase.transform(acc, env, schema, queryType) }
+      query   <- allPhases.foldLeftM(parsed.query) { (acc, phase) => phase.transform(acc, env, schema, queryType) }
     } yield query
   }
 
