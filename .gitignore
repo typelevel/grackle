@@ -43,9 +43,13 @@ bin/
 # Mill
 out/
 
+# VSCode
+.vscode/
+
 # Bloop/Metals
 .bloop/
 .metals/
+metals.sbt
 
 # Vim
 *.swp
