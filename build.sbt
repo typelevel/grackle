@@ -33,6 +33,7 @@ lazy val noPublishSettings = Seq(
 
 lazy val modules: List[ProjectReference] = List(
   core,
+  circe,
   doobie,
   generic,
   demo
@@ -54,6 +55,25 @@ lazy val core = project
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-core",
+    libraryDependencies ++= Seq(
+      "org.tpolecat"      %% "atto-core"              % attoVersion,
+      "org.typelevel"     %% "cats-core"              % catsVersion,
+      "io.circe"          %% "circe-core"             % circeVersion,
+      "io.circe"          %% "circe-literal"          % circeVersion,
+      "io.circe"          %% "circe-optics"           % circeOpticsVersion,
+      "io.circe"          %% "circe-parser"           % circeVersion,
+      "org.typelevel"     %% "jawn-parser"            % jawnVersion,
+    )
+  )
+
+lazy val circe = project
+  .in(file("modules/circe"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(core)
+  .settings(commonSettings)
+  .settings(
+    name := "gsp-graphql-circe",
     libraryDependencies ++= Seq(
       "org.tpolecat"      %% "atto-core"              % attoVersion,
       "org.typelevel"     %% "cats-core"              % catsVersion,
