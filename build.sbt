@@ -89,7 +89,7 @@ lazy val doobie = project
   .in(file("modules/doobie"))
   .enablePlugins(AutomateHeaderPlugin)
   .disablePlugins(RevolverPlugin)
-  .dependsOn(core)
+  .dependsOn(core, circe)
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-doobie",
