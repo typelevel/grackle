@@ -5,6 +5,7 @@ package edu.gemini.grackle
 package doobie
 
 import java.sql.ResultSet
+import org.postgresql.util.PGobject
 import scala.reflect.ClassTag
 import scala.util.matching.Regex
 
@@ -21,6 +22,7 @@ import _root_.doobie.util.meta.Meta
 import _root_.doobie.util.transactor.Transactor
 import io.chrisdavenport.log4cats.Logger
 import io.circe.{ Encoder, Json }
+import io.circe.parser._
 
 import QueryCompiler._, ComponentElaborator.TrivialJoin
 import DoobiePredicate._
@@ -29,8 +31,9 @@ import Query._
 import QueryInterpreter.mkErrorResult
 import Row.FailedJoin
 import ScalarType._
+import circe.AbstractCirceMapping
 
-trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
+trait DoobieMapping[F[_]] extends AbstractCirceMapping[Sync, F] {
   type Table = List[Row]
 
   val transactor: Transactor[F]
@@ -96,6 +99,7 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
     val obj = tpe.underlyingObject
     fieldMapping(obj, fieldName) match {
       case Some(DoobieField(_, cr, _)) => List(cr)
+      case Some(DoobieJson(_, cr)) => List(cr)
       case Some(DoobieObject(_, Subobject(joins, _))) => joins.map(_.parent) ++ joins.map(_.child)
       case _ => Nil
     }
@@ -121,6 +125,7 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
     val obj = tpe.underlyingObject
     fieldMapping(obj, fieldName) match {
       case Some(DoobieField(_, cr, _)) => Some(cr)
+      case Some(DoobieJson(_, cr)) => Some(cr)
       case _ => None
     }
   }
@@ -257,6 +262,17 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
       orderJoins(Set(rootTable), joins, Nil).reverse
     }
 
+    val jsonMeta: Meta[Json] =
+      Meta.Advanced.other[PGobject]("json").timap[Json](
+        a => parse(a.getValue).leftMap[Json](e => throw e).merge)(
+        a => {
+          val o = new PGobject
+          o.setType("json")
+          o.setValue(a.noSpaces)
+          o
+        }
+      )
+
     val metas = {
       def getForColumn(col: ColumnRef): (Boolean, (Meta[_], NullabilityKnown)) = {
         // A column is the product of an outer join (and may therefore be null even if it's non-nullable
@@ -269,6 +285,9 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
               case DoobieField(fieldName, `col`, _) if mappings.contains(om) =>
                 val meta = typeToMeta(mappings(om).field(fieldName))
                 (isJoin(col), meta)
+              case DoobieJson(fieldName, _) =>
+                val nullable = mappings(om).field(fieldName).isNullable
+                (false, (jsonMeta, if (nullable) Nullable else NoNulls))
               case DoobieAttribute(_, `col`, meta, _, nullable) =>
                 (isJoin(col), (meta, if (nullable) Nullable else NoNulls))
             }
@@ -314,6 +333,7 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
   object DoobieFieldMapping {
     case class DoobieField(fieldName: String, columnRef: ColumnRef, key: Boolean = false) extends DoobieFieldMapping
     case class DoobieObject(fieldName: String, subobject: Subobject) extends DoobieFieldMapping
+    case class DoobieJson(fieldName: String, columnRef: ColumnRef) extends DoobieFieldMapping
   }
 
   case class DoobieLeafMapping[T](val tpe: Type, val encoder: Encoder[T], val meta: Meta[T]) extends LeafMapping[T]
@@ -364,10 +384,13 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
       fieldMapping(obj, fieldName).map(_ => true).getOrElse(false)
     }
 
-    def selectField(row: Row, tpe: Type, fieldName: String): Any = {
+    def selectField(row: Row, tpe: Type, fieldName: String): Result[Any] = {
       val obj = tpe.dealias
-      val Some(DoobieField(_, col: ColumnRef, _)) = fieldMapping(obj, fieldName)
-      select(row, col)
+      fieldMapping(obj, fieldName) match {
+        case Some(DoobieField(_, col: ColumnRef, _)) => select(row, col).rightIor
+        case Some(DoobieJson(_, col: ColumnRef)) => select(row, col).rightIor
+        case other => mkErrorResult(s"Expected mapping for field $fieldName of type $obj, found $other")
+      }
     }
 
     def hasAttribute(tpe: Type, attrName: String): Boolean = {
@@ -375,10 +398,12 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
       attributeMapping(obj, attrName).map(_ => true).getOrElse(false)
     }
 
-    def selectAttribute(row: Row, tpe: Type, attrName: String): Any = {
+    def selectAttribute(row: Row, tpe: Type, attrName: String): Result[Any] = {
       val obj = tpe.dealias
-      val Some(col: ColumnRef) = attributeMapping(obj, attrName).map(_.col)
-      select(row, col)
+      attributeMapping(obj, attrName).map(_.col) match {
+        case Some(col: ColumnRef) => select(row, col).rightIor
+        case other => mkErrorResult(s"Expected mapping for attribute $attrName of type $obj, found $other")
+      }
     }
 
     def hasSubobject(tpe: Type): Boolean = objectMapping(tpe).isDefined
@@ -749,9 +774,28 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
       fieldMapping(tpe.underlyingObject, fieldName) match {
         case Some(CursorField(_, f, _)) =>
           f(this).map(res => LeafCursor(tpe = fieldTpe, focus = res))
+
+        case Some(DoobieJson(_, _)) =>
+          asTable.flatMap { table =>
+            mapped.selectField(table.head, tpe, fieldName).flatMap(_ match {
+              case Some(j: Json) if fieldTpe.isNullable =>
+                CirceCursor(tpe = fieldTpe, focus = j).rightIor
+              case None =>
+                CirceCursor(tpe = fieldTpe, focus = Json.Null).rightIor
+              case j: Json if !fieldTpe.isNullable =>
+                CirceCursor(tpe = fieldTpe, focus = j).rightIor
+              case other =>
+                mkErrorResult(s"Expected jsonb value found $other")
+            })
+          }
+
         case _ =>
           if (isUnstructured(fieldTpe))
-            asTable.map(table => LeafCursor(tpe = fieldTpe, focus = mapped.selectField(table.head, tpe, fieldName)))
+            asTable.flatMap(table =>
+              mapped.selectField(table.head, tpe, fieldName).map(leaf =>
+                LeafCursor(tpe = fieldTpe, focus = leaf)
+              )
+            )
           else
             asTable.map(table => copy(tpe = fieldTpe, focus = mapped.stripNulls(table, fieldTpe)))
       }
@@ -767,7 +811,7 @@ trait DoobieMapping[F[_]] extends AbstractMapping[Sync, F] {
       fieldMapping(tpe, attributeName) match {
         case Some(CursorAttribute(_, f)) => f(this)
         case _ =>
-          asTable.map(table => mapped.selectAttribute(table.head, tpe, attributeName))
+          asTable.flatMap(table => mapped.selectAttribute(table.head, tpe, attributeName))
       }
   }
 

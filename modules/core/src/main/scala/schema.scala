@@ -45,9 +45,9 @@ trait Schema {
    *
    * ```
    * type Schema {
-   * query: Query!
-   * mutation: Mutation
-   * subscription: Subscription
+   *   query: Query!
+   *   mutation: Mutation
+   *   subscription: Subscription
    * }
    * ```
    *
@@ -409,9 +409,9 @@ case class TypeRef(schema: Schema, name: String) extends NamedType {
  * @see https://facebook.github.io/graphql/draft/#sec-Scalar
  */
 case class ScalarType(
-                       name: String,
-                       description: Option[String]
-                     ) extends Type with NamedType
+  name: String,
+  description: Option[String]
+) extends Type with NamedType
 
 object ScalarType {
   def apply(tpnme: String): Option[ScalarType] = tpnme match {
@@ -494,11 +494,11 @@ sealed trait TypeWithFields extends NamedType {
  * @see https://facebook.github.io/graphql/draft/#sec-Interface
  */
 case class InterfaceType(
-                          name: String,
-                          description: Option[String],
-                          fields: List[Field],
-                          interfaces: List[NamedType]
-                        ) extends Type with TypeWithFields {
+  name: String,
+  description: Option[String],
+  fields: List[Field],
+  interfaces: List[NamedType]
+) extends Type with TypeWithFields {
   override def isInterface: Boolean = true
 }
 
@@ -508,11 +508,11 @@ case class InterfaceType(
  * @see https://facebook.github.io/graphql/draft/#sec-Object
  */
 case class ObjectType(
-                       name: String,
-                       description: Option[String],
-                       fields: List[Field],
-                       interfaces: List[NamedType]
-                     ) extends Type with TypeWithFields
+  name: String,
+  description: Option[String],
+  fields: List[Field],
+  interfaces: List[NamedType]
+) extends Type with TypeWithFields
 
 /**
  * Unions are an abstract type where no common fields are declared. The possible types of a union
@@ -522,10 +522,10 @@ case class ObjectType(
  * @see https://facebook.github.io/graphql/draft/#sec-Union
  */
 case class UnionType(
-                      name: String,
-                      description: Option[String],
-                      members: List[NamedType]
-                    ) extends Type with NamedType {
+  name: String,
+  description: Option[String],
+  members: List[NamedType]
+) extends Type with NamedType {
   override def toString: String = members.mkString("|")
 }
 
@@ -535,10 +535,10 @@ case class UnionType(
  * @see https://facebook.github.io/graphql/draft/#sec-Enum
  */
 case class EnumType(
-                     name: String,
-                     description: Option[String],
-                     enumValues: List[EnumValue]
-                   ) extends Type with NamedType {
+  name: String,
+  description: Option[String],
+  enumValues: List[EnumValue]
+) extends Type with NamedType {
   def hasValue(name: String): Boolean = enumValues.exists(_.name == name)
 
   def value(name: String): Option[EnumValue] = enumValues.find(_.name == name)
@@ -550,11 +550,11 @@ case class EnumType(
  * @see https://facebook.github.io/graphql/draft/#sec-The-__EnumValue-Type
  */
 case class EnumValue(
-                      name: String,
-                      description: Option[String],
-                      isDeprecated: Boolean = false,
-                      deprecationReason: Option[String] = None
-                    )
+  name: String,
+  description: Option[String],
+  isDeprecated: Boolean = false,
+  deprecationReason: Option[String] = None
+)
 
 /**
  * Input objects are composite types used as inputs into queries defined as a list of named input
@@ -563,10 +563,10 @@ case class EnumValue(
  * @see https://facebook.github.io/graphql/draft/#sec-Input-Object
  */
 case class InputObjectType(
-                            name: String,
-                            description: Option[String],
-                            inputFields: List[InputValue]
-                          ) extends Type with NamedType {
+  name: String,
+  description: Option[String],
+  inputFields: List[InputValue]
+) extends Type with NamedType {
   def inputFieldInfo(name: String): Option[InputValue] = inputFields.find(_.name == name)
 }
 
@@ -577,8 +577,8 @@ case class InputObjectType(
  * @see https://facebook.github.io/graphql/draft/#sec-Type-Kinds.List
  */
 case class ListType(
-                     ofType: Type
-                   ) extends Type {
+  ofType: Type
+) extends Type {
   override def toString: String = s"[$ofType]"
 }
 
@@ -590,8 +590,8 @@ case class ListType(
  * @see https://facebook.github.io/graphql/draft/#sec-Type-Kinds.Non-Null
  */
 case class NullableType(
-                         ofType: Type
-                       ) extends Type {
+  ofType: Type
+) extends Type {
   override def toString: String = s"$ofType?"
 }
 
@@ -601,24 +601,24 @@ case class NullableType(
  * @see https://facebook.github.io/graphql/draft/#sec-The-__Field-Type
  */
 case class Field private(
-                          name: String,
-                          description: Option[String],
-                          args: List[InputValue],
-                          tpe: Type,
-                          isDeprecated: Boolean,
-                          deprecationReason: Option[String]
-                        )
+  name: String,
+  description: Option[String],
+  args: List[InputValue],
+  tpe: Type,
+  isDeprecated: Boolean,
+  deprecationReason: Option[String]
+)
 
 /**
  * @param defaultValue a String encoding (using the GraphQL language) of the default value used by
  *                     this input value in the condition a value is not provided at runtime.
  */
 case class InputValue private(
-                               name: String,
-                               description: Option[String],
-                               tpe: Type,
-                               defaultValue: Option[Value]
-                             )
+  name: String,
+  description: Option[String],
+  tpe: Type,
+  defaultValue: Option[Value]
+)
 
 sealed trait Value
 
@@ -733,11 +733,11 @@ object Value {
  * @see https://facebook.github.io/graphql/draft/#sec-The-__Directive-Type
  */
 case class Directive(
-                      name: String,
-                      description: Option[String],
-                      locations: List[Ast.DirectiveLocation],
-                      args: List[InputValue]
-                    )
+  name: String,
+  description: Option[String],
+  locations: List[Ast.DirectiveLocation],
+  args: List[InputValue]
+)
 
 /**
  * GraphQL schema parser
