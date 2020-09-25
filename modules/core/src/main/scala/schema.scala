@@ -169,6 +169,17 @@ sealed trait Type {
   def hasField(fieldName: String): Boolean =
     field(fieldName) != NoType
 
+  /**
+   * `true` if this type has a field named `fieldName` which is undefined in
+   * some interface it implements
+   */
+  def variantField(fieldName: String): Boolean =
+    underlyingObject match {
+      case ObjectType(_, _, _, interfaces) =>
+        hasField(fieldName) && interfaces.exists(!_.hasField(fieldName))
+      case _ => false
+    }
+
   def withField[T](fieldName: String)(body: Type => Result[T]): Result[T] = {
     val childTpe = field(fieldName)
     if (childTpe =:= NoType) mkErrorResult(s"Unknown field '$fieldName' in '$this'")
