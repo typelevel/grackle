@@ -61,8 +61,8 @@ trait ValueMapping[F[_]] extends AbstractMapping[Monad, F] {
     new ValueObjectMapping(tpe, fieldMappings.map(_.withParent(tpe)), classTag)
 
   case class ValueCursor(
-    tpe:     Type,
-    focus:   Any
+    tpe:   Type,
+    focus: Any
   ) extends Cursor {
     def isLeaf: Boolean =
       tpe.dealias match {
@@ -111,7 +111,7 @@ trait ValueMapping[F[_]] extends AbstractMapping[Monad, F] {
 
     def narrowsTo(subtpe: TypeRef): Boolean =
       subtpe <:< tpe &&
-        typeMapping(subtpe).map {
+        objectMapping(RootedType(subtpe)).map {
           case ValueObjectMapping(_, _, classTag) =>
             classTag.runtimeClass.isInstance(focus)
           case _ => false
@@ -125,10 +125,10 @@ trait ValueMapping[F[_]] extends AbstractMapping[Monad, F] {
         mkErrorResult(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
 
     def hasField(fieldName: String): Boolean =
-      tpe.hasField(fieldName) && fieldMapping(tpe, fieldName).isDefined
+      tpe.hasField(fieldName) && fieldMapping(RootedType(tpe), fieldName).isDefined
 
     def field(fieldName: String): Result[Cursor] =
-      fieldMapping(tpe, fieldName) match {
+      fieldMapping(RootedType(tpe), fieldName) match {
         case Some(ValueField(_, f)) =>
           copy(tpe = tpe.field(fieldName), focus = f.asInstanceOf[Any => Any](focus)).rightIor
         case Some(CursorField(_, f, _)) =>
@@ -138,10 +138,10 @@ trait ValueMapping[F[_]] extends AbstractMapping[Monad, F] {
       }
 
     def hasAttribute(attrName: String): Boolean =
-      !tpe.hasField(attrName) && fieldMapping(tpe, attrName).isDefined
+      !tpe.hasField(attrName) && fieldMapping(RootedType(tpe), attrName).isDefined
 
     def attribute(attrName: String): Result[Any] =
-      fieldMapping(tpe, attrName) match {
+      fieldMapping(RootedType(tpe), attrName) match {
         case Some(ValueAttribute(_, f)) =>
           f.asInstanceOf[Any => Any](focus).rightIor
         case Some(CursorAttribute(_, f)) =>

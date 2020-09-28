@@ -256,4 +256,68 @@ final class StarWarsSpec extends CatsSuite {
 
     assert(res == expected)
   }
+
+  test("fragments") {
+    val query = """
+      query {
+        character(id: "1000") {
+          name
+          friends {
+            name
+            ... on Human {
+              homePlanet
+              appearsIn
+            }
+            ... on Droid {
+              primaryFunction
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "character" : {
+            "name" : "Luke Skywalker",
+            "friends" : [
+              {
+                "name" : "Han Solo",
+                "homePlanet" : null,
+                "appearsIn" : [
+                  "NEWHOPE",
+                  "EMPIRE",
+                  "JEDI"
+                ]
+              },
+              {
+                "name" : "Leia Organa",
+                "homePlanet" : "Alderaan",
+                "appearsIn" : [
+                  "NEWHOPE",
+                  "EMPIRE",
+                  "JEDI"
+                ]
+              },
+              {
+                "name" : "C-3PO",
+                "primaryFunction" : "Protocol"
+              },
+              {
+                "name" : "R2-D2",
+                "primaryFunction" : "Astromech"
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val compiledQuery = StarWarsMapping.compiler.compile(query).right.get
+    val res = StarWarsMapping.interpreter.run(compiledQuery, StarWarsMapping.schema.queryType)
+    //println(res)
+
+    assert(res == expected)
+  }
 }

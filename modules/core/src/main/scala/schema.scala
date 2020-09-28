@@ -169,6 +169,17 @@ sealed trait Type {
   def hasField(fieldName: String): Boolean =
     field(fieldName) != NoType
 
+  /**
+   * `true` if this type has a field named `fieldName` which is undefined in
+   * some interface it implements
+   */
+  def variantField(fieldName: String): Boolean =
+    underlyingObject match {
+      case ObjectType(_, _, _, interfaces) =>
+        hasField(fieldName) && interfaces.exists(!_.hasField(fieldName))
+      case _ => false
+    }
+
   def withField[T](fieldName: String)(body: Type => Result[T]): Result[T] = {
     val childTpe = field(fieldName)
     if (childTpe =:= NoType) mkErrorResult(s"Unknown field '$fieldName' in '$this'")
@@ -390,6 +401,35 @@ object JoinType {
     case ObjectType(nme, None, List(Field(fieldName, None, Nil, tpe, false, None)), Nil) if nme == s"<$fieldName:$tpe>" =>
       Some((fieldName, tpe))
   }
+}
+
+/**
+ * Represents an occurence of a type at a position within the graph determined
+ * by a path prefix.
+ */
+case class RootedType(path: List[String], tpe: Type) {
+  def dealias: RootedType = copy(tpe = tpe.dealias)
+  def underlyingObject: RootedType = copy(tpe = tpe.underlyingObject)
+  def nonNull: RootedType = copy(tpe = tpe.nonNull)
+  def item: RootedType = copy(tpe = tpe.item)
+
+  def field(fieldName: String): RootedType =
+    RootedType(path :+ fieldName, tpe.field(fieldName))
+  def underlyingField(fieldName: String): RootedType =
+    RootedType(path :+ fieldName, tpe.underlyingField(fieldName))
+  def withUnderlyingField[T](fieldName: String)(body: RootedType => Result[T]): Result[T] =
+    tpe.withUnderlyingField(fieldName) { childTpe =>
+      body(RootedType(path :+ fieldName, childTpe))
+    }
+
+  def path(fns: List[String]): RootedType =
+    RootedType(path ++ fns, tpe.path(fns))
+}
+
+object RootedType {
+  def apply(tpe: Type): RootedType = RootedType(Nil, tpe)
+
+  implicit def asType(rt: RootedType): Type = rt.tpe
 }
 
 /**
