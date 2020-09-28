@@ -20,6 +20,40 @@ trait Mapping[F[_]] {
   def typeMapping(tpe: Type): List[TypeMapping] =
     typeMappings.filter(_.tpe.nominal_=:=(tpe))
 
+  def validate: Boolean = {
+    val typeMappingNames: List[String] = typeMappings.flatMap(_.tpe.asNamed.toList.map(_.name))
+
+    val typeMappingFieldNames: List[String] = typeMappings.collect {
+      case om: ObjectMapping => om.fieldMappings.map(_.fieldName)
+    }.flatten
+
+    val mappingTypesExistInSchema: Boolean = {
+      val missingTypes = typeMappingNames.filterNot(name => schema.types.map(_.name).contains(name))
+      if (missingTypes.isEmpty) true
+      else {
+        println(s"The following types defined in the mappings were not found in the schema: $missingTypes")
+        false
+      }
+    }
+
+    val mappingFieldsExistInSchema: Boolean = {
+      val missingFields = typeMappingFieldNames.filterNot(name => schema.types.collect { case t: TypeWithFields => t.fields.map(_.name) }.flatten.contains(name))
+      if (missingFields.isEmpty) true
+      else {
+        println(s"The following fields defined in the mappings were not found in the schema: $missingFields")
+        false
+      }
+    }
+
+    println(s"-----------------------------------")
+    println(s"mapping fields: $typeMappingFieldNames")
+    println(s"schema fields: ${schema.types.collect { case t: TypeWithFields => t.fields.map(_.name) }.flatten}")
+
+    println(s"missing fields: ${typeMappingFieldNames.filterNot(name => schema.types.collect { case t: TypeWithFields => t.fields.map(_.name) }.flatten.contains(name))}")
+
+    mappingTypesExistInSchema && mappingFieldsExistInSchema
+  }
+
   def objectMapping(tpe: RootedType): Option[ObjectMapping] =
     (tpe.path, typeMapping(tpe.tpe)) match {
       case (_, Nil) => None
@@ -71,6 +105,7 @@ trait Mapping[F[_]] {
 
   trait TypeMapping extends Product with Serializable {
     def tpe: Type
+
   }
 
   trait ObjectMapping extends TypeMapping {
@@ -125,10 +160,10 @@ trait Mapping[F[_]] {
   }
 
   case class Delegate(
-    fieldName: String,
-    interpreter: Mapping[F],
-    join: (Cursor, Query) => Result[Query] = ComponentElaborator.TrivialJoin
-  ) extends FieldMapping {
+                       fieldName: String,
+                       interpreter: Mapping[F],
+                       join: (Cursor, Query) => Result[Query] = ComponentElaborator.TrivialJoin
+                     ) extends FieldMapping {
     def withParent(tpe: Type): Delegate = this
   }
 
