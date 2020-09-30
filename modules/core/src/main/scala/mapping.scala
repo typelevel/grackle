@@ -31,23 +31,11 @@ trait Mapping[F[_]] {
       }
     }.flatten
 
-    val mappingTypesExistInSchema: Boolean = {
-      val missingTypes = typeMappingNames.filterNot(name => schema.types.map(_.name).contains(name))
-      if (missingTypes.isEmpty) true
-      else {
-        println(s"The following types defined in the mappings were not found in the schema: $missingTypes")
-        false
-      }
-    }
+    val mappingTypesExistInSchema: Boolean =
+      typeMappingNames.forall(name => schema.types.map(_.name).contains(name))
 
-    val mappingFieldsExistInSchema: Boolean = {
-      val missingFields = typeMappingFieldNames.filterNot(name => schema.types.collect { case t: TypeWithFields => t.fields.map(_.name) }.flatten.contains(name))
-      if (missingFields.isEmpty) true
-      else {
-        println(s"The following fields defined in the mappings were not found in the schema: $missingFields")
-        false
-      }
-    }
+    val mappingFieldsExistInSchema: Boolean = 
+      typeMappingFieldNames.forall(name => schema.types.collect { case t: TypeWithFields => t.fields.map(_.name) }.flatten.contains(name))
 
     mappingTypesExistInSchema && mappingFieldsExistInSchema
   }
