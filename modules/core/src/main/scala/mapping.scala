@@ -103,7 +103,6 @@ trait Mapping[F[_]] {
 
   trait TypeMapping extends Product with Serializable {
     def tpe: Type
-
   }
 
   trait ObjectMapping extends TypeMapping {
@@ -158,10 +157,10 @@ trait Mapping[F[_]] {
   }
 
   case class Delegate(
-                       fieldName: String,
-                       interpreter: Mapping[F],
-                       join: (Cursor, Query) => Result[Query] = ComponentElaborator.TrivialJoin
-                     ) extends FieldMapping {
+    fieldName: String,
+    interpreter: Mapping[F],
+    join: (Cursor, Query) => Result[Query] = ComponentElaborator.TrivialJoin
+  ) extends FieldMapping {
     def withParent(tpe: Type): Delegate = this
   }
 
