@@ -23,8 +23,12 @@ trait Mapping[F[_]] {
   def validate: Boolean = {
     val typeMappingNames: List[String] = typeMappings.flatMap(_.tpe.asNamed.toList.map(_.name))
 
-    val typeMappingFieldNames: List[String] = typeMappings.collect {
-      case om: ObjectMapping => om.fieldMappings.map(_.fieldName)
+    def typeMappingFieldNames: List[String] = typeMappings.collect {
+      case om: ObjectMapping => om.fieldMappings.flatMap {
+        case _: CursorField[_] => Nil
+        case _: CursorAttribute[_] => Nil
+        case fm => List(fm.fieldName)
+      }
     }.flatten
 
     val mappingTypesExistInSchema: Boolean = {
@@ -44,12 +48,6 @@ trait Mapping[F[_]] {
         false
       }
     }
-
-    println(s"-----------------------------------")
-    println(s"mapping fields: $typeMappingFieldNames")
-    println(s"schema fields: ${schema.types.collect { case t: TypeWithFields => t.fields.map(_.name) }.flatten}")
-
-    println(s"missing fields: ${typeMappingFieldNames.filterNot(name => schema.types.collect { case t: TypeWithFields => t.fields.map(_.name) }.flatten.contains(name))}")
 
     mappingTypesExistInSchema && mappingFieldsExistInSchema
   }

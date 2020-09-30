@@ -348,8 +348,4 @@ final class MovieSpec extends DatabaseSuite {
     assert(res == expected)
   }
 
-  test("mappping") {
-    assert(mapping.validate)
-  }
-
 }

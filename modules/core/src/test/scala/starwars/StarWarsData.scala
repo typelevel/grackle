@@ -174,7 +174,7 @@ object StarWarsMapping extends ValueMapping[Id] {
             ValueField("id", _.id),
             ValueField("name", _.name),
             ValueField("appearsIn", _.appearsIn),
-            ValueField("friends", resolveFriends _),
+            ValueField("friends", resolveFriends _)
           )
       ),
       ValueObjectMapping[Human](
