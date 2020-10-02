@@ -12,15 +12,17 @@ import edu.gemini.grackle.{Schema, ValueMapping}
 class MappingValidationSpec extends CatsSuite {
 
   test("validate ValueMapping") {
-    assert(MovieMapping.validate)
+    assert(MovieMapping.validate.isRight)
   }
 
   test("validate missing typeMapping") {
-    assert(!UnvalidatedTypeMapping.validate)
+    val result = UnvalidatedTypeMapping.validate
+    assert(result.isLeft && result.left.toOption.get.head.noSpaces.contains("Country"))
   }
 
   test("validate missing fieldMapping") {
-    assert(!UnvalidatedFieldMapping.validate)
+    val result = UnvalidatedFieldMapping.validate
+    assert(result.isLeft && result.left.toOption.get.head.noSpaces.contains("name"))
   }
 }
 
