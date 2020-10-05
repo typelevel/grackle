@@ -8,8 +8,8 @@ import cats.implicits._
 import io.circe.{Encoder, Json}
 import Query.Select
 import QueryCompiler.{ComponentElaborator, SelectElaborator}
-import QueryInterpreter.{mkErrorResult, mkOneError}
-import cats.data.NonEmptyChain
+import QueryInterpreter.mkErrorResult
+import cats.data.Chain
 
 trait Mapping[F[_]] {
   implicit val M: Monad[F]
@@ -20,7 +20,7 @@ trait Mapping[F[_]] {
   def typeMapping(tpe: Type): List[TypeMapping] =
     typeMappings.filter(_.tpe.nominal_=:=(tpe))
 
-  def validate: Either[NonEmptyChain[Json], String] = {
+  def validate: Chain[Json] = {
     val typeMappingNames: List[String] = typeMappings.flatMap(_.tpe.asNamed.toList.map(_.name))
 
     def typeMappingFieldNames: List[String] = typeMappings.collect {
@@ -37,8 +37,8 @@ trait Mapping[F[_]] {
     val mappingFieldsExistInSchema: List[String] =
       typeMappingFieldNames.filterNot(name => schema.types.collect { case t: TypeWithFields => t.fields.map(_.name) }.flatten.contains(name))
 
-    if (mappingTypesExistInSchema.isEmpty && mappingFieldsExistInSchema.isEmpty) Right("Mappings are valid")
-    else Left(mkOneError(
+    if (mappingTypesExistInSchema.isEmpty && mappingFieldsExistInSchema.isEmpty) Chain.empty
+    else Chain(Json.fromString(
       s"Schema is missing ${mappingTypesExistInSchema.map(t => s"type: $t").mkString(", ")} ${mappingFieldsExistInSchema.map(t => s"field: $t").mkString(", ")}"))
   }
 
