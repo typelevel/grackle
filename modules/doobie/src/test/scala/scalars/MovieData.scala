@@ -148,6 +148,7 @@ class MovieMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
   val IntervalType = schema.ref("Interval")
   val GenreType = schema.ref("Genre")
   val FeatureType = schema.ref("Feature")
+  val RatingType = schema.ref("Rating")
 
   import DoobieFieldMapping._
 
@@ -180,6 +181,7 @@ class MovieMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
             DoobieField("duration", ColumnRef("movies", "duration")),
             DoobieField("categories", ColumnRef("movies", "categories")),
             DoobieField("features", ColumnRef("movies", "features")),
+            DoobieField("rating", ColumnRef("movies", "rating")),
             CursorAttribute("isLong", isLong)
           )
       ),
