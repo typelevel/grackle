@@ -271,6 +271,8 @@ object QueryCompiler {
         case s@Skip(_, _, child)      => transform(child, env, schema, tpe).map(ec => s.copy(child = ec))
         case l@Limit(_, child)        => transform(child, env, schema, tpe).map(ec => l.copy(child = ec))
         case o@OrderBy(_, child)      => transform(child, env, schema, tpe).map(ec => o.copy(child = ec))
+        case g@GroupBy(_, child)      => transform(child, env, schema, tpe).map(ec => g.copy(child = ec))
+        case c@Context(_, child)      => transform(child, env, schema, tpe).map(ec => c.copy(child = ec))
         case Empty                    => Empty.rightIor
       }
   }

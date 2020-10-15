@@ -216,7 +216,7 @@ final class DerivationSpec extends CatsSuite {
   test("primitive types have leaf cursor builders") {
     val i =
       for {
-        c <- CursorBuilder[Int].build(23)
+        c <- CursorBuilder[Int].build(Nil, 23)
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -224,7 +224,7 @@ final class DerivationSpec extends CatsSuite {
 
     val s =
       for {
-        c <- CursorBuilder[String].build("foo")
+        c <- CursorBuilder[String].build(Nil, "foo")
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -232,7 +232,7 @@ final class DerivationSpec extends CatsSuite {
 
     val b =
       for {
-        c <- CursorBuilder[Boolean].build(true)
+        c <- CursorBuilder[Boolean].build(Nil, true)
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -240,7 +240,7 @@ final class DerivationSpec extends CatsSuite {
 
     val f =
       for {
-        c <- CursorBuilder[Double].build(13.0)
+        c <- CursorBuilder[Double].build(Nil, 13.0)
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -250,7 +250,7 @@ final class DerivationSpec extends CatsSuite {
   test("types with a Circe Encoder instance have leaf cursor builders") {
     val z =
       for {
-        c <- CursorBuilder.leafCursorBuilder[ZonedDateTime].build(ZonedDateTime.parse("2020-03-25T16:24:06.081Z"))
+        c <- CursorBuilder.leafCursorBuilder[ZonedDateTime].build(Nil, ZonedDateTime.parse("2020-03-25T16:24:06.081Z"))
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -260,7 +260,7 @@ final class DerivationSpec extends CatsSuite {
   test("Scala Enumeration types have leaf cursor builders") {
     val e =
       for {
-        c <- CursorBuilder.enumerationCursorBuilder[Episode.Value].build(Episode.JEDI)
+        c <- CursorBuilder.enumerationCursorBuilder[Episode.Value].build(Nil, Episode.JEDI)
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -270,7 +270,7 @@ final class DerivationSpec extends CatsSuite {
   test("product types have cursor builders") {
     val name =
       for {
-        c <- CursorBuilder[Human].build(lukeSkywalker)
+        c <- CursorBuilder[Human].build(Nil, lukeSkywalker)
         f <- c.field("name")
         n <- f.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
         l <- n.asLeaf
@@ -281,7 +281,7 @@ final class DerivationSpec extends CatsSuite {
   test("cursor builders can be resolved for nested types") {
     val appearsIn =
       for {
-        c <- CursorBuilder[Character].build(lukeSkywalker)
+        c <- CursorBuilder[Character].build(Nil, lukeSkywalker)
         f <- c.field("appearsIn")
         n <- f.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
         l <- n.asList
@@ -293,7 +293,7 @@ final class DerivationSpec extends CatsSuite {
   test("default cursor builders can be customised by mapping fields") {
     val friends =
       for {
-        c <- CursorBuilder[Human].build(lukeSkywalker)
+        c <- CursorBuilder[Human].build(Nil, lukeSkywalker)
         f <- c.field("friends")
         n <- f.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
         l <- n.asList
@@ -307,7 +307,7 @@ final class DerivationSpec extends CatsSuite {
   test("sealed ADTs have narrowable cursor builders") {
     val homePlanets =
       for {
-        c <- CursorBuilder[Character].build(lukeSkywalker)
+        c <- CursorBuilder[Character].build(Nil, lukeSkywalker)
         h <- c.narrow(HumanType)
         m <- h.field("homePlanet")
         n <- m.asNullable.flatMap(_.toRightIor(mkOneError("missing")))

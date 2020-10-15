@@ -86,6 +86,10 @@ object Query {
     def render = s"<defer: ${child.render}>"
   }
 
+  case class Context(path: List[String], child: Query) extends Query {
+    def render = s"<context: $path ${child.render}>"
+  }
+
   /**
    * Wraps the result of `child` as a field named `name` of an enclosing object.
    */
@@ -168,6 +172,38 @@ object Query {
           if (ascending) ord
           else -ord
       }
+    }
+  }
+
+  case class GroupBy(discriminator: GroupDiscriminator[_], child: Query) extends Query {
+    def render = s"<group-by: $discriminator ${child.render}>"
+  }
+
+  case class GroupDiscriminator[T: Eq](t: Term[T], ds: List[T]) {
+    def group(cs: List[Cursor]): List[List[Cursor]] = {
+      def deref(c: Cursor): Option[T] =
+        if (c.isNullable) c.asNullable.getOrElse(None).flatMap(t(_).toOption)
+        else t(c).toOption
+
+      val tagged: List[(Cursor, Int)] = cs.map { c =>
+        (c, deref(c).map { t => ds.indexOf(t) }.getOrElse(-1))
+      }
+
+      val sorted: List[(Cursor, Int)] = tagged.sortBy(_._2).dropWhile(_._2 == -1)
+
+      val ngroups = ds.length
+
+      def loop(cis: List[(Cursor, Int)], prev: Int, acc0: List[Cursor], acc1: List[List[Cursor]]): List[List[Cursor]] =
+        cis match {
+          case Nil =>
+            val pad = List.fill(ngroups-prev-1)(Nil)
+            (pad ++ (acc0.reverse :: acc1)).reverse
+          case (c, i) :: tl if i == prev => loop(tl, i, c :: acc0, acc1)
+          case (c, i) :: tl if i == prev+1 => loop(tl, i, List(c), acc0.reverse :: acc1)
+          case cis => loop(cis, prev+1, Nil, acc0.reverse :: acc1)
+        }
+
+      loop(sorted, 0, Nil, Nil)
     }
   }
 
@@ -326,6 +362,7 @@ object Predicate {
 
   case class Eql[T: Eq](x: Term[T], y: Term[T]) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_ === _)
+    def eqInstance: Eq[T] = implicitly[Eq[T]]
   }
 
   case class NEql[T: Eq](x: Term[T], y: Term[T]) extends Predicate {
@@ -350,6 +387,23 @@ object Predicate {
 
   case class GtEql[T: Order](x: Term[T], y: Term[T]) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_.compare(_) >= 0)
+  }
+
+  case class In[T: Eq](x: Term[T], y: List[T]) extends Predicate {
+    def apply(c: Cursor): Result[Boolean] = x(c).map(y.contains(_))
+
+    def mkDiscriminator: GroupDiscriminator[T] = GroupDiscriminator(x, y)
+  }
+
+  object In {
+    def fromEqls[T](eqls: List[Eql[T]]): Option[In[T]] = {
+      val paths = eqls.map(_.x).distinct
+      val consts = eqls.collect { case Eql(_, Const(c)) => c }
+      if (eqls.map(_.x).distinct.size == 1 && consts.size == eqls.size)
+        Some(In(paths.head, consts)(eqls.head.eqInstance))
+      else
+        None
+    }
   }
 
   case class AndB(x: Term[Int], y: Term[Int]) extends Term[Int] {
@@ -468,18 +522,41 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
    *
    *  Errors are accumulated on the `Left` of the result.
    */
-  def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]] =
+  def runRootValue0(query: Query, path: List[String], rootTpe: Type): F[Result[ProtoJson]] =
     query match {
+      case Context(cpath, child) =>
+        runRootValue0(child, cpath ++ path, rootTpe)
+
+      case Select("__staged", _, child) =>
+        (for {
+          cursor <- IorT(mapping.rootCursor(path, rootTpe, "__staged", child))
+          value  <- IorT(runValue(Wrap("__staged", child), rootTpe.list, cursor).pure[F])
+        } yield {
+          val Some(List(unpacked)) = ProtoJson.unpackObject(value)
+          unpacked
+        }).value
+
       case PossiblyRenamedSelect(Select(fieldName, _, child), resultName) =>
         (for {
-          cursor <- IorT(mapping.rootCursor(rootTpe, fieldName, child))
+          cursor <- IorT(mapping.rootCursor(path, rootTpe, fieldName, child))
           value  <- IorT(runValue(Wrap(resultName, child), rootTpe.field(fieldName), cursor).pure[F])
         } yield value).value
+
+      case q@GroupBy(_, Select(fieldName, _, child)) =>
+        val elemTpe = rootTpe.item
+        (for {
+          cursor <- IorT(mapping.rootCursor(path, elemTpe, fieldName, child))
+          value  <- IorT(runValue(q, rootTpe, cursor).pure[F])
+        } yield value).value
+
       case Wrap(_, Component(mapping, _, child)) =>
         mapping.asInstanceOf[Mapping[F]].interpreter.runRootValue(child, rootTpe)
+
       case _ =>
-        mkErrorResult(s"Bad root query '${query.render}' in UniformQueryInterpreter").pure[F]
+        mkErrorResult(s"Bad root query '${query.render}' in QueryInterpreter").pure[F]
     }
+
+  def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]] = runRootValue0(query, Nil, rootTpe)
 
   /** Interpret multiple queries with respect to their expected types.
    *
@@ -510,6 +587,17 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
       }).map(_.reverse)
     }
 
+  def cursorCompatible(tpe: Type, cursorTpe: Type): Boolean = {
+    def strip(tpe: Type): Type =
+      tpe.dealias match {
+        case NullableType(tpe) => strip(tpe)
+        case ListType(tpe) => strip(tpe)
+        case _ => tpe
+      }
+
+    cursorTpe =:= NoType || (strip(tpe) nominal_=:= strip(cursorTpe))
+  }
+
   /**
    * Interpret `query` against `cursor`, yielding a collection of fields.
    *
@@ -518,83 +606,89 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
    * build a Json object of type `tpe`. If the query is invalid errors
    * will be returned on the left hand side of the result.
    */
-  def runFields(query: Query, tpe: Type, cursor: Cursor): Result[List[(String, ProtoJson)]] = {
-    (query, tpe.dealias) match {
-      case (Narrow(tp1, child), _) =>
-        if (!cursor.narrowsTo(tp1)) Nil.rightIor
-        else
+  def runFields(query: Query, tpe: Type, cursor: Cursor): Result[List[(String, ProtoJson)]] =
+    if (!cursorCompatible(tpe, cursor.tpe))
+      mkErrorResult(s"Mismatched query and cursor type in runFields: $tpe ${cursor.tpe}")
+    else {
+      (query, tpe.dealias) match {
+        case (Narrow(tp1, child), _) =>
+          if (!cursor.narrowsTo(tp1)) Nil.rightIor
+          else
+            for {
+              c      <- cursor.narrow(tp1)
+              fields <- runFields(child, tp1, c)
+            } yield fields
+
+        case (Introspect(schema, PossiblyRenamedSelect(Select("__typename", Nil, Empty), resultName)), tpe: NamedType) =>
+          (tpe match {
+            case o: ObjectType => Some(o.name)
+            case i: InterfaceType =>
+              (schema.types.collectFirst {
+                case o: ObjectType if o <:< i && cursor.narrowsTo(schema.ref(o.name)) => o.name
+              })
+            case u: UnionType =>
+              (u.members.map(_.dealias).collectFirst {
+                case nt: NamedType if cursor.narrowsTo(schema.ref(nt.name)) => nt.name
+              })
+            case _ => None
+          }) match {
+            case Some(name) =>
+              List((resultName, ProtoJson.fromJson(Json.fromString(name)))).rightIor
+            case None =>
+              mkErrorResult(s"'__typename' cannot be applied to non-selectable type '$tpe'")
+          }
+
+        case (PossiblyRenamedSelect(sel, resultName), NullableType(tpe)) =>
+          cursor.asNullable.sequence.map { rc =>
+            for {
+              c      <- rc
+              fields <- runFields(sel, tpe, c)
+            } yield fields
+          }.getOrElse(List((resultName, ProtoJson.fromJson(Json.Null))).rightIor)
+
+        case (PossiblyRenamedSelect(Select(fieldName, _, child), resultName), tpe) =>
           for {
-            c      <- cursor.narrow(tp1)
-            fields <- runFields(child, tp1, c)
-          } yield fields
+            c     <- cursor.field(fieldName)
+            value <- runValue(child, tpe.field(fieldName), c)
+          } yield List((resultName, value))
 
-      case (Introspect(schema, PossiblyRenamedSelect(Select("__typename", Nil, Empty), resultName)), tpe: NamedType) =>
-        (tpe match {
-          case o: ObjectType => Some(o.name)
-          case i: InterfaceType =>
-            (schema.types.collectFirst {
-              case o: ObjectType if o <:< i && cursor.narrowsTo(schema.ref(o.name)) => o.name
-            })
-          case u: UnionType =>
-            (u.members.map(_.dealias).collectFirst {
-              case nt: NamedType if cursor.narrowsTo(schema.ref(nt.name)) => nt.name
-            })
-          case _ => None
-        }) match {
-          case Some(name) =>
-            List((resultName, ProtoJson.fromJson(Json.fromString(name)))).rightIor
-          case None =>
-            mkErrorResult(s"'__typename' cannot be applied to non-selectable type '$tpe'")
-        }
-
-      case (PossiblyRenamedSelect(sel, resultName), NullableType(tpe)) =>
-        cursor.asNullable.sequence.map { rc =>
+        case (Rename(resultName, Wrap(_, child)), tpe) =>
           for {
-            c      <- rc
-            fields <- runFields(sel, tpe, c)
-          } yield fields
-        }.getOrElse(List((resultName, ProtoJson.fromJson(Json.Null))).rightIor)
+            value <- runValue(child, tpe, cursor)
+          } yield List((resultName, value))
 
-      case (PossiblyRenamedSelect(Select(fieldName, _, child), resultName), tpe) =>
-        for {
-          c     <- cursor.field(fieldName)
-          value <- runValue(child, tpe.field(fieldName), c)
-        } yield List((resultName, value))
+        case (Wrap(fieldName, child), tpe) =>
+          for {
+            value <- runValue(child, tpe, cursor)
+          } yield List((fieldName, value))
 
-      case (Rename(resultName, Wrap(_, child)), tpe) =>
-        for {
-          value <- runValue(child, tpe, cursor)
-        } yield List((resultName, value))
+        case (Group(siblings), _) =>
+          siblings.flatTraverse(query => runFields(query, tpe, cursor))
 
-      case (Wrap(fieldName, child), tpe) =>
-        for {
-          value <- runValue(child, tpe, cursor)
-        } yield List((fieldName, value))
-
-      case (Group(siblings), _) =>
-        siblings.flatTraverse(query => runFields(query, tpe, cursor))
-
-      case _ =>
-        Thread.dumpStack
-        mkErrorResult(s"failed: { ${query.render} } $tpe")
+        case _ =>
+          mkErrorResult(s"runFields failed: { ${query.render} } $tpe")
+      }
     }
-  }
 
-  def runList(query: Query, tpe: Type, cursor: Cursor, f: Kleisli[Result, List[Cursor], List[Cursor]]): Result[ProtoJson] =
-    query match {
-      case Filter(pred, child) =>
-        runList(child, tpe, cursor, f.compose(_.filterA(pred(_))))
+  def runList(query: Query, tpe: Type, cursors: List[Cursor], f: Kleisli[Result, List[Cursor], List[Cursor]]): Result[ProtoJson] =
+    if (cursors.exists(cursor => !cursorCompatible(tpe, cursor.tpe)))
+      mkErrorResult(s"Mismatched query and cursor type in runList: $tpe ${cursors.map(_.tpe)}")
+    else {
+      query match {
+        case Filter(pred, child) =>
+          runList(child, tpe, cursors, f.compose(_.filterA(pred(_))))
 
-      case Limit(num, child) =>
-        runList(child, tpe, cursor, f.compose(_.take(num).rightIor))
+        case Limit(num, child) =>
+          runList(child, tpe, cursors, f.compose(_.take(num).rightIor))
 
-      case OrderBy(selections, child) =>
-        runList(child, tpe, cursor, f.compose(selections.order(_).rightIor))
+        case OrderBy(selections, child) =>
+          runList(child, tpe, cursors, f.compose(selections.order(_).rightIor))
 
-      case _ =>
-        cursor.asList.flatMap(f.run).flatMap(lc =>
-          lc.traverse(c => runValue(query, tpe, c)).map(ProtoJson.fromValues)
-        )
+        case _ =>
+          f.run(cursors).flatMap(lc =>
+            lc.traverse(c => runValue(query, tpe, c)).map(ProtoJson.fromValues)
+          )
+      }
     }
 
   /**
@@ -603,95 +697,135 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
    * If the query is invalid errors will be returned on teh left hand side
    * of the result.
    */
-  def runValue(query: Query, tpe: Type, cursor: Cursor): Result[ProtoJson] = {
-    def mkResult[T](ot: Option[T]): Result[T] = ot match {
-      case Some(t) => t.rightIor
-      case None => mkErrorResult(s"Join continuation has unexpected shape")
-    }
+  def runValue(query: Query, tpe: Type, cursor: Cursor): Result[ProtoJson] =
+    if (!cursorCompatible(tpe, cursor.tpe))
+      mkErrorResult(s"Mismatched query and cursor type in runValue: $tpe ${cursor.tpe}")
+    else {
+      def mkResult[T](ot: Option[T]): Result[T] = ot match {
+        case Some(t) => t.rightIor
+        case None => mkErrorResult(s"Join continuation has unexpected shape")
+      }
 
-    (query, tpe.dealias) match {
-      case (Wrap(_, Component(_, _, _)), ListType(tpe)) =>
-        // Keep the wrapper with the component when going under the list
-        cursor.asList.flatMap(lc =>
-          lc.traverse(c => runValue(query, tpe, c)).map(ProtoJson.fromValues)
-        )
+      (query, tpe.dealias) match {
+        case (Context(_, child), tpe) =>
+          runValue(child, tpe, cursor)
 
-      case (Wrap(fieldName, Defer(join, child, rootTpe)), _) =>
-        for {
-          cont        <- join(cursor, child)
-          renamedCont <- mkResult(renameRoot(cont, fieldName))
-        } yield ProtoJson.staged(this, renamedCont, rootTpe)
+        case (Wrap(_, Component(_, _, _)), ListType(tpe)) =>
+          // Keep the wrapper with the component when going under the list
+          cursor.asList.flatMap(lc =>
+            lc.traverse(c => runValue(query, tpe, c)).map(ProtoJson.fromValues)
+          )
 
-      case (Wrap(fieldName, child), _) =>
-        for {
-          pvalue <- runValue(child, tpe, cursor)
-        } yield ProtoJson.fromFields(List((fieldName, pvalue)))
+        case (Wrap(fieldName, Defer(join, child, rootTpe)), _) =>
+          for {
+            cont        <- join(cursor, child)
+            renamedCont <- mkResult(renameRoot(cont, fieldName))
+          } yield ProtoJson.staged(this, renamedCont, rootTpe)
 
-      case (Component(mapping, join, PossiblyRenamedSelect(child, resultName)), tpe) =>
-        val interpreter = mapping.interpreter
-        join(cursor, child).flatMap {
-          case GroupList(conts) =>
-            conts.traverse { case cont =>
+        case (Wrap(fieldName, child), _) =>
+          for {
+            pvalue <- runValue(child, tpe, cursor)
+          } yield ProtoJson.fromFields(List((fieldName, pvalue)))
+
+        case (Component(mapping, join, PossiblyRenamedSelect(child, resultName)), tpe) =>
+          val interpreter = mapping.interpreter
+          join(cursor, child).flatMap {
+            case GroupList(conts) =>
+              conts.traverse { case cont =>
+                for {
+                  componentName <- mkResult(rootName(cont))
+                } yield
+                  ProtoJson.select(
+                    ProtoJson.staged(interpreter, cont, JoinType(componentName, tpe.field(child.name).item)),
+                    componentName
+                  )
+              }.map(ProtoJson.fromValues)
+
+            case cont =>
               for {
                 componentName <- mkResult(rootName(cont))
-              } yield
-                ProtoJson.select(
-                  ProtoJson.staged(interpreter, cont, JoinType(componentName, tpe.field(child.name).item)),
-                  componentName
-                )
-            }.map(ProtoJson.fromValues)
-
-          case cont =>
-            for {
-              componentName <- mkResult(rootName(cont))
-              renamedCont   <- mkResult(renameRoot(cont, resultName))
-            } yield ProtoJson.staged(interpreter, renamedCont, JoinType(componentName, tpe.field(child.name)))
-        }
-
-      case (Defer(join, child, rootTpe), _) =>
-        for {
-          cont <- join(cursor, child)
-        } yield ProtoJson.staged(this, cont, rootTpe)
-
-      case (Unique(pred, child), _) =>
-        val cursors =
-          if (cursor.isNullable)
-            cursor.asNullable.flatMap {
-              case None => Nil.rightIor
-              case Some(c) => c.asList
-            }
-          else cursor.asList
-
-        cursors.flatMap(_.filterA(pred(_))).flatMap(lc =>
-          lc match {
-            case List(c) => runValue(child, tpe.nonNull, c)
-            case Nil if tpe.isNullable => ProtoJson.fromJson(Json.Null).rightIor
-            case Nil => mkErrorResult(s"No match")
-            case _ => mkErrorResult(s"Multiple matches")
+                renamedCont   <- mkResult(renameRoot(cont, resultName))
+              } yield ProtoJson.staged(interpreter, renamedCont, JoinType(componentName, tpe.field(child.name)))
           }
-        )
 
-      case (_, ListType(tpe)) =>
-        runList(query, tpe, cursor, Kleisli(_.rightIor))
-
-      case (_, NullableType(tpe)) =>
-        cursor.asNullable.sequence.map { rc =>
+        case (Defer(join, child, rootTpe), _) =>
           for {
-            c     <- rc
-            value <- runValue(query, tpe, c)
-          } yield value
-        }.getOrElse(ProtoJson.fromJson(Json.Null).rightIor)
+            cont <- join(cursor, child)
+          } yield ProtoJson.staged(this, cont, rootTpe)
 
-      case (_, (_: ScalarType) | (_: EnumType)) =>
-        cursor.asLeaf.map(ProtoJson.fromJson)
+        case (Unique(pred, child), _) =>
+          val cursors =
+            if (cursor.isNullable)
+              cursor.asNullable.flatMap {
+                case None => Nil.rightIor
+                case Some(c) => c.asList
+              }
+            else cursor.asList
 
-      case (_, (_: ObjectType) | (_: InterfaceType) | (_: UnionType)) =>
-        runFields(query, tpe, cursor).map(ProtoJson.fromFields)
+          cursors.flatMap(_.filterA(pred(_))).flatMap(lc =>
+            lc match {
+              case List(c) => runValue(child, tpe.nonNull, c)
+              case Nil if tpe.isNullable => ProtoJson.fromJson(Json.Null).rightIor
+              case Nil => mkErrorResult(s"No match")
+              case _ => mkErrorResult(s"Multiple matches")
+            }
+          )
 
-      case _ =>
-        mkErrorResult(s"Stuck at type $tpe for ${query.render}")
+        case (GroupBy(discriminator, Select(_, _, child)), ListType(ltpe)) =>
+          val cursors =
+            if (cursor.isNullable)
+              cursor.asNullable.flatMap {
+                case None => Nil.rightIor
+                case Some(c) => c.asList
+              }
+            else cursor.asList
+
+          val grouped: Result[List[List[Cursor]]] = cursors.map(cs => discriminator.group(cs))
+
+          object PArr {
+            def unapply(p: ProtoJson): Option[List[ProtoJson]] =
+              p match {
+                case ProtoJson.ProtoArray(elems) => Some(elems)
+                case j: Json if j.isArray => j.asArray.map(ja => ja.toList.asInstanceOf[List[ProtoJson]])
+                case _ => None
+              }
+          }
+
+          val gr: Result[List[ProtoJson]] = grouped.flatMap(_.traverse { cs =>
+            runList(child, ltpe, cs, Kleisli(_.rightIor)).flatMap { orig =>
+              orig match {
+                case PArr(Nil) => ProtoJson.fromJson(Json.Null).rightIor
+                case PArr(List(value)) => value.rightIor
+                case pj => mkErrorResult(s"Grouped result of wrong shape: $pj")
+              }
+            }
+          })
+
+          gr.map(ProtoJson.fromValues)
+
+        case (_, ListType(tpe)) =>
+          cursor.asList.flatMap { cursors =>
+            runList(query, tpe, cursors, Kleisli(_.rightIor))
+          }
+
+        case (_, NullableType(tpe)) =>
+          cursor.asNullable.sequence.map { rc =>
+            for {
+              c     <- rc
+              value <- runValue(query, tpe, c)
+            } yield value
+          }.getOrElse(ProtoJson.fromJson(Json.Null).rightIor)
+
+        case (_, (_: ScalarType) | (_: EnumType)) =>
+          cursor.asLeaf.map(ProtoJson.fromJson)
+
+        case (_, (_: ObjectType) | (_: InterfaceType) | (_: UnionType)) =>
+          runFields(query, tpe, cursor).map(ProtoJson.fromFields)
+
+        case _ =>
+          mkErrorResult(s"Stuck at type $tpe for ${query.render}")
+      }
     }
-  }
 }
 
 object QueryInterpreter {
@@ -794,7 +928,29 @@ object QueryInterpreter {
       }
     }
 
+    def unpackObject(p: ProtoJson): Option[List[ProtoJson]] =
+      p match {
+        case ProtoObject(List((_, packedElems))) => unpackList(packedElems)
+        case j: Json if j.isObject =>
+          j.asObject.flatMap(jo =>
+            if (jo.size != 1) None
+            else {
+              val List((_, packedElems)) = jo.toList
+              packedElems.asArray.map(v => wrapList(v.toList))
+            }
+          )
+        case _ => None
+      }
+
+    def unpackList(p: ProtoJson): Option[List[ProtoJson]] =
+      p match {
+        case ProtoArray(elems) => Some(elems)
+        case j: Json if j.isArray => j.asArray.map(ja => wrapList(ja.toList))
+        case _ => None
+      }
+
     private def wrap(j: AnyRef): ProtoJson = j.asInstanceOf[ProtoJson]
+    private def wrapList(l: List[AnyRef]): List[ProtoJson] = l.asInstanceOf[List[ProtoJson]]
   }
 
   import ProtoJson._

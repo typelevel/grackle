@@ -22,7 +22,7 @@ trait ValueMapping[F[_]] extends AbstractMapping[Monad, F] {
         case _: Query.Unique => fieldTpe.nonNull.list
         case _ => fieldTpe
       }
-      ValueCursor(cursorTpe, root).rightIor.pure[F].widen
+      ValueCursor(cursorTpe, root, Nil).rightIor.pure[F].widen
     }
     def withParent(tpe: Type): ValueRoot =
       new ValueRoot(tpe, fieldName, root0)
@@ -62,7 +62,8 @@ trait ValueMapping[F[_]] extends AbstractMapping[Monad, F] {
 
   case class ValueCursor(
     tpe:   Type,
-    focus: Any
+    focus: Any,
+    path:  List[String]
   ) extends Cursor {
     def isLeaf: Boolean =
       tpe.dealias match {
@@ -111,7 +112,7 @@ trait ValueMapping[F[_]] extends AbstractMapping[Monad, F] {
 
     def narrowsTo(subtpe: TypeRef): Boolean =
       subtpe <:< tpe &&
-        objectMapping(RootedType(subtpe)).map {
+        objectMapping(path, subtpe).map {
           case ValueObjectMapping(_, _, classTag) =>
             classTag.runtimeClass.isInstance(focus)
           case _ => false
@@ -125,12 +126,12 @@ trait ValueMapping[F[_]] extends AbstractMapping[Monad, F] {
         mkErrorResult(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
 
     def hasField(fieldName: String): Boolean =
-      tpe.hasField(fieldName) && fieldMapping(RootedType(tpe), fieldName).isDefined
+      tpe.hasField(fieldName) && fieldMapping(path, tpe, fieldName).isDefined
 
     def field(fieldName: String): Result[Cursor] =
-      fieldMapping(RootedType(tpe), fieldName) match {
+      fieldMapping(path, tpe, fieldName) match {
         case Some(ValueField(_, f)) =>
-          copy(tpe = tpe.field(fieldName), focus = f.asInstanceOf[Any => Any](focus)).rightIor
+          copy(tpe = tpe.field(fieldName), focus = f.asInstanceOf[Any => Any](focus), path = fieldName :: path).rightIor
         case Some(CursorField(_, f, _)) =>
           f(this).map(res => copy(tpe = tpe.field(fieldName), focus = res))
         case _ =>
@@ -138,10 +139,10 @@ trait ValueMapping[F[_]] extends AbstractMapping[Monad, F] {
       }
 
     def hasAttribute(attrName: String): Boolean =
-      !tpe.hasField(attrName) && fieldMapping(RootedType(tpe), attrName).isDefined
+      !tpe.hasField(attrName) && fieldMapping(path, tpe, attrName).isDefined
 
     def attribute(attrName: String): Result[Any] =
-      fieldMapping(RootedType(tpe), attrName) match {
+      fieldMapping(path, tpe, attrName) match {
         case Some(ValueAttribute(_, f)) =>
           f.asInstanceOf[Any => Any](focus).rightIor
         case Some(CursorAttribute(_, f)) =>

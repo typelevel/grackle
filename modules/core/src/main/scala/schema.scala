@@ -404,35 +404,6 @@ object JoinType {
 }
 
 /**
- * Represents an occurence of a type at a position within the graph determined
- * by a path prefix.
- */
-case class RootedType(path: List[String], tpe: Type) {
-  def dealias: RootedType = copy(tpe = tpe.dealias)
-  def underlyingObject: RootedType = copy(tpe = tpe.underlyingObject)
-  def nonNull: RootedType = copy(tpe = tpe.nonNull)
-  def item: RootedType = copy(tpe = tpe.item)
-
-  def field(fieldName: String): RootedType =
-    RootedType(path :+ fieldName, tpe.field(fieldName))
-  def underlyingField(fieldName: String): RootedType =
-    RootedType(path :+ fieldName, tpe.underlyingField(fieldName))
-  def withUnderlyingField[T](fieldName: String)(body: RootedType => Result[T]): Result[T] =
-    tpe.withUnderlyingField(fieldName) { childTpe =>
-      body(RootedType(path :+ fieldName, childTpe))
-    }
-
-  def path(fns: List[String]): RootedType =
-    RootedType(path ++ fns, tpe.path(fns))
-}
-
-object RootedType {
-  def apply(tpe: Type): RootedType = RootedType(Nil, tpe)
-
-  implicit def asType(rt: RootedType): Type = rt.tpe
-}
-
-/**
  * A by name reference to a type defined in `schema`.
  */
 case class TypeRef(schema: Schema, name: String) extends NamedType {
