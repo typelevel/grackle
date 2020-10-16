@@ -163,6 +163,51 @@ final class WorldSpec extends DatabaseSuite {
     assert(res == expected)
   }
 
+  test("recursive query (0)") {
+    val query = """
+      query {
+        cities(namePattern: "Monte-Carlo") {
+          name
+          country {
+            name
+            cities {
+              name
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+    {
+      "data" : {
+        "cities" : [
+          {
+            "name" : "Monte-Carlo",
+            "country" : {
+              "name" : "Monaco",
+              "cities" : [
+                {
+                  "name" : "Monte-Carlo"
+                },
+                {
+                  "name" : "Monaco-Ville"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+    """
+
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
+
   test("recursive query (1)") {
     val query = """
       query {

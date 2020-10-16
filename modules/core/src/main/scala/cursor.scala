@@ -21,16 +21,15 @@ trait Cursor {
   /** The GraphQL type of the value at the position represented by this `Cursor`. */
   def tpe: Type
 
+  /** The selection path from the root */
+  def path: List[String]
+
   /**
    * Yield the value at this `Cursor` as a value of type `T` if possible,
    * an error or the left hand side otherwise.
    */
   def as[T: ClassTag]: Result[T] =
-    if (classTag[T].runtimeClass.isInstance(focus))
-      focus.asInstanceOf[T].rightIor
-    else
-      mkErrorResult(s"Expected value of type ${classTag[T]} for focus of type $tpe, found $focus")
-
+    cast[T](focus).toRightIor(mkOneError(s"Expected value of type ${classTag[T]} for focus of type $tpe, found $focus"))
 
   /** Is the value at this `Cursor` of a scalar or enum type? */
   def isLeaf: Boolean
@@ -104,10 +103,7 @@ trait Cursor {
    */
   def attributeAs[T: ClassTag](attributeName: String): Result[T] =
     attribute(attributeName).flatMap { attr =>
-      if (classTag[T].runtimeClass.isInstance(attr))
-        attr.asInstanceOf[T].rightIor
-      else
-        mkErrorResult(s"Expected value of type ${classTag[T]} for field '$attributeName' found $attr")
+      cast[T](attr).toRightIor(mkOneError(s"Expected value of type ${classTag[T]} for field '$attributeName' found '$attr' of type ${attr.getClass.getName}"))
     }
 
   /**
@@ -254,5 +250,24 @@ trait Cursor {
             case Ior.Both(es, _) => es.leftIor
           }
     }
+  }
+
+  private def cast[T: ClassTag](x: Any): Option[T] = {
+    val clazz = classTag[T].runtimeClass
+    if (
+      clazz.isInstance(x) ||
+      (clazz == classOf[Int] && x.isInstanceOf[java.lang.Integer]) ||
+      (clazz == classOf[Boolean] && x.isInstanceOf[java.lang.Boolean]) ||
+      (clazz == classOf[Long] && x.isInstanceOf[java.lang.Long]) ||
+      (clazz == classOf[Double] && x.isInstanceOf[java.lang.Double]) ||
+      (clazz == classOf[Byte] && x.isInstanceOf[java.lang.Byte]) ||
+      (clazz == classOf[Short] && x.isInstanceOf[java.lang.Short]) ||
+      (clazz == classOf[Char] && x.isInstanceOf[java.lang.Character]) ||
+      (clazz == classOf[Float] && x.isInstanceOf[java.lang.Float]) ||
+      (clazz == classOf[Unit] && x.isInstanceOf[scala.runtime.BoxedUnit])
+    )
+      Some(x.asInstanceOf[T])
+    else
+      None
   }
 }

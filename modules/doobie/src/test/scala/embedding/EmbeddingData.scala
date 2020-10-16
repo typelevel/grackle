@@ -16,12 +16,18 @@ class EmbeddingMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Lo
         type Query {
           films: [Film!]!
           series: [Series!]!
+          episodes: [Episode!]!
         }
         type Film {
           title: String!
           synopses: Synopses!
         }
         type Series {
+          title: String!
+          synopses: Synopses!
+          episodes: [Episode!]!
+        }
+        type Episode {
           title: String!
           synopses: Synopses!
         }
@@ -35,6 +41,7 @@ class EmbeddingMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Lo
   val QueryType = schema.ref("Query")
   val FilmType = schema.ref("Film")
   val SeriesType = schema.ref("Series")
+  val EpisodeType = schema.ref("Episode")
   val SynopsesType = schema.ref("Synopses")
 
   import DoobieFieldMapping._
@@ -62,25 +69,50 @@ class EmbeddingMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Lo
         fieldMappings =
           List(
             DoobieField("title", ColumnRef("series", "title"), key = true),
-            DoobieObject("synopses", Subobject(Nil))
+            DoobieObject("synopses", Subobject(Nil)),
+            DoobieObject("episodes", Subobject(List(Join(ColumnRef("series", "title"), ColumnRef("episodes2", "series_title")))))
           )
       ),
       ObjectMapping(
-        tpe = SynopsesType,
-        path = List("films", "synopses"),
+        tpe = EpisodeType,
         fieldMappings =
           List(
-            DoobieField("short", ColumnRef("films", "synopsis_short")),
-            DoobieField("long", ColumnRef("films", "synopsis_long"))
+            DoobieField("title", ColumnRef("episodes2", "title"), key = true),
+            DoobieObject("synopses", Subobject(Nil)),
+            DoobieAttribute[String]("series_title", ColumnRef("episodes2", "series_title"))
           )
       ),
-      ObjectMapping(
+      PrefixedMapping(
         tpe = SynopsesType,
-        path = List("series", "synopses"),
-        fieldMappings =
+        mappings =
           List(
-            DoobieField("short", ColumnRef("series", "synopsis_short")),
-            DoobieField("long", ColumnRef("series", "synopsis_long"))
+            List("films", "synopses") ->
+              ObjectMapping(
+                tpe = SynopsesType,
+                fieldMappings =
+                  List(
+                    DoobieField("short", ColumnRef("films", "synopsis_short")),
+                    DoobieField("long", ColumnRef("films", "synopsis_long"))
+                  )
+              ),
+            List("series", "synopses") ->
+              ObjectMapping(
+                tpe = SynopsesType,
+                fieldMappings =
+                  List(
+                    DoobieField("short", ColumnRef("series", "synopsis_short")),
+                    DoobieField("long", ColumnRef("series", "synopsis_long"))
+                  )
+              ),
+            List("episodes", "synopses") ->
+              ObjectMapping(
+                tpe = SynopsesType,
+                fieldMappings =
+                  List(
+                    DoobieField("short", ColumnRef("episodes2", "synopsis_short")),
+                    DoobieField("long", ColumnRef("episodes2", "synopsis_long"))
+                  )
+              )
           )
       )
     )
@@ -90,4 +122,3 @@ object EmbeddingMapping {
   def fromTransactor[F[_] : Sync : Logger](transactor: Transactor[F]): EmbeddingMapping[F] =
     new EmbeddingMapping[F](transactor, Logger[F])
 }
-

@@ -11,7 +11,6 @@ import io.chrisdavenport.log4cats.Logger
 import edu.gemini.grackle._, doobie._
 import Query._, Predicate._, Value._
 import QueryCompiler._
-import QueryInterpreter.mkErrorResult
 import DoobiePredicate._
 
 class WorldMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger[F]) extends DoobieMapping[F] {
@@ -98,13 +97,11 @@ class WorldMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
             DoobieField("capitalId", ColumnRef("country", "capitalId")),
             DoobieField("code2", ColumnRef("country", "code2")),
             DoobieObject("cities", Subobject(
-              List(Join(ColumnRef("country", "code"), ColumnRef("city", "countrycode"))),
-              countryCityJoin
+              List(Join(ColumnRef("country", "code"), ColumnRef("city", "countrycode")))
             )),
             DoobieObject("languages", Subobject(
-              List(Join(ColumnRef("country", "code"), ColumnRef("countryLanguage", "countrycode"))),
-              countryLanguageJoin
-            )),
+              List(Join(ColumnRef("country", "code"), ColumnRef("countryLanguage", "countrycode")))
+            ))
           ),
       ),
       ObjectMapping(
@@ -115,8 +112,7 @@ class WorldMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
             DoobieAttribute[String]("countrycode", ColumnRef("city", "countrycode")),
             DoobieField("name", ColumnRef("city", "name")),
             DoobieObject("country", Subobject(
-              List(Join(ColumnRef("city", "countrycode"), ColumnRef("country", "code"))),
-              cityCountryJoin
+              List(Join(ColumnRef("city", "countrycode"), ColumnRef("country", "code")))
             )),
             DoobieField("district", ColumnRef("city", "district")),
             DoobieField("population", ColumnRef("city", "population"))
@@ -131,44 +127,11 @@ class WorldMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
             DoobieField("percentage", ColumnRef("countryLanguage", "percentage")),
             DoobieAttribute[String]("countrycode", ColumnRef("countryLanguage", "countrycode")),
             DoobieObject("countries", Subobject(
-              List(Join(ColumnRef("countryLanguage", "countrycode"), ColumnRef("country", "code"))),
-              languageCountryJoin
+              List(Join(ColumnRef("countryLanguage", "countrycode"), ColumnRef("country", "code")))
             ))
           )
       )
     )
-
-  def countryCityJoin(c: Cursor, q: Query): Result[Query] = q match {
-    case Select("cities", Nil, child) =>
-      c.attribute("code").map { case (code: String) =>
-        Select("cities", Nil, Filter(Eql(AttrPath(List("countrycode")), Const(code)), child))
-      }
-    case _ => mkErrorResult("Bad staging join")
-  }
-
-  def countryLanguageJoin(c: Cursor, q: Query): Result[Query] = q match {
-    case Select("languages", Nil, child) =>
-      c.attribute("code").map { case (code: String) =>
-        Select("languages", Nil, Filter(Eql(AttrPath(List("countrycode")), Const(code)), child))
-      }
-    case _ => mkErrorResult("Bad staging join")
-  }
-
-  def cityCountryJoin(c: Cursor, q: Query): Result[Query] = q match {
-    case Select("country", Nil, child) =>
-      c.attribute("countrycode").map { case (countrycode: String) =>
-        Select("country", Nil, Unique(Eql(AttrPath(List("code")), Const(countrycode)), child))
-      }
-    case _ => mkErrorResult("Bad staging join")
-  }
-
-  def languageCountryJoin(c: Cursor, q: Query): Result[Query] = q match {
-    case Select("countries", Nil, child) =>
-      c.field("language").map { case ScalarFocus(language: String) =>
-        Select("countries", Nil, Filter(Contains(CollectFieldPath(List("languages", "language")), Const(language)), child))
-      }
-    case _ => mkErrorResult("Bad staging join")
-  }
 
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {

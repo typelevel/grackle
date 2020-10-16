@@ -17,8 +17,8 @@ trait Mapping[F[_]] {
   val schema: Schema
   val typeMappings: List[TypeMapping]
   
-  def typeMapping(tpe: Type): List[TypeMapping] =
-    typeMappings.filter(_.tpe.nominal_=:=(tpe))
+  def typeMapping(tpe: Type): Option[TypeMapping] =
+    typeMappings.find(_.tpe.nominal_=:=(tpe))
 
   def validate: Chain[Json] = {
     val typeMappingNames: List[String] = typeMappings.flatMap(_.tpe.asNamed.toList.map(_.name))
@@ -42,46 +42,38 @@ trait Mapping[F[_]] {
       s"Schema is missing ${mappingTypesExistInSchema.map(t => s"type: $t").mkString(", ")} ${mappingFieldsExistInSchema.map(t => s"field: $t").mkString(", ")}"))
   }
 
-  def objectMapping(tpe: RootedType): Option[ObjectMapping] =
-    (tpe.path, typeMapping(tpe.tpe)) match {
-      case (_, Nil) => None
-      case (Nil, List(om: ObjectMapping)) => Some(om)
-      case (Nil, _) => None
-      case (path, ms) =>
-        ms.collectFirst {
-          case om: RootedObjectMapping if om.path == path => om
-        }.orElse(
-          ms.collectFirst {
-            case om: RootedObjectMapping if om.path.isEmpty => om
-            case om: ObjectMapping => om
-          }
-        )
-    }
-
-  def rootMapping(tpe: Type, fieldName: String): Option[RootMapping] =
+  def rootMapping(path: List[String], tpe: Type, fieldName: String): Option[RootMapping] =
     tpe match {
       case JoinType(componentName, _) =>
-        rootMapping(schema.queryType, componentName)
+        rootMapping(Nil, schema.queryType, componentName)
       case _ =>
-        fieldMapping(RootedType(tpe), fieldName) match {
-          case Some(rm: RootMapping) => Some(rm)
-          case _ => None
+        fieldMapping(path, tpe, fieldName).collect {
+          case rm: RootMapping => rm
         }
     }
 
-  def rootCursor(rootTpe: Type, fieldName: String, child: Query): F[Result[Cursor]] =
-    rootMapping(rootTpe, fieldName) match {
+  def rootCursor(path: List[String], rootTpe: Type, fieldName: String, child: Query): F[Result[Cursor]] =
+    rootMapping(path, rootTpe, fieldName) match {
       case Some(root) =>
         root.cursor(child)
       case None =>
         mkErrorResult(s"No root field '$fieldName' in $rootTpe").pure[F]
     }
 
-  def fieldMapping(tpe: RootedType, fieldName: String): Option[FieldMapping] =
-    objectMapping(tpe).flatMap(_.fieldMappings.find(_.fieldName == fieldName).orElse {
-      tpe.tpe.dealias match {
+  def objectMapping(path: List[String], tpe: Type): Option[ObjectMapping] =
+    typeMapping(tpe) match {
+      case Some(om: ObjectMapping) => Some(om)
+      case Some(pm: PrefixedMapping) =>
+        val matching = pm.mappings.filter(m => path.startsWith(m._1.reverse))
+        matching.sortBy(m => -m._1.length).headOption.map(_._2)
+      case _ => None
+    }
+
+  def fieldMapping(path: List[String], tpe: Type, fieldName: String): Option[FieldMapping] =
+    objectMapping(path, tpe).flatMap(_.fieldMappings.find(_.fieldName == fieldName).orElse {
+      tpe.dealias match {
         case ot: ObjectType =>
-          ot.interfaces.collectFirstSome(nt => fieldMapping(tpe.copy(tpe = nt), fieldName))
+          ot.interfaces.collectFirstSome(nt => fieldMapping(path, nt, fieldName))
         case _ => None
       }
     })
@@ -99,16 +91,14 @@ trait Mapping[F[_]] {
     def fieldMappings: List[FieldMapping]
   }
 
-  trait RootedObjectMapping extends ObjectMapping {
-    def path: List[String]
-  }
-
   object ObjectMapping {
-    case class DefaultObjectMapping(tpe: Type, fieldMappings: List[FieldMapping], path: List[String]) extends RootedObjectMapping
+    case class DefaultObjectMapping(tpe: Type, fieldMappings: List[FieldMapping]) extends ObjectMapping
 
-    def apply(tpe: Type, fieldMappings: List[FieldMapping], path: List[String] = Nil): ObjectMapping =
-      DefaultObjectMapping(tpe, fieldMappings.map(_.withParent(tpe)), path)
+    def apply(tpe: Type, fieldMappings: List[FieldMapping]): ObjectMapping =
+      DefaultObjectMapping(tpe, fieldMappings.map(_.withParent(tpe)))
   }
+
+  case class PrefixedMapping(tpe: Type, mappings: List[(List[String], ObjectMapping)]) extends TypeMapping
 
   trait FieldMapping extends Product with Serializable {
     def fieldName: String

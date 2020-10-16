@@ -21,7 +21,7 @@ trait AbstractCirceMapping[+M[f[_]] <: Monad[f], F[_]] extends AbstractMapping[M
         case _: Query.Unique => fieldTpe.nonNull.list
         case _ => fieldTpe
       }
-      CirceCursor(cursorTpe, root).rightIor.pure[F].widen
+      CirceCursor(cursorTpe, root, Nil).rightIor.pure[F].widen
     }
     def withParent(tpe: Type): CirceRoot =
       new CirceRoot(tpe, fieldName, root)
@@ -33,8 +33,9 @@ trait AbstractCirceMapping[+M[f[_]] <: Monad[f], F[_]] extends AbstractMapping[M
   }
 
   case class CirceCursor(
-    tpe:     Type,
-    focus:   Json
+    tpe:   Type,
+    focus: Json,
+    path:  List[String]
   ) extends Cursor {
     def isLeaf: Boolean =
       tpe.dealias match {
@@ -103,8 +104,8 @@ trait AbstractCirceMapping[+M[f[_]] <: Monad[f], F[_]] extends AbstractMapping[M
       val f = focus.asObject.flatMap(_(fieldName))
       val ftpe = tpe.field(fieldName)
       f match {
-        case None if ftpe.isNullable => copy(tpe = ftpe, Json.Null).rightIor
-        case Some(json) => copy(tpe = ftpe, json).rightIor
+        case None if ftpe.isNullable => copy(tpe = ftpe, Json.Null, path = fieldName :: path).rightIor
+        case Some(json) => copy(tpe = ftpe, json, path = fieldName :: path).rightIor
         case _ =>
           mkErrorResult(s"No field '$fieldName' for type $tpe")
       }

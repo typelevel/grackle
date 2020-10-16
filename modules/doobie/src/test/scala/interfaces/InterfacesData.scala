@@ -4,7 +4,6 @@
 package interfaces
 
 import cats.effect.Sync
-import cats.implicits._
 import cats.kernel.Eq
 import doobie.Transactor
 import doobie.util.meta.Meta
@@ -12,14 +11,6 @@ import edu.gemini.grackle._
 import edu.gemini.grackle.doobie._
 import io.chrisdavenport.log4cats.Logger
 import io.circe.Encoder
-import edu.gemini.grackle.Query.Select
-import edu.gemini.grackle.Value.IDValue
-import edu.gemini.grackle.Query.Filter
-import edu.gemini.grackle.Predicate.Eql
-import edu.gemini.grackle.Predicate.AttrPath
-import edu.gemini.grackle.Predicate.Const
-import QueryInterpreter.mkErrorResult
-import edu.gemini.grackle.Predicate.ScalarFocus
 
 class InterfacesMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger[F]) extends DoobieMapping[F] {
   val schema =
@@ -107,8 +98,7 @@ class InterfacesMapping[F[_]: Sync](val transactor: Transactor[F], val logger: L
           List(
             DoobieField("numberOfEpisodes", ColumnRef("entities", "series_number_of_episodes")),
             DoobieObject("episodes", Subobject(
-              List(Join(ColumnRef("entities", "id"), ColumnRef("episodes", "series_id"))),
-              seriesEpisodeJoin
+              List(Join(ColumnRef("entities", "id"), ColumnRef("episodes", "series_id")))
             ))
           )
       ),
@@ -122,22 +112,28 @@ class InterfacesMapping[F[_]: Sync](val transactor: Transactor[F], val logger: L
             DoobieObject("synopses", Subobject(Nil))
           )
       ),
-      ObjectMapping(
+      PrefixedMapping(
         tpe = SynopsesType,
-        path = List("entities", "synopses"),
-        fieldMappings =
+        mappings =
           List(
-            DoobieField("short", ColumnRef("entities", "synopsis_short")),
-            DoobieField("long", ColumnRef("entities", "synopsis_long"))
-          )
-      ),
-      ObjectMapping(
-        tpe = SynopsesType,
-        path = List("entities", "episodes", "synopses"),
-        fieldMappings =
-          List(
-            DoobieField("short", ColumnRef("episodes", "synopsis_short")),
-            DoobieField("long", ColumnRef("episoes", "synopsis_long"))
+            List("entities", "synopses") ->
+              ObjectMapping(
+                tpe = SynopsesType,
+                fieldMappings =
+                  List(
+                    DoobieField("short", ColumnRef("entities", "synopsis_short")),
+                    DoobieField("long", ColumnRef("entities", "synopsis_long"))
+                  )
+              ),
+            List("entities", "episodes", "synopses") ->
+              ObjectMapping(
+                tpe = SynopsesType,
+                fieldMappings =
+                  List(
+                    DoobieField("short", ColumnRef("episodes", "synopsis_short")),
+                    DoobieField("long", ColumnRef("episoes", "synopsis_long"))
+                  )
+              )
           )
       ),
       DoobieLeafMapping[EntityType](EntityTypeType)
@@ -150,14 +146,6 @@ class InterfacesMapping[F[_]: Sync](val transactor: Transactor[F], val logger: L
       case EntityType.Film => FilmType
       case EntityType.Series => SeriesType
     }
-  }
-
-  def seriesEpisodeJoin(c: Cursor, q: Query): Result[Query] = q match {
-    case Select("episodes", Nil, child) =>
-      c.field("id").map { case ScalarFocus(IDValue(episodeId)) =>
-        Select("episodes", Nil, Filter(Eql(AttrPath(List("episodeId")), Const(episodeId)), child))
-      }
-    case _ => mkErrorResult("Bad staging join")
   }
 }
 

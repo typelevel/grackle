@@ -20,7 +20,7 @@ import ShapelessUtils._
 trait GenericMapping[F[_]] extends AbstractMapping[Monad, F] {
   case class GenericRoot[T](val tpe: Type, val fieldName: String, t: T, cb: () => CursorBuilder[T]) extends RootMapping {
     lazy val cursorBuilder = cb()
-    def cursor(query: Query): F[Result[Cursor]] = cursorBuilder.build(t).pure[F]
+    def cursor(query: Query): F[Result[Cursor]] = cursorBuilder.build(Nil, t).pure[F]
     def withParent(tpe: Type): GenericRoot[T] =
       new GenericRoot(tpe, fieldName, t, cb)
   }
@@ -56,39 +56,39 @@ object MkObjectCursorBuilder {
     ): MkObjectCursorBuilder[T] =
     new MkObjectCursorBuilder[T] {
       def apply(tpe: Type): ObjectCursorBuilder[T] = {
-        def fieldMap: Map[String, T => Result[Cursor]] = {
+        def fieldMap: Map[String, (List[String], T) => Result[Cursor]] = {
           val keys: List[String] = unsafeToList[Symbol](keys0()).map(_.name)
           val elems = unsafeToList[CursorBuilder[Any]](elems0.instances)
           keys.zip(elems.zipWithIndex).map {
-            case (fieldName, (elem, idx)) => (fieldName, (t: T) => elem.build(t.productElement(idx)))
+            case (fieldName, (elem, idx)) => (fieldName, (p: List[String], t: T) => elem.build(p, t.productElement(idx)))
           }.toMap
         }
         new Impl[T](tpe, fieldMap)
       }
     }
 
-  class Impl[T](tpe0: Type, fieldMap0: => Map[String, T => Result[Cursor]]) extends ObjectCursorBuilder[T] {
+  class Impl[T](tpe0: Type, fieldMap0: => Map[String, (List[String], T) => Result[Cursor]]) extends ObjectCursorBuilder[T] {
     lazy val fieldMap = fieldMap0
 
     val tpe = tpe0
 
-    def build(focus: T): Result[Cursor] =
-      CursorImpl(tpe, fieldMap, focus).rightIor
+    def build(path: List[String], focus: T): Result[Cursor] =
+      CursorImpl(tpe, fieldMap, path, focus).rightIor
 
     def renameField(from: String, to: String): ObjectCursorBuilder[T] =
       transformFieldNames { case `from` => to ; case other => other }
     def transformFieldNames(f: String => String): ObjectCursorBuilder[T] =
       new Impl(tpe, fieldMap0.map { case (k, v) => (f(k), v) })
     def transformField[U](fieldName: String)(f: T => Result[U])(implicit cb: => CursorBuilder[U]): ObjectCursorBuilder[T] =
-      new Impl(tpe, fieldMap0.updated(fieldName, (focus: T) => f(focus).flatMap(f => cb.build(f))))
+      new Impl(tpe, fieldMap0.updated(fieldName, (path: List[String], focus: T) => f(focus).flatMap(f => cb.build(path, f))))
   }
 
-  case class CursorImpl[T](tpe: Type, fieldMap: Map[String, T => Result[Cursor]], focus: T)
+  case class CursorImpl[T](tpe: Type, fieldMap: Map[String, (List[String], T) => Result[Cursor]], path: List[String], focus: T)
     extends AbstractCursor[Product] {
     override def hasField(fieldName: String): Boolean = fieldMap.contains(fieldName)
 
     override def field(fieldName: String): Result[Cursor] = {
-      fieldMap.get(fieldName).toRightIor(mkOneError(s"No field '$fieldName' for type $tpe")).flatMap(f => f(focus))
+      fieldMap.get(fieldName).toRightIor(mkOneError(s"No field '$fieldName' for type $tpe")).flatMap(f => f(fieldName :: path, focus))
     }
   }
 }
@@ -120,15 +120,16 @@ object MkInterfaceCursorBuilder {
 
   class Impl[T](tpe0: Type, sel: T => Int, elems: => Array[CursorBuilder[T]]) extends CursorBuilder[T] {
     val tpe = tpe0
-    def build(focus: T): Result[Cursor] = {
+    def build(path: List[String], focus: T): Result[Cursor] = {
       val builder = elems(sel(focus))
-      builder.build(focus).map(cursor => CursorImpl(tpe, builder.tpe, cursor))
+      builder.build(path, focus).map(cursor => CursorImpl(tpe, builder.tpe, cursor))
     }
   }
 
   case class CursorImpl[T](tpe: Type, rtpe: Type, cursor: Cursor)
     extends AbstractCursor[T] {
     def focus: Any = cursor.focus
+    def path: List[String] = cursor.path
 
     override def hasField(fieldName: String): Boolean = cursor.hasField(fieldName)
 
@@ -145,7 +146,7 @@ object MkInterfaceCursorBuilder {
 
 trait CursorBuilder[T] { outer =>
   def tpe: Type
-  def build(focus: T): Result[Cursor]
+  def build(path: List[String], focus: T): Result[Cursor]
 }
 
 object CursorBuilder {
@@ -156,8 +157,8 @@ object CursorBuilder {
   implicit val stringCursorBuilder: CursorBuilder[String] =
     new CursorBuilder[String] {
       val tpe = StringType
-      def build(focus: String): Result[Cursor] =
-        new PrimitiveCursor(focus, tpe) {
+      def build(path: List[String], focus: String): Result[Cursor] =
+        new PrimitiveCursor(focus, tpe, path) {
           override def asLeaf: Result[Json] = Json.fromString(focus).rightIor
         }.rightIor
     }
@@ -165,8 +166,8 @@ object CursorBuilder {
   implicit val intCursorBuilder: CursorBuilder[Int] =
     new CursorBuilder[Int] {
       val tpe = IntType
-      def build(focus: Int): Result[Cursor] =
-        new PrimitiveCursor(focus, tpe) {
+      def build(path: List[String], focus: Int): Result[Cursor] =
+        new PrimitiveCursor(focus, tpe, path) {
           override def asLeaf: Result[Json] = Json.fromInt(focus).rightIor
         }.rightIor
     }
@@ -174,8 +175,8 @@ object CursorBuilder {
   implicit val longCursorBuilder: CursorBuilder[Long] =
     new CursorBuilder[Long] {
       val tpe = IntType
-      def build(focus: Long): Result[Cursor] =
-        new PrimitiveCursor(focus, tpe) {
+      def build(path: List[String], focus: Long): Result[Cursor] =
+        new PrimitiveCursor(focus, tpe, path) {
           override def asLeaf: Result[Json] = Json.fromLong(focus).rightIor
         }.rightIor
     }
@@ -183,8 +184,8 @@ object CursorBuilder {
   implicit val floatCursorBuilder: CursorBuilder[Float] =
     new CursorBuilder[Float] {
       val tpe = FloatType
-      def build(focus: Float): Result[Cursor] =
-        new PrimitiveCursor(focus, tpe) {
+      def build(path: List[String], focus: Float): Result[Cursor] =
+        new PrimitiveCursor(focus, tpe, path) {
           override def asLeaf: Result[Json] =
             Json.fromFloat(focus).toRightIor(mkOneError(s"Unrepresentable float %focus"))
         }.rightIor
@@ -193,8 +194,8 @@ object CursorBuilder {
   implicit val doubleCursorBuilder: CursorBuilder[Double] =
     new CursorBuilder[Double] {
       val tpe = FloatType
-      def build(focus: Double): Result[Cursor] =
-        new PrimitiveCursor(focus, tpe) {
+      def build(path: List[String], focus: Double): Result[Cursor] =
+        new PrimitiveCursor(focus, tpe, path) {
           override def asLeaf: Result[Json] =
             Json.fromDouble(focus).toRightIor(mkOneError(s"Unrepresentable double %focus"))
         }.rightIor
@@ -203,8 +204,8 @@ object CursorBuilder {
   implicit val booleanCursorBuilder: CursorBuilder[Boolean] =
     new CursorBuilder[Boolean] {
       val tpe = BooleanType
-      def build(focus: Boolean): Result[Cursor] =
-        new PrimitiveCursor(focus, tpe) {
+      def build(path: List[String], focus: Boolean): Result[Cursor] =
+        new PrimitiveCursor(focus, tpe, path) {
           override def asLeaf: Result[Json] = Json.fromBoolean(focus).rightIor
         }.rightIor
     }
@@ -212,8 +213,8 @@ object CursorBuilder {
   implicit def deriveEnumerationCursorBuilder[T <: Enumeration#Value](tpe0: Type): CursorBuilder[T] =
     new CursorBuilder[T] {
       val tpe = tpe0
-      def build(focus: T): Result[Cursor] =
-        new PrimitiveCursor(focus, tpe) {
+      def build(path: List[String], focus: T): Result[Cursor] =
+        new PrimitiveCursor(focus, tpe, path) {
           override def asLeaf: Result[Json] = Json.fromString(focus.toString).rightIor
         }.rightIor
     }
@@ -224,14 +225,15 @@ object CursorBuilder {
   implicit def optionCursorBuiler[T](implicit elemBuilder: CursorBuilder[T]): CursorBuilder[Option[T]] =
     new CursorBuilder[Option[T]] { outer =>
       val tpe = NullableType(elemBuilder.tpe)
-      def build(focus0: Option[T]): Result[Cursor] =
+      def build(path0: List[String], focus0: Option[T]): Result[Cursor] =
         new AbstractCursor[Option[T]] {
           def focus = focus0
           def tpe = outer.tpe
+          def path = path0
 
           override def isNullable: Boolean = true
           override def asNullable: Result[Option[Cursor]] = {
-            focus.traverse(elem => elemBuilder.build(elem))
+            focus.traverse(elem => elemBuilder.build(path, elem))
           }
         }.rightIor
     }
@@ -239,19 +241,20 @@ object CursorBuilder {
   implicit def listCursorBuiler[T](implicit elemBuilder: CursorBuilder[T]): CursorBuilder[List[T]] =
     new CursorBuilder[List[T]] { outer =>
       val tpe = ListType(elemBuilder.tpe)
-      def build(focus0: List[T]): Result[Cursor] =
+      def build(path0: List[String], focus0: List[T]): Result[Cursor] =
         new AbstractCursor[List[T]] {
           def focus = focus0
           def tpe = outer.tpe
+          def path = path0
 
           override def isList: Boolean = true
           override def asList: Result[List[Cursor]] = {
-            focus.traverse(elem => elemBuilder.build(elem))
+            focus.traverse(elem => elemBuilder.build(path, elem))
           }
         }.rightIor
     }
 
-  class LeafCursor[T](val focus: T, val tpe: Type, encoder: Encoder[T]) extends AbstractCursor[T] {
+  class LeafCursor[T](val focus: T, val tpe: Type, val path: List[String], encoder: Encoder[T]) extends AbstractCursor[T] {
     override def isLeaf: Boolean = true
     override def asLeaf: Result[Json] = encoder(focus).rightIor
   }
@@ -259,8 +262,8 @@ object CursorBuilder {
   def deriveLeafCursorBuilder[T](tpe0: Type)(implicit encoder: Encoder[T]): CursorBuilder[T] =
     new CursorBuilder[T] {
       val tpe = tpe0
-      def build(focus: T): Result[Cursor] =
-        new LeafCursor(focus, tpe, encoder).rightIor
+      def build(path: List[String], focus: T): Result[Cursor] =
+        new LeafCursor(focus, tpe, path, encoder).rightIor
     }
 
   implicit def leafCursorBuilder[T](implicit encoder: Encoder[T]): CursorBuilder[T] =
@@ -299,7 +302,7 @@ abstract class AbstractCursor[T] extends Cursor {
     mkErrorResult(s"No attribute '$attributeName' for type $tpe")
 }
 
-abstract class PrimitiveCursor[T](val focus: T, val tpe: Type) extends AbstractCursor[T] {
+abstract class PrimitiveCursor[T](val focus: T, val tpe: Type, val path: List[String]) extends AbstractCursor[T] {
   override def isLeaf: Boolean = true
 }
 
