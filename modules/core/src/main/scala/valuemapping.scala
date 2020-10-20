@@ -132,7 +132,7 @@ trait ValueMapping[F[_]] extends AbstractMapping[Monad, F] {
       fieldMapping(path, tpe, fieldName) match {
         case Some(ValueField(_, f)) =>
           copy(tpe = tpe.field(fieldName), focus = f.asInstanceOf[Any => Any](focus), path = fieldName :: path).rightIor
-        case Some(CursorField(_, f, _)) =>
+        case Some(CursorField(_, f, _, _)) =>
           f(this).map(res => copy(tpe = tpe.field(fieldName), focus = res))
         case _ =>
           mkErrorResult(s"No field '$fieldName' for type $tpe")
@@ -145,7 +145,7 @@ trait ValueMapping[F[_]] extends AbstractMapping[Monad, F] {
       fieldMapping(path, tpe, attrName) match {
         case Some(ValueAttribute(_, f)) =>
           f.asInstanceOf[Any => Any](focus).rightIor
-        case Some(CursorAttribute(_, f)) =>
+        case Some(CursorAttribute(_, f, _)) =>
           f(this)
         case _ =>
           mkErrorResult(s"No attribute '$attrName' for type $tpe")

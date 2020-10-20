@@ -124,15 +124,15 @@ trait Mapping[F[_]] {
       Some((lm.tpe, lm.encoder))
   }
 
-  case class CursorField[T](fieldName: String, f: Cursor => Result[T], encoder: Encoder[T]) extends FieldMapping {
+  case class CursorField[T](fieldName: String, f: Cursor => Result[T], encoder: Encoder[T], required: List[String]) extends FieldMapping {
     def withParent(tpe: Type): CursorField[T] = this
   }
   object CursorField {
-    def apply[T](fieldName: String, f: Cursor => Result[T])(implicit encoder: Encoder[T], di: DummyImplicit): CursorField[T] =
-      new CursorField(fieldName, f, encoder)
+    def apply[T](fieldName: String, f: Cursor => Result[T], required: List[String] = Nil)(implicit encoder: Encoder[T], di: DummyImplicit): CursorField[T] =
+      new CursorField(fieldName, f, encoder, required)
   }
 
-  case class CursorAttribute[T](fieldName: String, f: Cursor => Result[T]) extends FieldMapping {
+  case class CursorAttribute[T](fieldName: String, f: Cursor => Result[T], required: List[String] = Nil) extends FieldMapping {
     def withParent(tpe: Type): CursorAttribute[T] = this
   }
 
