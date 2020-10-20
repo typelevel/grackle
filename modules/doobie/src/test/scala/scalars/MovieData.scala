@@ -177,12 +177,12 @@ class MovieMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
             DoobieField("releaseDate", ColumnRef("movies", "releasedate")),
             DoobieField("showTime", ColumnRef("movies", "showtime")),
             DoobieField("nextShowing", ColumnRef("movies", "nextshowing")),
-            CursorField("nextEnding", nextEnding),
+            CursorField("nextEnding", nextEnding, List("nextShowing", "duration")),
             DoobieField("duration", ColumnRef("movies", "duration")),
             DoobieField("categories", ColumnRef("movies", "categories")),
             DoobieField("features", ColumnRef("movies", "features")),
             DoobieField("rating", ColumnRef("movies", "rating")),
-            CursorAttribute("isLong", isLong)
+            CursorAttribute("isLong", isLong, List("duration"))
           )
       ),
       DoobieLeafMapping[UUID](UUIDType),

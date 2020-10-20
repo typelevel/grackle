@@ -280,6 +280,44 @@ final class MovieSpec extends DatabaseSuite {
     assert(res == expected)
   }
 
+  test("query with standalone computed field") {
+    val query = """
+      query {
+        moviesShownBetween(from: "2020-05-01T10:30:00Z", to: "2020-05-19T18:00:00Z") {
+          title
+          nextEnding
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "moviesShownBetween" : [
+            {
+              "title" : "Stalker",
+              "nextEnding" : "2020-05-19T18:11:00Z"
+            },
+            {
+              "title" : "Daisies",
+              "nextEnding" : "2020-05-15T22:46:00Z"
+            },
+            {
+              "title" : "Le Pont du Nord",
+              "nextEnding" : "2020-05-11T22:52:00Z"
+            }
+          ]
+        }
+      }
+    """
+
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
+
   test("query with computed attribute") {
     val query = """
       query {
@@ -301,6 +339,37 @@ final class MovieSpec extends DatabaseSuite {
             {
               "title" : "L'Amour fou",
               "duration" : "PT4H12M"
+            }
+          ]
+        }
+      }
+    """
+
+    val compiledQuery = mapping.compiler.compile(query).right.get
+    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("query with standaloe computed attribute") {
+    val query = """
+      query {
+        longMovies {
+          title
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "longMovies" : [
+            {
+              "title" : "Celine et Julie Vont en Bateau"
+            },
+            {
+              "title" : "L'Amour fou"
             }
           ]
         }

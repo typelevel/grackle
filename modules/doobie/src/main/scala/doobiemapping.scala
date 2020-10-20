@@ -95,18 +95,17 @@ trait DoobieMapping[F[_]] extends AbstractCirceMapping[Sync, F] {
     }
   }
 
-  def attributeMapping(path: List[String], tpe: Type, attrName: String): Option[DoobieAttribute] =
-    fieldMapping(path, tpe, attrName) match {
-      case Some(am: DoobieAttribute) => Some(am)
-      case _ => None
-    }
-
-  def columnsForField(path: List[String], tpe: Type, fieldName: String): List[ColumnRef] = {
+  def columnsForFieldOrAttribute(path: List[String], tpe: Type, name: String): List[ColumnRef] = {
     val obj = tpe.underlyingObject
-    fieldMapping(path, obj, fieldName) match {
+    fieldMapping(path, obj, name) match {
       case Some(DoobieField(_, cr, _, _)) => List(cr)
       case Some(DoobieJson(_, cr)) => List(cr)
       case Some(DoobieObject(_, Subobject(joins))) => joins.map(_.parent) ++ joins.map(_.child)
+      case Some(DoobieAttribute(_, cr, _, _, _, _)) => List(cr)
+      case Some(CursorField(_, _, _, required)) =>
+        required.flatMap(r => columnsForFieldOrAttribute(path, tpe, r))
+      case Some(CursorAttribute(_, _, required)) =>
+        required.flatMap(r => columnsForFieldOrAttribute(path, tpe, r))
       case _ => Nil
     }
   }
@@ -119,19 +118,19 @@ trait DoobieMapping[F[_]] extends AbstractCirceMapping[Sync, F] {
     }
   }
 
-  def columnForAttribute(path: List[String], tpe: Type, attrName: String): Option[ColumnRef] = {
-    val obj = tpe.underlyingObject
-    attributeMapping(path, obj, attrName) match {
-      case Some(DoobieAttribute(_, cr, _, _, _, _)) => Some(cr)
-      case _ => None
-    }
-  }
-
-  def primaryColumnForField(path: List[String], tpe: Type, fieldName: String): Option[ColumnRef] = {
+  def termColumnForField(path: List[String], tpe: Type, fieldName: String): Option[ColumnRef] = {
     val obj = tpe.underlyingObject
     fieldMapping(path, obj, fieldName) match {
       case Some(DoobieField(_, cr, _, _)) => Some(cr)
       case Some(DoobieJson(_, cr)) => Some(cr)
+      case _ => None
+    }
+  }
+
+  def termColumnForAttribute(path: List[String], tpe: Type, attrName: String): Option[ColumnRef] = {
+    val obj = tpe.underlyingObject
+    fieldMapping(path, obj, attrName) match {
+      case Some(DoobieAttribute(_, cr, _, _, _, _)) => Some(cr)
       case _ => None
     }
   }
@@ -145,9 +144,9 @@ trait DoobieMapping[F[_]] extends AbstractCirceMapping[Sync, F] {
         val parent = obj.path(prefix)
         val name = termPath.path.last
         if (isField(termPath))
-          primaryColumnForField(path.reverse_:::(termPath.path), parent, name)
+          termColumnForField(path.reverse_:::(termPath.path), parent, name)
         else
-          columnForAttribute(path, parent, name)
+          termColumnForAttribute(path, parent, name)
     }
 
   def key(om: ObjectMapping): List[ColumnRef] =
@@ -224,11 +223,10 @@ trait DoobieMapping[F[_]] extends AbstractCirceMapping[Sync, F] {
           if (isField(term)) {
             loop(mkSelects(term.path), path, obj, acc)
           } else {
-            columnForAttribute(path, parent, name) match {
-              case Some(pcol) =>
-                (pcol :: requiredCols, List.empty[Join], List.empty[(List[String], Type, Predicate)], requiredMappings) |+| loop(mkSelects(prefix), path, obj, acc)
-              case _ =>
-                loop(mkSelects(prefix), path, obj, acc)
+            columnsForFieldOrAttribute(path, parent, name) match {
+              case Nil => loop(mkSelects(prefix), path, obj, acc)
+              case pcols =>
+                (pcols ++ requiredCols, List.empty[Join], List.empty[(List[String], Type, Predicate)], requiredMappings) |+| loop(mkSelects(prefix), path, obj, acc)
             }
           }
         }
@@ -240,7 +238,7 @@ trait DoobieMapping[F[_]] extends AbstractCirceMapping[Sync, F] {
       q match {
         case Select(fieldName, _, child) =>
           val fieldTpe = obj.field(fieldName)
-          val cols = columnsForField(path, obj, fieldName).toList ++ requiredCols
+          val cols = columnsForFieldOrAttribute(path, obj, fieldName).toList ++ requiredCols
           val joins = joinsForField(path, obj, fieldName)
 
           loop(child, fieldName :: path, fieldTpe, (cols, joins, List.empty[(List[String], Type, Predicate)], requiredMappings) |+| acc)
@@ -494,13 +492,16 @@ trait DoobieMapping[F[_]] extends AbstractCirceMapping[Sync, F] {
 
     def hasAttribute(path: List[String], tpe: Type, attrName: String): Boolean = {
       val obj = tpe.dealias
-      attributeMapping(path, obj, attrName).map(_ => true).getOrElse(false)
+      fieldMapping(path, obj, attrName) match {
+        case Some(_: DoobieAttribute) => true
+        case _ => false
+      }
     }
 
     def selectAttribute(row: Row, path: List[String], tpe: Type, attrName: String): Result[Any] = {
       val obj = tpe.dealias
-      attributeMapping(path, obj, attrName).map(_.col) match {
-        case Some(col: ColumnRef) => select(row, col).rightIor
+      fieldMapping(path, obj, attrName) match {
+        case Some(DoobieAttribute(_, col: ColumnRef, _, _, _, _)) => select(row, col).rightIor
         case other => mkErrorResult(s"Expected mapping for attribute $attrName of type $obj, found $other")
       }
     }
@@ -557,7 +558,9 @@ trait DoobieMapping[F[_]] extends AbstractCirceMapping[Sync, F] {
                 }
               )
             } else if (hasAttribute(p, parentTpe, last))
-              attributeMapping(p, parentTpe, last).map(_.meta.put)
+              fieldMapping(p, parentTpe, last).collect {
+                case da: DoobieAttribute => da.meta.put
+              }
             else None
           case Nil => doobieLeafMapping[T](tpe.nonNull).map(_.meta.put)
         }).map(_.asInstanceOf[Put[T]])
@@ -979,7 +982,7 @@ trait DoobieMapping[F[_]] extends AbstractCirceMapping[Sync, F] {
     def field(fieldName: String): Result[Cursor] = {
       val fieldTpe = tpe.field(fieldName)
       fieldMapping(path, tpe.underlyingObject, fieldName) match {
-        case Some(CursorField(_, f, _)) =>
+        case Some(CursorField(_, f, _, _)) =>
           f(this).map(res => LeafCursor(tpe = fieldTpe, focus = res, fieldName :: path))
 
         case Some(DoobieJson(_, _)) =>
@@ -1016,13 +1019,13 @@ trait DoobieMapping[F[_]] extends AbstractCirceMapping[Sync, F] {
 
     def hasAttribute(attributeName: String): Boolean =
       fieldMapping(path, tpe, attributeName) match {
-        case Some(CursorAttribute(_, _)) => true
+        case Some(CursorAttribute(_, _, _)) => true
         case _ => mapped.hasAttribute(path, tpe, attributeName)
       }
 
     def attribute(attributeName: String): Result[Any] =
       fieldMapping(path, tpe, attributeName) match {
-        case Some(CursorAttribute(_, f)) => f(this)
+        case Some(CursorAttribute(_, f, _)) => f(this)
         case _ =>
           asTable.flatMap(table => mapped.selectAttribute(table.head, path, tpe, attributeName))
       }
