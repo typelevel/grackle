@@ -38,13 +38,16 @@ trait ValueMapping[F[_]] extends AbstractMapping[Monad, F] {
     implicit def wrap[T](fm: FieldMapping): ValueField0[T] = Wrap(fm)
     case class Wrap[T](fm: FieldMapping) extends ValueField0[T] {
       def fieldName = fm.fieldName
+      def isPublic = fm.isPublic
       def withParent(tpe: Type): FieldMapping = fm.withParent(tpe)
     }
   }
   case class ValueField[T](fieldName: String, f: T => Any) extends ValueField0[T] {
+    def isPublic = true
     def withParent(tpe: Type): ValueField[T] = this
   }
   case class ValueAttribute[T](fieldName: String, f: T => Any) extends ValueField0[T] {
+    def isPublic = false
     def withParent(tpe: Type): ValueAttribute[T] = this
   }
 
