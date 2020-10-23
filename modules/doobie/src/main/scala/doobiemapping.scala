@@ -411,6 +411,7 @@ trait DoobieMapping[F[_]] extends AbstractCirceMapping[Sync, F] {
     nullable: Boolean,
     discriminator: Boolean
   ) extends FieldMapping {
+    def isPublic = false
     def withParent(tpe: Type): FieldMapping = this
   }
 
@@ -424,6 +425,7 @@ trait DoobieMapping[F[_]] extends AbstractCirceMapping[Sync, F] {
     new DoobieAttribute(fieldName, col, meta, key, nullable, discriminator)
 
   sealed trait DoobieFieldMapping extends FieldMapping {
+    def isPublic = true
     def withParent(tpe: Type): FieldMapping = this
   }
 

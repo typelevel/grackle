@@ -16,30 +16,46 @@ trait Mapping[F[_]] {
 
   val schema: Schema
   val typeMappings: List[TypeMapping]
-  
+
   def typeMapping(tpe: Type): Option[TypeMapping] =
     typeMappings.find(_.tpe.nominal_=:=(tpe))
 
   def validate: Chain[Json] = {
-    val typeMappingNames: List[String] = typeMappings.flatMap(_.tpe.asNamed.toList.map(_.name))
+    val missingSchemaTypes: List[String] =
+      typeMappings.flatMap(_.tpe.asNamed match {
+        case None => Nil
+        case Some(nt) =>
+          if (schema.ref(nt).isEmpty) List(s"Found mapping for unknown type ${nt.name}")
+          else Nil
+      })
 
-    def typeMappingFieldNames: List[String] = typeMappings.collect {
-      case om: ObjectMapping => om.fieldMappings.flatMap {
-        case _: CursorField[_] => Nil
-        case _: CursorAttribute[_] => Nil
-        case fm => List(fm.fieldName)
+    val oms = typeMappings.collect { case om: ObjectMapping => om }
+
+    val missingSchemaFields: List[String] =
+      oms.flatMap { om =>
+        val obj = om.tpe
+        val on = obj.asNamed.map(_.name).getOrElse("Unknown")
+        om.fieldMappings.collect {
+          case fm if fm.isPublic && !obj.hasField(fm.fieldName) =>
+            s"Found mapping for unknown field ${fm.fieldName} of type $on"
+        }
       }
-    }.flatten
 
-    val mappingTypesExistInSchema: List[String] =
-      typeMappingNames.filterNot(name => schema.types.map(_.name).contains(name))
+    val missingRequiredMappings: List[String] =
+      oms.flatMap { om =>
+        def hasRequired(name: String): Boolean =
+          om.fieldMappings.exists(_.fieldName == name)
 
-    val mappingFieldsExistInSchema: List[String] =
-      typeMappingFieldNames.filterNot(name => schema.types.collect { case t: TypeWithFields => t.fields.map(_.name) }.flatten.contains(name))
+        val on = om.tpe.asNamed.map(_.name).getOrElse("Unknown")
 
-    if (mappingTypesExistInSchema.isEmpty && mappingFieldsExistInSchema.isEmpty) Chain.empty
-    else Chain(Json.fromString(
-      s"Schema is missing ${mappingTypesExistInSchema.map(t => s"type: $t").mkString(", ")} ${mappingFieldsExistInSchema.map(t => s"field: $t").mkString(", ")}"))
+        om.fieldMappings.flatMap {
+          case CursorField(_, _, _, required) => required.filterNot(hasRequired)
+          case CursorAttribute(_, _, required) => required.filterNot(hasRequired)
+          case _ => Nil
+        }.map(fan => s"No field/attribute mapping for $fan in object mapping for $on")
+      }
+
+    Chain.fromSeq((missingSchemaTypes ++ missingSchemaFields ++ missingRequiredMappings).map(Json.fromString))
   }
 
   def rootMapping(path: List[String], tpe: Type, fieldName: String): Option[RootMapping] =
@@ -102,10 +118,12 @@ trait Mapping[F[_]] {
 
   trait FieldMapping extends Product with Serializable {
     def fieldName: String
+    def isPublic: Boolean
     def withParent(tpe: Type): FieldMapping
   }
 
   trait RootMapping extends FieldMapping {
+    def isPublic = true
     def cursor(query: Query): F[Result[Cursor]]
     def withParent(tpe: Type): RootMapping
   }
@@ -125,6 +143,7 @@ trait Mapping[F[_]] {
   }
 
   case class CursorField[T](fieldName: String, f: Cursor => Result[T], encoder: Encoder[T], required: List[String]) extends FieldMapping {
+    def isPublic = true
     def withParent(tpe: Type): CursorField[T] = this
   }
   object CursorField {
@@ -133,6 +152,7 @@ trait Mapping[F[_]] {
   }
 
   case class CursorAttribute[T](fieldName: String, f: Cursor => Result[T], required: List[String] = Nil) extends FieldMapping {
+    def isPublic = false
     def withParent(tpe: Type): CursorAttribute[T] = this
   }
 
@@ -141,6 +161,7 @@ trait Mapping[F[_]] {
     interpreter: Mapping[F],
     join: (Cursor, Query) => Result[Query] = ComponentElaborator.TrivialJoin
   ) extends FieldMapping {
+    def isPublic = true
     def withParent(tpe: Type): Delegate = this
   }
 
