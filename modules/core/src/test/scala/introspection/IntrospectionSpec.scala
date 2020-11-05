@@ -26,7 +26,7 @@ final class IntrospectionSuite extends CatsSuite {
   }
 
   test("simple type query") {
-    val text = """
+    val query = """
       {
         __type(name: "User") {
           name
@@ -64,14 +64,14 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestMapping.compiler.compile(text)
-    val res = TestMapping.interpreter.run(compiled.right.get, TestMapping.schema.queryType)
+    val res = TestMapping.compileAndRun(query)
     //println(res)
+
     assert(res == expected)
   }
 
   test("kind/name/description/ofType query") {
-    val text = """
+    val query = """
       {
         __type(name: "KindTest") {
           name
@@ -221,14 +221,14 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestMapping.compiler.compile(text)
-    val res = TestMapping.interpreter.run(compiled.right.get, TestMapping.schema.queryType)
+    val res = TestMapping.compileAndRun(query)
     //println(res)
+
     assert(res == expected)
   }
 
   test("fields query") {
-    val text = """
+    val query = """
       {
         __type(name: "KindTest") {
           name
@@ -342,14 +342,14 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestMapping.compiler.compile(text)
-    val res = TestMapping.interpreter.run(compiled.right.get, TestMapping.schema.queryType)
+    val res = TestMapping.compileAndRun(query)
     //println(res)
+
     assert(res == expected)
   }
 
   test("interfaces query") {
-    val text = """
+    val query = """
       {
         __type(name: "KindTest") {
           name
@@ -429,14 +429,14 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestMapping.compiler.compile(text)
-    val res = TestMapping.interpreter.run(compiled.right.get, TestMapping.schema.queryType)
+    val res = TestMapping.compileAndRun(query)
     //println(res)
+
     assert(res == expected)
   }
 
   test("possibleTypes query") {
-    val text = """
+    val query = """
       {
         __type(name: "KindTest") {
           name
@@ -523,14 +523,14 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestMapping.compiler.compile(text)
-    val res = TestMapping.interpreter.run(compiled.right.get, TestMapping.schema.queryType)
+    val res = TestMapping.compileAndRun(query)
     //println(res)
+
     assert(res == expected)
   }
 
   test("enumValues query") {
-    val text = """
+    val query = """
       {
         __type(name: "KindTest") {
           name
@@ -613,14 +613,14 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestMapping.compiler.compile(text)
-    val res = TestMapping.interpreter.run(compiled.right.get, TestMapping.schema.queryType)
+    val res = TestMapping.compileAndRun(query)
     //println(res)
+
     assert(res == expected)
   }
 
   test("deprecation excluded") {
-    val text = """
+    val query = """
       {
         __type(name: "DeprecationTest") {
           fields {
@@ -694,14 +694,14 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestMapping.compiler.compile(text)
-    val res = TestMapping.interpreter.run(compiled.right.get, TestMapping.schema.queryType)
+    val res = TestMapping.compileAndRun(query)
     //println(res)
+
     assert(res == expected)
   }
 
   test("deprecation included") {
-    val text = """
+    val query = """
       {
         __type(name: "DeprecationTest") {
           fields {
@@ -785,14 +785,14 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestMapping.compiler.compile(text)
-    val res = TestMapping.interpreter.run(compiled.right.get, TestMapping.schema.queryType)
+    val res = TestMapping.compileAndRun(query)
     //println(res)
+
     assert(res == expected)
   }
 
   test("simple schema query") {
-    val text = """
+    val query = """
       {
         __schema {
           queryType { name }
@@ -846,15 +846,15 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestMapping.compiler.compile(text)
-    val res0 = TestMapping.interpreter.run(compiled.right.get, TestMapping.schema.queryType)
+    val res0 = TestMapping.compileAndRun(query)
     val res = stripStandardTypes(res0)
     //println(res)
+
     assert(res == expected)
   }
 
   test("standard introspection query") {
-    val text = """
+    val query = """
       |query IntrospectionQuery {
       |  __schema {
       |    queryType { name }
@@ -1114,15 +1114,15 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = SmallMapping.compiler.compile(text)
-    val res0 = SmallMapping.interpreter.run(compiled.right.get, SmallMapping.schema.queryType)
+    val res0 = SmallMapping.compileAndRun(query)
     val res = stripStandardTypes(res0)
     //println(res)
+
     assert(res == expected)
   }
 
   test("typename query") {
-    val text = """
+    val query = """
       {
         users {
           __typename
@@ -1146,14 +1146,14 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = SmallMapping.compiler.compile(text)
-    val res = SmallMapping.interpreter.run(compiled.right.get, SmallMapping.schema.queryType)
+    val res = SmallMapping.compileAndRun(query)
     //println(res)
+
     assert(res == expected)
   }
 
   test("typename query with narrowing") {
-    val text = """
+    val query = """
       {
         profiles {
           __typename
@@ -1175,14 +1175,14 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = SmallMapping.compiler.compile(text)
-    val res = SmallMapping.interpreter.run(compiled.right.get, SmallMapping.schema.queryType)
+    val res = SmallMapping.compileAndRun(query)
     //println(res)
+
     assert(res == expected)
   }
 
   test("mixed query") {
-    val text = """
+    val query = """
       {
         users {
           name
@@ -1222,14 +1222,14 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = SmallMapping.compiler.compile(text)
-    val res = SmallMapping.interpreter.run(compiled.right.get, SmallMapping.schema.queryType)
+    val res = SmallMapping.compileAndRun(query)
     //println(res)
+
     assert(res == expected)
   }
 
   test("introspection disabled") {
-    val text = """
+    val query = """
       {
         __type(name: "User") {
           name
@@ -1243,13 +1243,24 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val compiled = TestMapping.compiler.compile(text, None, useIntrospection = false)
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Unknown field '__type' in 'Query'"
+          }
+        ]
+      }
+    """
+
+    val res = TestMapping.compileAndRun(query, useIntrospection = false)
     //println(res)
-    assert(compiled.isLeft)
+
+    assert(res == expected)
   }
 }
 
-object TestMapping extends SimpleMapping[Id] {
+object TestMapping extends Mapping[Id] {
   val schema =
     Schema(
       """

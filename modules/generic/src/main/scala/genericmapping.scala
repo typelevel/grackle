@@ -17,7 +17,7 @@ import shapeless.ops.record.Keys
 import QueryInterpreter.{ mkErrorResult, mkOneError }
 import ShapelessUtils._
 
-trait GenericMapping[F[_]] extends AbstractMapping[Monad, F] {
+abstract class GenericMapping[F[_]: Monad] extends Mapping[F] {
   case class GenericRoot[T](val tpe: Type, val fieldName: String, t: T, cb: () => CursorBuilder[T]) extends RootMapping {
     lazy val cursorBuilder = cb()
     def cursor(query: Query): F[Result[Cursor]] = cursorBuilder.build(Nil, t).pure[F]

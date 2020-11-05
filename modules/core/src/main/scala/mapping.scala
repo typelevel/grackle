@@ -4,18 +4,36 @@
 package edu.gemini.grackle
 
 import cats.Monad
+import cats.data.{Chain, Ior}
 import cats.implicits._
 import io.circe.{Encoder, Json}
+
 import Query.Select
 import QueryCompiler.{ComponentElaborator, SelectElaborator}
 import QueryInterpreter.mkErrorResult
-import cats.data.Chain
 
-trait Mapping[F[_]] {
+trait QueryExecutor[F[_], T] { outer =>
   implicit val M: Monad[F]
 
+  def run(query: Query, rootTpe: Type): F[T]
+
+  def compileAndRun(text: String, name: Option[String] = None, untypedEnv: Option[Json] = None, useIntrospection: Boolean = true): F[T]
+}
+
+abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, Json] {
   val schema: Schema
   val typeMappings: List[TypeMapping]
+
+  def run(query: Query, rootTpe: Type): F[Json] =
+    interpreter.run(query, rootTpe)
+
+  def compileAndRun(text: String, name: Option[String] = None, untypedEnv: Option[Json] = None, useIntrospection: Boolean = true): F[Json] =
+    compiler.compile(text, name, untypedEnv, useIntrospection) match {
+      case Ior.Right(compiledQuery) =>
+        run(compiledQuery, schema.queryType)
+      case invalid =>
+        QueryInterpreter.mkInvalidResponse(invalid).pure[F]
+    }
 
   def typeMapping(tpe: Type): Option[TypeMapping] =
     typeMappings.find(_.tpe.nominal_=:=(tpe))
@@ -187,7 +205,3 @@ trait Mapping[F[_]] {
 
   val interpreter: QueryInterpreter[F] = new QueryInterpreter(this)
 }
-
-abstract class AbstractMapping[+M[f[_]] <: Monad[f], F[_]](implicit val M: M[F]) extends Mapping[F]
-
-trait SimpleMapping[F[_]] extends AbstractMapping[Monad, F]

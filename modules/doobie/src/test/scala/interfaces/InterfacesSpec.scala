@@ -88,8 +88,7 @@ final class InterfacesSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -157,8 +156,7 @@ final class InterfacesSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -219,8 +217,7 @@ final class InterfacesSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -283,8 +280,7 @@ final class InterfacesSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -376,8 +372,7 @@ final class InterfacesSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -470,8 +465,7 @@ final class InterfacesSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)

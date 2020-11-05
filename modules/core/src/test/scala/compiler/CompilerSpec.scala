@@ -14,7 +14,7 @@ import QueryCompiler._, ComponentElaborator.TrivialJoin
 
 final class CompilerSuite extends CatsSuite {
   test("simple query") {
-    val text = """
+    val query = """
       query {
         character(id: "1000") {
           name
@@ -27,12 +27,12 @@ final class CompilerSuite extends CatsSuite {
         Select("name", Nil)
       )
 
-    val res = QueryParser.parseText(text)
+    val res = QueryParser.parseText(query)
     assert(res == Ior.Right(UntypedQuery(expected, Nil)))
   }
 
  test("simple mutation") {
-    val text = """
+    val query = """
       mutation {
         update_character(id: "1000", name: "Luke") {
           character {
@@ -49,12 +49,12 @@ final class CompilerSuite extends CatsSuite {
         )
       )
 
-    val res = QueryParser.parseText(text)
+    val res = QueryParser.parseText(query)
     assert(res == Ior.Right(UntypedMutation(expected, Nil)))
   }
 
   test("simple subscription") {
-    val text = """
+    val query = """
       subscription {
         character(id: "1000") {
           name
@@ -67,12 +67,12 @@ final class CompilerSuite extends CatsSuite {
         Select("name", Nil)
       )
 
-    val res = QueryParser.parseText(text)
+    val res = QueryParser.parseText(query)
     assert(res == Ior.Right(UntypedSubscription(expected, Nil)))
   }
 
   test("simple nested query") {
-    val text = """
+    val query = """
       query {
         character(id: "1000") {
           name
@@ -93,12 +93,12 @@ final class CompilerSuite extends CatsSuite {
           )
       )
 
-    val res = QueryParser.parseText(text)
+    val res = QueryParser.parseText(query)
     assert(res == Ior.Right(UntypedQuery(expected, Nil)))
   }
 
   test("shorthand query") {
-    val text = """
+    val query = """
       {
         hero(episode: NEWHOPE) {
           name
@@ -124,12 +124,12 @@ final class CompilerSuite extends CatsSuite {
         )
       )
 
-    val res = QueryParser.parseText(text)
+    val res = QueryParser.parseText(query)
     assert(res == Ior.Right(UntypedQuery(expected, Nil)))
   }
 
   test("field alias") {
-    val text = """
+    val query = """
       {
         user(id: 4) {
           id
@@ -150,12 +150,12 @@ final class CompilerSuite extends CatsSuite {
         ))
       )
 
-    val res = QueryParser.parseText(text)
+    val res = QueryParser.parseText(query)
     assert(res == Ior.Right(UntypedQuery(expected, Nil)))
   }
 
   test("introspection query") {
-    val text = """
+    val query = """
       query IntrospectionQuery {
         __schema {
           queryType {
@@ -179,12 +179,12 @@ final class CompilerSuite extends CatsSuite {
         Select("subscriptionType", Nil, Select("name", Nil, Empty))
       )
 
-    val res = QueryParser.parseText(text)
+    val res = QueryParser.parseText(query)
     assert(res == Ior.Right(UntypedQuery(expected, Nil)))
   }
 
   test("simple selector elaborated query") {
-    val text = """
+    val query = """
       query {
         character(id: "1000") {
           name
@@ -196,21 +196,24 @@ final class CompilerSuite extends CatsSuite {
     """
 
     val expected =
-      Unique(Eql(FieldPath(List("id")), Const("1000")),
-        Select("name", Nil) ~
-          Select(
-            "friends", Nil,
-            Select("name", Nil)
-          )
-      )
+      Select(
+        "character", Nil,
+        Unique(Eql(FieldPath(List("id")), Const("1000")),
+          Select("name", Nil) ~
+            Select(
+              "friends", Nil,
+              Select("name", Nil)
+            )
+        )
+    )
 
-    val res = SimpleMapping.compiler.compile(text)
+    val res = AtomicMapping.compiler.compile(query)
 
     assert(res == Ior.Right(expected))
   }
 
   test("simple component elaborated query") {
-    val text = """
+    val query = """
       query {
         componenta {
           fielda1
@@ -251,13 +254,13 @@ final class CompilerSuite extends CatsSuite {
         )
       )
 
-    val res = ComposedMapping.compiler.compile(text)
+    val res = ComposedMapping.compiler.compile(query)
 
     assert(res == Ior.Right(expected))
   }
 }
 
-object SimpleMapping {
+object AtomicMapping extends Mapping[Id] {
   val schema =
     Schema(
       """
@@ -274,17 +277,17 @@ object SimpleMapping {
 
   val QueryType = schema.ref("Query")
 
-  val selectElaborator = new SelectElaborator(Map(
+  val typeMappings = Nil
+
+  override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("character", List(Binding("id", StringValue(id))), child) =>
-        Unique(Eql(FieldPath(List("id")), Const(id)), child).rightIor
+        Select("character", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
     }
   ))
-
-  val compiler = new QueryCompiler(schema, List(selectElaborator))
 }
 
-trait DummyComponent extends SimpleMapping[Id] {
+trait DummyComponent extends Mapping[Id] {
   val schema = Schema("type Query {}").right.get
   val typeMappings = Nil
 }
@@ -293,7 +296,7 @@ object ComponentA extends DummyComponent
 object ComponentB extends DummyComponent
 object ComponentC extends DummyComponent
 
-object ComposedMapping extends SimpleMapping[Id] {
+object ComposedMapping extends Mapping[Id] {
   val schema =
     Schema(
       """

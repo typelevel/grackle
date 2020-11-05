@@ -139,7 +139,7 @@ object CountryMapping extends ValueMapping[Id] {
 
 /* Composition */
 
-object ComposedMapping extends SimpleMapping[Id] {
+object ComposedMapping extends Mapping[Id] {
   val schema =
     Schema(
       """

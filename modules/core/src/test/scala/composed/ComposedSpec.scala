@@ -28,8 +28,7 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = CurrencyMapping.compiler.compile(query).right.get
-    val res = CurrencyMapping.interpreter.run(compiledQuery, CurrencyMapping.schema.queryType)
+    val res = ComposedMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -54,8 +53,7 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = CountryMapping.compiler.compile(query).right.get
-    val res = CountryMapping.interpreter.run(compiledQuery, CountryMapping.schema.queryType)
+    val res = ComposedMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -88,8 +86,7 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = ComposedMapping.compiler.compile(query).right.get
-    val res = ComposedMapping.interpreter.run(compiledQuery, ComposedMapping.schema.queryType)
+    val res = ComposedMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -138,8 +135,7 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = ComposedMapping.compiler.compile(query).right.get
-    val res = ComposedMapping.interpreter.run(compiledQuery, ComposedMapping.schema.queryType)
+    val res = ComposedMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -182,8 +178,7 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = ComposedMapping.compiler.compile(query).right.get
-    val res = ComposedMapping.interpreter.run(compiledQuery, ComposedMapping.schema.queryType)
+    val res = ComposedMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -216,8 +211,7 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = ComposedMapping.compiler.compile(query).right.get
-    val res = ComposedMapping.interpreter.run(compiledQuery, ComposedMapping.schema.queryType)
+    val res = ComposedMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -254,8 +248,7 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = ComposedMapping.compiler.compile(query).right.get
-    val res = ComposedMapping.interpreter.run(compiledQuery, ComposedMapping.schema.queryType)
+    val res = ComposedMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)

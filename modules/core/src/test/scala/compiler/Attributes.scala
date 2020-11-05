@@ -6,8 +6,6 @@ package compiler
 import cats.tests.CatsSuite
 import io.circe.literal.JsonStringContext
 
-import edu.gemini.grackle.QueryInterpreter.mkInvalidResponse
-
 final class AttributesSpec extends CatsSuite {
   test("fields only") {
     val query = """
@@ -44,8 +42,7 @@ final class AttributesSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = ItemMapping.compiler.compile(query).right.get
-    val res = ItemMapping.interpreter.run(compiledQuery, ItemMapping.QueryType)
+    val res = ItemMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -71,7 +68,7 @@ final class AttributesSpec extends CatsSuite {
       }
     """
 
-    val res = mkInvalidResponse(ItemMapping.compiler.compile(query))
+    val res = ItemMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -97,7 +94,7 @@ final class AttributesSpec extends CatsSuite {
       }
     """
 
-    val res = mkInvalidResponse(ItemMapping.compiler.compile(query))
+    val res = ItemMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)

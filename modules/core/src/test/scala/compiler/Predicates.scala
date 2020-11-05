@@ -125,8 +125,7 @@ final class PredicatesSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = ItemMapping.compiler.compile(query).right.get
-    val res = ItemMapping.interpreter.run(compiledQuery, ItemMapping.QueryType)
+    val res = ItemMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -156,8 +155,7 @@ final class PredicatesSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = ItemMapping.compiler.compile(query).right.get
-    val res = ItemMapping.interpreter.run(compiledQuery, ItemMapping.QueryType)
+    val res = ItemMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -198,8 +196,7 @@ final class PredicatesSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = ItemMapping.compiler.compile(query).right.get
-    val res = ItemMapping.interpreter.run(compiledQuery, ItemMapping.QueryType)
+    val res = ItemMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)

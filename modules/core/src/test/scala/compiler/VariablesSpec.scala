@@ -3,6 +3,7 @@
 
 package compiler
 
+import cats.Id
 import cats.data.Ior
 import cats.tests.CatsSuite
 import io.circe.literal.JsonStringContext
@@ -13,7 +14,7 @@ import QueryCompiler._
 
 final class VariablesSuite extends CatsSuite {
   test("simple variables query") {
-    val text = """
+    val query = """
       query getZuckProfile($devicePicSize: Int) {
         user(id: 4) {
           id
@@ -38,13 +39,13 @@ final class VariablesSuite extends CatsSuite {
         ))
       )
 
-    val compiled = VariablesMapping.compiler.compile(text, Some(variables))
+    val compiled = VariablesMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
     assert(compiled == Ior.Right(expected))
   }
 
   test("list variable query") {
-    val text = """
+    val query = """
       query getProfile($ids: [ID!]) {
         users(ids: $ids) {
           name
@@ -64,13 +65,13 @@ final class VariablesSuite extends CatsSuite {
         Select("name", Nil, Empty)
       )
 
-    val compiled = VariablesMapping.compiler.compile(text, Some(variables))
+    val compiled = VariablesMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
     assert(compiled == Ior.Right(expected))
   }
 
   test("object variable query") {
-    val text = """
+    val query = """
       query doSearch($pattern: Pattern) {
         search(pattern: $pattern) {
           name
@@ -104,13 +105,13 @@ final class VariablesSuite extends CatsSuite {
         ))
       )
 
-    val compiled = VariablesMapping.compiler.compile(text, Some(variables))
+    val compiled = VariablesMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
     assert(compiled == Ior.Right(expected))
   }
 }
 
-object VariablesMapping {
+object VariablesMapping extends Mapping[Id] {
   val schema =
     Schema(
       """
@@ -132,11 +133,11 @@ object VariablesMapping {
       """
     ).right.get
 
+  val typeMappings = Nil
+
   val QueryType = schema.ref("Query")
 
-  val selectElaborator = new SelectElaborator(Map(
+  override val selectElaborator = new SelectElaborator(Map(
     QueryType -> PartialFunction.empty
   ))
-
-  val compiler = new QueryCompiler(schema, List(selectElaborator))
 }

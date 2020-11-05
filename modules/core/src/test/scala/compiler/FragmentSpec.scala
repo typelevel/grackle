@@ -15,7 +15,7 @@ import QueryCompiler._
 
 final class FragmentSuite extends CatsSuite {
   test("simple fragment query") {
-    val text = """
+    val query = """
       query withFragments {
         user(id: 1) {
           friends {
@@ -89,17 +89,17 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val compiled = FragmentMapping.compiler.compile(text)
+    val compiled = FragmentMapping.compiler.compile(query)
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentMapping.interpreter.run(compiled.right.get, FragmentMapping.schema.queryType)
+    val res = FragmentMapping.run(compiled.right.get, FragmentMapping.schema.queryType)
     //println(res)
     assert(res == expectedResult)
   }
 
   test("nested fragment query") {
-    val text = """
+    val query = """
       query withNestedFragments {
         user(id: 1) {
           friends {
@@ -177,17 +177,17 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val compiled = FragmentMapping.compiler.compile(text)
+    val compiled = FragmentMapping.compiler.compile(query)
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentMapping.interpreter.run(compiled.right.get, FragmentMapping.schema.queryType)
+    val res = FragmentMapping.run(compiled.right.get, FragmentMapping.schema.queryType)
     //println(res)
     assert(res == expectedResult)
   }
 
   test("typed fragment query") {
-    val text = """
+    val query = """
       query FragmentTyping {
         profiles {
           id
@@ -254,17 +254,17 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val compiled = FragmentMapping.compiler.compile(text)
+    val compiled = FragmentMapping.compiler.compile(query)
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentMapping.interpreter.run(compiled.right.get, FragmentMapping.schema.queryType)
+    val res = FragmentMapping.run(compiled.right.get, FragmentMapping.schema.queryType)
     //println(res)
     assert(res == expectedResult)
   }
 
   test("inline fragment query") {
-    val text = """
+    val query = """
       query inlineFragmentTyping {
         profiles {
           id
@@ -319,17 +319,17 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val compiled = FragmentMapping.compiler.compile(text)
+    val compiled = FragmentMapping.compiler.compile(query)
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentMapping.interpreter.run(compiled.right.get, FragmentMapping.schema.queryType)
+    val res = FragmentMapping.run(compiled.right.get, FragmentMapping.schema.queryType)
     //println(res)
     assert(res == expectedResult)
   }
 
   test("typed union fragment query") {
-    val text = """
+    val query = """
       query FragmentUnionTyping {
         user: user(id: "1") {
           favourite {
@@ -419,11 +419,11 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val compiled = FragmentMapping.compiler.compile(text)
+    val compiled = FragmentMapping.compiler.compile(query)
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentMapping.interpreter.run(compiled.right.get, FragmentMapping.schema.queryType)
+    val res = FragmentMapping.run(compiled.right.get, FragmentMapping.schema.queryType)
     //println(res)
     assert(res == expectedResult)
   }

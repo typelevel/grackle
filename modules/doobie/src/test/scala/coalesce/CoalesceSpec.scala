@@ -85,10 +85,19 @@ final class CoalesceSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val (res, trace) = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
+
+    val numStages = trace.size
+    val numCells = trace.foldLeft(0) { case (acc, stage) =>
+      acc+stage.foldLeft(0) { case (acc, stats) =>
+        acc+(stats.rows*stats.cols)
+      }
+    }
+
+    assert(numStages == 2)
+    assert(numCells == 32)
   }
 }

@@ -11,7 +11,7 @@ import Ast._, OperationType._, OperationDefinition._, Selection._, Value._, Type
 
 final class ParserSuite extends CatsSuite {
   test("simple query") {
-    val text = """
+    val query = """
       query {
         character(id: 1000) {
           name
@@ -30,13 +30,13 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(text).option match {
+    GraphQLParser.Document.parseOnly(query).option match {
       case Some(List(q)) => assert(q == expected)
     }
   }
 
   test("multiple parameters (commas)") {
-    val text = """
+    val query = """
       query {
         wibble(foo: "a", bar: "b", baz: 3) {
           quux
@@ -61,13 +61,13 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(text).option match {
+    GraphQLParser.Document.parseOnly(query).option match {
       case Some(List(q)) => assert(q == expected)
     }
   }
 
   test("multiple parameters (no commas)") {
-    val text = """
+    val query = """
       query {
         wibble(foo: "a" bar: "b" baz: 3) {
           quux
@@ -92,13 +92,13 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(text).option match {
+    GraphQLParser.Document.parseOnly(query).option match {
       case Some(List(q)) => assert(q == expected)
     }
   }
 
   test("introspection query") {
-    val text = """
+    val query = """
       query IntrospectionQuery {
         __schema {
           queryType {
@@ -139,13 +139,13 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(text).option match {
+    GraphQLParser.Document.parseOnly(query).option match {
       case Some(List(q)) => assert(q == expected)
     }
   }
 
   test("shorthand query") {
-    val text = """
+    val query = """
       {
         hero(episode: NEWHOPE) {
           name
@@ -180,13 +180,13 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(text).option match {
+    GraphQLParser.Document.parseOnly(query).option match {
       case Some(List(q)) => assert(q == expected)
     }
   }
 
   test("field alias") {
-    val text = """
+    val query = """
       {
         user(id: 4) {
           id
@@ -211,13 +211,13 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(text).option match {
+    GraphQLParser.Document.parseOnly(query).option match {
       case Some(List(q)) => assert(q == expected)
     }
   }
 
   test("multiple root fields") {
-    val text = """
+    val query = """
       {
         luke: character(id: "1000") {
           name
@@ -242,13 +242,13 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(text).option match {
+    GraphQLParser.Document.parseOnly(query).option match {
       case Some(List(q)) => assert(q == expected)
     }
   }
 
   test("variables") {
-    val text = """
+    val query = """
       query getZuckProfile($devicePicSize: Int) {
         user(id: 4) {
           id
@@ -273,13 +273,13 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(text).option match {
+    GraphQLParser.Document.parseOnly(query).option match {
       case Some(List(q)) => assert(q == expected)
     }
   }
 
   test("comments") {
-    val text = """
+    val query = """
       #comment at start of document
       query IntrospectionQuery { #comment at end of line
         __schema {
@@ -324,7 +324,7 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(text).option match {
+    GraphQLParser.Document.parseOnly(query).option match {
       case Some(List(q)) => assert(q == expected)
     }
   }

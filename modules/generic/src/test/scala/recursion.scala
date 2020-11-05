@@ -112,8 +112,7 @@ final class MutualRecursionSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MutualRecursionMapping.compiler.compile(query).right.get
-    val res = MutualRecursionMapping.interpreter.run(compiledQuery, MutualRecursionMapping.schema.queryType)
+    val res = MutualRecursionMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -146,8 +145,7 @@ final class MutualRecursionSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MutualRecursionMapping.compiler.compile(query).right.get
-    val res = MutualRecursionMapping.interpreter.run(compiledQuery, MutualRecursionMapping.schema.queryType)
+    val res = MutualRecursionMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -184,8 +182,7 @@ final class MutualRecursionSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MutualRecursionMapping.compiler.compile(query).right.get
-    val res = MutualRecursionMapping.interpreter.run(compiledQuery, MutualRecursionMapping.schema.queryType)
+    val res = MutualRecursionMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -230,8 +227,7 @@ final class MutualRecursionSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MutualRecursionMapping.compiler.compile(query).right.get
-    val res = MutualRecursionMapping.interpreter.run(compiledQuery, MutualRecursionMapping.schema.queryType)
+    val res = MutualRecursionMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -262,8 +258,7 @@ final class MutualRecursionSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MutualRecursionMapping.compiler.compile(query).right.get
-    val res = MutualRecursionMapping.interpreter.run(compiledQuery, MutualRecursionMapping.schema.queryType)
+    val res = MutualRecursionMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -302,8 +297,7 @@ final class MutualRecursionSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MutualRecursionMapping.compiler.compile(query).right.get
-    val res = MutualRecursionMapping.interpreter.run(compiledQuery, MutualRecursionMapping.schema.queryType)
+    val res = MutualRecursionMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)

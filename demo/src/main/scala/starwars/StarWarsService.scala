@@ -4,14 +4,12 @@
 package starwars
 
 import cats.{ Applicative }
-import cats.data.Ior
 import cats.effect.Sync
 import cats.implicits._
 import io.circe.{ Json, ParsingFailure, parser }
 import org.http4s.{ HttpRoutes, InvalidMessageBodyFailure, ParseFailure, QueryParamDecoder }
 import org.http4s.circe._
 import org.http4s.dsl.Http4sDsl
-import edu.gemini.grackle.QueryInterpreter
 
 // #service
 trait StarWarsService[F[_]]{
@@ -60,12 +58,7 @@ object StarWarsService {
   def service[F[_]](implicit F: Applicative[F]): StarWarsService[F] =
     new StarWarsService[F]{
       def runQuery(op: Option[String], vars: Option[Json], query: String): F[Json] =
-        StarWarsMapping.compiler.compile(query, vars) match {
-          case Ior.Right(compiledQuery) =>
-            StarWarsMapping.interpreter.run(compiledQuery, StarWarsMapping.QueryType).pure[F]
-          case invalid =>
-            QueryInterpreter.mkInvalidResponse(invalid).pure[F]
-        }
+        StarWarsMapping.compileAndRun(query, op, vars).pure[F]
     }
 }
 // #service

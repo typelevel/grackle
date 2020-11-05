@@ -3,6 +3,7 @@
 
 package compiler
 
+import cats.Id
 import cats.data.Ior
 import cats.tests.CatsSuite
 
@@ -12,7 +13,7 @@ import QueryCompiler._
 
 final class InputValuesSuite extends CatsSuite {
   test("null value") {
-    val text = """
+    val query = """
       query {
         field {
           subfield
@@ -33,13 +34,13 @@ final class InputValuesSuite extends CatsSuite {
         Select("field", List(Binding("arg", IntValue(23))), Select("subfield", Nil, Empty))
       ))
 
-    val compiled = InputValuesMapping.compiler.compile(text, None)
+    val compiled = InputValuesMapping.compiler.compile(query, None)
     //println(compiled)
     assert(compiled == Ior.Right(expected))
   }
 
   test("list value") {
-    val text = """
+    val query = """
       query {
         listField(arg: []) {
           subfield
@@ -60,13 +61,13 @@ final class InputValuesSuite extends CatsSuite {
         )
       ))
 
-    val compiled = InputValuesMapping.compiler.compile(text, None)
+    val compiled = InputValuesMapping.compiler.compile(query, None)
     //println(compiled)
     assert(compiled == Ior.Right(expected))
   }
 
   test("input object value") {
-    val text = """
+    val query = """
       query {
         objectField(arg: { foo: 23, bar: true, baz: "quux" }) {
           subfield
@@ -88,13 +89,13 @@ final class InputValuesSuite extends CatsSuite {
         Select("subfield", Nil, Empty)
       )
 
-    val compiled = InputValuesMapping.compiler.compile(text, None)
+    val compiled = InputValuesMapping.compiler.compile(query, None)
     //println(compiled)
     assert(compiled == Ior.Right(expected))
   }
 }
 
-object InputValuesMapping {
+object InputValuesMapping extends Mapping[Id] {
   val schema =
     Schema(
       """
@@ -118,9 +119,9 @@ object InputValuesMapping {
 
   val QueryType = schema.ref("Query")
 
-  val selectElaborator = new SelectElaborator(Map(
+  val typeMappings = Nil
+
+  override val selectElaborator = new SelectElaborator(Map(
     QueryType -> PartialFunction.empty
   ))
-
-  val compiler = new QueryCompiler(schema, List(selectElaborator))
 }

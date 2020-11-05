@@ -5,11 +5,10 @@ package embedding
 
 import cats.effect.Sync
 import doobie.Transactor
-import io.chrisdavenport.log4cats.Logger
 
 import edu.gemini.grackle._, doobie._
 
-class EmbeddingMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger[F]) extends DoobieMapping[F] {
+trait EmbeddingMapping[F[_]] extends DoobieMapping[F] {
   val schema =
     Schema(
       """
@@ -118,7 +117,7 @@ class EmbeddingMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Lo
     )
 }
 
-object EmbeddingMapping {
-  def fromTransactor[F[_] : Sync : Logger](transactor: Transactor[F]): EmbeddingMapping[F] =
-    new EmbeddingMapping[F](transactor, Logger[F])
+object EmbeddingMapping extends DoobieMappingCompanion {
+  def mkMapping[F[_] : Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): EmbeddingMapping[F] =
+    new DoobieMapping(transactor, monitor) with EmbeddingMapping[F]
 }

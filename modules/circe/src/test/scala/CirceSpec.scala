@@ -35,8 +35,7 @@ final class CirceSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = TestCirceMapping.compiler.compile(query).right.get
-    val res = TestCirceMapping.interpreter.run(compiledQuery, TestCirceMapping.schema.queryType)
+    val res = TestCirceMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -61,8 +60,7 @@ final class CirceSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = TestCirceMapping.compiler.compile(query).right.get
-    val res = TestCirceMapping.interpreter.run(compiledQuery, TestCirceMapping.schema.queryType)
+    val res = TestCirceMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -93,8 +91,7 @@ final class CirceSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = TestCirceMapping.compiler.compile(query).right.get
-    val res = TestCirceMapping.interpreter.run(compiledQuery, TestCirceMapping.schema.queryType)
+    val res = TestCirceMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -128,8 +125,7 @@ final class CirceSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = TestCirceMapping.compiler.compile(query).right.get
-    val res = TestCirceMapping.interpreter.run(compiledQuery, TestCirceMapping.schema.queryType)
+    val res = TestCirceMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -171,8 +167,7 @@ final class CirceSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = TestCirceMapping.compiler.compile(query).right.get
-    val res = TestCirceMapping.interpreter.run(compiledQuery, TestCirceMapping.schema.queryType)
+    val res = TestCirceMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -217,8 +212,7 @@ final class CirceSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = TestCirceMapping.compiler.compile(query).right.get
-    val res = TestCirceMapping.interpreter.run(compiledQuery, TestCirceMapping.schema.queryType)
+    val res = TestCirceMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)

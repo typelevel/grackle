@@ -3,6 +3,7 @@
 
 package compiler
 
+import cats.Id
 import cats.data.Ior
 import cats.tests.CatsSuite
 import io.circe.literal.JsonStringContext
@@ -12,7 +13,7 @@ import Query._
 
 final class SkipIncludeSuite extends CatsSuite {
   test("skip/include field") {
-    val text = """
+    val query = """
       query ($yup: Boolean, $nope: Boolean) {
         a: field @skip(if: $yup) {
           subfieldA
@@ -42,13 +43,14 @@ final class SkipIncludeSuite extends CatsSuite {
         Rename("c", Select("field", Nil, Select("subfieldA", Nil, Empty)))
       ))
 
-    val compiled = SkipIncludeMapping.compiler.compile(text, Some(variables))
+    val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
+
     assert(compiled == Ior.Right(expected))
   }
 
   test("skip/include fragment spread") {
-    val text = """
+    val query = """
       query ($yup: Boolean, $nope: Boolean) {
         a: field {
           ...frag @skip(if: $yup)
@@ -99,13 +101,14 @@ final class SkipIncludeSuite extends CatsSuite {
         Rename("d", Select("field", Nil, Empty))
       ))
 
-    val compiled = SkipIncludeMapping.compiler.compile(text, Some(variables))
+    val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
+
     assert(compiled == Ior.Right(expected))
   }
 
   test("fragment spread with nested skip/include") {
-    val text = """
+    val query = """
       query ($yup: Boolean, $nope: Boolean) {
         field {
           ...frag
@@ -135,13 +138,14 @@ final class SkipIncludeSuite extends CatsSuite {
         ))
       )
 
-    val compiled = SkipIncludeMapping.compiler.compile(text, Some(variables))
+    val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
+
     assert(compiled == Ior.Right(expected))
   }
 
   test("skip/include inline fragment") {
-    val text = """
+    val query = """
       query ($yup: Boolean, $nope: Boolean) {
         a: field {
           ... on Value @skip(if: $yup) {
@@ -199,13 +203,14 @@ final class SkipIncludeSuite extends CatsSuite {
         Rename("d", Select("field", Nil, Empty))
       ))
 
-    val compiled = SkipIncludeMapping.compiler.compile(text, Some(variables))
+    val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
+
     assert(compiled == Ior.Right(expected))
   }
 
   test("inline fragment with nested skip/include") {
-    val text = """
+    val query = """
       query ($yup: Boolean, $nope: Boolean) {
         field {
           ... on Value {
@@ -233,13 +238,14 @@ final class SkipIncludeSuite extends CatsSuite {
         ))
       )
 
-    val compiled = SkipIncludeMapping.compiler.compile(text, Some(variables))
+    val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
+
     assert(compiled == Ior.Right(expected))
   }
 }
 
-object SkipIncludeMapping {
+object SkipIncludeMapping extends Mapping[Id] {
   val schema =
     Schema(
       """
@@ -253,5 +259,5 @@ object SkipIncludeMapping {
       """
     ).right.get
 
-  val compiler = new QueryCompiler(schema, Nil)
+  val typeMappings = Nil
 }
