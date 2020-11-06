@@ -16,7 +16,6 @@ import doobie.implicits.legacy.localdate._
 import doobie.implicits.legacy.instant._
 import doobie.postgres.implicits.UuidType
 import doobie.util.meta.Meta
-import io.chrisdavenport.log4cats.Logger
 import io.circe.Encoder
 
 import edu.gemini.grackle._, doobie._
@@ -95,7 +94,7 @@ object MovieData {
     Order.fromComparable[Duration]
 }
 
-class MovieMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger[F]) extends DoobieMapping[F] {
+trait MovieMapping[F[_]] extends DoobieMapping[F] {
   import MovieData._
 
   val schema =
@@ -282,7 +281,7 @@ class MovieMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
   ))
 }
 
-object MovieMapping {
-  def fromTransactor[F[_] : Sync : Logger](transactor: Transactor[F]): MovieMapping[F] =
-    new MovieMapping[F](transactor, Logger[F])
+object MovieMapping extends DoobieMappingCompanion {
+  def mkMapping[F[_] : Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): MovieMapping[F] =
+    new DoobieMapping(transactor, monitor) with MovieMapping[F]
 }

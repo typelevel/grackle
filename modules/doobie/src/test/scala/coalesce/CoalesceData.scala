@@ -5,11 +5,11 @@ package coalesce
 
 import cats.effect.Sync
 import doobie.Transactor
-import io.chrisdavenport.log4cats.Logger
 
 import edu.gemini.grackle._, doobie._
 
-class CoalesceMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger[F]) extends DoobieMapping[F] {
+trait CoalesceMapping[F[_]] extends DoobieMapping[F] {
+
   val schema =
     Schema(
       """
@@ -82,7 +82,7 @@ class CoalesceMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Log
     )
 }
 
-object CoalesceMapping {
-  def fromTransactor[F[_] : Sync : Logger](transactor: Transactor[F]): CoalesceMapping[F] =
-    new CoalesceMapping[F](transactor, Logger[F])
+object CoalesceMapping extends TracedDoobieMappingCompanion {
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): CoalesceMapping[F] =
+    new DoobieMapping(transactor, monitor) with CoalesceMapping[F]
 }

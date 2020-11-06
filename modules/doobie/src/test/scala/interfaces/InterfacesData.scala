@@ -7,12 +7,11 @@ import cats.effect.Sync
 import cats.kernel.Eq
 import doobie.Transactor
 import doobie.util.meta.Meta
-import edu.gemini.grackle._
-import edu.gemini.grackle.doobie._
-import io.chrisdavenport.log4cats.Logger
 import io.circe.Encoder
 
-class InterfacesMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger[F]) extends DoobieMapping[F] {
+import edu.gemini.grackle._, doobie._
+
+trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
   val schema =
     Schema(
       """
@@ -149,9 +148,9 @@ class InterfacesMapping[F[_]: Sync](val transactor: Transactor[F], val logger: L
   }
 }
 
-object InterfacesMapping {
-  def fromTransactor[F[_] : Sync : Logger](transactor: Transactor[F]): InterfacesMapping[F] =
-    new InterfacesMapping[F](transactor, Logger[F])
+object InterfacesMapping extends DoobieMappingCompanion {
+  def mkMapping[F[_] : Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): InterfacesMapping[F] =
+    new DoobieMapping(transactor, monitor) with InterfacesMapping[F]
 }
 
 sealed trait EntityType extends Product with Serializable

@@ -6,13 +6,12 @@ package jsonb
 import cats.effect.Sync
 import cats.implicits._
 import doobie.Transactor
-import io.chrisdavenport.log4cats.Logger
 
 import edu.gemini.grackle._, doobie._
 import Query._, Predicate._, Value._
 import QueryCompiler._
 
-class JsonbMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger[F]) extends DoobieMapping[F] {
+trait JsonbMapping[F[_]] extends DoobieMapping[F] {
   val schema =
     Schema(
       """
@@ -89,8 +88,7 @@ class JsonbMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
   ))
 }
 
-object JsonbMapping {
-  def fromTransactor[F[_] : Sync : Logger](transactor: Transactor[F]): JsonbMapping[F] =
-    new JsonbMapping[F](transactor, Logger[F])
+object JsonbMapping extends DoobieMappingCompanion {
+  def mkMapping[F[_] : Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): JsonbMapping[F] =
+    new DoobieMapping(transactor, monitor) with JsonbMapping[F]
 }
-

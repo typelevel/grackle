@@ -12,7 +12,7 @@ import io.circe.Json
 import QueryInterpreter.{mkErrorResult, mkOneError}
 import ScalarType._
 
-trait ValueMapping[F[_]] extends AbstractMapping[Monad, F] {
+abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
 
   case class ValueRoot(val tpe: Type, val fieldName: String, root0: () => Any) extends RootMapping {
     lazy val root: Any = root0()

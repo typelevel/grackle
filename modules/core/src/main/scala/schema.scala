@@ -6,11 +6,12 @@ package edu.gemini.grackle
 import atto.Atto._
 import cats.data.Ior
 import cats.implicits._
-import edu.gemini.grackle.Ast.{ObjectTypeDefinition, TypeDefinition}
-import edu.gemini.grackle.QueryInterpreter.{mkErrorResult, mkOneError}
-import edu.gemini.grackle.ScalarType._
-import edu.gemini.grackle.Value._
 import io.circe.Json
+
+import Ast.{ObjectTypeDefinition, TypeDefinition}
+import QueryInterpreter.{mkErrorResult, mkOneError}
+import ScalarType._
+import Value._
 
 /**
  * Representation of a GraphQL schema

@@ -8,9 +8,8 @@ import cats.data.Ior
 import cats.effect.Sync
 import cats.implicits._
 import doobie.Transactor
-import edu.gemini.grackle._, doobie._
-import io.chrisdavenport.log4cats.Logger
 
+import edu.gemini.grackle._, doobie._
 import Query._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.mkErrorResult
@@ -80,7 +79,7 @@ object CurrencyMapping {
 
 /* World component */
 
-class WorldMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger[F]) extends DoobieMapping[F] {
+trait WorldMapping[F[_]] extends DoobieMapping[F] {
   import DoobieFieldMapping._
 
   val schema =
@@ -193,15 +192,15 @@ class WorldMapping[F[_]: Sync](val transactor: Transactor[F], val logger: Logger
     )
 }
 
-object WorldMapping {
-  def fromTransactor[F[_] : Sync : Logger](transactor: Transactor[F]): WorldMapping[F] =
-    new WorldMapping[F](transactor, Logger[F])
+object WorldMapping extends DoobieMappingCompanion {
+  def mkMapping[F[_] : Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): WorldMapping[F] =
+    new DoobieMapping(transactor, monitor) with WorldMapping[F]
 }
 
 /* Composition */
 
 class ComposedMapping[F[_] : Monad]
-  (world: Mapping[F], currency: Mapping[F]) extends SimpleMapping[F] {
+  (world: Mapping[F], currency: Mapping[F]) extends Mapping[F] {
   val schema =
     Schema(
       """
@@ -293,6 +292,6 @@ class ComposedMapping[F[_] : Monad]
 }
 
 object ComposedMapping {
-  def fromTransactor[F[_] : Sync : Logger](xa: Transactor[F]): ComposedMapping[F] =
+  def fromTransactor[F[_] : Sync](xa: Transactor[F]): ComposedMapping[F] =
     new ComposedMapping[F](WorldMapping.fromTransactor(xa), CurrencyMapping[F])
 }

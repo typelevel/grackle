@@ -22,8 +22,7 @@ final class WorldSpec extends DatabaseSuite {
 
     val expected = 239
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     val resSize = root.data.countries.arr.getOption(res).map(_.size)
@@ -50,8 +49,7 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -124,8 +122,7 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -156,8 +153,7 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -201,8 +197,7 @@ final class WorldSpec extends DatabaseSuite {
     }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -289,8 +284,7 @@ final class WorldSpec extends DatabaseSuite {
     }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -439,8 +433,7 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -493,8 +486,7 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -557,8 +549,7 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -631,8 +622,7 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -719,8 +709,7 @@ final class WorldSpec extends DatabaseSuite {
     }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -748,8 +737,7 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -767,8 +755,7 @@ final class WorldSpec extends DatabaseSuite {
         }
       }
     """
-    val cquery    = mapping.compiler.compile(query).right.get
-    val json      = mapping.interpreter.run(cquery, mapping.schema.queryType).unsafeRunSync
+    val json      = mapping.compileAndRun(query).unsafeRunSync
     val countries = root.data.countries.arr.getOption(json).get
     val map       = countries.map(j => root.name.string.getOption(j).get -> root.cities.arr.getOption(j).get.length).toMap
     assert(map("Kazakstan")  == 21)
@@ -795,8 +782,7 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -823,8 +809,7 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query)
-    val res = mapping.interpreter.run(compiledQuery.right.get, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -851,8 +836,7 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -879,8 +863,7 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -907,8 +890,7 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -949,8 +931,7 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -983,8 +964,7 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)
@@ -1021,8 +1001,7 @@ final class WorldSpec extends DatabaseSuite {
       }
     """
 
-    val compiledQuery = mapping.compiler.compile(query).right.get
-    val res = mapping.interpreter.run(compiledQuery, mapping.schema.queryType).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync
     //println(res)
 
     assert(res == expected)

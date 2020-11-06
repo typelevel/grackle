@@ -268,8 +268,7 @@ final class ScalarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MovieMapping.compiler.compile(query).right.get
-    val res = MovieMapping.interpreter.run(compiledQuery, MovieMapping.QueryType)
+    val res = MovieMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -306,8 +305,7 @@ final class ScalarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MovieMapping.compiler.compile(query).right.get
-    val res = MovieMapping.interpreter.run(compiledQuery, MovieMapping.QueryType)
+    val res = MovieMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -344,8 +342,7 @@ final class ScalarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MovieMapping.compiler.compile(query).right.get
-    val res = MovieMapping.interpreter.run(compiledQuery, MovieMapping.QueryType)
+    val res = MovieMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -378,8 +375,7 @@ final class ScalarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MovieMapping.compiler.compile(query).right.get
-    val res = MovieMapping.interpreter.run(compiledQuery, MovieMapping.QueryType)
+    val res = MovieMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -416,8 +412,7 @@ final class ScalarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MovieMapping.compiler.compile(query).right.get
-    val res = MovieMapping.interpreter.run(compiledQuery, MovieMapping.QueryType)
+    val res = MovieMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)
@@ -454,8 +449,7 @@ final class ScalarsSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = MovieMapping.compiler.compile(query).right.get
-    val res = MovieMapping.interpreter.run(compiledQuery, MovieMapping.QueryType)
+    val res = MovieMapping.compileAndRun(query)
     //println(res)
 
     assert(res == expected)

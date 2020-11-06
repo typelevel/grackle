@@ -11,9 +11,7 @@ import io.circe.Json
 import QueryInterpreter.{mkErrorResult, mkOneError}
 import ScalarType._
 
-trait CirceMapping[F[_]] extends AbstractCirceMapping[Monad, F]
-
-trait AbstractCirceMapping[+M[f[_]] <: Monad[f], F[_]] extends AbstractMapping[M, F] {
+abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
   case class CirceRoot(val tpe: Type, val fieldName: String, root: Json) extends RootMapping {
     def cursor(query: Query): F[Result[Cursor]] = {
       val fieldTpe = tpe.field(fieldName)

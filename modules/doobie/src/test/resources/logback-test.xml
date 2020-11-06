@@ -8,4 +8,8 @@
   <root level="WARN">
     <appender-ref ref="STDOUT" />
   </root>
+
+  <logger name="utils.DatabaseSuite" level="INFO" additivity="false">
+    <appender-ref ref="STDOUT" />
+  </logger>
 </configuration>

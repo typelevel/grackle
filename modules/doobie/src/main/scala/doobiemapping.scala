@@ -9,9 +9,12 @@ import org.postgresql.util.PGobject
 import scala.reflect.ClassTag
 import scala.util.matching.Regex
 
+import cats.{Applicative, Monad}
+import cats.arrow.FunctionK
+import cats.data.{Chain, Ior, NonEmptyList, StateT}
 import cats.effect.Sync
+import cats.kernel.{Eq, Monoid}
 import cats.implicits._
-import cats.kernel.Monoid
 import _root_.doobie.{ ConnectionIO, Fragment, Fragments, Read }
 import _root_.doobie.implicits._
 import _root_.doobie.enum.Nullability._
@@ -29,21 +32,13 @@ import QueryCompiler._
 import DoobiePredicate._
 import Predicate._
 import Query._
-import QueryInterpreter.mkErrorResult
+import QueryInterpreter.{mkErrorResult, ProtoJson}
 import Row.FailedJoin
 import ScalarType._
-import circe.AbstractCirceMapping
-import cats.data.NonEmptyList
-import cats.data.Chain
-import edu.gemini.grackle.QueryInterpreter.ProtoJson
-import cats.data.Ior
-import cats.kernel.Eq
+import circe.CirceMapping
 
-trait DoobieMapping[F[_]] extends AbstractCirceMapping[Sync, F] {
+abstract class DoobieMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]) extends CirceMapping[F] {
   type Table = List[Row]
-
-  val transactor: Transactor[F]
-  val logger: Logger[F]
 
   import DoobieFieldMapping._
 
@@ -360,28 +355,23 @@ trait DoobieMapping[F[_]] extends AbstractCirceMapping[Sync, F] {
     new MappedQuery(rootTable, columns, metas, predicates, orderedJoins)
   }
 
+  def mkRootCursor(query: Query, fieldPath: List[String], fieldTpe: Type): F[Result[Cursor]] = {
+    val mapped = mapQuery(query, fieldPath, fieldTpe)
+
+    val cursorType = fieldTpe.list
+
+    for {
+      table <- mapped.fetch.transact(transactor)
+      _     <- monitor.queryMapped(query, mapped.fragment, table)
+    } yield DoobieCursor(fieldPath, cursorType, table, mapped).rightIor
+  }
+
   case class DoobieRoot(fieldName: String, path: List[String] = Nil, rootTpe: Type = NoType) extends RootMapping {
     def cursor(query: Query): F[Result[Cursor]] =
-      if (fieldName == "__staged") {
-        val fieldTpe = rootTpe
-        val mapped = mapQuery(query, path, fieldTpe)
-
-        val cursorType = fieldTpe.list
-
-        for {
-          table <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(transactor)
-        } yield DoobieCursor(path, cursorType, table, mapped).rightIor
-
-      } else {
-        val fieldTpe = rootTpe.underlyingField(fieldName)
-        val mapped = mapQuery(query, fieldName :: path, fieldTpe)
-
-        val cursorType = fieldTpe.list
-
-        for {
-          table <- logger.info(s"fetch(${mapped.fragment})") *> mapped.fetch.transact(transactor)
-        } yield DoobieCursor(fieldName :: path, cursorType, table, mapped).rightIor
-      }
+      if (fieldName == "__staged")
+        mkRootCursor(query, path, rootTpe)
+      else
+        mkRootCursor(query, fieldName :: path, rootTpe.underlyingField(fieldName))
 
     def withParent(tpe: Type): DoobieRoot =
       copy(rootTpe = tpe)
@@ -829,7 +819,20 @@ trait DoobieMapping[F[_]] extends AbstractCirceMapping[Sync, F] {
   override def compilerPhases: List[QueryCompiler.Phase] = (new StagingElaborator) :: super.compilerPhases
 
   override val interpreter: QueryInterpreter[F] = new QueryInterpreter(this) {
-    override def runRootValues(queries: List[(Query, Type)]): F[(Chain[Json], List[ProtoJson])] = {
+    override def runRootValues(queries: List[(Query, Type)]): F[(Chain[Json], List[ProtoJson])] =
+      for {
+        _   <- monitor.stageStarted
+        res <- runRootValues0(queries)
+        _   <- monitor.stageCompleted
+      } yield res
+
+    override def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]] =
+      for {
+        res <- super.runRootValue(query, rootTpe)
+        _   <- monitor.resultComputed(res)
+      } yield res
+
+    def runRootValues0(queries: List[(Query, Type)]): F[(Chain[Json], List[ProtoJson])] = {
       if (queries.length == 1)
         super.runRootValues(queries)
       else {
@@ -1159,5 +1162,137 @@ object Row {
       }
 
     new Read(metas.map { case (_, (m, n)) => (m.get, n) }, unsafeGet)
+  }
+}
+
+trait DoobieMonitor[F[_]] {
+  def stageStarted: F[Unit]
+  def queryMapped(query: Query, fragment: Fragment, table: List[Row]): F[Unit]
+  def resultComputed(result: Result[ProtoJson]): F[Unit]
+  def stageCompleted: F[Unit]
+}
+
+case class DoobieStats(
+  query: Query,
+  sql: String,
+  args: List[Any],
+  rows: Int,
+  cols: Int
+)
+
+object DoobieMonitor {
+  def noopMonitor[F[_]: Applicative]: DoobieMonitor[F] =
+    new DoobieMonitor[F] {
+      def stageStarted: F[Unit] = ().pure[F]
+      def queryMapped(query: Query, fragment: Fragment, table: List[Row]): F[Unit] = ().pure[F]
+      def resultComputed(result: Result[ProtoJson]): F[Unit] = ().pure[F]
+      def stageCompleted: F[Unit] = ().pure[F]
+    }
+
+  def loggerMonitor[F[_]: Applicative](logger: Logger[F]): DoobieMonitor[F] =
+    new DoobieMonitor[F] {
+      import FragmentAccess._
+
+      def stageStarted: F[Unit] =
+        logger.info(s"stage started")
+
+      def queryMapped(query: Query, fragment: Fragment, table: List[Row]): F[Unit] =
+        logger.info(
+          s"""query: $query
+             |sql: ${fragment.sql}
+             |args: ${fragment.args.mkString(", ")}
+             |fetched ${table.size} row(s) of ${table.headOption.map(_.elems.size).getOrElse(0)} column(s)
+           """.stripMargin)
+
+      def resultComputed(result: Result[ProtoJson]): F[Unit] =
+        logger.info(s"result: $result")
+
+      def stageCompleted: F[Unit] =
+        logger.info(s"stage completed")
+    }
+
+  def stateMonitor[F[_]: Applicative]: DoobieMonitor[StateT[F, List[List[DoobieStats]], ?]] =
+    new DoobieMonitor[StateT[F, List[List[DoobieStats]], ?]] {
+      import FragmentAccess._
+
+      def stageStarted: StateT[F, List[List[DoobieStats]], Unit] =
+        StateT.modify(states => Nil :: states)
+
+      def queryMapped(query: Query, fragment: Fragment, table: List[Row]): StateT[F, List[List[DoobieStats]], Unit] = {
+        val stats =
+          DoobieStats(
+            query,
+            fragment.sql,
+            fragment.args,
+            table.size,
+            table.headOption.map(_.elems.size).getOrElse(0),
+          )
+
+        StateT.modify {
+          case Nil => List(List(stats))
+          case hd :: tl => (stats :: hd) :: tl
+        }
+      }
+
+      def resultComputed(result: Result[ProtoJson]): StateT[F, List[List[DoobieStats]], Unit] =
+        StateT.pure(())
+
+      def stageCompleted: StateT[F, List[List[DoobieStats]], Unit] =
+        StateT.pure(())
+    }
+}
+
+trait DoobieMappingCompanion {
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F]
+
+  def fromTransactor[F[_] : Sync](transactor: Transactor[F]): Mapping[F] = {
+    val monitor: DoobieMonitor[F] = DoobieMonitor.noopMonitor[F]
+
+    mkMapping(transactor, monitor)
+  }
+}
+
+trait LoggedDoobieMappingCompanion {
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F]
+
+  def fromTransactor[F[_] : Sync : Logger](transactor: Transactor[F]): Mapping[F] = {
+    val monitor: DoobieMonitor[F] = DoobieMonitor.loggerMonitor[F](Logger[F])
+
+    mkMapping(transactor, monitor)
+  }
+}
+
+trait TracedDoobieMappingCompanion {
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F]
+
+  def fromTransactor[F[_] : Sync](transactor: Transactor[F]): QueryExecutor[F, (Json, List[List[DoobieStats]])] = {
+    def liftF[T](ft: F[T]): StateT[F, List[List[DoobieStats]], T] = StateT.liftF(ft)
+    val stateMapping = mkMapping(transactor.mapK(FunctionK.lift(liftF)), DoobieMonitor.stateMonitor[F])
+
+    new QueryExecutor[F, (Json, List[List[DoobieStats]])] {
+      implicit val M: Monad[F] = Sync[F]
+
+      def run(query: Query, rootTpe: Type): F[(Json, List[List[DoobieStats]])] =
+        stateMapping.run(query, rootTpe).run(Nil).map(_.swap)
+
+      def compileAndRun(text: String, name: Option[String] = None, untypedEnv: Option[Json] = None, useIntrospection: Boolean = true): F[(Json, List[List[DoobieStats]])] =
+        stateMapping.compileAndRun(text, name, untypedEnv, useIntrospection).run(Nil).map(_.swap)
+    }
+  }
+}
+
+object FragmentAccess {
+  implicit class FragmentOps(f: Fragment) {
+    def sql: String = {
+      val m = f.getClass.getDeclaredField("sql")
+      m.setAccessible(true)
+      m.get(f).asInstanceOf[String]
+    }
+
+    def args: List[Any] = {
+      val m = f.getClass.getDeclaredMethod("args")
+      m.setAccessible(true)
+      m.invoke(f).asInstanceOf[List[Any]]
+    }
   }
 }

@@ -11,12 +11,12 @@ import Ast._, OperationType._, Type.{ List => _, _ }
 
 final class SDLSuite extends CatsSuite {
   test("parse schema definition") {
-    val text = """
-    schema {
-      query: MyQuery
-      mutation: MyMutation
-      subscription: MySubscription
-    }
+    val schema = """
+      schema {
+        query: MyQuery
+        mutation: MyMutation
+        subscription: MySubscription
+      }
     """
 
     val expected =
@@ -31,13 +31,13 @@ final class SDLSuite extends CatsSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseOnly(text).option
+    val res = GraphQLParser.Document.parseOnly(schema).option
     //println(res)
     assert(res == Some(expected))
   }
 
   test("parse scalar type definition") {
-    val text = """
+    val schema = """
       "A scalar type"
       scalar Url
 
@@ -51,13 +51,13 @@ final class SDLSuite extends CatsSuite {
         ScalarTypeDefinition(Name("Time"), Some("A scalar type"), List(Directive(Name("deprecated"), Nil)))
       )
 
-    val res = GraphQLParser.Document.parseOnly(text).option
+    val res = GraphQLParser.Document.parseOnly(schema).option
     //println(res)
     assert(res == Some(expected))
   }
 
   test("parse object type definition") {
-    val text = """
+    val schema = """
       "An object type"
       type Query {
         posts: [Post]
@@ -83,13 +83,13 @@ final class SDLSuite extends CatsSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseOnly(text).option
+    val res = GraphQLParser.Document.parseOnly(schema).option
     //println(res)
     assert(res == Some(expected))
   }
 
   test("parse interface type definition") {
-    val text = """
+    val schema = """
       "An interface type"
       interface Post {
         "A field"
@@ -115,13 +115,13 @@ final class SDLSuite extends CatsSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseOnly(text).option
+    val res = GraphQLParser.Document.parseOnly(schema).option
     //println(res)
     assert(res == Some(expected))
   }
 
   test("parse union type definition") {
-    val text = """
+    val schema = """
       "A union type"
       union ThisOrThat = This | That
     """
@@ -136,13 +136,13 @@ final class SDLSuite extends CatsSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseOnly(text).option
+    val res = GraphQLParser.Document.parseOnly(schema).option
     //println(res)
     assert(res == Some(expected))
   }
 
   test("parse enum type definition") {
-    val text = """
+    val schema = """
       "An enum type"
       enum Direction {
         NORTH
@@ -164,13 +164,13 @@ final class SDLSuite extends CatsSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseOnly(text).option
+    val res = GraphQLParser.Document.parseOnly(schema).option
     //println(res)
     assert(res == Some(expected))
   }
 
   test("parse input object type definition") {
-    val text = """
+    val schema = """
       "An input object type"
       input Point2D {
         x: Float
@@ -189,13 +189,13 @@ final class SDLSuite extends CatsSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseOnly(text).option
+    val res = GraphQLParser.Document.parseOnly(schema).option
     //println(res)
     assert(res == Some(expected))
   }
 
   test("parse directive definition") {
-    val text = """
+    val schema = """
       "A directive"
       directive @delegateField(name: String!) repeatable on OBJECT | INTERFACE
     """
@@ -213,13 +213,13 @@ final class SDLSuite extends CatsSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseOnly(text).option
+    val res = GraphQLParser.Document.parseOnly(schema).option
     //println(res)
     assert(res == Some(expected))
   }
 
   test("deserialize schema (1)") {
-    val text =
+    val schema =
     """|type Author {
        |  id: Int!
        |  firstName: String
@@ -237,14 +237,14 @@ final class SDLSuite extends CatsSuite {
        |  author(id: Int! = 23): Author
        |}""".stripMargin
 
-    val res = SchemaParser.parseText(text)
+    val res = SchemaParser.parseText(schema)
     val ser = res.map(_.toString)
     //println(ser.right.get)
-    assert(ser.right.get == text)
+    assert(ser.right.get == schema)
   }
 
   test("deserialize schema (2)") {
-    val text =
+    val schema =
     """|type Query {
        |  hero(episode: Episode!): Character!
        |  character(id: ID!): Character
@@ -279,14 +279,14 @@ final class SDLSuite extends CatsSuite {
        |  primaryFunction: String
        |}""".stripMargin
 
-    val res = SchemaParser.parseText(text)
+    val res = SchemaParser.parseText(schema)
     val ser = res.map(_.toString)
     //println(ser.right.get)
-    assert(ser.right.get == text)
+    assert(ser.right.get == schema)
   }
 
   test("deserialize schema (3)") {
-    val text =
+    val schema =
     """|type Query {
        |  whatsat(p: Point!): ThisOrThat!
        |}
@@ -302,9 +302,9 @@ final class SDLSuite extends CatsSuite {
        |  y: Int
        |}""".stripMargin
 
-    val res = SchemaParser.parseText(text)
+    val res = SchemaParser.parseText(schema)
     val ser = res.map(_.toString)
     //println(ser.right.get)
-    assert(ser.right.get == text)
+    assert(ser.right.get == schema)
   }
 }
