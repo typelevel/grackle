@@ -98,7 +98,7 @@ final class SchemaSpec extends CatsSuite {
     val schema = Schema(
       """
          type ExampleType {
-          oldField: String @deprecated(notareadon: "foo bar baz")
+          oldField: String @deprecated(notareason: "foo bar baz")
         }
     """
     )
