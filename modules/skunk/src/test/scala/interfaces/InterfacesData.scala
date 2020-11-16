@@ -5,11 +5,13 @@ package interfaces
 
 import cats.effect.Sync
 import cats.kernel.Eq
-import skunk.Transactor
-import skunk.util.meta.Meta
+import cats.syntax.all._
 import io.circe.Encoder
-
+import _root_.skunk.codec.all._
 import edu.gemini.grackle._, skunk._
+import _root_.skunk.Codec
+import cats.effect.Resource
+import _root_.skunk.Session
 
 trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
   val schema =
@@ -21,31 +23,31 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
         interface Entity {
           id: ID!
           entityType: EntityType!
-          title: String!
-          synopses: Synopses!
+          title: String
+          synopses: Synopses
         }
         type Film implements Entity {
           id: ID!
           entityType: EntityType!
-          title: String!
-          synopses: Synopses!
+          title: String
+          synopses: Synopses
           rating: String
         }
         type Series implements Entity {
           id: ID!
           entityType: EntityType!
-          title: String!
-          numberOfEpisodes: Int!
+          title: String
+          numberOfEpisodes: Int
           episodes: [Episode!]!
         }
         type Episode {
           id: ID!
-          title: String!
-          synopses: Synopses!
+          title: String
+          synopses: Synopses
         }
         type Synopses {
-          short: String!
-          long: String!
+          short: String
+          long: String
         }
         enum EntityType {
           FILM
@@ -62,8 +64,6 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
   val EpisodeType = schema.ref("Episode")
   val SynopsesType = schema.ref("Synopses")
 
-  import SkunkFieldMapping._
-
   val typeMappings =
     List(
       ObjectMapping(
@@ -78,16 +78,16 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
         discriminator = entityTypeDiscriminator,
         fieldMappings =
           List(
-            SkunkField("id", ColumnRef("entities", "id"), key = true),
-            SkunkField("entityType", ColumnRef("entities", "entity_type"), discriminator = true),
-            SkunkField("title", ColumnRef("entities", "title"))
+            SkunkField("id", ColumnRef("entities", "id", text), key = true),
+            SkunkField("entityType", ColumnRef("entities", "entity_type", EntityType.codec), discriminator = true),
+            SkunkField("title", ColumnRef("entities", "title", text.opt))
           )
       ),
       ObjectMapping(
         tpe = FilmType,
         fieldMappings =
           List(
-            SkunkField("rating", ColumnRef("entities", "film_rating")),
+            SkunkField("rating", ColumnRef("entities", "film_rating", text.opt)),
             SkunkObject("synopses", Subobject(Nil))
           )
       ),
@@ -95,9 +95,9 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
         tpe = SeriesType,
         fieldMappings =
           List(
-            SkunkField("numberOfEpisodes", ColumnRef("entities", "series_number_of_episodes")),
+            SkunkField("numberOfEpisodes", ColumnRef("entities", "series_number_of_episodes", int4.opt)),
             SkunkObject("episodes", Subobject(
-              List(Join(ColumnRef("entities", "id"), ColumnRef("episodes", "series_id")))
+              List(Join(ColumnRef("entities", "id", text), ColumnRef("episodes", "series_id", text)))
             ))
           )
       ),
@@ -105,9 +105,9 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
         tpe = EpisodeType,
         fieldMappings =
           List(
-            SkunkField("id", ColumnRef("episodes", "id"), key = true),
-            SkunkField("title", ColumnRef("episodes", "title")),
-            SkunkAttribute[String]("episodeId", ColumnRef("episodes", "series_id")),
+            SkunkField("id", ColumnRef("episodes", "id", text), key = true),
+            SkunkField("title", ColumnRef("episodes", "title", text.opt)),
+            SkunkAttribute("episodeId", ColumnRef("episodes", "series_id", text), text),
             SkunkObject("synopses", Subobject(Nil))
           )
       ),
@@ -120,8 +120,8 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    SkunkField("short", ColumnRef("entities", "synopsis_short")),
-                    SkunkField("long", ColumnRef("entities", "synopsis_long"))
+                    SkunkField("short", ColumnRef("entities", "synopsis_short", text.opt)),
+                    SkunkField("long", ColumnRef("entities", "synopsis_long", text.opt))
                   )
               ),
             List("entities", "episodes", "synopses") ->
@@ -129,13 +129,13 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    SkunkField("short", ColumnRef("episodes", "synopsis_short")),
-                    SkunkField("long", ColumnRef("episoes", "synopsis_long"))
+                    SkunkField("short", ColumnRef("episodes", "synopsis_short", text.opt)),
+                    SkunkField("long", ColumnRef("episoes", "synopsis_long", text.opt))
                   )
               )
           )
       ),
-      SkunkLeafMapping[EntityType](EntityTypeType)
+      SkunkLeafMapping[EntityType](EntityTypeType, EntityType.codec)
     )
 
   def entityTypeDiscriminator(c: Cursor): Result[Type] = {
@@ -149,9 +149,12 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
 }
 
 object InterfacesMapping extends SkunkMappingCompanion {
-  def mkMapping[F[_] : Sync](transactor: Transactor[F], monitor: SkunkMonitor[F]): InterfacesMapping[F] =
-    new SkunkMapping(transactor, monitor) with InterfacesMapping[F]
+
+  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
+    new SkunkMapping[F](pool, monitor) with InterfacesMapping[F]
+
 }
+
 
 sealed trait EntityType extends Product with Serializable
 object EntityType {
@@ -173,12 +176,17 @@ object EntityType {
       case Series => "SERIES"
     })
 
-  implicit val entityTypeMeta: Meta[EntityType] =
-    Meta[Int].timap {
-      case 1 => Film
-      case 2 => Series
-    } {
-      case Film  => 1
-      case Series => 2
-    }
-}
+  implicit val codec: Codec[EntityType] =
+    Codec.simple(
+      {
+        case Film   => "1"
+        case Series => "2"
+      }, {
+        case "1" => Film.asRight
+        case "2" => Series.asRight
+        case n   => s"No such entity type: $n".asLeft
+      },
+      _root_.skunk.data.Type.int4
+    )
+
+ }
