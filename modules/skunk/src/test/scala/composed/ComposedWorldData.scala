@@ -159,10 +159,8 @@ trait WorldMapping[F[_]] extends SkunkMapping[F] {
             SkunkField("headofstate", ColumnRef("country", "headofstate", text.opt)),
             SkunkField("capitalId", ColumnRef("country", "capitalId", int4.opt)),
             SkunkField("code2", ColumnRef("country", "code2", bpchar(2))),
-            SkunkObject("cities", Subobject(
-              List(Join(ColumnRef("country", "code", bpchar(3)), ColumnRef("city", "countrycode", bpchar(3)))))),
-            SkunkObject("languages", Subobject(
-              List(Join(ColumnRef("country", "code", bpchar(3)), ColumnRef("countryLanguage", "countrycode", bpchar(3))))))
+            SkunkObject("cities", Join(ColumnRef("country", "code", bpchar(3)), ColumnRef("city", "countrycode", bpchar(3)))),
+            SkunkObject("languages", Join(ColumnRef("country", "code", bpchar(3)), ColumnRef("countryLanguage", "countrycode", bpchar(3))))
           )
       ),
       ObjectMapping(
@@ -172,8 +170,7 @@ trait WorldMapping[F[_]] extends SkunkMapping[F] {
             SkunkAttribute("id", ColumnRef("city", "id", int4), key = true),
             SkunkAttribute("countrycode", ColumnRef("city", "countrycode", bpchar(3))),
             SkunkField("name", ColumnRef("city", "name", text)),
-            SkunkObject("country", Subobject(
-              List(Join(ColumnRef("city", "countrycode", bpchar(3)), ColumnRef("country", "code", bpchar(3)))))),
+            SkunkObject("country", Join(ColumnRef("city", "countrycode", bpchar(3)), ColumnRef("country", "code", bpchar(3)))),
             SkunkField("district", ColumnRef("city", "district", text)),
             SkunkField("population", ColumnRef("city", "population", int4))
           )
@@ -186,8 +183,7 @@ trait WorldMapping[F[_]] extends SkunkMapping[F] {
             SkunkField("isOfficial", ColumnRef("countryLanguage", "isOfficial", bool)),
             SkunkField("percentage", ColumnRef("countryLanguage", "percentage", float4)),
             SkunkAttribute("countrycode", ColumnRef("countryLanguage", "countrycode", bpchar(3))),
-            SkunkObject("countries", Subobject(
-              List(Join(ColumnRef("countryLanguage", "countrycode", bpchar(3)), ColumnRef("country", "code", bpchar(3))))))
+            SkunkObject("countries", Join(ColumnRef("countryLanguage", "countrycode", bpchar(3)), ColumnRef("country", "code", bpchar(3))))
           )
       )
     )

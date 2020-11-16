@@ -59,7 +59,7 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
         fieldMappings =
           List(
             SkunkField("title", ColumnRef("films", "title", text), key = true),
-            SkunkObject("synopses", Subobject(Nil))
+            SkunkObject("synopses")
           )
       ),
       ObjectMapping(
@@ -67,8 +67,8 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
         fieldMappings =
           List(
             SkunkField("title", ColumnRef("series", "title", text), key = true),
-            SkunkObject("synopses", Subobject(Nil)),
-            SkunkObject("episodes", Subobject(List(Join(ColumnRef("series", "title", text), ColumnRef("episodes2", "series_title", text)))))
+            SkunkObject("synopses"),
+            SkunkObject("episodes", Join(ColumnRef("series", "title", text), ColumnRef("episodes2", "series_title", text))),
           )
       ),
       ObjectMapping(
@@ -76,7 +76,7 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
         fieldMappings =
           List(
             SkunkField("title", ColumnRef("episodes2", "title", text), key = true),
-            SkunkObject("synopses", Subobject(Nil)),
+            SkunkObject("synopses"),
             SkunkAttribute("series_title", ColumnRef("episodes2", "series_title", text))
           )
       ),

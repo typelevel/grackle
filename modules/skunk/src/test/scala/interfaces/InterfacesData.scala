@@ -88,7 +88,7 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
         fieldMappings =
           List(
             SkunkField("rating", ColumnRef("entities", "film_rating", text.opt)),
-            SkunkObject("synopses", Subobject(Nil))
+            SkunkObject("synopses")
           )
       ),
       ObjectMapping(
@@ -96,9 +96,7 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
         fieldMappings =
           List(
             SkunkField("numberOfEpisodes", ColumnRef("entities", "series_number_of_episodes", int4.opt)),
-            SkunkObject("episodes", Subobject(
-              List(Join(ColumnRef("entities", "id", text), ColumnRef("episodes", "series_id", text)))
-            ))
+            SkunkObject("episodes", Join(ColumnRef("entities", "id", text), ColumnRef("episodes", "series_id", text))),
           )
       ),
       ObjectMapping(
@@ -108,7 +106,7 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
             SkunkField("id", ColumnRef("episodes", "id", text), key = true),
             SkunkField("title", ColumnRef("episodes", "title", text.opt)),
             SkunkAttribute("episodeId", ColumnRef("episodes", "series_id", text)),
-            SkunkObject("synopses", Subobject(Nil))
+            SkunkObject("synopses"),
           )
       ),
       PrefixedMapping(

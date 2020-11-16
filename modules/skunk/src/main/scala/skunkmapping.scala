@@ -45,7 +45,7 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
     fieldMapping(path, obj, name) match {
       case Some(SkunkField(_, cr, _, _)) => List(cr)
       case Some(SkunkJson(_, cr)) => List(cr)
-      case Some(SkunkObject(_, Subobject(joins))) => joins.map(_.parent) ++ joins.map(_.child)
+      case Some(SkunkObject(_, joins)) => joins.map(_.parent) ++ joins.map(_.child)
       case Some(SkunkAttribute(_, cr, _, _, _)) => List(cr)
       case Some(CursorField(_, _, _, required)) =>
         required.flatMap(r => columnsForFieldOrAttribute(path, tpe, r))
@@ -58,7 +58,7 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
   private def joinsForField(path: List[String], tpe: Type, fieldName: String): List[Join] = {
     val obj = tpe.underlyingObject
     fieldMapping(path, obj, fieldName) match {
-      case Some(SkunkObject(_, Subobject(joins))) => joins
+      case Some(SkunkObject(_, joins)) => joins
       case _ => Nil
     }
   }
@@ -365,7 +365,12 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
     key: Boolean = false,
     discriminator: Boolean = false
   ) extends SkunkFieldMapping
-  case class SkunkObject(fieldName: String, subobject: Subobject) extends SkunkFieldMapping
+
+  case class SkunkObject(fieldName: String, joins: List[Join]) extends SkunkFieldMapping
+  object SkunkObject {
+    def apply(fieldName: String, joins: Join*): SkunkObject = apply(fieldName, joins.toList)
+  }
+
   case class SkunkJson(fieldName: String, columnRef: ColumnRef) extends SkunkFieldMapping
 
   case class SkunkLeafMapping[T](val tpe: Type, val encoder: JsonEncoder[T], val codec: Codec[T]) extends LeafMapping[T]
@@ -388,8 +393,6 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
       table.hashCode() + column.hashCode()
 
   }
-
-  case class Subobject(joins: List[Join])
 
   case class Join(parent: ColumnRef, child: ColumnRef) {
     def normalize: Join = {
@@ -688,7 +691,7 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
         val fieldTpe = tpe.underlyingField(fieldName).nonNull
         fieldTpe.isList &&
           (fieldMapping(path, tpe.underlyingObject, fieldName) match {
-            case Some(SkunkObject(_, Subobject(joins))) if joins.nonEmpty => true
+            case Some(SkunkObject(_, joins)) if joins.nonEmpty => true
             case _ => false
           })
       }

@@ -53,12 +53,8 @@ trait CoalesceMapping[F[_]] extends SkunkMapping[F] {
         fieldMappings =
           List(
             SkunkField("id", ColumnRef("r", "id", text), key = true),
-            SkunkObject("ca", Subobject(
-              List(Join(ColumnRef("r", "id", text), ColumnRef("ca", "rid", text)))
-            )),
-            SkunkObject("cb", Subobject(
-              List(Join(ColumnRef("r", "id", text), ColumnRef("cb", "rid", text)))
-            ))
+            SkunkObject("ca", Join(ColumnRef("r", "id", text), ColumnRef("ca", "rid", text))),
+            SkunkObject("cb", Join(ColumnRef("r", "id", text), ColumnRef("cb", "rid", text))),
           )
       ),
       ObjectMapping(
