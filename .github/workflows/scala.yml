@@ -12,6 +12,6 @@ jobs:
       - name: Set up JDK 1.8
         uses: olafurpg/setup-scala@v10
         with:
-          java-version: adoptjdk@14
+          java-version: adopt@1.11
       - name: Run compile
         run: csbt headerCheck +compile +test +doc
