@@ -107,7 +107,7 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
           List(
             SkunkField("id", ColumnRef("episodes", "id", text), key = true),
             SkunkField("title", ColumnRef("episodes", "title", text.opt)),
-            SkunkAttribute("episodeId", ColumnRef("episodes", "series_id", text), text),
+            SkunkAttribute("episodeId", ColumnRef("episodes", "series_id", text)),
             SkunkObject("synopses", Subobject(Nil))
           )
       ),

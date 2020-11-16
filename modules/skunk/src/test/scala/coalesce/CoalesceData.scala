@@ -66,7 +66,7 @@ trait CoalesceMapping[F[_]] extends SkunkMapping[F] {
         fieldMappings =
           List(
             SkunkField("id", ColumnRef("ca", "id", text), key = true),
-            SkunkAttribute("rid", ColumnRef("ca", "rid", text), text),
+            SkunkAttribute("rid", ColumnRef("ca", "rid", text)),
             SkunkField("a", ColumnRef("ca", "a", int4))
           )
       ),
@@ -75,7 +75,7 @@ trait CoalesceMapping[F[_]] extends SkunkMapping[F] {
         fieldMappings =
           List(
             SkunkField("id", ColumnRef("cb", "id", text), key = true),
-            SkunkAttribute("rid", ColumnRef("cb", "rid", text), text),
+            SkunkAttribute("rid", ColumnRef("cb", "rid", text)),
             SkunkField("b", ColumnRef("cb", "b", bool))
           )
       )

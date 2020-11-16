@@ -46,7 +46,7 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
       case Some(SkunkField(_, cr, _, _)) => List(cr)
       case Some(SkunkJson(_, cr)) => List(cr)
       case Some(SkunkObject(_, Subobject(joins))) => joins.map(_.parent) ++ joins.map(_.child)
-      case Some(SkunkAttribute(_, cr, _, _, _, _)) => List(cr)
+      case Some(SkunkAttribute(_, cr, _, _, _)) => List(cr)
       case Some(CursorField(_, _, _, required)) =>
         required.flatMap(r => columnsForFieldOrAttribute(path, tpe, r))
       case Some(CursorAttribute(_, _, required)) =>
@@ -75,7 +75,7 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
   private def termColumnForAttribute(path: List[String], tpe: Type, attrName: String): Option[ColumnRef] = {
     val obj = tpe.underlyingObject
     fieldMapping(path, obj, attrName) match {
-      case Some(SkunkAttribute(_, cr, _, _, _, _)) => Some(cr)
+      case Some(SkunkAttribute(_, cr, _, _, _)) => Some(cr)
       case _ => None
     }
   }
@@ -278,8 +278,8 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
                       val nullable = obj.field(fieldName).isNullable || obj.variantField(fieldName)
                       (`col`.codec, if (nullable) Nullable else NoNulls)
 
-                    case SkunkAttribute(_, `col`, codec, _, nullable, _) =>
-                      (codec, if (nullable) Nullable else NoNulls)
+                    case SkunkAttribute(_, `col`, _, nullable, _) =>
+                      (col.codec, if (nullable) Nullable else NoNulls)
 
                   } orElse loop(tl)
 
@@ -346,7 +346,6 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
   case class SkunkAttribute(
     fieldName: String,
     col: ColumnRef,
-    codec: Codec[_],
     key: Boolean = false,
     nullable: Boolean = false,
     discriminator: Boolean = false,
@@ -443,7 +442,7 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
     def selectAttribute(row: Row, path: List[String], tpe: Type, attrName: String): Result[Any] = {
       val obj = tpe.dealias
       fieldMapping(path, obj, attrName) match {
-        case Some(SkunkAttribute(_, col, _, _, _, _)) => select(row, col).rightIor
+        case Some(SkunkAttribute(_, col, _, _, _)) => select(row, col).rightIor
         case other => mkErrorResult(s"Expected mapping for attribute $attrName of type $obj, found $other")
       }
     }
@@ -508,7 +507,7 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
               )
             } else if (hasAttribute(p, parentTpe, last))
               fieldMapping(p, parentTpe, last).collect {
-                case da: SkunkAttribute => da.codec
+                case da: SkunkAttribute => da.col.codec
               }
             else None
           case Nil => skunkLeafMapping[T](tpe.nonNull).map(_.codec)

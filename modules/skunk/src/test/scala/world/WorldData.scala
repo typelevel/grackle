@@ -80,7 +80,7 @@ trait WorldMapping[F[_]] extends SkunkMapping[F] {
         tpe = CountryType,
         fieldMappings =
           List(
-            SkunkAttribute("code", ColumnRef("country", "code", bpchar(3)), bpchar(3), key = true),
+            SkunkAttribute("code", ColumnRef("country", "code", bpchar(3)), key = true),
             SkunkField("name", ColumnRef("country", "name", text)),
             SkunkField("continent", ColumnRef("country", "continent", varchar)),
             SkunkField("region", ColumnRef("country", "region", varchar)),
@@ -107,8 +107,8 @@ trait WorldMapping[F[_]] extends SkunkMapping[F] {
         tpe = CityType,
         fieldMappings =
           List(
-            SkunkAttribute("id", ColumnRef("city", "id", varchar), int4, key = true),
-            SkunkAttribute("countrycode", ColumnRef("city", "countrycode", bpchar(3)), bpchar(3)),
+            SkunkAttribute("id", ColumnRef("city", "id", int4), key = true),
+            SkunkAttribute("countrycode", ColumnRef("city", "countrycode", bpchar(3))),
             SkunkField("name", ColumnRef("city", "name", text)),
             SkunkObject("country", Subobject(
               List(Join(ColumnRef("city", "countrycode", bpchar(3)), ColumnRef("country", "code", bpchar(3))))
@@ -124,7 +124,7 @@ trait WorldMapping[F[_]] extends SkunkMapping[F] {
             SkunkField("language", ColumnRef("countryLanguage", "language", text), key = true),
             SkunkField("isOfficial", ColumnRef("countryLanguage", "isOfficial", varchar)),
             SkunkField("percentage", ColumnRef("countryLanguage", "percentage", varchar)),
-            SkunkAttribute("countrycode", ColumnRef("countryLanguage", "countrycode", bpchar(3)), bpchar(3)),
+            SkunkAttribute("countrycode", ColumnRef("countryLanguage", "countrycode", bpchar(3))),
             SkunkObject("countries", Subobject(
               List(Join(ColumnRef("countryLanguage", "countrycode", bpchar(3)), ColumnRef("country", "code", bpchar(3))))
             ))
