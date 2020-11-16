@@ -7,8 +7,8 @@ package skunk
 import _root_.skunk.{ Codec, Encoder, Decoder, AppliedFragment, Session, Void }
 import _root_.skunk.codec.all._
 import _root_.skunk.implicits._
-import cats.{ Eq, Monoid }
-import cats.data.{ Ior, Chain, NonEmptyList }
+import cats.{ Eq, Monoid, Monad }
+import cats.data.{ Ior, Chain, NonEmptyList, StateT }
 import cats.effect._
 import cats.implicits._
 import circe.CirceMapping
@@ -22,6 +22,7 @@ import scala.util.matching.Regex
 import scala.util.control.NonFatal
 
 import NullabilityKnown._
+import cats.arrow.FunctionK
 
 abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]) extends CirceMapping[F] {
 
@@ -1161,21 +1162,30 @@ trait SkunkMappingCompanion {
 //   }
 // }
 
-// trait TracedSkunkMappingCompanion {
-//   def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: SkunkMonitor[F]): Mapping[F]
+trait TracedSkunkMappingCompanion {
 
-//   def fromTransactor[F[_] : Sync](transactor: Transactor[F]): QueryExecutor[F, (Json, List[List[SkunkStats]])] = {
-//     def liftF[T](ft: F[T]): StateT[F, List[List[SkunkStats]], T] = StateT.liftF(ft)
-//     val stateMapping = mkMapping(transactor.mapK(FunctionK.lift(liftF)), SkunkMonitor.stateMonitor[F])
+  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F]
 
-//     new QueryExecutor[F, (Json, List[List[SkunkStats]])] {
-//       implicit val M: Monad[F] = Sync[F]
+  def fromSessionPool[F[_] : Sync](pool: Resource[F, Session[F]]): QueryExecutor[F, (Json, List[List[SkunkStats]])] = {
 
-//       def run(query: Query, rootTpe: Type): F[(Json, List[List[SkunkStats]])] =
-//         stateMapping.run(query, rootTpe).run(Nil).map(_.swap)
+    type G[A] = StateT[F, List[List[SkunkStats]], A]
 
-//       def compileAndRun(text: String, name: Option[String] = None, untypedEnv: Option[Json] = None, useIntrospection: Boolean = true): F[(Json, List[List[SkunkStats]])] =
-//         stateMapping.compileAndRun(text, name, untypedEnv, useIntrospection).run(Nil).map(_.swap)
-//     }
-//   }
-// }
+    def liftF[T](ft: F[T]): G[T] = StateT.liftF(ft)
+
+    val sm: SkunkMonitor[G] = SkunkMonitor.stateMonitor[F]
+
+    val fk: FunctionK[F, G] = FunctionK.lift(liftF)
+
+    val stateMapping = mkMapping(pool.mapK(fk).map(_.mapK(fk)), sm)
+
+    new QueryExecutor[F, (Json, List[List[SkunkStats]])] {
+      implicit val M: Monad[F] = Sync[F]
+
+      def run(query: Query, rootTpe: Type): F[(Json, List[List[SkunkStats]])] =
+        stateMapping.run(query, rootTpe).run(Nil).map(_.swap)
+
+      def compileAndRun(text: String, name: Option[String] = None, untypedEnv: Option[Json] = None, useIntrospection: Boolean = true): F[(Json, List[List[SkunkStats]])] =
+        stateMapping.compileAndRun(text, name, untypedEnv, useIntrospection).run(Nil).map(_.swap)
+    }
+  }
+}

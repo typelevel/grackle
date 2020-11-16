@@ -4,9 +4,11 @@
 package coalesce
 
 import cats.effect.Sync
-import skunk.Transactor
 
 import edu.gemini.grackle._, skunk._
+import _root_.skunk.codec.all._
+import cats.effect.Resource
+import _root_.skunk.Session
 
 trait CoalesceMapping[F[_]] extends SkunkMapping[F] {
 
@@ -37,8 +39,6 @@ trait CoalesceMapping[F[_]] extends SkunkMapping[F] {
   val CAType = schema.ref("CA")
   val CBType = schema.ref("CB")
 
-  import SkunkFieldMapping._
-
   val typeMappings =
     List(
       ObjectMapping(
@@ -52,12 +52,12 @@ trait CoalesceMapping[F[_]] extends SkunkMapping[F] {
         tpe = RType,
         fieldMappings =
           List(
-            SkunkField("id", ColumnRef("r", "id"), key = true),
+            SkunkField("id", ColumnRef("r", "id", text), key = true),
             SkunkObject("ca", Subobject(
-              List(Join(ColumnRef("r", "id"), ColumnRef("ca", "rid")))
+              List(Join(ColumnRef("r", "id", text), ColumnRef("ca", "rid", text)))
             )),
             SkunkObject("cb", Subobject(
-              List(Join(ColumnRef("r", "id"), ColumnRef("cb", "rid")))
+              List(Join(ColumnRef("r", "id", text), ColumnRef("cb", "rid", text)))
             ))
           )
       ),
@@ -65,24 +65,26 @@ trait CoalesceMapping[F[_]] extends SkunkMapping[F] {
         tpe = CAType,
         fieldMappings =
           List(
-            SkunkField("id", ColumnRef("ca", "id"), key = true),
-            SkunkAttribute[String]("rid", ColumnRef("ca", "rid")),
-            SkunkField("a", ColumnRef("ca", "a"))
+            SkunkField("id", ColumnRef("ca", "id", text), key = true),
+            SkunkAttribute("rid", ColumnRef("ca", "rid", text), text),
+            SkunkField("a", ColumnRef("ca", "a", int4))
           )
       ),
       ObjectMapping(
         tpe = CBType,
         fieldMappings =
           List(
-            SkunkField("id", ColumnRef("cb", "id"), key = true),
-            SkunkAttribute[String]("rid", ColumnRef("cb", "rid")),
-            SkunkField("b", ColumnRef("cb", "b"))
+            SkunkField("id", ColumnRef("cb", "id", text), key = true),
+            SkunkAttribute("rid", ColumnRef("cb", "rid", text), text),
+            SkunkField("b", ColumnRef("cb", "b", bool))
           )
       )
     )
 }
 
 object CoalesceMapping extends TracedSkunkMappingCompanion {
-  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: SkunkMonitor[F]): CoalesceMapping[F] =
-    new SkunkMapping(transactor, monitor) with CoalesceMapping[F]
+
+  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
+    new SkunkMapping[F](pool, monitor) with CoalesceMapping[F]
+
 }

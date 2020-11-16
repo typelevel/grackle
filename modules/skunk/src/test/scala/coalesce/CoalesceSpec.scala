@@ -8,7 +8,8 @@ import io.circe.literal.JsonStringContext
 import utils.DatabaseSuite
 
 final class CoalesceSpec extends DatabaseSuite {
-  lazy val mapping = CoalesceMapping.fromTransactor(xa)
+
+  lazy val mapping = CoalesceMapping.fromSessionPool(pool)
 
   test("simple coalesced query") {
     val query = """
