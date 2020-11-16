@@ -4,9 +4,10 @@
 package embedding
 
 import cats.effect.Sync
-import skunk.Transactor
-
+import  _root_.skunk.codec.all._
 import edu.gemini.grackle._, skunk._
+import cats.effect.Resource
+import _root_.skunk.Session
 
 trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
   val schema =
@@ -31,8 +32,8 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
           synopses: Synopses!
         }
         type Synopses {
-          short: String!
-          long: String!
+          short: String
+          long: String
         }
       """
     ).right.get
@@ -42,8 +43,6 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
   val SeriesType = schema.ref("Series")
   val EpisodeType = schema.ref("Episode")
   val SynopsesType = schema.ref("Synopses")
-
-  import SkunkFieldMapping._
 
   val typeMappings =
     List(
@@ -59,7 +58,7 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
         tpe = FilmType,
         fieldMappings =
           List(
-            SkunkField("title", ColumnRef("films", "title"), key = true),
+            SkunkField("title", ColumnRef("films", "title", text), key = true),
             SkunkObject("synopses", Subobject(Nil))
           )
       ),
@@ -67,18 +66,18 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
         tpe = SeriesType,
         fieldMappings =
           List(
-            SkunkField("title", ColumnRef("series", "title"), key = true),
+            SkunkField("title", ColumnRef("series", "title", text), key = true),
             SkunkObject("synopses", Subobject(Nil)),
-            SkunkObject("episodes", Subobject(List(Join(ColumnRef("series", "title"), ColumnRef("episodes2", "series_title")))))
+            SkunkObject("episodes", Subobject(List(Join(ColumnRef("series", "title", text), ColumnRef("episodes2", "series_title", text)))))
           )
       ),
       ObjectMapping(
         tpe = EpisodeType,
         fieldMappings =
           List(
-            SkunkField("title", ColumnRef("episodes2", "title"), key = true),
+            SkunkField("title", ColumnRef("episodes2", "title", text), key = true),
             SkunkObject("synopses", Subobject(Nil)),
-            SkunkAttribute[String]("series_title", ColumnRef("episodes2", "series_title"))
+            SkunkAttribute("series_title", ColumnRef("episodes2", "series_title", text), text)
           )
       ),
       PrefixedMapping(
@@ -90,8 +89,8 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    SkunkField("short", ColumnRef("films", "synopsis_short")),
-                    SkunkField("long", ColumnRef("films", "synopsis_long"))
+                    SkunkField("short", ColumnRef("films", "synopsis_short", text.opt)),
+                    SkunkField("long", ColumnRef("films", "synopsis_long", text.opt))
                   )
               ),
             List("series", "synopses") ->
@@ -99,8 +98,8 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    SkunkField("short", ColumnRef("series", "synopsis_short")),
-                    SkunkField("long", ColumnRef("series", "synopsis_long"))
+                    SkunkField("short", ColumnRef("series", "synopsis_short", text.opt)),
+                    SkunkField("long", ColumnRef("series", "synopsis_long", text.opt))
                   )
               ),
             List("episodes", "synopses") ->
@@ -108,8 +107,8 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    SkunkField("short", ColumnRef("episodes2", "synopsis_short")),
-                    SkunkField("long", ColumnRef("episodes2", "synopsis_long"))
+                    SkunkField("short", ColumnRef("episodes2", "synopsis_short", text.opt)),
+                    SkunkField("long", ColumnRef("episodes2", "synopsis_long", text.opt))
                   )
               )
           )
@@ -118,6 +117,8 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
 }
 
 object EmbeddingMapping extends SkunkMappingCompanion {
-  def mkMapping[F[_] : Sync](transactor: Transactor[F], monitor: SkunkMonitor[F]): EmbeddingMapping[F] =
-    new SkunkMapping(transactor, monitor) with EmbeddingMapping[F]
+
+  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
+    new SkunkMapping[F](pool, monitor) with EmbeddingMapping[F]
+
 }
