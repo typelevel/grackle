@@ -7,13 +7,15 @@ import cats.Monad
 import cats.data.Ior
 import cats.effect.Sync
 import cats.implicits._
-import skunk.Transactor
 
 import edu.gemini.grackle._, skunk._
 import Query._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.mkErrorResult
 import SkunkPredicate._
+import _root_.skunk.codec.all._
+import cats.effect.Resource
+import _root_.skunk.Session
 
 /* Currency component */
 
@@ -80,7 +82,6 @@ object CurrencyMapping {
 /* World component */
 
 trait WorldMapping[F[_]] extends SkunkMapping[F] {
-  import SkunkFieldMapping._
 
   val schema =
     Schema(
@@ -143,58 +144,60 @@ trait WorldMapping[F[_]] extends SkunkMapping[F] {
         tpe = CountryType,
         fieldMappings =
           List(
-            SkunkAttribute[String]("code", ColumnRef("country", "code"), key = true),
-            SkunkField("name", ColumnRef("country", "name")),
-            SkunkField("continent", ColumnRef("country", "continent")),
-            SkunkField("region", ColumnRef("country", "region")),
-            SkunkField("surfacearea", ColumnRef("country", "surfacearea")),
-            SkunkField("indepyear", ColumnRef("country", "indepyear")),
-            SkunkField("population", ColumnRef("country", "population")),
-            SkunkField("lifeexpectancy", ColumnRef("country", "lifeexpectancy")),
-            SkunkField("gnp", ColumnRef("country", "gnp")),
-            SkunkField("gnpold", ColumnRef("country", "gnpold")),
-            SkunkField("localname", ColumnRef("country", "localname")),
-            SkunkField("governmentform", ColumnRef("country", "governmentform")),
-            SkunkField("headofstate", ColumnRef("country", "headofstate")),
-            SkunkField("capitalId", ColumnRef("country", "capitalId")),
-            SkunkField("code2", ColumnRef("country", "code2")),
+            SkunkAttribute("code", ColumnRef("country", "code", bpchar(3)), bpchar(3), key = true),
+            SkunkField("name", ColumnRef("country", "name", text)),
+            SkunkField("continent", ColumnRef("country", "continent", text)),
+            SkunkField("region", ColumnRef("country", "region", text)),
+            SkunkField("surfacearea", ColumnRef("country", "surfacearea", float4)),
+            SkunkField("indepyear", ColumnRef("country", "indepyear", int2.opt)),
+            SkunkField("population", ColumnRef("country", "population", int4)),
+            SkunkField("lifeexpectancy", ColumnRef("country", "lifeexpectancy", float4.opt)),
+            SkunkField("gnp", ColumnRef("country", "gnp", numeric(10,2))),
+            SkunkField("gnpold", ColumnRef("country", "gnpold", numeric(10,2))),
+            SkunkField("localname", ColumnRef("country", "localname", text)),
+            SkunkField("governmentform", ColumnRef("country", "governmentform", text)),
+            SkunkField("headofstate", ColumnRef("country", "headofstate", text.opt)),
+            SkunkField("capitalId", ColumnRef("country", "capitalId", int4.opt)),
+            SkunkField("code2", ColumnRef("country", "code2", bpchar(2))),
             SkunkObject("cities", Subobject(
-              List(Join(ColumnRef("country", "code"), ColumnRef("city", "countrycode"))))),
+              List(Join(ColumnRef("country", "code", bpchar(3)), ColumnRef("city", "countrycode", bpchar(3)))))),
             SkunkObject("languages", Subobject(
-              List(Join(ColumnRef("country", "code"), ColumnRef("countryLanguage", "countrycode")))))
+              List(Join(ColumnRef("country", "code", bpchar(3)), ColumnRef("countryLanguage", "countrycode", bpchar(3))))))
           )
       ),
       ObjectMapping(
         tpe = CityType,
         fieldMappings =
           List(
-            SkunkAttribute[Int]("id", ColumnRef("city", "id"), key = true),
-            SkunkAttribute[String]("countrycode", ColumnRef("city", "countrycode")),
-            SkunkField("name", ColumnRef("city", "name")),
+            SkunkAttribute("id", ColumnRef("city", "id", int4), int4, key = true),
+            SkunkAttribute("countrycode", ColumnRef("city", "countrycode", bpchar(3)), bpchar(3)),
+            SkunkField("name", ColumnRef("city", "name", text)),
             SkunkObject("country", Subobject(
-              List(Join(ColumnRef("city", "countrycode"), ColumnRef("country", "code"))))),
-            SkunkField("district", ColumnRef("city", "district")),
-            SkunkField("population", ColumnRef("city", "population"))
+              List(Join(ColumnRef("city", "countrycode", bpchar(3)), ColumnRef("country", "code", bpchar(3)))))),
+            SkunkField("district", ColumnRef("city", "district", text)),
+            SkunkField("population", ColumnRef("city", "population", int4))
           )
       ),
       ObjectMapping(
         tpe = LanguageType,
         fieldMappings =
           List(
-            SkunkField("language", ColumnRef("countryLanguage", "language"), key = true),
-            SkunkField("isOfficial", ColumnRef("countryLanguage", "isOfficial")),
-            SkunkField("percentage", ColumnRef("countryLanguage", "percentage")),
-            SkunkAttribute[String]("countrycode", ColumnRef("countryLanguage", "countrycode")),
+            SkunkField("language", ColumnRef("countryLanguage", "language", text), key = true),
+            SkunkField("isOfficial", ColumnRef("countryLanguage", "isOfficial", bool)),
+            SkunkField("percentage", ColumnRef("countryLanguage", "percentage", float4)),
+            SkunkAttribute("countrycode", ColumnRef("countryLanguage", "countrycode", bpchar(3)), bpchar(3)),
             SkunkObject("countries", Subobject(
-              List(Join(ColumnRef("countryLanguage", "countrycode"), ColumnRef("country", "code")))))
+              List(Join(ColumnRef("countryLanguage", "countrycode", bpchar(3)), ColumnRef("country", "code", bpchar(3))))))
           )
       )
     )
 }
 
 object WorldMapping extends SkunkMappingCompanion {
-  def mkMapping[F[_] : Sync](transactor: Transactor[F], monitor: SkunkMonitor[F]): WorldMapping[F] =
-    new SkunkMapping(transactor, monitor) with WorldMapping[F]
+
+  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
+    new SkunkMapping[F](pool, monitor) with WorldMapping[F]
+
 }
 
 /* Composition */
@@ -291,7 +294,8 @@ class ComposedMapping[F[_] : Monad]
   ))
 }
 
-object ComposedMapping {
-  def fromTransactor[F[_] : Sync](xa: Transactor[F]): ComposedMapping[F] =
-    new ComposedMapping[F](WorldMapping.fromTransactor(xa), CurrencyMapping[F])
+object ComposedMapping extends SkunkMappingCompanion {
+
+  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
+    new ComposedMapping[F](WorldMapping.mkMapping(pool), CurrencyMapping[F])
 }

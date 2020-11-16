@@ -8,7 +8,7 @@ import io.circe.literal.JsonStringContext
 import utils.DatabaseSuite
 
 final class ComposedWorldSpec extends DatabaseSuite {
-  lazy val mapping = ComposedMapping.fromTransactor(xa)
+  lazy val mapping = ComposedMapping.mkMapping(pool)
 
   test("simple composed query") {
     val query = """
