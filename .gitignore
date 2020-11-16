@@ -53,3 +53,6 @@ metals.sbt
 
 # Vim
 *.swp
+
+# Worksheets
+*.worksheet.sc

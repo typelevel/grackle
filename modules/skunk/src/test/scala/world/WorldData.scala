@@ -63,8 +63,6 @@ trait WorldMapping[F[_]] extends SkunkMapping[F] {
   val CityType = schema.ref("City")
   val LanguageType = schema.ref("Language")
 
-  import SkunkFieldMapping._
-
   val typeMappings =
     List(
       ObjectMapping(

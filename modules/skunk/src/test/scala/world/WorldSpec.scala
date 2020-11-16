@@ -204,92 +204,92 @@ final class WorldSpec extends DatabaseSuite {
     assert(res == expected)
   }
 
-  // test("recursive query (1)") {
-  //   val query = """
-  //     query {
-  //       cities(namePattern: "Monte-Carlo") {
-  //         name
-  //         country {
-  //           name
-  //           cities {
-  //             name
-  //             country {
-  //               name
-  //               cities {
-  //                 name
-  //                 country {
-  //                   name
-  //                 }
-  //               }
-  //             }
-  //           }
-  //         }
-  //       }
-  //     }
-  //   """
+  test("recursive query (1)") {
+    val query = """
+      query {
+        cities(namePattern: "Monte-Carlo") {
+          name
+          country {
+            name
+            cities {
+              name
+              country {
+                name
+                cities {
+                  name
+                  country {
+                    name
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    """
 
-  //   val expected = json"""
-  //   {
-  //     "data" : {
-  //       "cities" : [
-  //         {
-  //           "name" : "Monte-Carlo",
-  //           "country" : {
-  //             "name" : "Monaco",
-  //             "cities" : [
-  //               {
-  //                 "name" : "Monte-Carlo",
-  //                 "country" : {
-  //                   "name" : "Monaco",
-  //                   "cities" : [
-  //                     {
-  //                       "name" : "Monte-Carlo",
-  //                       "country" : {
-  //                         "name" : "Monaco"
-  //                       }
-  //                     },
-  //                     {
-  //                       "name" : "Monaco-Ville",
-  //                       "country" : {
-  //                         "name" : "Monaco"
-  //                       }
-  //                     }
-  //                   ]
-  //                 }
-  //               },
-  //               {
-  //                 "name" : "Monaco-Ville",
-  //                 "country" : {
-  //                   "name" : "Monaco",
-  //                   "cities" : [
-  //                     {
-  //                       "name" : "Monte-Carlo",
-  //                       "country" : {
-  //                         "name" : "Monaco"
-  //                       }
-  //                     },
-  //                     {
-  //                       "name" : "Monaco-Ville",
-  //                       "country" : {
-  //                         "name" : "Monaco"
-  //                       }
-  //                     }
-  //                   ]
-  //                 }
-  //               }
-  //             ]
-  //           }
-  //         }
-  //       ]
-  //     }
-  //   }
-  //   """
+    val expected = json"""
+    {
+      "data" : {
+        "cities" : [
+          {
+            "name" : "Monte-Carlo",
+            "country" : {
+              "name" : "Monaco",
+              "cities" : [
+                {
+                  "name" : "Monte-Carlo",
+                  "country" : {
+                    "name" : "Monaco",
+                    "cities" : [
+                      {
+                        "name" : "Monte-Carlo",
+                        "country" : {
+                          "name" : "Monaco"
+                        }
+                      },
+                      {
+                        "name" : "Monaco-Ville",
+                        "country" : {
+                          "name" : "Monaco"
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name" : "Monaco-Ville",
+                  "country" : {
+                    "name" : "Monaco",
+                    "cities" : [
+                      {
+                        "name" : "Monte-Carlo",
+                        "country" : {
+                          "name" : "Monaco"
+                        }
+                      },
+                      {
+                        "name" : "Monaco-Ville",
+                        "country" : {
+                          "name" : "Monaco"
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+    """
 
-  //   val res = mapping.compileAndRun(query).unsafeRunSync
-  //   //println(res)
+    val res = mapping.compileAndRun(query).unsafeRunSync
+    //println(res)
 
-  //   assert(res == expected)
-  // }
+    assert(res == expected)
+  }
 
   test("recursive query (2)") {
     val query = """

@@ -28,7 +28,6 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
 
   type Table = List[Row]
 
-  import SkunkFieldMapping._
   import SkunkPredicate._
   import Row.FailedJoin
 
@@ -36,12 +35,12 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
     if (tpe =:= schema.queryType) super.rootMapping(path, tpe, fieldName)
     else Some(SkunkRoot(fieldName, path, tpe))
 
-  def skunkLeafMapping[T](tpe: Type): Option[SkunkLeafMapping[T]] =
+  private def skunkLeafMapping[T](tpe: Type): Option[SkunkLeafMapping[T]] =
     leafMapping[T](tpe).collectFirst {
       case dlm: SkunkLeafMapping[T] => dlm.asInstanceOf[SkunkLeafMapping[T]]
     }
 
-  def columnsForFieldOrAttribute(path: List[String], tpe: Type, name: String): List[ColumnRef] = {
+  private def columnsForFieldOrAttribute(path: List[String], tpe: Type, name: String): List[ColumnRef] = {
     val obj = tpe.underlyingObject
     fieldMapping(path, obj, name) match {
       case Some(SkunkField(_, cr, _, _)) => List(cr)
@@ -56,7 +55,7 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
     }
   }
 
-  def joinsForField(path: List[String], tpe: Type, fieldName: String): List[Join] = {
+  private def joinsForField(path: List[String], tpe: Type, fieldName: String): List[Join] = {
     val obj = tpe.underlyingObject
     fieldMapping(path, obj, fieldName) match {
       case Some(SkunkObject(_, Subobject(joins))) => joins
@@ -64,7 +63,7 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
     }
   }
 
-  def termColumnForField(path: List[String], tpe: Type, fieldName: String): Option[ColumnRef] = {
+  private def termColumnForField(path: List[String], tpe: Type, fieldName: String): Option[ColumnRef] = {
     val obj = tpe.underlyingObject
     fieldMapping(path, obj, fieldName) match {
       case Some(SkunkField(_, cr, _, _)) => Some(cr)
@@ -73,7 +72,7 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
     }
   }
 
-  def termColumnForAttribute(path: List[String], tpe: Type, attrName: String): Option[ColumnRef] = {
+  private def termColumnForAttribute(path: List[String], tpe: Type, attrName: String): Option[ColumnRef] = {
     val obj = tpe.underlyingObject
     fieldMapping(path, obj, attrName) match {
       case Some(SkunkAttribute(_, cr, _, _, _, _)) => Some(cr)
@@ -81,7 +80,7 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
     }
   }
 
-  def primaryColumnForTerm[T](path: List[String], tpe: Type, term: Term[T]): Option[ColumnRef] =
+  private def primaryColumnForTerm[T](path: List[String], tpe: Type, term: Term[T]): Option[ColumnRef] =
     term match {
       case Const(_) => None
       case termPath: Path =>
@@ -95,13 +94,13 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
           termColumnForAttribute(path, parent, name)
     }
 
-  def key(om: ObjectMapping): List[ColumnRef] =
+  private def key(om: ObjectMapping): List[ColumnRef] =
     om.fieldMappings.collect {
       case cm: SkunkField if cm.key => cm.columnRef
       case am: SkunkAttribute if am.key => am.col
     }
 
-  def keyColumnsForType(path: List[String], tpe: Type): List[ColumnRef] = {
+  private def keyColumnsForType(path: List[String], tpe: Type): List[ColumnRef] = {
     val obj = tpe.underlyingObject
     objectMapping(path, obj) match {
       case Some(om) => key(om)
@@ -109,13 +108,13 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
     }
   }
 
-  def discriminator(om: ObjectMapping): List[ColumnRef] =
+  private def discriminator(om: ObjectMapping): List[ColumnRef] =
     om.fieldMappings.collect {
       case cm: SkunkField if cm.discriminator => cm.columnRef
       case am: SkunkAttribute if am.discriminator => am.col
     }
 
-  def discriminatorColumnsForType(path: List[String], tpe: Type): List[ColumnRef] = {
+  private def discriminatorColumnsForType(path: List[String], tpe: Type): List[ColumnRef] = {
     val obj = tpe.underlyingObject
     objectMapping(path, obj) match {
       case Some(om) => discriminator(om)
@@ -123,7 +122,7 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
     }
   }
 
-  def hasDiscriminator(path: List[String], tpe: Type): Boolean = {
+  private def hasDiscriminator(path: List[String], tpe: Type): Boolean = {
     val obj = tpe.underlyingObject
     objectMapping(path, obj) match {
       case Some(om) => discriminator(om).nonEmpty
@@ -133,7 +132,7 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
 
   // This is partial, however, we should be able to perform a consistency check ahead of time
   // such that a valid query is guaranteed to be covered.
-  def mapQuery(q: Query, path: List[String], tpe: Type): MappedQuery = {
+  private def mapQuery(q: Query, path: List[String], tpe: Type): MappedQuery = {
     type Acc = (List[ColumnRef], List[Join], List[(List[String], Type, Predicate)], List[(ObjectMapping, Type)])
     implicit object MAcc extends Monoid[Acc] {
       def combine(x: Acc, y: Acc): Acc =
@@ -306,7 +305,7 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
     new MappedQuery(rootTable, columns, metas, predicates, orderedJoins)
   }
 
-  def mkRootCursor(query: Query, fieldPath: List[String], fieldTpe: Type): F[Result[Cursor]] = {
+  private def mkRootCursor(query: Query, fieldPath: List[String], fieldTpe: Type): F[Result[Cursor]] = {
     val mapped = mapQuery(query, fieldPath, fieldTpe)
 
     val cursorType = fieldTpe.list
@@ -348,43 +347,31 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
     fieldName: String,
     col: ColumnRef,
     codec: Codec[_],
-    key: Boolean,
-    nullable: Boolean,
-    discriminator: Boolean
+    key: Boolean = false,
+    nullable: Boolean = false,
+    discriminator: Boolean = false,
   ) extends FieldMapping {
     def isPublic = false
     def withParent(tpe: Type): FieldMapping = this
   }
-
-  def SkunkAttribute(
-    fieldName: String,
-    col: ColumnRef,
-    codec: Codec[_],
-    key: Boolean = false,
-    nullable: Boolean = false,
-    discriminator: Boolean = false
-  ): SkunkAttribute =
-    new SkunkAttribute(fieldName, col, codec, key, nullable, discriminator)
 
   sealed trait SkunkFieldMapping extends FieldMapping {
     def isPublic = true
     def withParent(tpe: Type): FieldMapping = this
   }
 
-  object SkunkFieldMapping {
-    case class SkunkField(
-      fieldName: String,
-      columnRef: ColumnRef,
-      key: Boolean = false,
-      discriminator: Boolean = false
-    ) extends SkunkFieldMapping
-    case class SkunkObject(fieldName: String, subobject: Subobject) extends SkunkFieldMapping
-    case class SkunkJson(fieldName: String, columnRef: ColumnRef) extends SkunkFieldMapping
-  }
+  case class SkunkField(
+    fieldName: String,
+    columnRef: ColumnRef,
+    key: Boolean = false,
+    discriminator: Boolean = false
+  ) extends SkunkFieldMapping
+  case class SkunkObject(fieldName: String, subobject: Subobject) extends SkunkFieldMapping
+  case class SkunkJson(fieldName: String, columnRef: ColumnRef) extends SkunkFieldMapping
 
   case class SkunkLeafMapping[T](val tpe: Type, val encoder: JsonEncoder[T], val codec: Codec[T]) extends LeafMapping[T]
   object SkunkLeafMapping {
-    def apply[T](tpe: Type)(implicit encoder: JsonEncoder[T], codec: Codec[T], dummy: DummyImplicit) =
+    def apply[T](tpe: Type, codec: Codec[T])(implicit encoder: JsonEncoder[T], dummy: DummyImplicit) =
       new SkunkLeafMapping(tpe, encoder, codec)
   }
 
@@ -397,6 +384,9 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
         case ColumnRef(`table`, `column`, _) => true
         case _ => false
       }
+
+    override def hashCode(): Int =
+      table.hashCode() + column.hashCode()
 
   }
 
@@ -1104,7 +1094,7 @@ object SkunkPredicate {
       case _ => false
     }
 
-  def likeToRegex(pattern: String, caseInsensitive: Boolean): Regex = {
+  private def likeToRegex(pattern: String, caseInsensitive: Boolean): Regex = {
     val csr = ("^"+pattern.replace("%", ".*").replace("_", ".")+"$")
     (if (caseInsensitive) s"(?i:$csr)" else csr).r
   }
