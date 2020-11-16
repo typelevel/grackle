@@ -5,11 +5,14 @@ package jsonb
 
 import cats.effect.Sync
 import cats.implicits._
-import skunk.Transactor
 
 import edu.gemini.grackle._, skunk._
 import Query._, Predicate._, Value._
 import QueryCompiler._
+import _root_.skunk.codec.all._
+import _root_.skunk.circe.codec.all._
+import cats.effect.Resource
+import _root_.skunk.Session
 
 trait JsonbMapping[F[_]] extends SkunkMapping[F] {
   val schema =
@@ -58,8 +61,6 @@ trait JsonbMapping[F[_]] extends SkunkMapping[F] {
   val RowType = schema.ref("Row")
   val RecordType = schema.ref("Record")
 
-  import SkunkFieldMapping._
-
   val typeMappings =
     List(
       ObjectMapping(
@@ -74,8 +75,8 @@ trait JsonbMapping[F[_]] extends SkunkMapping[F] {
         tpe = RowType,
         fieldMappings =
           List(
-            SkunkField("id", ColumnRef("records", "id"), key = true),
-            SkunkJson("record", ColumnRef("records", "record"))
+            SkunkField("id", ColumnRef("records", "id", int4), key = true),
+            SkunkJson("record", ColumnRef("records", "record", jsonb.opt))
           )
       ),
     )
@@ -89,6 +90,8 @@ trait JsonbMapping[F[_]] extends SkunkMapping[F] {
 }
 
 object JsonbMapping extends SkunkMappingCompanion {
-  def mkMapping[F[_] : Sync](transactor: Transactor[F], monitor: SkunkMonitor[F]): JsonbMapping[F] =
-    new SkunkMapping(transactor, monitor) with JsonbMapping[F]
+
+  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
+    new SkunkMapping[F](pool, monitor) with JsonbMapping[F]
+
 }

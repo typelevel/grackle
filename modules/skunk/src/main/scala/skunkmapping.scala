@@ -5,7 +5,6 @@ package edu.gemini.grackle
 package skunk
 
 import _root_.skunk.{ Codec, Encoder, Decoder, AppliedFragment, Session, Void }
-import _root_.skunk.circe.codec.all._
 import _root_.skunk.codec.all._
 import _root_.skunk.implicits._
 import cats.{ Eq, Monoid }
@@ -276,7 +275,7 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
                     case SkunkJson(fieldName, `col`) if mappings.contains(om) =>
                       val obj = mappings(om)
                       val nullable = obj.field(fieldName).isNullable || obj.variantField(fieldName)
-                      (json, if (nullable) Nullable else NoNulls)
+                      (`col`.codec, if (nullable) Nullable else NoNulls)
 
                     case SkunkAttribute(_, `col`, codec, _, nullable, _) =>
                       (codec, if (nullable) Nullable else NoNulls)
@@ -964,7 +963,7 @@ abstract class SkunkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: 
               case j: Json if !fieldTpe.isNullable =>
                 CirceCursor(tpe = fieldTpe, focus = j, fieldName :: path).rightIor
               case other =>
-                mkErrorResult(s"Expected jsonb value found $other")
+                mkErrorResult(s"$fieldTpe: expected jsonb value found ${other.getClass}: $other")
             })
           }
 
