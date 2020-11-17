@@ -3,14 +3,13 @@
 
 package coalesce
 
+import _root_.doobie.util.meta.Meta
+import _root_.doobie.util.transactor.Transactor
 import cats.effect.Sync
+import edu.gemini.grackle._
+import edu.gemini.grackle.doobie._
 
-import edu.gemini.grackle._, skunk._
-import _root_.skunk.codec.all._
-import cats.effect.Resource
-import _root_.skunk.Session
-
-trait CoalesceMapping[F[_]] extends SkunkMapping[F] {
+trait CoalesceMapping[F[_]] extends DoobieMapping[F] {
 
   val schema =
     Schema(
@@ -52,35 +51,35 @@ trait CoalesceMapping[F[_]] extends SkunkMapping[F] {
         tpe = RType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("r", "id", text), key = true),
-            SqlObject("ca", Join(ColumnRef("r", "id", text), ColumnRef("ca", "rid", text))),
-            SqlObject("cb", Join(ColumnRef("r", "id", text), ColumnRef("cb", "rid", text))),
+            SqlField("id", ColumnRef("r", "id", Meta[String]), key = true),
+            SqlObject("ca", Join(ColumnRef("r", "id", Meta[String]), ColumnRef("ca", "rid", Meta[String]))),
+            SqlObject("cb", Join(ColumnRef("r", "id", Meta[String]), ColumnRef("cb", "rid", Meta[String]))),
           )
       ),
       ObjectMapping(
         tpe = CAType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("ca", "id", text), key = true),
-            SqlAttribute("rid", ColumnRef("ca", "rid", text)),
-            SqlField("a", ColumnRef("ca", "a", int4))
+            SqlField("id", ColumnRef("ca", "id", Meta[String]), key = true),
+            SqlAttribute("rid", ColumnRef("ca", "rid", Meta[String])),
+            SqlField("a", ColumnRef("ca", "a", Meta[Int]))
           )
       ),
       ObjectMapping(
         tpe = CBType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("cb", "id", text), key = true),
-            SqlAttribute("rid", ColumnRef("cb", "rid", text)),
-            SqlField("b", ColumnRef("cb", "b", bool))
+            SqlField("id", ColumnRef("cb", "id", Meta[String]), key = true),
+            SqlAttribute("rid", ColumnRef("cb", "rid", Meta[String])),
+            SqlField("b", ColumnRef("cb", "b", Meta[Boolean]))
           )
       )
     )
 }
 
-object CoalesceMapping extends TracedSkunkMappingCompanion {
+object CoalesceMapping extends TracedDoobieMappingCompanion {
 
-  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
-    new SkunkMapping[F](pool, monitor) with CoalesceMapping[F]
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
+    new DoobieMapping[F](transactor, monitor) with CoalesceMapping[F]
 
 }

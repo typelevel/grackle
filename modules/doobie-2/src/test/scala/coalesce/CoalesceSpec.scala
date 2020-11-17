@@ -9,7 +9,7 @@ import utils.DatabaseSuite
 
 final class CoalesceSpec extends DatabaseSuite {
 
-  lazy val mapping = CoalesceMapping.fromSessionPool(pool)
+  lazy val mapping = CoalesceMapping.fromTransactor(xa)
 
   test("simple coalesced query") {
     val query = """
