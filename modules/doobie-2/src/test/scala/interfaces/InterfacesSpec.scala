@@ -8,7 +8,7 @@ import io.circe.literal.JsonStringContext
 import utils.DatabaseSuite
 
 final class InterfacesSpec extends DatabaseSuite {
-  lazy val mapping = InterfacesMapping.mkMapping(pool)
+  lazy val mapping = InterfacesMapping.fromTransactor(xa)
 
   test("simple interface query") {
     val query = """

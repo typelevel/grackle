@@ -3,17 +3,15 @@
 
 package interfaces
 
+import _root_.doobie.util.meta.Meta
+import _root_.doobie.util.transactor.Transactor
 import cats.effect.Sync
 import cats.kernel.Eq
-import cats.syntax.all._
+import edu.gemini.grackle._
+import edu.gemini.grackle.doobie._
 import io.circe.Encoder
-import _root_.skunk.codec.all._
-import edu.gemini.grackle._, skunk._
-import _root_.skunk.Codec
-import cats.effect.Resource
-import _root_.skunk.Session
 
-trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
+trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
   val schema =
     Schema(
       """
@@ -78,16 +76,16 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
         discriminator = entityTypeDiscriminator,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("entities", "id", text), key = true),
-            SqlField("entityType", ColumnRef("entities", "entity_type", EntityType.codec), discriminator = true),
-            SqlField("title", ColumnRef("entities", "title", text.opt))
+            SqlField("id", ColumnRef("entities", "id", Meta[String]), key = true),
+            SqlField("entityType", ColumnRef("entities", "entity_type", Meta[EntityType]), discriminator = true),
+            SqlField("title", ColumnRef("entities", "title", Meta[String]))
           )
       ),
       ObjectMapping(
         tpe = FilmType,
         fieldMappings =
           List(
-            SqlField("rating", ColumnRef("entities", "film_rating", text.opt)),
+            SqlField("rating", ColumnRef("entities", "film_rating", Meta[String])),
             SqlObject("synopses")
           )
       ),
@@ -95,17 +93,17 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
         tpe = SeriesType,
         fieldMappings =
           List(
-            SqlField("numberOfEpisodes", ColumnRef("entities", "series_number_of_episodes", int4.opt)),
-            SqlObject("episodes", Join(ColumnRef("entities", "id", text), ColumnRef("episodes", "series_id", text))),
+            SqlField("numberOfEpisodes", ColumnRef("entities", "series_number_of_episodes", Meta[Int])),
+            SqlObject("episodes", Join(ColumnRef("entities", "id", Meta[String]), ColumnRef("episodes", "series_id", Meta[String]))),
           )
       ),
       ObjectMapping(
         tpe = EpisodeType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("episodes", "id", text), key = true),
-            SqlField("title", ColumnRef("episodes", "title", text.opt)),
-            SqlAttribute("episodeId", ColumnRef("episodes", "series_id", text)),
+            SqlField("id", ColumnRef("episodes", "id", Meta[String]), key = true),
+            SqlField("title", ColumnRef("episodes", "title", Meta[String])),
+            SqlAttribute("episodeId", ColumnRef("episodes", "series_id", Meta[String])),
             SqlObject("synopses"),
           )
       ),
@@ -118,8 +116,8 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    SqlField("short", ColumnRef("entities", "synopsis_short", text.opt)),
-                    SqlField("long", ColumnRef("entities", "synopsis_long", text.opt))
+                    SqlField("short", ColumnRef("entities", "synopsis_short", Meta[String])),
+                    SqlField("long", ColumnRef("entities", "synopsis_long", Meta[String]))
                   )
               ),
             List("entities", "episodes", "synopses") ->
@@ -127,13 +125,13 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    SqlField("short", ColumnRef("episodes", "synopsis_short", text.opt)),
-                    SqlField("long", ColumnRef("episoes", "synopsis_long", text.opt))
+                    SqlField("short", ColumnRef("episodes", "synopsis_short", Meta[String])),
+                    SqlField("long", ColumnRef("episoes", "synopsis_long", Meta[String]))
                   )
               )
           )
       ),
-      SqlLeafMapping[EntityType](EntityTypeType, EntityType.codec)
+      SqlLeafMapping[EntityType](EntityTypeType, Meta[EntityType])
     )
 
   def entityTypeDiscriminator(c: Cursor): Result[Type] = {
@@ -146,12 +144,13 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
   }
 }
 
-object InterfacesMapping extends SkunkMappingCompanion {
+object InterfacesMapping extends DoobieMappingCompanion {
 
-  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
-    new SkunkMapping[F](pool, monitor) with InterfacesMapping[F]
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
+    new DoobieMapping[F](transactor, monitor) with InterfacesMapping[F]
 
 }
+
 
 
 sealed trait EntityType extends Product with Serializable
@@ -174,17 +173,13 @@ object EntityType {
       case Series => "SERIES"
     })
 
-  implicit val codec: Codec[EntityType] =
-    Codec.simple(
-      {
-        case Film   => "1"
-        case Series => "2"
-      }, {
-        case "1" => Film.asRight
-        case "2" => Series.asRight
-        case n   => s"No such entity type: $n".asLeft
-      },
-      _root_.skunk.data.Type.int4
-    )
+  implicit val entityTypeMeta: Meta[EntityType] =
+    Meta[Int].timap {
+      case 1 => Film
+      case 2 => Series
+    } {
+      case Film  => 1
+      case Series => 2
+    }
 
  }
