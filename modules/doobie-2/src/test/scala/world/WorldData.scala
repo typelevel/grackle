@@ -6,17 +6,17 @@ package world
 import cats.effect.Sync
 import cats.implicits._
 
-import edu.gemini.grackle._, skunk._
+import edu.gemini.grackle._
 import edu.gemini.grackle.sql.Like
 import Query._, Predicate._, Value._
 import QueryCompiler._
-import cats.effect.Resource
-import _root_.skunk.Session
+import edu.gemini.grackle.doobie.DoobieMapping
+import _root_.doobie.util.meta.Meta
+import edu.gemini.grackle.doobie.DoobieMappingCompanion
+import edu.gemini.grackle.doobie.DoobieMonitor
+import _root_.doobie.util.transactor.Transactor
 
-trait WorldPostgresSchema[F[_]] extends SkunkMapping[F] {
-
-  // ok nobody knows about codecs but us
-  import _root_.skunk.codec.all._
+trait WorldPostgresSchema[F[_]] extends DoobieMapping[F] {
 
   class TableDef(name: String) {
     def col(colName: String, codec: Codec[_]): ColumnRef =
@@ -24,36 +24,36 @@ trait WorldPostgresSchema[F[_]] extends SkunkMapping[F] {
   }
 
   object country extends TableDef("country") {
-    val code           = col("code", bpchar(3))
-    val name           = col("name", text)
-    val continent      = col("continent", varchar)
-    val region         = col("region", varchar)
-    val surfacearea    = col("surfacearea", varchar)
-    val indepyear      = col("indepyear", int2.imap(_.toInt)(_.toShort).opt)
-    val population     = col("population", int4)
-    val lifeexpectancy = col("lifeexpectancy", varchar)
-    val gnp            = col("gnp", varchar)
-    val gnpold         = col("gnpold", varchar)
-    val localname      = col("localname", varchar)
-    val governmentform = col("governmentform", varchar)
-    val headofstate    = col("headofstate", varchar)
-    val capitalId      = col("capitalId", varchar)
-    val code2          = col("code2", varchar)
+    val code           = col("code", Meta[String])
+    val name           = col("name", Meta[String])
+    val continent      = col("continent", Meta[String])
+    val region         = col("region", Meta[String])
+    val surfacearea    = col("surfacearea", Meta[String])
+    val indepyear      = col("indepyear", Meta[Int])
+    val population     = col("population", Meta[Int])
+    val lifeexpectancy = col("lifeexpectancy", Meta[String])
+    val gnp            = col("gnp", Meta[String])
+    val gnpold         = col("gnpold", Meta[String])
+    val localname      = col("localname", Meta[String])
+    val governmentform = col("governmentform", Meta[String])
+    val headofstate    = col("headofstate", Meta[String])
+    val capitalId      = col("capitalId", Meta[String])
+    val code2          = col("code2", Meta[String])
   }
 
   object city extends TableDef("city") {
-    val id          = col("id", int4)
-    val countrycode = col("countrycode", bpchar(3))
-    val name        = col("name", text)
-    val district    = col("district", varchar)
-    val population  = col("population", int4)
+    val id          = col("id", Meta[Int])
+    val countrycode = col("countrycode", Meta[String])
+    val name        = col("name", Meta[String])
+    val district    = col("district", Meta[String])
+    val population  = col("population", Meta[Int])
   }
 
   object countrylanguage extends TableDef("countrylanguage") {
-    val countrycode = col("countrycode", bpchar(3))
-    val language = col("language", text)
-    val isOfficial = col("isOfficial", varchar)
-    val percentage = col("percentage", varchar)
+    val countrycode = col("countrycode", Meta[String])
+    val language = col("language", Meta[String])
+    val isOfficial = col("isOfficial", Meta[String])
+    val percentage = col("percentage", Meta[String])
   }
 
 }
@@ -208,9 +208,9 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
   ))
 }
 
-object WorldMapping extends SkunkMappingCompanion {
+object WorldMapping extends DoobieMappingCompanion {
 
-  def mkMapping[F[_]: Sync](pool: Resource[F,Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
-    new SkunkMapping[F](pool, monitor) with WorldMapping[F]
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
+    new DoobieMapping[F](transactor, monitor) with WorldMapping[F]
 
 }

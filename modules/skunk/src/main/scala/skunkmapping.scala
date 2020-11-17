@@ -23,6 +23,8 @@ abstract class SkunkMapping[F[_]: Sync](
   type Encoder[A] = _root_.skunk.Encoder[A]
   type Fragment   = _root_.skunk.AppliedFragment
 
+  def toEncoder[A](c: Codec[A]): Encoder[A] = c
+
   // Also we need to know how to encode the basic GraphQL types.
   def booleanEncoder = bool
   def stringEncoder  = varchar

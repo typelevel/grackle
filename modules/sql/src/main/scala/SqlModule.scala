@@ -14,6 +14,9 @@ trait SqlModule[F[_]] {
   /** The type of an encoder that writes column values of type `A`. */
   type Encoder[A]
 
+  /** Extract an encoder from a codec. */
+  def toEncoder[A](c: Codec[A]): Encoder[A]
+
   /** Typeclass for SQL fragments. */
   trait SqlFragment[T] extends Monoid[T] {
 

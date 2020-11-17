@@ -94,28 +94,38 @@ lazy val sql = project
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-sql",
-    // fork in Test := true,
-    // parallelExecution in Test := false,
-    // libraryDependencies ++= Seq(
-    //   "org.typelevel"     %% "cats-effect"            % catsEffectVersion,
-    //   "io.chrisdavenport" %% "log4cats-slf4j"         % log4catsVersion,
-    //   "org.tpolecat"      %% "doobie-core"            % doobieVersion,
-    //   "org.tpolecat"      %% "doobie-postgres"        % doobieVersion,
-
-    //   "ch.qos.logback"    %  "logback-classic"        % logbackVersion % "test",
-    //   "com.dimafeng"      %% "testcontainers-scala-scalatest"  % testContainersVersion % "test",
-    //   "com.dimafeng"      %% "testcontainers-scala-postgresql" % testContainersVersion % "test",
-    // )
   )
 
 lazy val doobie = project
   .in(file("modules/doobie"))
   .enablePlugins(AutomateHeaderPlugin)
   .disablePlugins(RevolverPlugin)
-  .dependsOn(sql, circe)
+  .dependsOn(core, circe)
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-doobie",
+    fork in Test := true,
+    parallelExecution in Test := false,
+    libraryDependencies ++= Seq(
+      "org.typelevel"     %% "cats-effect"            % catsEffectVersion,
+      "io.chrisdavenport" %% "log4cats-slf4j"         % log4catsVersion,
+      "org.tpolecat"      %% "doobie-core"            % doobieVersion,
+      "org.tpolecat"      %% "doobie-postgres"        % doobieVersion,
+
+      "ch.qos.logback"    %  "logback-classic"        % logbackVersion % "test",
+      "com.dimafeng"      %% "testcontainers-scala-scalatest"  % testContainersVersion % "test",
+      "com.dimafeng"      %% "testcontainers-scala-postgresql" % testContainersVersion % "test",
+    )
+  )
+
+lazy val doobie_2 = project
+  .in(file("modules/doobie-2"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(sql, circe)
+  .settings(commonSettings)
+  .settings(
+    name := "gsp-graphql-doobie-2",
     fork in Test := true,
     parallelExecution in Test := false,
     libraryDependencies ++= Seq(

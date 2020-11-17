@@ -21,14 +21,14 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
   private def discriminator(om: ObjectMapping): List[ColumnRef] =
     om.fieldMappings.collect {
-      case cm: SkunkField if cm.discriminator => cm.columnRef
-      case am: SkunkAttribute if am.discriminator => am.col
+      case cm: SqlField if cm.discriminator => cm.columnRef
+      case am: SqlAttribute if am.discriminator => am.col
     }
 
   private def key(om: ObjectMapping): List[ColumnRef] =
     om.fieldMappings.collect {
-      case cm: SkunkField if cm.key => cm.columnRef
-      case am: SkunkAttribute if am.key => am.col
+      case cm: SqlField if cm.key => cm.columnRef
+      case am: SqlAttribute if am.key => am.col
     }
 
   private def isField(p: Path): Boolean =
@@ -74,7 +74,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
   }
 
-  case class SkunkRoot(fieldName: String, path: List[String] = Nil, rootTpe: Type = NoType) extends RootMapping {
+  case class SqlRoot(fieldName: String, path: List[String] = Nil, rootTpe: Type = NoType) extends RootMapping {
 
     private def mkRootCursor(query: Query, fieldPath: List[String], fieldTpe: Type): F[Result[Cursor]] = {
       val mapped = MappedQuery(query, fieldPath, fieldTpe)
@@ -82,7 +82,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       for {
         table <- mapped.fetch
         _     <- monitor.queryMapped(query, mapped.fragment, table)
-      } yield SkunkCursor(fieldPath, cursorType, table, mapped).rightIor
+      } yield SqlCursor(fieldPath, cursorType, table, mapped).rightIor
     }
 
     def cursor(query: Query): F[Result[Cursor]] =
@@ -91,17 +91,17 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       else
         mkRootCursor(query, fieldName :: path, rootTpe.underlyingField(fieldName))
 
-    def withParent(tpe: Type): SkunkRoot =
+    def withParent(tpe: Type): SqlRoot =
       copy(rootTpe = tpe)
 
   }
 
-  sealed trait SkunkFieldMapping extends FieldMapping {
+  sealed trait SqlFieldMapping extends FieldMapping {
     final def isPublic = true
     final def withParent(tpe: Type): FieldMapping = this
   }
 
-  case class SkunkAttribute(
+  case class SqlAttribute(
     fieldName: String,
     col: ColumnRef,
     key: Boolean = false,
@@ -112,35 +112,35 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def withParent(tpe: Type): FieldMapping = this
   }
 
-  case class SkunkField(
+  case class SqlField(
     fieldName: String,
     columnRef: ColumnRef,
     key: Boolean = false,
     discriminator: Boolean = false
-  ) extends SkunkFieldMapping
+  ) extends SqlFieldMapping
 
-  case class SkunkObject(fieldName: String, joins: List[Join]) extends SkunkFieldMapping
-  object SkunkObject {
-    def apply(fieldName: String, joins: Join*): SkunkObject = apply(fieldName, joins.toList)
+  case class SqlObject(fieldName: String, joins: List[Join]) extends SqlFieldMapping
+  object SqlObject {
+    def apply(fieldName: String, joins: Join*): SqlObject = apply(fieldName, joins.toList)
   }
 
-  case class SkunkJson(fieldName: String, columnRef: ColumnRef) extends SkunkFieldMapping
+  case class SqlJson(fieldName: String, columnRef: ColumnRef) extends SqlFieldMapping
 
-  case class SkunkLeafMapping[T](val tpe: Type, val encoder: JsonEncoder[T], val codec: Codec[T]) extends LeafMapping[T]
-  object SkunkLeafMapping {
+  case class SqlLeafMapping[T](val tpe: Type, val encoder: JsonEncoder[T], val codec: Codec[T]) extends LeafMapping[T]
+  object SqlLeafMapping {
     def apply[T](tpe: Type, codec: Codec[T])(implicit encoder: JsonEncoder[T], dummy: DummyImplicit) =
-      new SkunkLeafMapping(tpe, encoder, codec)
+      new SqlLeafMapping(tpe, encoder, codec)
   }
 
 
-  sealed trait SkunkInterfaceMapping extends ObjectMapping {
+  sealed trait SqlInterfaceMapping extends ObjectMapping {
     def discriminate(cursor: Cursor): Result[Type]
   }
 
-  object SkunkInterfaceMapping {
+  object SqlInterfaceMapping {
 
    sealed abstract case class DefaultInterfaceMapping(tpe: Type, fieldMappings: List[FieldMapping], path: List[String])
-      extends SkunkInterfaceMapping
+      extends SqlInterfaceMapping
 
     val defaultDiscriminator: Cursor => Result[Type] = (cursor: Cursor) => cursor.tpe.rightIor
 
@@ -177,8 +177,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def selectField(row: Row, path: List[String], tpe: Type, fieldName: String): Result[Any] = {
       val obj = tpe.dealias
       fieldMapping(path, obj, fieldName) match {
-        case Some(SkunkField(_, col, _, _)) => select(row, col).rightIor
-        case Some(SkunkJson(_, col)) => select(row, col).rightIor
+        case Some(SqlField(_, col, _, _)) => select(row, col).rightIor
+        case Some(SqlJson(_, col)) => select(row, col).rightIor
         case other => mkErrorResult(s"Expected mapping for field $fieldName of type $obj, found $other")
       }
     }
@@ -186,7 +186,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def hasAttribute(path: List[String], tpe: Type, attrName: String): Boolean = {
       val obj = tpe.dealias
       fieldMapping(path, obj, attrName) match {
-        case Some(_: SkunkAttribute) => true
+        case Some(_: SqlAttribute) => true
         case _ => false
       }
     }
@@ -194,7 +194,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def selectAttribute(row: Row, path: List[String], tpe: Type, attrName: String): Result[Any] = {
       val obj = tpe.dealias
       fieldMapping(path, obj, attrName) match {
-        case Some(SkunkAttribute(_, col, _, _, _)) => select(row, col).rightIor
+        case Some(SqlAttribute(_, col, _, _, _)) => select(row, col).rightIor
         case other => mkErrorResult(s"Expected mapping for attribute $attrName of type $obj, found $other")
       }
     }
@@ -230,7 +230,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       def termColumnForAttribute(path: List[String], tpe: Type, attrName: String): Option[ColumnRef] = {
         val obj = tpe.underlyingObject
         fieldMapping(path, obj, attrName) match {
-          case Some(SkunkAttribute(_, cr, _, _, _)) => Some(cr)
+          case Some(SqlAttribute(_, cr, _, _, _)) => Some(cr)
           case _ => None
         }
       }
@@ -238,8 +238,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       def termColumnForField(path: List[String], tpe: Type, fieldName: String): Option[ColumnRef] = {
         val obj = tpe.underlyingObject
         fieldMapping(path, obj, fieldName) match {
-          case Some(SkunkField(_, cr, _, _)) => Some(cr)
-          case Some(SkunkJson(_, cr)) => Some(cr)
+          case Some(SqlField(_, cr, _, _)) => Some(cr)
+          case Some(SqlJson(_, cr)) => Some(cr)
           case _ => None
         }
       }
@@ -265,9 +265,9 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             primaryColumnForTerm(path, tpe, other).map(col => Fragments.const(col.toSql))
         }
 
-      def skunkLeafMapping[T](tpe: Type): Option[SkunkLeafMapping[T]] =
+      def SqlLeafMapping[T](tpe: Type): Option[SqlLeafMapping[T]] =
         leafMapping[T](tpe).collectFirst {
-          case dlm: SkunkLeafMapping[_] => dlm.asInstanceOf[SkunkLeafMapping[T]]
+          case dlm: SqlLeafMapping[_] => dlm.asInstanceOf[SqlLeafMapping[T]]
         }
 
       def putForPath[T](p: List[String]): Option[Encoder[T]] =
@@ -276,22 +276,22 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             val parentTpe = tpe.path(init).underlyingObject
             if (parentTpe.hasField(last)) {
               val fieldTpe = parentTpe.field(last).nonNull
-              skunkLeafMapping[T](fieldTpe).map(_.codec).orElse(
+              SqlLeafMapping[T](fieldTpe).map(a => toEncoder(a.codec)).orElse(
                 fieldTpe match {
-                  case StringType => Some(stringEncoder)
-                  case IntType => Some(intEncoder)
-                  case FloatType => Some(doubleEncoder)
-                  case BooleanType => Some(booleanEncoder)
-                  case _ => None
+                  case StringType  => Some(stringEncoder.asInstanceOf[Encoder[T]])
+                  case IntType     => Some(intEncoder.asInstanceOf[Encoder[T]])
+                  case FloatType   => Some(doubleEncoder.asInstanceOf[Encoder[T]])
+                  case BooleanType => Some(booleanEncoder.asInstanceOf[Encoder[T]])
+                  case _           => None
                 }
               )
             } else if (hasAttribute(p, parentTpe, last))
               fieldMapping(p, parentTpe, last).collect {
-                case da: SkunkAttribute => da.col.codec
+                case da: SqlAttribute => toEncoder(da.col.codec.asInstanceOf[Codec[T]])
               }
             else None
-          case Nil => skunkLeafMapping[T](tpe.nonNull).map(_.codec)
-        }).map(_.asInstanceOf[Encoder[T]])
+          case Nil => SqlLeafMapping[T](tpe.nonNull).map(a => toEncoder(a.codec))
+        })
 
       def putForTerm(x: Term[_]): Option[Encoder[_]] =
         x match {
@@ -496,10 +496,10 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       def columnsForFieldOrAttribute(path: List[String], tpe: Type, name: String): List[ColumnRef] = {
         val obj = tpe.underlyingObject
         fieldMapping(path, obj, name) match {
-          case Some(SkunkField(_, cr, _, _)) => List(cr)
-          case Some(SkunkJson(_, cr)) => List(cr)
-          case Some(SkunkObject(_, joins)) => joins.map(_.parent) ++ joins.map(_.child)
-          case Some(SkunkAttribute(_, cr, _, _, _)) => List(cr)
+          case Some(SqlField(_, cr, _, _)) => List(cr)
+          case Some(SqlJson(_, cr)) => List(cr)
+          case Some(SqlObject(_, joins)) => joins.map(_.parent) ++ joins.map(_.child)
+          case Some(SqlAttribute(_, cr, _, _, _)) => List(cr)
           case Some(CursorField(_, _, _, required)) =>
             required.flatMap(r => columnsForFieldOrAttribute(path, tpe, r))
           case Some(CursorAttribute(_, _, required)) =>
@@ -526,7 +526,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         def joinsForField(path: List[String], tpe: Type, fieldName: String): List[Join] = {
           val obj = tpe.underlyingObject
           fieldMapping(path, obj, fieldName) match {
-            case Some(SkunkObject(_, joins)) => joins
+            case Some(SqlObject(_, joins)) => joins
             case _ => Nil
           }
         }
@@ -637,7 +637,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
                   case om: ObjectMapping =>
                     om.fieldMappings.collectFirst {
 
-                      case SkunkField(fieldName, `col`, _, _) if mappings.contains(om) =>
+                      case SqlField(fieldName, `col`, _, _) if mappings.contains(om) =>
                         val obj = mappings(om)
                         val fieldTpe0 = obj.field(fieldName)
                         val fieldTpe =
@@ -648,12 +648,12 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
                           case _ => (col.codec, NoNulls)
                         }
 
-                      case SkunkJson(fieldName, `col`) if mappings.contains(om) =>
+                      case SqlJson(fieldName, `col`) if mappings.contains(om) =>
                         val obj = mappings(om)
                         val nullable = obj.field(fieldName).isNullable || obj.variantField(fieldName)
                         (`col`.codec, if (nullable) Nullable else NoNulls)
 
-                      case SkunkAttribute(_, `col`, _, nullable, _) =>
+                      case SqlAttribute(_, `col`, _, nullable, _) =>
                         (col.codec, if (nullable) Nullable else NoNulls)
 
                     } orElse loop(tl)
@@ -693,12 +693,12 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           val joinPreds =
             Predicate.and(
               om.fieldMappings.collect {
-                case cm: SkunkField if cm.key =>
+                case cm: SqlField if cm.key =>
                   val fv0 = c.field(cm.fieldName)
                   val Ior.Right(fv) = fv0
                   Eql(FieldPath(List(cm.fieldName)), Const(fv.focus))(Eq.fromUniversalEquals)
 
-                case am: SkunkAttribute if am.key =>
+                case am: SqlAttribute if am.key =>
                   val av0 = c.attribute(am.fieldName)
                   val Ior.Right(av) = av0
                   Eql(AttrPath(List(am.fieldName)), Const(av))(Eq.fromUniversalEquals)
@@ -714,7 +714,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         val fieldTpe = tpe.underlyingField(fieldName).nonNull
         fieldTpe.isList &&
           (fieldMapping(path, tpe.underlyingObject, fieldName) match {
-            case Some(SkunkObject(_, joins)) if joins.nonEmpty => true
+            case Some(SqlObject(_, joins)) if joins.nonEmpty => true
             case _ => false
           })
       }
@@ -873,7 +873,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       mkErrorResult(s"Cannot read attribute '$attributeName' from leaf type $tpe")
   }
 
-  case class SkunkCursor(val path: List[String], val tpe: Type, val focus: Any, mapped: MappedQuery) extends Cursor {
+  case class SqlCursor(val path: List[String], val tpe: Type, val focus: Any, mapped: MappedQuery) extends Cursor {
     def asTable: Result[Table] = focus match {
       case table@((_: Row) :: _ | Nil) => table.asInstanceOf[Table].rightIor
       case _ => mkErrorResult(s"Not a table")
@@ -938,7 +938,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def narrowsTo(subtpe: TypeRef): Boolean = {
       val ctpe =
         objectMapping(path, tpe) match {
-          case Some(im: SkunkInterfaceMapping) =>
+          case Some(im: SqlInterfaceMapping) =>
             im.discriminate(this).getOrElse(tpe)
           case _ => tpe
         }
@@ -960,7 +960,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         case Some(CursorField(_, f, _, _)) =>
           f(this).map(res => LeafCursor(tpe = fieldTpe, focus = res, fieldName :: path))
 
-        case Some(SkunkJson(_, _)) =>
+        case Some(SqlJson(_, _)) =>
           asTable.flatMap { table =>
             mapped.selectField(table.head, path, tpe, fieldName).flatMap(_ match {
               case Some(j: Json) if fieldTpe.isNullable =>
@@ -1010,7 +1010,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
   override def rootMapping(path: List[String], tpe: Type, fieldName: String): Option[RootMapping] =
     if (tpe =:= schema.queryType) super.rootMapping(path, tpe, fieldName)
-    else Some(SkunkRoot(fieldName, path, tpe))
+    else Some(SqlRoot(fieldName, path, tpe))
 
   override def compilerPhases: List[QueryCompiler.Phase] =
     StagingElaborator :: super.compilerPhases
