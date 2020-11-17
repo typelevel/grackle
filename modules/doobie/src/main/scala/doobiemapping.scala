@@ -571,17 +571,24 @@ abstract class DoobieMapping[F[_]: Sync](transactor: Transactor[F], monitor: Doo
         def unify(x: Term[_], y: Term[_]): Option[Put[Any]] =
           putForTerm(x).orElse(putForTerm(y)).orElse(put).asInstanceOf[Option[Put[Any]]]
 
+        def nonEmpty(frag: Fragment): Option[Fragment] =
+          if (frag == Fragment.empty) None
+          else Some(frag)
+
         exp match {
           case Const(value) =>
             put.map(pa => Fragment("?", List(Arg(value, pa)), None))
+
+          case Project(prefix, pred) =>
+            fragmentForPred(prefix ++ path, tpe.path(prefix), pred)
 
           case pathTerm: Path =>
             primaryColumnForTerm(path, tpe, pathTerm).map(col => Fragment.const(s"${col.toSql}"))
 
           case And(x, y) =>
-            Some(Fragments.andOpt(loop(x, None), loop(y, None)))
+            nonEmpty(Fragments.andOpt(loop(x, None), loop(y, None)))
           case Or(x, y) =>
-            Some(Fragments.orOpt(loop(x, None), loop(y, None)))
+            nonEmpty(Fragments.orOpt(loop(x, None), loop(y, None)))
           case Not(x) =>
             loop(x, Some(Put[Boolean])).map(x => fr"NOT" ++ x)
 
@@ -1100,6 +1107,7 @@ abstract class DoobieMapping[F[_]: Sync](transactor: Transactor[F], monitor: Doo
 object DoobiePredicate {
   def paths(t: Term[_]): List[Path] =
     t match {
+      case Project(prefix, x) => paths(x).map(_.extend(prefix))
       case p: Path => List(p)
       case And(x, y) => paths(x) ++ paths(y)
       case Or(x, y) => paths(x) ++ paths(y)
