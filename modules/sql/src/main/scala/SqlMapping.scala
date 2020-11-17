@@ -10,82 +10,32 @@ import edu.gemini.grackle.QueryInterpreter.ProtoJson
 import edu.gemini.grackle.ScalarType._
 import edu.gemini.grackle.sql._
 
-import cats.{ Eq, Monoid, Reducible }
+import cats.{ Eq, Monoid }
 import cats.data.{ Chain, Ior, NonEmptyList }
 import cats.implicits._
 
 import io.circe.{ Json, Encoder => JsonEncoder }
 
 /** An abstract mapping that is backed by a SQL database. */
-trait SqlMapping[F[_]] extends CirceMapping[F] { self =>
+trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
-  def monitor: SqlMonitor[F, Fragment]
+  private def discriminator(om: ObjectMapping): List[ColumnRef] =
+    om.fieldMappings.collect {
+      case cm: SkunkField if cm.discriminator => cm.columnRef
+      case am: SkunkAttribute if am.discriminator => am.col
+    }
 
-  /** The type of a codec that reads and writes column values of type `A`. */
-  type Codec[A]
+  private def key(om: ObjectMapping): List[ColumnRef] =
+    om.fieldMappings.collect {
+      case cm: SkunkField if cm.key => cm.columnRef
+      case am: SkunkAttribute if am.key => am.col
+    }
 
-  /** The type of an encoder that writes column values of type `A`. */
-  type Encoder[A]
-
-  /** Typeclass for SQL fragments. */
-  trait SqlFragment[T] extends Monoid[T] {
-
-    def bind[A](encoder: Encoder[A], value: A): T
-
-    def const(s: String): T
-
-    /** Returns `(f1) AND (f2) AND ... (fn)` for all defined fragments. */
-    def andOpt(fs: Option[T]*): T
-
-    /** Returns `(f1) OR (f2) OR ... (fn)` for all defined fragments. */
-    def orOpt(fs: Option[T]*): T
-
-    /** Returns `WHERE (f1) AND (f2) AND ... (fn)` for defined `f`, if any, otherwise the empty fragment. */
-    def whereAndOpt(fs: Option[T]*): T
-
-    def in[G[_]: Reducible, A](f: T, fs: G[A], enc: Encoder[A]): T
-
-  }
-
-  /** The type of a fragment of SQL together with any interpolated arguments. */
-  type Fragment
-
-  implicit def Fragments: SqlFragment[Fragment]
-
-  def intEncoder: Encoder[Int]
-  def stringEncoder: Encoder[String]
-  def booleanEncoder: Encoder[Boolean]
-  def doubleEncoder: Encoder[Double]
-
-  def fetch(fragment: Fragment, metas: List[(Boolean, (Codec[_], NullabilityKnown))]): F[Table]
-
-
-  // impl below
-
-  override def rootMapping(path: List[String], tpe: Type, fieldName: String): Option[RootMapping] =
-    if (tpe =:= schema.queryType) super.rootMapping(path, tpe, fieldName)
-    else Some(SkunkRoot(fieldName, path, tpe))
-
-  private def mkRootCursor(query: Query, fieldPath: List[String], fieldTpe: Type): F[Result[Cursor]] = {
-    val mapped = mapQuery(query, fieldPath, fieldTpe)
-    val cursorType = fieldTpe.list
-    for {
-      table <- mapped.fetch
-      _     <- monitor.queryMapped(query, mapped.fragment, table)
-    } yield SkunkCursor(fieldPath, cursorType, table, mapped).rightIor
-  }
-
-  case class SkunkRoot(fieldName: String, path: List[String] = Nil, rootTpe: Type = NoType) extends RootMapping {
-    def cursor(query: Query): F[Result[Cursor]] =
-      if (fieldName === "__staged")
-        mkRootCursor(query, path, rootTpe)
-      else
-        mkRootCursor(query, fieldName :: path, rootTpe.underlyingField(fieldName))
-
-    def withParent(tpe: Type): SkunkRoot =
-      copy(rootTpe = tpe)
-  }
-
+  private def isField(p: Path): Boolean =
+    p match {
+      case FieldPath(_) | CollectFieldPath(_) => true
+      case _ => false
+    }
 
   /**
    * Name of a SQL schema column and its associated codec. Note that `ColumnRef`s are consider equal
@@ -108,9 +58,47 @@ trait SqlMapping[F[_]] extends CirceMapping[F] { self =>
 
   }
 
+  /** A pair of `ColumnRef`s, representing a SQL join. `ColumnRef`s have a canonical form. */
+  case class Join(parent: ColumnRef, child: ColumnRef) {
+
+    def normalize: Join =
+      if (parent.table > child.table) this
+      else if (parent.table === child.table && parent.column >= child.column) this
+      else Join(child, parent)
+
+    def swap: Join =
+      Join(child, parent)
+
+    def toSql: String =
+      s"LEFT JOIN ${child.table} ON ${parent.toSql} = ${child.toSql}"
+
+  }
+
+  case class SkunkRoot(fieldName: String, path: List[String] = Nil, rootTpe: Type = NoType) extends RootMapping {
+
+    private def mkRootCursor(query: Query, fieldPath: List[String], fieldTpe: Type): F[Result[Cursor]] = {
+      val mapped = MappedQuery(query, fieldPath, fieldTpe)
+      val cursorType = fieldTpe.list
+      for {
+        table <- mapped.fetch
+        _     <- monitor.queryMapped(query, mapped.fragment, table)
+      } yield SkunkCursor(fieldPath, cursorType, table, mapped).rightIor
+    }
+
+    def cursor(query: Query): F[Result[Cursor]] =
+      if (fieldName === "__staged")
+        mkRootCursor(query, path, rootTpe)
+      else
+        mkRootCursor(query, fieldName :: path, rootTpe.underlyingField(fieldName))
+
+    def withParent(tpe: Type): SkunkRoot =
+      copy(rootTpe = tpe)
+
+  }
+
   sealed trait SkunkFieldMapping extends FieldMapping {
-    def isPublic = true
-    def withParent(tpe: Type): FieldMapping = this
+    final def isPublic = true
+    final def withParent(tpe: Type): FieldMapping = this
   }
 
   case class SkunkAttribute(
@@ -144,23 +132,14 @@ trait SqlMapping[F[_]] extends CirceMapping[F] { self =>
       new SkunkLeafMapping(tpe, encoder, codec)
   }
 
-  case class Join(parent: ColumnRef, child: ColumnRef) {
-    def normalize: Join = {
-      if (parent.table > child.table) this
-      else if (parent.table === child.table && parent.column >= child.column) this
-      else Join(child, parent)
-    }
-    def swap: Join = Join(child, parent)
 
-    def toSql: String = s"LEFT JOIN ${child.table} ON ${parent.toSql} = ${child.toSql}"
-  }
-
-  trait SkunkInterfaceMapping extends ObjectMapping {
+  sealed trait SkunkInterfaceMapping extends ObjectMapping {
     def discriminate(cursor: Cursor): Result[Type]
   }
 
   object SkunkInterfaceMapping {
-    abstract case class DefaultInterfaceMapping(tpe: Type, fieldMappings: List[FieldMapping], path: List[String])
+
+   sealed abstract case class DefaultInterfaceMapping(tpe: Type, fieldMappings: List[FieldMapping], path: List[String])
       extends SkunkInterfaceMapping
 
     val defaultDiscriminator: Cursor => Result[Type] = (cursor: Cursor) => cursor.tpe.rightIor
@@ -169,72 +148,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] { self =>
       new DefaultInterfaceMapping(tpe, fieldMappings.map(_.withParent(tpe)), path) {
         def discriminate(cursor: Cursor): Result[Type] = discriminator(cursor)
       }
+
   }
-
-
-
-
-  private def discriminator(om: ObjectMapping): List[ColumnRef] =
-    om.fieldMappings.collect {
-      case cm: SkunkField if cm.discriminator => cm.columnRef
-      case am: SkunkAttribute if am.discriminator => am.col
-    }
-  private def hasDiscriminator(path: List[String], tpe: Type): Boolean = {
-    val obj = tpe.underlyingObject
-    objectMapping(path, obj) match {
-      case Some(om) => discriminator(om).nonEmpty
-      case _ => false
-    }
-  }
-
-  private def skunkLeafMapping[T](tpe: Type): Option[SkunkLeafMapping[T]] =
-    leafMapping[T](tpe).collectFirst {
-      case dlm: SkunkLeafMapping[_] => dlm.asInstanceOf[SkunkLeafMapping[T]]
-    }
-
-  private def key(om: ObjectMapping): List[ColumnRef] =
-    om.fieldMappings.collect {
-      case cm: SkunkField if cm.key => cm.columnRef
-      case am: SkunkAttribute if am.key => am.col
-    }
-
-  private def primaryColumnForTerm[T](path: List[String], tpe: Type, term: Term[T]): Option[ColumnRef] =
-    term match {
-      case Const(_) => None
-      case termPath: Path =>
-        val obj = tpe.underlyingObject
-        val prefix = termPath.path.init
-        val parent = obj.path(prefix)
-        val name = termPath.path.last
-        if (isField(termPath))
-          termColumnForField(path.reverse_:::(termPath.path), parent, name)
-        else
-          termColumnForAttribute(path, parent, name)
-    }
-
-  private def termColumnForField(path: List[String], tpe: Type, fieldName: String): Option[ColumnRef] = {
-    val obj = tpe.underlyingObject
-    fieldMapping(path, obj, fieldName) match {
-      case Some(SkunkField(_, cr, _, _)) => Some(cr)
-      case Some(SkunkJson(_, cr)) => Some(cr)
-      case _ => None
-    }
-  }
-
-  private def termColumnForAttribute(path: List[String], tpe: Type, attrName: String): Option[ColumnRef] = {
-    val obj = tpe.underlyingObject
-    fieldMapping(path, obj, attrName) match {
-      case Some(SkunkAttribute(_, cr, _, _, _)) => Some(cr)
-      case _ => None
-    }
-  }
-
-  def isField(p: Path): Boolean =
-    p match {
-      case FieldPath(_) | CollectFieldPath(_) => true
-      case _ => false
-    }
-
 
   final class MappedQuery(
     table: String,
@@ -253,10 +168,10 @@ trait SqlMapping[F[_]] extends CirceMapping[F] { self =>
     def index(col: ColumnRef): Int =
       columns.indexOf(col)
 
-    def project(row: Row, cols: List[ColumnRef]): Row =
+    private def project(row: Row, cols: List[ColumnRef]): Row =
       Row(cols.map(cr => row(index(cr))))
 
-    def select(row: Row, col: ColumnRef): Any =
+    private def select(row: Row, col: ColumnRef): Any =
       row(index(col))
 
     def selectField(row: Row, path: List[String], tpe: Type, fieldName: String): Result[Any] = {
@@ -310,12 +225,49 @@ trait SqlMapping[F[_]] extends CirceMapping[F] { self =>
       }
 
 
-    def fragmentForPred(path: List[String], tpe: Type, pred: Predicate): Option[Fragment] = {
+    private def fragmentForPred(path: List[String], tpe: Type, pred: Predicate): Option[Fragment] = {
+
+      def termColumnForAttribute(path: List[String], tpe: Type, attrName: String): Option[ColumnRef] = {
+        val obj = tpe.underlyingObject
+        fieldMapping(path, obj, attrName) match {
+          case Some(SkunkAttribute(_, cr, _, _, _)) => Some(cr)
+          case _ => None
+        }
+      }
+
+      def termColumnForField(path: List[String], tpe: Type, fieldName: String): Option[ColumnRef] = {
+        val obj = tpe.underlyingObject
+        fieldMapping(path, obj, fieldName) match {
+          case Some(SkunkField(_, cr, _, _)) => Some(cr)
+          case Some(SkunkJson(_, cr)) => Some(cr)
+          case _ => None
+        }
+      }
+
+      def primaryColumnForTerm[T](path: List[String], tpe: Type, term: Term[T]): Option[ColumnRef] =
+        term match {
+          case Const(_) => None
+          case termPath: Path =>
+            val obj = tpe.underlyingObject
+            val prefix = termPath.path.init
+            val parent = obj.path(prefix)
+            val name = termPath.path.last
+            if (isField(termPath))
+              termColumnForField(path.reverse_:::(termPath.path), parent, name)
+            else
+              termColumnForAttribute(path, parent, name)
+        }
+
       def term[T](x: Term[T], put: Encoder[T]): Option[Fragment] =
         x match {
           case Const(value) => Some(Fragments.bind(put, value))
           case other =>
             primaryColumnForTerm(path, tpe, other).map(col => Fragments.const(col.toSql))
+        }
+
+      def skunkLeafMapping[T](tpe: Type): Option[SkunkLeafMapping[T]] =
+        leafMapping[T](tpe).collectFirst {
+          case dlm: SkunkLeafMapping[_] => dlm.asInstanceOf[SkunkLeafMapping[T]]
         }
 
       def putForPath[T](p: List[String]): Option[Encoder[T]] =
@@ -485,7 +437,253 @@ trait SqlMapping[F[_]] extends CirceMapping[F] { self =>
     }
   }
 
-  class StagingElaborator extends Phase {
+
+  object MappedQuery {
+
+    // This is partial, however, we should be able to perform a consistency check ahead of time
+    // such that a valid query is guaranteed to be covered.
+    def apply(q: Query, path: List[String], tpe: Type): MappedQuery = {
+
+      type Acc = (List[ColumnRef], List[Join], List[(List[String], Type, Predicate)], List[(ObjectMapping, Type)])
+      implicit object MonoidAcc extends Monoid[Acc] {
+        def combine(x: Acc, y: Acc): Acc = (x._1 ++ y._1, x._2 ++ y._2, x._3 ++ y._3, x._4 ++ y._4)
+        def empty: Acc =  (Nil, Nil, Nil, Nil)
+      }
+
+      def discriminatorColumnsForType(path: List[String], tpe: Type): List[ColumnRef] = {
+        val obj = tpe.underlyingObject
+        objectMapping(path, obj) match {
+          case Some(om) => discriminator(om)
+          case _ => Nil
+        }
+      }
+
+      def keyColumnsForType(path: List[String], tpe: Type): List[ColumnRef] = {
+        val obj = tpe.underlyingObject
+        objectMapping(path, obj) match {
+          case Some(om) => key(om)
+          case _ => Nil
+        }
+      }
+
+      def paths(t: Term[_]): List[Path] =
+        t match {
+          case p: Path => List(p)
+          case And(x, y) => paths(x) ++ paths(y)
+          case Or(x, y) => paths(x) ++ paths(y)
+          case Not(x) => paths(x)
+          case Eql(x, y) => paths(x) ++ paths(y)
+          case NEql(x, y) => paths(x) ++ paths(y)
+          case Contains(x, y) => paths(x) ++ paths(y)
+          case Lt(x, y) => paths(x) ++ paths(y)
+          case LtEql(x, y) => paths(x) ++ paths(y)
+          case Gt(x, y) => paths(x) ++ paths(y)
+          case GtEql(x, y) => paths(x) ++ paths(y)
+          case In(x, _) => paths(x)
+          case AndB(x, y) => paths(x) ++ paths(y)
+          case OrB(x, y) => paths(x) ++ paths(y)
+          case XorB(x, y) => paths(x) ++ paths(y)
+          case NotB(x) => paths(x)
+          case StartsWith(x, _) => paths(x)
+          case ToUpperCase(x) => paths(x)
+          case ToLowerCase(x) => paths(x)
+          case Matches(x, _) => paths(x)
+          case Like(x, _, _) => paths(x)
+          case _ => Nil
+        }
+
+
+      def columnsForFieldOrAttribute(path: List[String], tpe: Type, name: String): List[ColumnRef] = {
+        val obj = tpe.underlyingObject
+        fieldMapping(path, obj, name) match {
+          case Some(SkunkField(_, cr, _, _)) => List(cr)
+          case Some(SkunkJson(_, cr)) => List(cr)
+          case Some(SkunkObject(_, joins)) => joins.map(_.parent) ++ joins.map(_.child)
+          case Some(SkunkAttribute(_, cr, _, _, _)) => List(cr)
+          case Some(CursorField(_, _, _, required)) =>
+            required.flatMap(r => columnsForFieldOrAttribute(path, tpe, r))
+          case Some(CursorAttribute(_, _, required)) =>
+            required.flatMap(r => columnsForFieldOrAttribute(path, tpe, r))
+          case _ => Nil
+        }
+      }
+
+      def loop(q: Query, path: List[String], tpe: Type, acc: Acc): Acc = {
+        val obj = tpe.underlyingObject
+        lazy val interfaces =
+          obj.underlyingObject match {
+            case ObjectType(_, _, _, interfaces) => interfaces
+            case _ => Nil
+          }
+
+        def requiredCols: List[ColumnRef] =
+          discriminatorColumnsForType(path, obj) ++ interfaces.flatMap(discriminatorColumnsForType(path, _)) ++ keyColumnsForType(path, obj)
+
+        def requiredMappings: List[(ObjectMapping, Type)] =
+          objectMapping(path, obj).map(om => (om, obj)).toList ++
+          interfaces.flatMap(i => objectMapping(path, i).map(im => (im, i)).toList)
+
+        def joinsForField(path: List[String], tpe: Type, fieldName: String): List[Join] = {
+          val obj = tpe.underlyingObject
+          fieldMapping(path, obj, fieldName) match {
+            case Some(SkunkObject(_, joins)) => joins
+            case _ => Nil
+          }
+        }
+
+        def loopPredicate(pred: Predicate): Acc = {
+          def loopPath(term: Path): Acc = {
+            def mkSelects(path: List[String]): Query =
+              path.foldRight(Empty: Query) { (fieldName, child) => Select(fieldName, Nil, child) }
+
+            val prefix = term.path.init
+            val parent = obj.path(prefix)
+            val name = term.path.last
+
+            if (isField(term)) {
+              loop(mkSelects(term.path), path, obj, acc)
+            } else {
+              columnsForFieldOrAttribute(path, parent, name) match {
+                case Nil => loop(mkSelects(prefix), path, obj, acc)
+                case pcols =>
+                  (pcols ++ requiredCols, List.empty[Join], List.empty[(List[String], Type, Predicate)], requiredMappings) |+| loop(mkSelects(prefix), path, obj, acc)
+              }
+            }
+          }
+
+          paths(pred).foldMap(loopPath) |+|
+            ((List.empty[ColumnRef], List.empty[Join], List((path, tpe, pred)), List.empty[(ObjectMapping, Type)]))
+        }
+
+        q match {
+          case Select(fieldName, _, child) =>
+            val fieldTpe = obj.field(fieldName)
+            val cols = columnsForFieldOrAttribute(path, obj, fieldName).toList ++ requiredCols
+            val joins = joinsForField(path, obj, fieldName)
+
+            loop(child, fieldName :: path, fieldTpe, (cols, joins, List.empty[(List[String], Type, Predicate)], requiredMappings) |+| acc)
+
+          case Context(contextPath, child) =>
+            loop(child, contextPath, tpe, acc)
+
+          case Narrow(subtpe, child) =>
+            loop(child, path, subtpe, acc)
+          case Filter(pred, child) =>
+            loop(child, path, obj, loopPredicate(pred) |+| acc)
+          case Unique(pred, child) =>
+            loop(child, path, obj, loopPredicate(pred) |+| acc)
+          case Wrap(_, q) =>
+            loop(q, path, obj, acc)
+          case Rename(_, q) =>
+            loop(q, path, obj, acc)
+          case Group(queries) =>
+            queries.foldLeft(acc) {
+              case (acc, sibling) => loop(sibling, path, obj, acc)
+            }
+          case GroupList(queries) =>
+            queries.foldLeft(acc) {
+              case (acc, sibling) => loop(sibling, path, obj, acc)
+            }
+          case Limit(_, child) =>
+            loop(child, path, obj, acc)
+          case OrderBy(_, child) =>
+            loop(child, path, obj, acc)
+
+          case GroupBy(_, child) =>
+            loop(child, path, obj, acc)
+
+          case Empty | Query.Component(_, _, _) | (_: Introspect) | (_: Defer) | (_: UntypedNarrow) | (_: Skip) => acc
+        }
+      }
+
+      val (columns0, joins0, predicates, mappings0) = loop(q, path, tpe, MonoidAcc.empty)
+
+      val columns = columns0.distinct
+      val mappings = mappings0.toMap
+      val joins = joins0.distinctBy(_.normalize)
+
+      def numChildren(t: String): Int =
+        joins.filter(_.parent.table === t).distinctBy(_.child.table).size
+
+      val tables = columns.map(_.table).distinct
+      val childTables = joins.map(_.child.table).toSet
+      val rootTable = tables.filterNot(childTables) match {
+        case List(rt) => rt
+        case _ => tables.maxBy(numChildren)
+      }
+
+      val orderedJoins = {
+        def orderJoins(seen: Set[String], joins: List[Join], acc: List[Join]): List[Join] = {
+          if (joins.isEmpty) acc
+          else {
+            val (admissable, rest) = joins.partition(j => seen(j.parent.table))
+            if (admissable.isEmpty) sys.error(s"unable to order joins $joins given $seen")
+            val ats = admissable.map(_.child.table)
+            orderJoins(seen ++ ats, rest, admissable ++ acc)
+          }
+        }
+
+        orderJoins(Set(rootTable), joins, Nil).reverse
+      }
+
+      val metas = {
+        def metaForColumn(col: ColumnRef): (Boolean, (Codec[_], NullabilityKnown)) = {
+          def loop(tms: List[TypeMapping]): Option[(Codec[_], NullabilityKnown)] =
+            tms match {
+              case Nil => None
+              case tm :: tl =>
+                tm match {
+
+                  case om: ObjectMapping =>
+                    om.fieldMappings.collectFirst {
+
+                      case SkunkField(fieldName, `col`, _, _) if mappings.contains(om) =>
+                        val obj = mappings(om)
+                        val fieldTpe0 = obj.field(fieldName)
+                        val fieldTpe =
+                          if (obj.variantField(fieldName)) fieldTpe0.nullable
+                          else fieldTpe0
+                        fieldTpe match {
+                          case NullableType(_) => (col.codec, Nullable)
+                          case _ => (col.codec, NoNulls)
+                        }
+
+                      case SkunkJson(fieldName, `col`) if mappings.contains(om) =>
+                        val obj = mappings(om)
+                        val nullable = obj.field(fieldName).isNullable || obj.variantField(fieldName)
+                        (`col`.codec, if (nullable) Nullable else NoNulls)
+
+                      case SkunkAttribute(_, `col`, _, nullable, _) =>
+                        (col.codec, if (nullable) Nullable else NoNulls)
+
+                    } orElse loop(tl)
+
+                  case pm: PrefixedMapping =>
+                    loop(pm.mappings.map(_._2)).orElse(loop(tl))
+
+                  case _ =>
+                    loop(tl)
+
+                }
+            }
+
+          // A column is the product of an outer join (and may therefore be null even if it's non-nullable
+          // in the schema) if its table introduced on the child side of a `Join`.
+          def isJoin(cr: ColumnRef): Boolean = childTables(cr.table)
+
+          loop(typeMappings).map(mn => (isJoin(col), mn)).getOrElse(sys.error(s"No Get for $col"))
+        }
+
+        columns.map(metaForColumn)
+      }
+
+      new MappedQuery(rootTable, columns, metas, predicates, orderedJoins)
+    }
+
+  }
+
+  object StagingElaborator extends Phase {
+
     val stagingJoin = (c: Cursor, q: Query) =>
       q match {
         case Select(_, _, _) =>
@@ -537,6 +735,14 @@ trait SqlMapping[F[_]] extends CirceMapping[F] { self =>
 
       object Seen {
         def apply(q: Query): Seen[Query] = new Seen(q, Set.empty, false)
+      }
+
+      def hasDiscriminator(path: List[String], tpe: Type): Boolean = {
+        val obj = tpe.underlyingObject
+        objectMapping(path, obj) match {
+          case Some(om) => discriminator(om).nonEmpty
+          case _ => false
+        }
       }
 
       def loop(path: List[String], tpe: Type, seen: Seen[Query]): Result[Seen[Query]] = {
@@ -605,249 +811,6 @@ trait SqlMapping[F[_]] extends CirceMapping[F] { self =>
           loop(Nil, tpe, Seen(other)).map(_.context)
       }
     }
-  }
-
-  override def compilerPhases: List[QueryCompiler.Phase] = (new StagingElaborator) :: super.compilerPhases
-
-
-  private def discriminatorColumnsForType(path: List[String], tpe: Type): List[ColumnRef] = {
-    val obj = tpe.underlyingObject
-    objectMapping(path, obj) match {
-      case Some(om) => discriminator(om)
-      case _ => Nil
-    }
-  }
-
-
-  def keyColumnsForType(path: List[String], tpe: Type): List[ColumnRef] = {
-    val obj = tpe.underlyingObject
-    objectMapping(path, obj) match {
-      case Some(om) => key(om)
-      case _ => Nil
-    }
-  }
-
-  def paths(t: Term[_]): List[Path] =
-    t match {
-      case p: Path => List(p)
-      case And(x, y) => paths(x) ++ paths(y)
-      case Or(x, y) => paths(x) ++ paths(y)
-      case Not(x) => paths(x)
-      case Eql(x, y) => paths(x) ++ paths(y)
-      case NEql(x, y) => paths(x) ++ paths(y)
-      case Contains(x, y) => paths(x) ++ paths(y)
-      case Lt(x, y) => paths(x) ++ paths(y)
-      case LtEql(x, y) => paths(x) ++ paths(y)
-      case Gt(x, y) => paths(x) ++ paths(y)
-      case GtEql(x, y) => paths(x) ++ paths(y)
-      case In(x, _) => paths(x)
-      case AndB(x, y) => paths(x) ++ paths(y)
-      case OrB(x, y) => paths(x) ++ paths(y)
-      case XorB(x, y) => paths(x) ++ paths(y)
-      case NotB(x) => paths(x)
-      case StartsWith(x, _) => paths(x)
-      case ToUpperCase(x) => paths(x)
-      case ToLowerCase(x) => paths(x)
-      case Matches(x, _) => paths(x)
-      case Like(x, _, _) => paths(x)
-      case _ => Nil
-    }
-
-  private def joinsForField(path: List[String], tpe: Type, fieldName: String): List[Join] = {
-    val obj = tpe.underlyingObject
-    fieldMapping(path, obj, fieldName) match {
-      case Some(SkunkObject(_, joins)) => joins
-      case _ => Nil
-    }
-  }
-
-  private def columnsForFieldOrAttribute(path: List[String], tpe: Type, name: String): List[ColumnRef] = {
-    val obj = tpe.underlyingObject
-    fieldMapping(path, obj, name) match {
-      case Some(SkunkField(_, cr, _, _)) => List(cr)
-      case Some(SkunkJson(_, cr)) => List(cr)
-      case Some(SkunkObject(_, joins)) => joins.map(_.parent) ++ joins.map(_.child)
-      case Some(SkunkAttribute(_, cr, _, _, _)) => List(cr)
-      case Some(CursorField(_, _, _, required)) =>
-        required.flatMap(r => columnsForFieldOrAttribute(path, tpe, r))
-      case Some(CursorAttribute(_, _, required)) =>
-        required.flatMap(r => columnsForFieldOrAttribute(path, tpe, r))
-      case _ => Nil
-    }
-  }
-  // This is partial, however, we should be able to perform a consistency check ahead of time
-  // such that a valid query is guaranteed to be covered.
-  def mapQuery(q: Query, path: List[String], tpe: Type): MappedQuery = {
-    type Acc = (List[ColumnRef], List[Join], List[(List[String], Type, Predicate)], List[(ObjectMapping, Type)])
-    implicit object MAcc extends Monoid[Acc] {
-      def combine(x: Acc, y: Acc): Acc =
-        (x._1 ++ y._1, x._2 ++ y._2, x._3 ++ y._3, x._4 ++ y._4)
-
-      def empty: Acc =  (Nil, Nil, Nil, Nil)
-    }
-
-    def loop(q: Query, path: List[String], tpe: Type, acc: Acc): Acc = {
-      val obj = tpe.underlyingObject
-      lazy val interfaces =
-        obj.underlyingObject match {
-          case ObjectType(_, _, _, interfaces) => interfaces
-          case _ => Nil
-        }
-
-      def requiredCols: List[ColumnRef] =
-        discriminatorColumnsForType(path, obj) ++ interfaces.flatMap(discriminatorColumnsForType(path, _)) ++ keyColumnsForType(path, obj)
-
-      def requiredMappings: List[(ObjectMapping, Type)] =
-        objectMapping(path, obj).map(om => (om, obj)).toList ++
-        interfaces.flatMap(i => objectMapping(path, i).map(im => (im, i)).toList)
-
-      def loopPredicate(pred: Predicate): Acc = {
-        def loopPath(term: Path): Acc = {
-          def mkSelects(path: List[String]): Query =
-            path.foldRight(Empty: Query) { (fieldName, child) => Select(fieldName, Nil, child) }
-
-          val prefix = term.path.init
-          val parent = obj.path(prefix)
-          val name = term.path.last
-
-          if (isField(term)) {
-            loop(mkSelects(term.path), path, obj, acc)
-          } else {
-            columnsForFieldOrAttribute(path, parent, name) match {
-              case Nil => loop(mkSelects(prefix), path, obj, acc)
-              case pcols =>
-                (pcols ++ requiredCols, List.empty[Join], List.empty[(List[String], Type, Predicate)], requiredMappings) |+| loop(mkSelects(prefix), path, obj, acc)
-            }
-          }
-        }
-
-        paths(pred).foldMap(loopPath) |+|
-          ((List.empty[ColumnRef], List.empty[Join], List((path, tpe, pred)), List.empty[(ObjectMapping, Type)]))
-      }
-
-      q match {
-        case Select(fieldName, _, child) =>
-          val fieldTpe = obj.field(fieldName)
-          val cols = columnsForFieldOrAttribute(path, obj, fieldName).toList ++ requiredCols
-          val joins = joinsForField(path, obj, fieldName)
-
-          loop(child, fieldName :: path, fieldTpe, (cols, joins, List.empty[(List[String], Type, Predicate)], requiredMappings) |+| acc)
-
-        case Context(contextPath, child) =>
-          loop(child, contextPath, tpe, acc)
-
-        case Narrow(subtpe, child) =>
-          loop(child, path, subtpe, acc)
-        case Filter(pred, child) =>
-          loop(child, path, obj, loopPredicate(pred) |+| acc)
-        case Unique(pred, child) =>
-          loop(child, path, obj, loopPredicate(pred) |+| acc)
-        case Wrap(_, q) =>
-          loop(q, path, obj, acc)
-        case Rename(_, q) =>
-          loop(q, path, obj, acc)
-        case Group(queries) =>
-          queries.foldLeft(acc) {
-            case (acc, sibling) => loop(sibling, path, obj, acc)
-          }
-        case GroupList(queries) =>
-          queries.foldLeft(acc) {
-            case (acc, sibling) => loop(sibling, path, obj, acc)
-          }
-        case Limit(_, child) =>
-          loop(child, path, obj, acc)
-        case OrderBy(_, child) =>
-          loop(child, path, obj, acc)
-
-        case GroupBy(_, child) =>
-          loop(child, path, obj, acc)
-
-        case Empty | Query.Component(_, _, _) | (_: Introspect) | (_: Defer) | (_: UntypedNarrow) | (_: Skip) => acc
-      }
-    }
-
-    val (columns0, joins0, predicates, mappings0) = loop(q, path, tpe, MAcc.empty)
-
-    val columns = columns0.distinct
-    val mappings = mappings0.toMap
-    val joins = joins0.distinctBy(_.normalize)
-
-    def numChildren(t: String): Int =
-      joins.filter(_.parent.table === t).distinctBy(_.child.table).size
-
-    val tables = columns.map(_.table).distinct
-    val childTables = joins.map(_.child.table).toSet
-    val rootTable = tables.filterNot(childTables) match {
-      case List(rt) => rt
-      case _ => tables.maxBy(numChildren)
-    }
-
-    val orderedJoins = {
-      def orderJoins(seen: Set[String], joins: List[Join], acc: List[Join]): List[Join] = {
-        if (joins.isEmpty) acc
-        else {
-          val (admissable, rest) = joins.partition(j => seen(j.parent.table))
-          if (admissable.isEmpty) sys.error(s"unable to order joins $joins given $seen")
-          val ats = admissable.map(_.child.table)
-          orderJoins(seen ++ ats, rest, admissable ++ acc)
-        }
-      }
-
-      orderJoins(Set(rootTable), joins, Nil).reverse
-    }
-
-    val metas = {
-      def metaForColumn(col: ColumnRef): (Boolean, (Codec[_], NullabilityKnown)) = {
-        def loop(tms: List[TypeMapping]): Option[(Codec[_], NullabilityKnown)] =
-          tms match {
-            case Nil => None
-            case tm :: tl =>
-              tm match {
-
-                case om: ObjectMapping =>
-                  om.fieldMappings.collectFirst {
-
-                    case SkunkField(fieldName, `col`, _, _) if mappings.contains(om) =>
-                      val obj = mappings(om)
-                      val fieldTpe0 = obj.field(fieldName)
-                      val fieldTpe =
-                        if (obj.variantField(fieldName)) fieldTpe0.nullable
-                        else fieldTpe0
-                      fieldTpe match {
-                        case NullableType(_) => (col.codec, Nullable)
-                        case _ => (col.codec, NoNulls)
-                      }
-
-                    case SkunkJson(fieldName, `col`) if mappings.contains(om) =>
-                      val obj = mappings(om)
-                      val nullable = obj.field(fieldName).isNullable || obj.variantField(fieldName)
-                      (`col`.codec, if (nullable) Nullable else NoNulls)
-
-                    case SkunkAttribute(_, `col`, _, nullable, _) =>
-                      (col.codec, if (nullable) Nullable else NoNulls)
-
-                  } orElse loop(tl)
-
-                case pm: PrefixedMapping =>
-                  loop(pm.mappings.map(_._2)).orElse(loop(tl))
-
-                case _ =>
-                  loop(tl)
-
-              }
-          }
-
-        // A column is the product of an outer join (and may therefore be null even if it's non-nullable
-        // in the schema) if its table introduced on the child side of a `Join`.
-        def isJoin(cr: ColumnRef): Boolean = childTables(cr.table)
-
-        loop(typeMappings).map(mn => (isJoin(col), mn)).getOrElse(sys.error(s"No Get for $col"))
-      }
-
-      columns.map(metaForColumn)
-    }
-
-    new MappedQuery(rootTable, columns, metas, predicates, orderedJoins)
   }
 
   case class LeafCursor(tpe: Type, focus: Any, path: List[String]) extends Cursor {
@@ -1043,89 +1006,100 @@ trait SqlMapping[F[_]] extends CirceMapping[F] { self =>
       }
   }
 
-    override val interpreter: QueryInterpreter[F] = new QueryInterpreter(this) {
-    override def runRootValues(queries: List[(Query, Type)]): F[(Chain[Json], List[ProtoJson])] =
-      for {
-        _   <- monitor.stageStarted
-        res <- runRootValues0(queries)
-        _   <- monitor.stageCompleted
-      } yield res
+  // overrides
 
-    override def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]] =
-      for {
-        res <- super.runRootValue(query, rootTpe)
-        _   <- monitor.resultComputed(res)
-      } yield res
+  override def rootMapping(path: List[String], tpe: Type, fieldName: String): Option[RootMapping] =
+    if (tpe =:= schema.queryType) super.rootMapping(path, tpe, fieldName)
+    else Some(SkunkRoot(fieldName, path, tpe))
 
-    def runRootValues0(queries: List[(Query, Type)]): F[(Chain[Json], List[ProtoJson])] = {
-      if (queries.length === 1)
-        super.runRootValues(queries)
-      else {
-        def isGroupable(q: Query): Boolean =
-          q match {
-            case Context(_, Select(_, Nil, Filter(Eql(_, Const(_)), _))) => true
-            case _ => false
-          }
+  override def compilerPhases: List[QueryCompiler.Phase] =
+    StagingElaborator :: super.compilerPhases
 
-        def groupKey(q: (Query, Type)): (List[String], String, Term[Any], Query, Type) = {
-          val (Context(cpath, Select(fieldName, Nil, Filter(Eql(path, Const(_)), child))), tpe) = q
-          (cpath, fieldName, path, child, tpe)
-        }
+  override val interpreter: QueryInterpreter[F] =
+    new QueryInterpreter(this) {
 
-        def groupConst(q: Query): Eql[Any] = {
-          val Context(_, Select(_, Nil, Filter(eql: Eql[Any] @unchecked, _))) = q
-          eql
-        }
-
-        val deduped = queries.zipWithIndex.groupMap(_._1)(_._2)
-
-        val (groupable, ungroupable) =
-          deduped.partition(e => isGroupable(e._1._1))
-
-        val grouped = groupable.groupMap {
-          case (qt, _) => groupKey(qt)
-        }{
-          case ((q, _), is) => (groupConst(q), is)
-        }
-
-        val coalesced = grouped.map {
-          case ((cpath, fieldName, _, child, tpe), cis) =>
-            val ncis = (cis.map { case (q, is) => (q, is.sorted) }).toList.sortBy(_._2.head)
-            val (eqls, is) = ncis.unzip
-            val Some(in) = In.fromEqls[Any](eqls)
-            ((Context(cpath, GroupBy(in.mkDiscriminator, Select(fieldName, Nil, Filter(in, child)))), ListType(tpe)), is)
-        }
-
-        val ungroupableResults = {
-          val (qts, is) = ungroupable.toList.unzip
-          super.runRootValues(qts).map {
-            case (errs, js) => (errs, js.zip(is))
-          }
-        }
-
-        val coalescedResults = {
-          val (qts, is) = coalesced.toList.unzip
-          super.runRootValues(qts).map {
-            case (errs, js) =>
-              val unpacked = js.zip(is) flatMap { case (j, is) =>
-                ProtoJson.unpackList(j).getOrElse(is.map(_ => ProtoJson.fromJson(Json.Null))).zip(is)
-              }
-
-              (errs, unpacked)
-          }
-        }
-
+      override def runRootValues(queries: List[(Query, Type)]): F[(Chain[Json], List[ProtoJson])] =
         for {
-          eurs <- ungroupableResults
-          ecrs <- coalescedResults
-        } yield {
-          val (errs0, urs) = eurs
-          val (errs1, crs) = ecrs
-          val aligned = (urs.toList ++ crs.toList) flatMap { case (j, is) => is.map(i => (i, j)) }
-          (errs0 ++ errs1, aligned.sortBy(_._1).map(_._2))
+          _   <- monitor.stageStarted
+          res <- runRootValues0(queries)
+          _   <- monitor.stageCompleted
+        } yield res
+
+      override def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]] =
+        for {
+          res <- super.runRootValue(query, rootTpe)
+          _   <- monitor.resultComputed(res)
+        } yield res
+
+      def runRootValues0(queries: List[(Query, Type)]): F[(Chain[Json], List[ProtoJson])] = {
+        if (queries.length === 1)
+          super.runRootValues(queries)
+        else {
+          def isGroupable(q: Query): Boolean =
+            q match {
+              case Context(_, Select(_, Nil, Filter(Eql(_, Const(_)), _))) => true
+              case _ => false
+            }
+
+          def groupKey(q: (Query, Type)): (List[String], String, Term[Any], Query, Type) = {
+            val (Context(cpath, Select(fieldName, Nil, Filter(Eql(path, Const(_)), child))), tpe) = q
+            (cpath, fieldName, path, child, tpe)
+          }
+
+          def groupConst(q: Query): Eql[Any] = {
+            val Context(_, Select(_, Nil, Filter(eql: Eql[Any] @unchecked, _))) = q
+            eql
+          }
+
+          val deduped = queries.zipWithIndex.groupMap(_._1)(_._2)
+
+          val (groupable, ungroupable) =
+            deduped.partition(e => isGroupable(e._1._1))
+
+          val grouped = groupable.groupMap {
+            case (qt, _) => groupKey(qt)
+          }{
+            case ((q, _), is) => (groupConst(q), is)
+          }
+
+          val coalesced = grouped.map {
+            case ((cpath, fieldName, _, child, tpe), cis) =>
+              val ncis = (cis.map { case (q, is) => (q, is.sorted) }).toList.sortBy(_._2.head)
+              val (eqls, is) = ncis.unzip
+              val Some(in) = In.fromEqls[Any](eqls)
+              ((Context(cpath, GroupBy(in.mkDiscriminator, Select(fieldName, Nil, Filter(in, child)))), ListType(tpe)), is)
+          }
+
+          val ungroupableResults = {
+            val (qts, is) = ungroupable.toList.unzip
+            super.runRootValues(qts).map {
+              case (errs, js) => (errs, js.zip(is))
+            }
+          }
+
+          val coalescedResults = {
+            val (qts, is) = coalesced.toList.unzip
+            super.runRootValues(qts).map {
+              case (errs, js) =>
+                val unpacked = js.zip(is) flatMap { case (j, is) =>
+                  ProtoJson.unpackList(j).getOrElse(is.map(_ => ProtoJson.fromJson(Json.Null))).zip(is)
+                }
+
+                (errs, unpacked)
+            }
+          }
+
+          for {
+            eurs <- ungroupableResults
+            ecrs <- coalescedResults
+          } yield {
+            val (errs0, urs) = eurs
+            val (errs1, crs) = ecrs
+            val aligned = (urs.toList ++ crs.toList) flatMap { case (j, is) => is.map(i => (i, j)) }
+            (errs0 ++ errs1, aligned.sortBy(_._1).map(_._2))
+          }
         }
       }
     }
-  }
 
 }
