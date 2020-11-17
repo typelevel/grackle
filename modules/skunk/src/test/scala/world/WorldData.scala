@@ -7,12 +7,11 @@ import cats.effect.Sync
 import cats.implicits._
 
 import edu.gemini.grackle._, skunk._
+import edu.gemini.grackle.sql.Like
 import Query._, Predicate._, Value._
 import QueryCompiler._
-import SkunkPredicate._
 import cats.effect.Resource
 import _root_.skunk.Session
-import _root_.skunk.Codec
 
 trait WorldPostgresSchema[F[_]] extends SkunkMapping[F] {
 

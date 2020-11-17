@@ -9,8 +9,9 @@ import cats.Applicative
 import cats.implicits._
 import edu.gemini.grackle.QueryInterpreter.ProtoJson
 import cats.data.StateT
+import edu.gemini.grackle.sql._
 
-trait SkunkMonitor[F[_]] {
+trait SkunkMonitor[F[_]] extends SqlMonitor[F, AppliedFragment] {
   def stageStarted: F[Unit]
   def queryMapped(query: Query, fragment: AppliedFragment, table: List[Row]): F[Unit]
   def resultComputed(result: Result[ProtoJson]): F[Unit]

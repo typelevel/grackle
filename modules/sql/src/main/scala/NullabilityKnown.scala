@@ -2,10 +2,9 @@
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
 package edu.gemini.grackle
-package skunk
+package sql
 
 sealed trait NullabilityKnown
-object NullabilityKnown {
-  case object NoNulls extends NullabilityKnown
-  case object Nullable extends NullabilityKnown
-}
+
+case object NoNulls extends NullabilityKnown
+case object Nullable extends NullabilityKnown

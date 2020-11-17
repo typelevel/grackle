@@ -86,11 +86,33 @@ lazy val circe = project
     )
   )
 
+lazy val sql = project
+  .in(file("modules/sql"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(circe)
+  .settings(commonSettings)
+  .settings(
+    name := "gsp-graphql-sql",
+    // fork in Test := true,
+    // parallelExecution in Test := false,
+    // libraryDependencies ++= Seq(
+    //   "org.typelevel"     %% "cats-effect"            % catsEffectVersion,
+    //   "io.chrisdavenport" %% "log4cats-slf4j"         % log4catsVersion,
+    //   "org.tpolecat"      %% "doobie-core"            % doobieVersion,
+    //   "org.tpolecat"      %% "doobie-postgres"        % doobieVersion,
+
+    //   "ch.qos.logback"    %  "logback-classic"        % logbackVersion % "test",
+    //   "com.dimafeng"      %% "testcontainers-scala-scalatest"  % testContainersVersion % "test",
+    //   "com.dimafeng"      %% "testcontainers-scala-postgresql" % testContainersVersion % "test",
+    // )
+  )
+
 lazy val doobie = project
   .in(file("modules/doobie"))
   .enablePlugins(AutomateHeaderPlugin)
   .disablePlugins(RevolverPlugin)
-  .dependsOn(core, circe)
+  .dependsOn(sql, circe)
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-doobie",
@@ -112,7 +134,7 @@ lazy val skunk = project
   .in(file("modules/skunk"))
   .enablePlugins(AutomateHeaderPlugin)
   .disablePlugins(RevolverPlugin)
-  .dependsOn(core, circe)
+  .dependsOn(sql, circe)
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-skunk",
