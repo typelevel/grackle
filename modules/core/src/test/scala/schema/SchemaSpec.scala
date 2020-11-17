@@ -108,4 +108,22 @@ final class SchemaSpec extends CatsSuite {
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
+
+  test("schema validation: duplicate enum values") {
+    val schema = Schema(
+      """
+         enum Direction {
+          NORTH
+          NORTH
+        }
+    """
+    )
+
+    schema match {
+      case Both(a, b)  =>
+        assert(a.head.\\("message").head.asString.get == "Duplicate EnumValueDefinition of NORTH for EnumTypeDefinition Direction")
+        assert(b.types.map(_.name) == List("Direction"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
 }

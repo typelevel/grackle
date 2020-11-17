@@ -4,14 +4,14 @@
 package edu.gemini.grackle
 
 import atto.Atto._
-import cats.data.Ior
+import cats.data.{Ior, NonEmptyChain}
 import cats.implicits._
 import io.circe.Json
-
-import Ast.{ObjectTypeDefinition, TypeDefinition}
-import QueryInterpreter.{mkErrorResult, mkOneError}
+import Ast.{EnumTypeDefinition, ObjectTypeDefinition, TypeDefinition}
+import QueryInterpreter.{mkError, mkErrorResult, mkOneError}
 import ScalarType._
 import Value._
+import cats.data.Ior.Both
 
 /**
  * Representation of a GraphQL schema
@@ -945,8 +945,32 @@ object SchemaParser {
 }
 
 object SchemaValidator {
-  def validateSchema(namedTypes: Result[List[NamedType]], defns: List[TypeDefinition]): Result[List[NamedType]] =
-    checkForUndefined(checkForDuplicates(namedTypes), defns)
+
+  def validateSchema(namedTypes: Result[List[NamedType]], defns: List[TypeDefinition]): Result[List[NamedType]] = {
+    val undefinedResults = checkForUndefined(checkForDuplicates(namedTypes), defns)
+
+    val duplicates = NonEmptyChain.fromSeq(checkForEnumValueDuplicates(defns))
+
+    duplicates.map { errors =>
+      undefinedResults match {
+        case Ior.Right(r) => Both(errors, r)
+        case Both(l, r) => Both(l combine errors, r)
+        case Ior.Left(l) => Ior.left(l combine errors)
+      }
+    }.getOrElse(undefinedResults)
+  }
+
+  def checkForEnumValueDuplicates(definitions: List[TypeDefinition]): List[Json] =
+  {
+    val enums = definitions.collect[EnumTypeDefinition] {
+      case a: EnumTypeDefinition => a
+    }
+
+    enums.flatMap { enum =>
+      val duplicateValues = enum.values.groupBy(identity).collect { case (x, xs) if xs.length > 1 => x }.toList
+      duplicateValues.map(dupe => mkError(s"Duplicate EnumValueDefinition of ${dupe.name.value} for EnumTypeDefinition ${enum.name.value}"))
+    }
+  }
 
   type NamedTypeWithIndex = (NamedType, Int)
 
