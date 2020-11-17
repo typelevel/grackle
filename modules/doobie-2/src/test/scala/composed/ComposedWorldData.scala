@@ -3,19 +3,21 @@
 
 package composed
 
+import _root_.doobie.util.meta.Meta
+import _root_.doobie.util.transactor.Transactor
 import cats.Monad
 import cats.data.Ior
 import cats.effect.Sync
 import cats.implicits._
-
-import edu.gemini.grackle._, skunk._
+import edu.gemini.grackle._
+import edu.gemini.grackle.doobie._
 import edu.gemini.grackle.sql.Like
-import Query._, Predicate._, Value._
+
+import Query._
+import Predicate._
+import Value._
 import QueryCompiler._
 import QueryInterpreter.mkErrorResult
-import _root_.skunk.codec.all._
-import cats.effect.Resource
-import _root_.skunk.Session
 
 /* Currency component */
 
@@ -81,7 +83,7 @@ object CurrencyMapping {
 
 /* World component */
 
-trait WorldMapping[F[_]] extends SkunkMapping[F] {
+trait WorldMapping[F[_]] extends DoobieMapping[F] {
 
   val schema =
     Schema(
@@ -144,55 +146,55 @@ trait WorldMapping[F[_]] extends SkunkMapping[F] {
         tpe = CountryType,
         fieldMappings =
           List(
-            SqlAttribute("code", ColumnRef("country", "code", bpchar(3)), key = true),
-            SqlField("name", ColumnRef("country", "name", text)),
-            SqlField("continent", ColumnRef("country", "continent", text)),
-            SqlField("region", ColumnRef("country", "region", text)),
-            SqlField("surfacearea", ColumnRef("country", "surfacearea", float4)),
-            SqlField("indepyear", ColumnRef("country", "indepyear", int2.opt)),
-            SqlField("population", ColumnRef("country", "population", int4)),
-            SqlField("lifeexpectancy", ColumnRef("country", "lifeexpectancy", float4.opt)),
-            SqlField("gnp", ColumnRef("country", "gnp", numeric(10,2))),
-            SqlField("gnpold", ColumnRef("country", "gnpold", numeric(10,2))),
-            SqlField("localname", ColumnRef("country", "localname", text)),
-            SqlField("governmentform", ColumnRef("country", "governmentform", text)),
-            SqlField("headofstate", ColumnRef("country", "headofstate", text.opt)),
-            SqlField("capitalId", ColumnRef("country", "capitalId", int4.opt)),
-            SqlField("code2", ColumnRef("country", "code2", bpchar(2))),
-            SqlObject("cities", Join(ColumnRef("country", "code", bpchar(3)), ColumnRef("city", "countrycode", bpchar(3)))),
-            SqlObject("languages", Join(ColumnRef("country", "code", bpchar(3)), ColumnRef("countryLanguage", "countrycode", bpchar(3))))
+            SqlAttribute("code", ColumnRef("country", "code", Meta[String]), key = true),
+            SqlField("name", ColumnRef("country", "name", Meta[String])),
+            SqlField("continent", ColumnRef("country", "continent", Meta[String])),
+            SqlField("region", ColumnRef("country", "region", Meta[String])),
+            SqlField("surfacearea", ColumnRef("country", "surfacearea", Meta[Float])),
+            SqlField("indepyear", ColumnRef("country", "indepyear", Meta[Short])),
+            SqlField("population", ColumnRef("country", "population", Meta[Int])),
+            SqlField("lifeexpectancy", ColumnRef("country", "lifeexpectancy", Meta[Float])),
+            SqlField("gnp", ColumnRef("country", "gnp", Meta[BigDecimal])),
+            SqlField("gnpold", ColumnRef("country", "gnpold", Meta[BigDecimal])),
+            SqlField("localname", ColumnRef("country", "localname", Meta[String])),
+            SqlField("governmentform", ColumnRef("country", "governmentform", Meta[String])),
+            SqlField("headofstate", ColumnRef("country", "headofstate", Meta[String])),
+            SqlField("capitalId", ColumnRef("country", "capitalId", Meta[Int])),
+            SqlField("code2", ColumnRef("country", "code2", Meta[String])),
+            SqlObject("cities", Join(ColumnRef("country", "code", Meta[String]), ColumnRef("city", "countrycode", Meta[String]))),
+            SqlObject("languages", Join(ColumnRef("country", "code", Meta[String]), ColumnRef("countryLanguage", "countrycode", Meta[String])))
           )
       ),
       ObjectMapping(
         tpe = CityType,
         fieldMappings =
           List(
-            SqlAttribute("id", ColumnRef("city", "id", int4), key = true),
-            SqlAttribute("countrycode", ColumnRef("city", "countrycode", bpchar(3))),
-            SqlField("name", ColumnRef("city", "name", text)),
-            SqlObject("country", Join(ColumnRef("city", "countrycode", bpchar(3)), ColumnRef("country", "code", bpchar(3)))),
-            SqlField("district", ColumnRef("city", "district", text)),
-            SqlField("population", ColumnRef("city", "population", int4))
+            SqlAttribute("id", ColumnRef("city", "id", Meta[Int]), key = true),
+            SqlAttribute("countrycode", ColumnRef("city", "countrycode", Meta[String])),
+            SqlField("name", ColumnRef("city", "name", Meta[String])),
+            SqlObject("country", Join(ColumnRef("city", "countrycode", Meta[String]), ColumnRef("country", "code", Meta[String]))),
+            SqlField("district", ColumnRef("city", "district", Meta[String])),
+            SqlField("population", ColumnRef("city", "population", Meta[Int]))
           )
       ),
       ObjectMapping(
         tpe = LanguageType,
         fieldMappings =
           List(
-            SqlField("language", ColumnRef("countryLanguage", "language", text), key = true),
-            SqlField("isOfficial", ColumnRef("countryLanguage", "isOfficial", bool)),
-            SqlField("percentage", ColumnRef("countryLanguage", "percentage", float4)),
-            SqlAttribute("countrycode", ColumnRef("countryLanguage", "countrycode", bpchar(3))),
-            SqlObject("countries", Join(ColumnRef("countryLanguage", "countrycode", bpchar(3)), ColumnRef("country", "code", bpchar(3))))
+            SqlField("language", ColumnRef("countryLanguage", "language", Meta[String]), key = true),
+            SqlField("isOfficial", ColumnRef("countryLanguage", "isOfficial", Meta[Boolean])),
+            SqlField("percentage", ColumnRef("countryLanguage", "percentage", Meta[Float])),
+            SqlAttribute("countrycode", ColumnRef("countryLanguage", "countrycode", Meta[String])),
+            SqlObject("countries", Join(ColumnRef("countryLanguage", "countrycode", Meta[String]), ColumnRef("country", "code", Meta[String])))
           )
       )
     )
 }
 
-object WorldMapping extends SkunkMappingCompanion {
+object WorldMapping extends DoobieMappingCompanion {
 
-  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
-    new SkunkMapping[F](pool, monitor) with WorldMapping[F]
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
+    new DoobieMapping[F](transactor, monitor) with WorldMapping[F]
 
 }
 
@@ -290,8 +292,8 @@ class ComposedMapping[F[_] : Monad]
   ))
 }
 
-object ComposedMapping extends SkunkMappingCompanion {
+object ComposedMapping extends DoobieMappingCompanion {
 
-  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
-    new ComposedMapping[F](WorldMapping.mkMapping(pool), CurrencyMapping[F])
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
+    new ComposedMapping[F](WorldMapping.mkMapping(transactor, monitor), CurrencyMapping[F])
 }
