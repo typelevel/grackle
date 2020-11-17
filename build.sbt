@@ -132,7 +132,7 @@ lazy val doobie_2 = project
       "org.typelevel"     %% "cats-effect"            % catsEffectVersion,
       "io.chrisdavenport" %% "log4cats-slf4j"         % log4catsVersion,
       "org.tpolecat"      %% "doobie-core"            % doobieVersion,
-      "org.tpolecat"      %% "doobie-postgres"        % doobieVersion,
+      "org.tpolecat"      %% "doobie-postgres-circe"        % doobieVersion,
 
       "ch.qos.logback"    %  "logback-classic"        % logbackVersion % "test",
       "com.dimafeng"      %% "testcontainers-scala-scalatest"  % testContainersVersion % "test",

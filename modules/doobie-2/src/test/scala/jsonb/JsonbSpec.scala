@@ -8,7 +8,7 @@ import io.circe.literal.JsonStringContext
 import utils.DatabaseSuite
 
 final class JsonbSpec extends DatabaseSuite {
-  lazy val mapping = JsonbMapping.mkMapping(pool)
+  lazy val mapping = JsonbMapping.fromTransactor(xa)
 
   test("simple jsonb query") {
     val query = """

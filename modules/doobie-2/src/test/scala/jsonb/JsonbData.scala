@@ -3,18 +3,23 @@
 
 package jsonb
 
+import _root_.doobie.Get
+import _root_.doobie.Meta
+import _root_.doobie.Put
+import _root_.doobie.postgres.circe.jsonb.implicits._
+import _root_.doobie.util.transactor.Transactor
 import cats.effect.Sync
 import cats.implicits._
+import edu.gemini.grackle._
+import edu.gemini.grackle.doobie._
+import io.circe.Json
 
-import edu.gemini.grackle._, skunk._
-import Query._, Predicate._, Value._
+import Query._
+import Predicate._
+import Value._
 import QueryCompiler._
-import _root_.skunk.codec.all._
-import _root_.skunk.circe.codec.all._
-import cats.effect.Resource
-import _root_.skunk.Session
 
-trait JsonbMapping[F[_]] extends SkunkMapping[F] {
+trait JsonbMapping[F[_]] extends DoobieMapping[F] {
   val schema =
     Schema(
       """
@@ -75,8 +80,8 @@ trait JsonbMapping[F[_]] extends SkunkMapping[F] {
         tpe = RowType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("records", "id", int4), key = true),
-            SqlJson("record", ColumnRef("records", "record", jsonb.opt))
+            SqlField("id", ColumnRef("records", "id", Meta[Int]), key = true),
+            SqlJson("record", ColumnRef("records", "record", new Meta(Get[Json], Put[Json])))
           )
       ),
     )
@@ -89,9 +94,9 @@ trait JsonbMapping[F[_]] extends SkunkMapping[F] {
   ))
 }
 
-object JsonbMapping extends SkunkMappingCompanion {
+object JsonbMapping extends DoobieMappingCompanion {
 
-  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
-    new SkunkMapping[F](pool, monitor) with JsonbMapping[F]
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
+    new DoobieMapping[F](transactor, monitor) with JsonbMapping[F]
 
 }
