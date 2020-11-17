@@ -12,6 +12,7 @@ import QueryInterpreter.{mkError, mkErrorResult, mkOneError}
 import ScalarType._
 import Value._
 import cats.data.Ior.Both
+import cats.kernel.Semigroup
 
 /**
  * Representation of a GraphQL schema
@@ -952,12 +953,14 @@ object SchemaValidator {
     val duplicates = NonEmptyChain.fromSeq(checkForEnumValueDuplicates(defns))
 
     duplicates.map { errors =>
-      undefinedResults match {
-        case Ior.Right(r) => Both(errors, r)
-        case Both(l, r) => Both(l combine errors, r)
-        case Ior.Left(l) => Ior.left(l combine errors)
-      }
+      addLeft(undefinedResults, errors)
     }.getOrElse(undefinedResults)
+  }
+
+  def addLeft[A: Semigroup, B](ior: Ior[A,B], a: A): Ior[A, B] = ior match {
+    case Ior.Right(r) => Both(a, r)
+    case Both(l, r) => Both(l combine a, r)
+    case Ior.Left(l) => Ior.left(l combine a)
   }
 
   def checkForEnumValueDuplicates(definitions: List[TypeDefinition]): List[Json] =
