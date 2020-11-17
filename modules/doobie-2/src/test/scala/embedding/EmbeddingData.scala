@@ -4,12 +4,12 @@
 package embedding
 
 import cats.effect.Sync
-import  _root_.skunk.codec.all._
-import edu.gemini.grackle._, skunk._
-import cats.effect.Resource
-import _root_.skunk.Session
+import edu.gemini.grackle._
+import edu.gemini.grackle.doobie._
+import _root_.doobie.util.meta.Meta
+import _root_.doobie.util.transactor.Transactor
 
-trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
+trait EmbeddingMapping[F[_]] extends DoobieMapping[F] {
   val schema =
     Schema(
       """
@@ -58,7 +58,7 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
         tpe = FilmType,
         fieldMappings =
           List(
-            SqlField("title", ColumnRef("films", "title", text), key = true),
+            SqlField("title", ColumnRef("films", "title", Meta[String]), key = true),
             SqlObject("synopses")
           )
       ),
@@ -66,18 +66,18 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
         tpe = SeriesType,
         fieldMappings =
           List(
-            SqlField("title", ColumnRef("series", "title", text), key = true),
+            SqlField("title", ColumnRef("series", "title", Meta[String]), key = true),
             SqlObject("synopses"),
-            SqlObject("episodes", Join(ColumnRef("series", "title", text), ColumnRef("episodes2", "series_title", text))),
+            SqlObject("episodes", Join(ColumnRef("series", "title", Meta[String]), ColumnRef("episodes2", "series_title", Meta[String]))),
           )
       ),
       ObjectMapping(
         tpe = EpisodeType,
         fieldMappings =
           List(
-            SqlField("title", ColumnRef("episodes2", "title", text), key = true),
+            SqlField("title", ColumnRef("episodes2", "title", Meta[String]), key = true),
             SqlObject("synopses"),
-            SqlAttribute("series_title", ColumnRef("episodes2", "series_title", text))
+            SqlAttribute("series_title", ColumnRef("episodes2", "series_title", Meta[String]))
           )
       ),
       PrefixedMapping(
@@ -89,8 +89,8 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    SqlField("short", ColumnRef("films", "synopsis_short", text.opt)),
-                    SqlField("long", ColumnRef("films", "synopsis_long", text.opt))
+                    SqlField("short", ColumnRef("films", "synopsis_short", Meta[String])),
+                    SqlField("long", ColumnRef("films", "synopsis_long", Meta[String]))
                   )
               ),
             List("series", "synopses") ->
@@ -98,8 +98,8 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    SqlField("short", ColumnRef("series", "synopsis_short", text.opt)),
-                    SqlField("long", ColumnRef("series", "synopsis_long", text.opt))
+                    SqlField("short", ColumnRef("series", "synopsis_short", Meta[String])),
+                    SqlField("long", ColumnRef("series", "synopsis_long", Meta[String]))
                   )
               ),
             List("episodes", "synopses") ->
@@ -107,8 +107,8 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    SqlField("short", ColumnRef("episodes2", "synopsis_short", text.opt)),
-                    SqlField("long", ColumnRef("episodes2", "synopsis_long", text.opt))
+                    SqlField("short", ColumnRef("episodes2", "synopsis_short", Meta[String])),
+                    SqlField("long", ColumnRef("episodes2", "synopsis_long", Meta[String]))
                   )
               )
           )
@@ -116,9 +116,9 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
     )
 }
 
-object EmbeddingMapping extends SkunkMappingCompanion {
+object EmbeddingMapping extends DoobieMappingCompanion {
 
-  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
-    new SkunkMapping[F](pool, monitor) with EmbeddingMapping[F]
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
+    new DoobieMapping[F](transactor, monitor) with EmbeddingMapping[F]
 
 }

@@ -8,7 +8,7 @@ import io.circe.literal.JsonStringContext
 import utils.DatabaseSuite
 
 final class EmbeddingSpec extends DatabaseSuite {
-  lazy val mapping = EmbeddingMapping.mkMapping(pool)
+  lazy val mapping = EmbeddingMapping.fromTransactor(xa)
 
   test("simple embedded query (1)") {
     val query = """
