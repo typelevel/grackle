@@ -9,7 +9,7 @@ import utils.DatabaseSuite
 
 final class MovieSpec extends DatabaseSuite {
 
-  lazy val mapping = MovieMapping.mkMapping(pool)
+  lazy val mapping = MovieMapping.fromTransactor(xa)
 
   test("query with UUID argument and custom scalar results") {
     val query = """
@@ -374,7 +374,7 @@ final class MovieSpec extends DatabaseSuite {
     assert(res == expected)
   }
 
-  ignore("query with arrays") {
+  test("query with arrays") {
     val query = """
       query {
         movieById(id: "6a7837fc-b463-4d32-b628-0f4b3065cb21") {

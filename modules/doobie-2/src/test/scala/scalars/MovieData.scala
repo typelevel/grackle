@@ -3,24 +3,36 @@
 
 package scalars
 
+
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import java.util.UUID
+
 import scala.util.Try
 
-import cats.{Eq, Order}
-import cats.effect._
-import cats.syntax.all._
+import cats.Eq
+import cats.Order
+import cats.effect.Sync
+import cats.implicits._
+import doobie.Transactor
+import doobie.implicits.javatime.JavaLocalTimeMeta
+import doobie.implicits.legacy.instant._
+import doobie.implicits.legacy.localdate._
+import doobie.postgres.implicits._
+import doobie.util.meta.Meta
+import edu.gemini.grackle._
 import io.circe.Encoder
 
-import edu.gemini.grackle._, skunk._
-import Query._, Predicate._, Value._
+import doobie._
+import Query._
+import Predicate._
+import Value._
 import QueryCompiler._
-import _root_.skunk.Codec
-import _root_.skunk.codec.all._
-import _root_.skunk.Session
-import java.time.OffsetDateTime
+import scala.reflect.ClassTag
 
 object MovieData {
   sealed trait Genre extends Product with Serializable
@@ -46,22 +58,16 @@ object MovieData {
         case Comedy => "COMEDY"
       })
 
-    // N.B. would be nice to have `eimap` with A => B and B => Either[String, A]
-    val codec: Codec[Genre] =
-      Codec.simple(
-        {
-          case Drama  => "1"
-          case Action => "2"
-          case Comedy => "3"
-        }, {
-          case "1" => Drama.asRight
-          case "2" => Action.asRight
-          case "3" => Comedy.asRight
-          case n    => s"No such Genre: $n".asLeft
-        },
-        _root_.skunk.data.Type.int4
-      )
-
+    implicit val genreMeta: Meta[Genre] =
+      Meta[Int].timap {
+        case 1 => Drama
+        case 2 => Action
+        case 3 => Comedy
+      } {
+        case Drama  => 1
+        case Action => 2
+        case Comedy => 3
+      }
   }
 
   sealed trait Feature
@@ -78,14 +84,14 @@ object MovieData {
       Encoder[String].contramap(_.toString)
   }
 
-  // implicit val durationMeta: Meta[Duration] =
-  //   Meta[Long].timap(Duration.ofMillis)(_.toMillis)
+  implicit val durationMeta: Meta[Duration] =
+    Meta[Long].timap(Duration.ofMillis)(_.toMillis)
 
-  // implicit val zonedDateTimeMeta: Meta[OffsetDateTime] =
-  //   Meta[Instant].timap(i => OffsetDateTime.ofInstant(i, ZoneOffset.UTC))(_.toInstant)
+  implicit val zonedDateTimeMeta: Meta[ZonedDateTime] =
+    Meta[Instant].timap(i => ZonedDateTime.ofInstant(i, ZoneOffset.UTC))(_.toInstant)
 
-  // implicit val featureListMeta: Meta[List[Feature]] =
-  //   Meta.Advanced.array[String]("VARCHAR", "_VARCHAR").imap(_.toList.map(Feature.fromString))(_.map(_.toString).toArray)
+  implicit val featureListMeta: Meta[List[Feature]] =
+    Meta.Advanced.array[String]("VARCHAR", "_VARCHAR").imap(_.toList.map(Feature.fromString))(_.map(_.toString).toArray)
 
   implicit val localDateOrder: Order[LocalDate] =
     Order.from(_.compareTo(_))
@@ -93,14 +99,17 @@ object MovieData {
   implicit val localTimeOrder: Order[LocalTime] =
     Order.fromComparable[LocalTime]
 
-  implicit val zonedDateTimeOrder: Order[OffsetDateTime] =
+  implicit val zonedDateTimeOrder: Order[ZonedDateTime] =
     Order.from(_.compareTo(_))
 
   implicit val durationOrder: Order[Duration] =
     Order.fromComparable[Duration]
+
+  implicit def listMeta[T: ClassTag](implicit m: Meta[Array[T]]): Meta[List[T]] =
+      m.imap(_.toList)(_.toArray)
 }
 
-trait MovieMapping[F[_]] extends SkunkMapping[F] {
+trait MovieMapping[F[_]] extends DoobieMapping[F] {
   import MovieData._
 
   val schema =
@@ -174,33 +183,33 @@ trait MovieMapping[F[_]] extends SkunkMapping[F] {
         tpe = MovieType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("movies", "id", uuid), key = true),
-            SqlField("title", ColumnRef("movies", "title", text)),
-            SqlField("genre", ColumnRef("movies", "genre", Genre.codec)),
-            SqlField("releaseDate", ColumnRef("movies", "releasedate", date)),
-            SqlField("showTime", ColumnRef("movies", "showtime", time)),
-            SqlField("nextShowing", ColumnRef("movies", "nextshowing", timestamptz)),
+            SqlField("id", ColumnRef("movies", "id", Meta[UUID]), key = true),
+            SqlField("title", ColumnRef("movies", "title", Meta[String])),
+            SqlField("genre", ColumnRef("movies", "genre", Meta[Genre])),
+            SqlField("releaseDate", ColumnRef("movies", "releasedate", Meta[LocalDate])),
+            SqlField("showTime", ColumnRef("movies", "showtime", Meta[LocalTime])),
+            SqlField("nextShowing", ColumnRef("movies", "nextshowing", Meta[ZonedDateTime])),
             CursorField("nextEnding", nextEnding, List("nextShowing", "duration")),
-            SqlField("duration", ColumnRef("movies", "duration", int8.imap(Duration.ofMillis)(_.toMillis))),
-            // SqlField("categories", ColumnRef("movies", "categories")),
-            // SqlField("features", ColumnRef("movies", "features")),
+            SqlField("duration", ColumnRef("movies", "duration", Meta[Duration])),
+            SqlField("categories", ColumnRef("movies", "categories", Meta[List[String]])),
+            SqlField("features", ColumnRef("movies", "features", Meta[List[Feature]])),
             // SqlField("rating", ColumnRef("movies", "rating")),
             CursorAttribute("isLong", isLong, List("duration"))
           )
       ),
-      SqlLeafMapping[UUID](UUIDType, uuid),
-      SqlLeafMapping[LocalTime](TimeType, time),
-      SqlLeafMapping[LocalDate](DateType, date),
-      SqlLeafMapping[OffsetDateTime](DateTimeType, timestamptz),
-      SqlLeafMapping[Duration](IntervalType, int8.imap(Duration.ofMillis)(_.toMillis)),
-      SqlLeafMapping[Genre](GenreType, Genre.codec),
+      SqlLeafMapping[UUID](UUIDType, Meta[UUID]),
+      SqlLeafMapping[LocalTime](TimeType, Meta[LocalTime]),
+      SqlLeafMapping[LocalDate](DateType, Meta[LocalDate]),
+      SqlLeafMapping[ZonedDateTime](DateTimeType, Meta[ZonedDateTime]),
+      SqlLeafMapping[Duration](IntervalType, Meta[Duration]),
+      SqlLeafMapping[Genre](GenreType, Meta[Genre]),
       LeafMapping[Feature](FeatureType),
-      // SqlLeafMapping[List[Feature]](ListType(FeatureType))
+      SqlLeafMapping(ListType(FeatureType), Meta[List[Feature]])
     )
 
-  def nextEnding(c: Cursor): Result[OffsetDateTime] =
+  def nextEnding(c: Cursor): Result[ZonedDateTime] =
     for {
-      nextShowing <- c.fieldAs[OffsetDateTime]("nextShowing")
+      nextShowing <- c.fieldAs[ZonedDateTime]("nextShowing")
       duration    <- c.fieldAs[Duration]("duration")
     } yield nextShowing.plus(duration)
 
@@ -225,8 +234,8 @@ trait MovieMapping[F[_]] extends SkunkMapping[F] {
   }
 
   object DateTimeValue {
-    def unapply(s: StringValue): Option[OffsetDateTime] =
-      Try(OffsetDateTime.parse(s.value)).toOption
+    def unapply(s: StringValue): Option[ZonedDateTime] =
+      Try(ZonedDateTime.parse(s.value)).toOption
   }
 
   object IntervalValue {
@@ -285,9 +294,10 @@ trait MovieMapping[F[_]] extends SkunkMapping[F] {
   ))
 }
 
-object MovieMapping extends SkunkMappingCompanion {
+object MovieMapping extends DoobieMappingCompanion {
 
-  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
-    new SkunkMapping[F](pool, monitor) with MovieMapping[F]
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
+    new DoobieMapping[F](transactor, monitor) with MovieMapping[F]
 
 }
+
