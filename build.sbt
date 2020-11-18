@@ -10,6 +10,7 @@ val jawnVersion                 = "1.0.0"
 val kindProjectorVersion        = "0.10.3"
 val logbackVersion              = "1.2.3"
 val log4catsVersion             = "1.1.1"
+val skunkVersion                = "0.0.21"
 val shapelessVersion            = "2.3.3"
 val testContainersVersion       = "0.37.0"
 
@@ -35,6 +36,9 @@ lazy val modules: List[ProjectReference] = List(
   core,
   circe,
   doobie,
+  sql,
+  doobie_2,
+  skunk,
   generic,
   demo
 )
@@ -104,6 +108,55 @@ lazy val doobie = project
       "ch.qos.logback"    %  "logback-classic"        % logbackVersion % "test",
       "com.dimafeng"      %% "testcontainers-scala-scalatest"  % testContainersVersion % "test",
       "com.dimafeng"      %% "testcontainers-scala-postgresql" % testContainersVersion % "test",
+    )
+  )
+
+lazy val sql = project
+  .in(file("modules/sql"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(circe)
+  .settings(commonSettings)
+  .settings(
+    name := "gsp-graphql-sql",
+    libraryDependencies ++= Seq(
+      "org.typelevel"     %% "cats-effect"            % catsEffectVersion,
+      "io.chrisdavenport" %% "log4cats-slf4j"         % log4catsVersion,
+      "ch.qos.logback"    %  "logback-classic"        % logbackVersion % "test",
+      "com.dimafeng"      %% "testcontainers-scala-scalatest"  % testContainersVersion % "test",
+      "com.dimafeng"      %% "testcontainers-scala-postgresql" % testContainersVersion % "test",
+    )
+  )
+
+lazy val doobie_2 = project
+  .in(file("modules/doobie-2"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(sql % "test->test;compile->compile", circe)
+  .settings(commonSettings)
+  .settings(
+    name := "gsp-graphql-doobie-2",
+    fork in Test := true,
+    parallelExecution in Test := false,
+    libraryDependencies ++= Seq(
+      "org.tpolecat"      %% "doobie-core"            % doobieVersion,
+      "org.tpolecat"      %% "doobie-postgres-circe"        % doobieVersion,
+    )
+  )
+
+lazy val skunk = project
+  .in(file("modules/skunk"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(sql % "test->test;compile->compile", circe)
+  .settings(commonSettings)
+  .settings(
+    name := "gsp-graphql-skunk",
+    fork in Test := true,
+    parallelExecution in Test := false,
+    libraryDependencies ++= Seq(
+      "org.tpolecat"      %% "skunk-core"            % "0.0.21",
+      "org.tpolecat"      %% "skunk-circe"        % "0.0.21",
     )
   )
 
