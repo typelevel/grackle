@@ -318,34 +318,53 @@ object Predicate {
     def apply(c: Cursor): Result[T] = v.rightIor
   }
 
+  case class Project(path: List[String], pred: Predicate) extends Predicate {
+    def apply(c: Cursor): Result[Boolean] = {
+      c.listPath(path).flatMap(cs => Cursor.flatten(cs).flatMap(_.traverse(pred(_)).map(bs => bs.exists(identity))))
+    }
+  }
+
   sealed trait Path {
     def path: List[String]
+    def extend(prefix: List[String]): Path
   }
 
   case class FieldPath[T](val path: List[String]) extends Term[T] with Path {
     def apply(c: Cursor): Result[T] =
       c.listPath(path) match {
         case Ior.Right(List(ScalarFocus(a: T @unchecked))) => a.rightIor
-        case _ => mkErrorResult(s"Expected exactly one element for path $path")
+        case other => mkErrorResult(s"Expected exactly one element for path $path found $other")
       }
+
+    def extend(prefix: List[String]): Path =
+      FieldPath(prefix ++ path)
   }
 
   case class AttrPath[T](val path: List[String]) extends Term[T] with Path {
     def apply(c: Cursor): Result[T] =
       c.attrListPath(path) match {
         case Ior.Right(List(a: T @unchecked)) => a.rightIor
-        case _ => mkErrorResult(s"Expected exactly one element for path $path")
+        case other => mkErrorResult(s"Expected exactly one element for path $path found $other")
       }
+
+    def extend(prefix: List[String]): Path =
+      AttrPath(prefix ++ path)
   }
 
   case class CollectFieldPath[T](val path: List[String]) extends Term[List[T]] with Path {
     def apply(c: Cursor): Result[List[T]] =
       c.flatListPath(path).map(_.map { case ScalarFocus(f: T @unchecked) => f })
+
+    def extend(prefix: List[String]): Path =
+      CollectFieldPath(prefix ++ path)
   }
 
   case class CollectAttrPath[T](val path: List[String]) extends Term[List[T]] with Path {
     def apply(c: Cursor): Result[List[T]] =
       c.attrListPath(path).map(_.asInstanceOf[List[T]])
+
+    def extend(prefix: List[String]): Path =
+      CollectAttrPath(prefix ++ path)
   }
 
   case class And(x: Predicate, y: Predicate) extends Predicate {

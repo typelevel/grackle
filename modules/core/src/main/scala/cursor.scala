@@ -271,3 +271,13 @@ trait Cursor {
       None
   }
 }
+
+object Cursor {
+  def flatten(c: Cursor): Result[List[Cursor]] =
+    if(c.isList) c.asList.flatMap(flatten)
+    else if(c.isNullable) c.asNullable.flatMap(oc => flatten(oc.toList))
+    else List(c).rightIor
+
+  def flatten(cs: List[Cursor]): Result[List[Cursor]] =
+    cs.flatTraverse(flatten)
+}
