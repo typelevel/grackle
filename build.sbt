@@ -36,6 +36,7 @@ lazy val modules: List[ProjectReference] = List(
   core,
   circe,
   doobie,
+  doobie_2,
   generic,
   demo
 )
