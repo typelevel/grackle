@@ -3,13 +3,13 @@
 
 package interfaces
 
+import _root_.doobie.util.meta.Meta
+import _root_.doobie.util.transactor.Transactor
 import cats.effect.Sync
 import cats.kernel.Eq
-import doobie.Transactor
-import doobie.util.meta.Meta
+import edu.gemini.grackle._
+import edu.gemini.grackle.doobie._
 import io.circe.Encoder
-
-import edu.gemini.grackle._, doobie._
 
 trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
   val schema =
@@ -21,31 +21,31 @@ trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
         interface Entity {
           id: ID!
           entityType: EntityType!
-          title: String!
-          synopses: Synopses!
+          title: String
+          synopses: Synopses
         }
         type Film implements Entity {
           id: ID!
           entityType: EntityType!
-          title: String!
-          synopses: Synopses!
+          title: String
+          synopses: Synopses
           rating: String
         }
         type Series implements Entity {
           id: ID!
           entityType: EntityType!
-          title: String!
-          numberOfEpisodes: Int!
+          title: String
+          numberOfEpisodes: Int
           episodes: [Episode!]!
         }
         type Episode {
           id: ID!
-          title: String!
-          synopses: Synopses!
+          title: String
+          synopses: Synopses
         }
         type Synopses {
-          short: String!
-          long: String!
+          short: String
+          long: String
         }
         enum EntityType {
           FILM
@@ -62,53 +62,49 @@ trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
   val EpisodeType = schema.ref("Episode")
   val SynopsesType = schema.ref("Synopses")
 
-  import DoobieFieldMapping._
-
   val typeMappings =
     List(
       ObjectMapping(
         tpe = QueryType,
         fieldMappings =
           List(
-            DoobieRoot("entities"),
+            SqlRoot("entities"),
           )
       ),
-      DoobieInterfaceMapping(
+      SqlInterfaceMapping(
         tpe = EType,
         discriminator = entityTypeDiscriminator,
         fieldMappings =
           List(
-            DoobieField("id", ColumnRef("entities", "id"), key = true),
-            DoobieField("entityType", ColumnRef("entities", "entity_type"), discriminator = true),
-            DoobieField("title", ColumnRef("entities", "title"))
+            SqlField("id", ColumnRef("entities", "id", Meta[String]), key = true),
+            SqlField("entityType", ColumnRef("entities", "entity_type", Meta[EntityType]), discriminator = true),
+            SqlField("title", ColumnRef("entities", "title", Meta[String]))
           )
       ),
       ObjectMapping(
         tpe = FilmType,
         fieldMappings =
           List(
-            DoobieField("rating", ColumnRef("entities", "film_rating")),
-            DoobieObject("synopses", Subobject(Nil))
+            SqlField("rating", ColumnRef("entities", "film_rating", Meta[String])),
+            SqlObject("synopses")
           )
       ),
       ObjectMapping(
         tpe = SeriesType,
         fieldMappings =
           List(
-            DoobieField("numberOfEpisodes", ColumnRef("entities", "series_number_of_episodes")),
-            DoobieObject("episodes", Subobject(
-              List(Join(ColumnRef("entities", "id"), ColumnRef("episodes", "series_id")))
-            ))
+            SqlField("numberOfEpisodes", ColumnRef("entities", "series_number_of_episodes", Meta[Int])),
+            SqlObject("episodes", Join(ColumnRef("entities", "id", Meta[String]), ColumnRef("episodes", "series_id", Meta[String]))),
           )
       ),
       ObjectMapping(
         tpe = EpisodeType,
         fieldMappings =
           List(
-            DoobieField("id", ColumnRef("episodes", "id"), key = true),
-            DoobieField("title", ColumnRef("episodes", "title")),
-            DoobieAttribute[String]("episodeId", ColumnRef("episodes", "series_id")),
-            DoobieObject("synopses", Subobject(Nil))
+            SqlField("id", ColumnRef("episodes", "id", Meta[String]), key = true),
+            SqlField("title", ColumnRef("episodes", "title", Meta[String])),
+            SqlAttribute("episodeId", ColumnRef("episodes", "series_id", Meta[String])),
+            SqlObject("synopses"),
           )
       ),
       PrefixedMapping(
@@ -120,8 +116,8 @@ trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    DoobieField("short", ColumnRef("entities", "synopsis_short")),
-                    DoobieField("long", ColumnRef("entities", "synopsis_long"))
+                    SqlField("short", ColumnRef("entities", "synopsis_short", Meta[String])),
+                    SqlField("long", ColumnRef("entities", "synopsis_long", Meta[String]))
                   )
               ),
             List("entities", "episodes", "synopses") ->
@@ -129,13 +125,13 @@ trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    DoobieField("short", ColumnRef("episodes", "synopsis_short")),
-                    DoobieField("long", ColumnRef("episoes", "synopsis_long"))
+                    SqlField("short", ColumnRef("episodes", "synopsis_short", Meta[String])),
+                    SqlField("long", ColumnRef("episoes", "synopsis_long", Meta[String]))
                   )
               )
           )
       ),
-      DoobieLeafMapping[EntityType](EntityTypeType)
+      LeafMapping[EntityType](EntityTypeType)
     )
 
   def entityTypeDiscriminator(c: Cursor): Result[Type] = {
@@ -149,9 +145,13 @@ trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
 }
 
 object InterfacesMapping extends DoobieMappingCompanion {
-  def mkMapping[F[_] : Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): InterfacesMapping[F] =
-    new DoobieMapping(transactor, monitor) with InterfacesMapping[F]
+
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
+    new DoobieMapping[F](transactor, monitor) with InterfacesMapping[F]
+
 }
+
+
 
 sealed trait EntityType extends Product with Serializable
 object EntityType {
@@ -181,4 +181,5 @@ object EntityType {
       case Film  => 1
       case Series => 2
     }
-}
+
+ }

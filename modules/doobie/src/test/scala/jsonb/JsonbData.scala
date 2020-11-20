@@ -3,12 +3,20 @@
 
 package jsonb
 
+import _root_.doobie.Get
+import _root_.doobie.Meta
+import _root_.doobie.Put
+import _root_.doobie.postgres.circe.jsonb.implicits._
+import _root_.doobie.util.transactor.Transactor
 import cats.effect.Sync
 import cats.implicits._
-import doobie.Transactor
+import edu.gemini.grackle._
+import edu.gemini.grackle.doobie._
+import io.circe.Json
 
-import edu.gemini.grackle._, doobie._
-import Query._, Predicate._, Value._
+import Query._
+import Predicate._
+import Value._
 import QueryCompiler._
 
 trait JsonbMapping[F[_]] extends DoobieMapping[F] {
@@ -58,24 +66,22 @@ trait JsonbMapping[F[_]] extends DoobieMapping[F] {
   val RowType = schema.ref("Row")
   val RecordType = schema.ref("Record")
 
-  import DoobieFieldMapping._
-
   val typeMappings =
     List(
       ObjectMapping(
         tpe = QueryType,
         fieldMappings =
           List(
-            DoobieRoot("record"),
-            DoobieRoot("records")
+            SqlRoot("record"),
+            SqlRoot("records")
           )
       ),
       ObjectMapping(
         tpe = RowType,
         fieldMappings =
           List(
-            DoobieField("id", ColumnRef("records", "id"), key = true),
-            DoobieJson("record", ColumnRef("records", "record"))
+            SqlField("id", ColumnRef("records", "id", Meta[Int]), key = true),
+            SqlJson("record", ColumnRef("records", "record", new Meta(Get[Json], Put[Json])))
           )
       ),
     )
@@ -89,6 +95,8 @@ trait JsonbMapping[F[_]] extends DoobieMapping[F] {
 }
 
 object JsonbMapping extends DoobieMappingCompanion {
-  def mkMapping[F[_] : Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): JsonbMapping[F] =
-    new DoobieMapping(transactor, monitor) with JsonbMapping[F]
+
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
+    new DoobieMapping[F](transactor, monitor) with JsonbMapping[F]
+
 }

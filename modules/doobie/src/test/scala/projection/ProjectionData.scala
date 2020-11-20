@@ -6,6 +6,7 @@ package projection
 import cats.effect.Sync
 import cats.implicits._
 import doobie.Transactor
+import doobie.util.meta.Meta
 
 import edu.gemini.grackle._, doobie._
 import edu.gemini.grackle.Predicate.{Const, Eql, FieldPath, Project}
@@ -46,48 +47,45 @@ trait ProjectionMapping[F[_]] extends DoobieMapping[F] {
   val Level1Type = schema.ref("Level1")
   val Level2Type = schema.ref("Level2")
 
-
-  import DoobieFieldMapping._
-
   val typeMappings =
     List(
       ObjectMapping(
         tpe = QueryType,
         fieldMappings =
           List(
-            DoobieRoot("level0"),
-            DoobieRoot("level1"),
-            DoobieRoot("level2")
+            SqlRoot("level0"),
+            SqlRoot("level1"),
+            SqlRoot("level2")
           )
       ),
       ObjectMapping(
         tpe = Level0Type,
         fieldMappings =
           List(
-            DoobieField("id", ColumnRef("level0", "id"), key = true),
-            DoobieObject("level1", Subobject(
-              List(Join(ColumnRef("level0", "id"), ColumnRef("level1", "level0_id")))
-            ))
+            SqlField("id", ColumnRef("level0", "id", Meta[String]), key = true),
+            SqlObject("level1",
+              Join(ColumnRef("level0", "id", Meta[String]), ColumnRef("level1", "level0_id", Meta[String]))
+            )
           )
       ),
       ObjectMapping(
         tpe = Level1Type,
         fieldMappings =
           List(
-            DoobieField("id", ColumnRef("level1", "id"), key = true),
-            DoobieAttribute[String]("level0_id", ColumnRef("level1", "level0_id")),
-            DoobieObject("level2", Subobject(
-              List(Join(ColumnRef("level1", "id"), ColumnRef("level2", "level1_id")))
-            ))
+            SqlField("id", ColumnRef("level1", "id", Meta[String]), key = true),
+            SqlAttribute("level0_id", ColumnRef("level1", "level0_id", Meta[String])),
+            SqlObject("level2",
+              Join(ColumnRef("level1", "id", Meta[String]), ColumnRef("level2", "level1_id", Meta[String]))
+            )
           )
       ),
       ObjectMapping(
         tpe = Level2Type,
         fieldMappings =
           List(
-            DoobieField("id", ColumnRef("level2", "id"), key = true),
-            DoobieField("attr", ColumnRef("level2", "attr")),
-            DoobieAttribute[String]("level1_id", ColumnRef("level2", "level1_id"))
+            SqlField("id", ColumnRef("level2", "id", Meta[String]), key = true),
+            SqlField("attr", ColumnRef("level2", "attr", Meta[Boolean])),
+            SqlAttribute("level1_id", ColumnRef("level2", "level1_id", Meta[String]))
           )
       )
     )
