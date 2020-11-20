@@ -5,14 +5,61 @@ package world
 
 import cats.effect.Sync
 import cats.implicits._
-import doobie.Transactor
 
-import edu.gemini.grackle._, doobie._
+import edu.gemini.grackle._
+import edu.gemini.grackle.sql.Like
 import Query._, Predicate._, Value._
 import QueryCompiler._
-import DoobiePredicate._
+import edu.gemini.grackle.doobie.DoobieMapping
+import _root_.doobie.util.meta.Meta
+import edu.gemini.grackle.doobie.DoobieMappingCompanion
+import edu.gemini.grackle.doobie.DoobieMonitor
+import _root_.doobie.util.transactor.Transactor
 
-trait WorldMapping[F[_]] extends DoobieMapping[F] {
+trait WorldPostgresSchema[F[_]] extends DoobieMapping[F] {
+
+  class TableDef(name: String) {
+    def col(colName: String, codec: Codec[_]): ColumnRef =
+      ColumnRef(name, colName, codec)
+  }
+
+  object country extends TableDef("country") {
+    val code           = col("code", Meta[String])
+    val name           = col("name", Meta[String])
+    val continent      = col("continent", Meta[String])
+    val region         = col("region", Meta[String])
+    val surfacearea    = col("surfacearea", Meta[String])
+    val indepyear      = col("indepyear", Meta[Int])
+    val population     = col("population", Meta[Int])
+    val lifeexpectancy = col("lifeexpectancy", Meta[String])
+    val gnp            = col("gnp", Meta[String])
+    val gnpold         = col("gnpold", Meta[String])
+    val localname      = col("localname", Meta[String])
+    val governmentform = col("governmentform", Meta[String])
+    val headofstate    = col("headofstate", Meta[String])
+    val capitalId      = col("capitalId", Meta[String])
+    val code2          = col("code2", Meta[String])
+  }
+
+  object city extends TableDef("city") {
+    val id          = col("id", Meta[Int])
+    val countrycode = col("countrycode", Meta[String])
+    val name        = col("name", Meta[String])
+    val district    = col("district", Meta[String])
+    val population  = col("population", Meta[Int])
+  }
+
+  object countrylanguage extends TableDef("countrylanguage") {
+    val countrycode = col("countrycode", Meta[String])
+    val language = col("language", Meta[String])
+    val isOfficial = col("isOfficial", Meta[String])
+    val percentage = col("percentage", Meta[String])
+  }
+
+}
+
+trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
+
   val schema =
     Schema(
       """
@@ -56,84 +103,72 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
       """
     ).right.get
 
-  val QueryType = schema.ref("Query")
-  val CountryType = schema.ref("Country")
-  val CityType = schema.ref("City")
+  val QueryType    = schema.ref("Query")
+  val CountryType  = schema.ref("Country")
+  val CityType     = schema.ref("City")
   val LanguageType = schema.ref("Language")
-
-  import DoobieFieldMapping._
 
   val typeMappings =
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            DoobieRoot("cities"),
-            DoobieRoot("country"),
-            DoobieRoot("countries"),
-            DoobieRoot("language"),
-            DoobieRoot("search")
-          )
+        fieldMappings = List(
+          SqlRoot("cities"),
+          SqlRoot("country"),
+          SqlRoot("countries"),
+          SqlRoot("language"),
+          SqlRoot("search")
+        )
       ),
       ObjectMapping(
         tpe = CountryType,
-        fieldMappings =
-          List(
-            DoobieAttribute[String]("code", ColumnRef("country", "code"), key = true),
-            DoobieField("name", ColumnRef("country", "name")),
-            DoobieField("continent", ColumnRef("country", "continent")),
-            DoobieField("region", ColumnRef("country", "region")),
-            DoobieField("surfacearea", ColumnRef("country", "surfacearea")),
-            DoobieField("indepyear", ColumnRef("country", "indepyear")),
-            DoobieField("population", ColumnRef("country", "population")),
-            DoobieField("lifeexpectancy", ColumnRef("country", "lifeexpectancy")),
-            DoobieField("gnp", ColumnRef("country", "gnp")),
-            DoobieField("gnpold", ColumnRef("country", "gnpold")),
-            DoobieField("localname", ColumnRef("country", "localname")),
-            DoobieField("governmentform", ColumnRef("country", "governmentform")),
-            DoobieField("headofstate", ColumnRef("country", "headofstate")),
-            DoobieField("capitalId", ColumnRef("country", "capitalId")),
-            DoobieField("code2", ColumnRef("country", "code2")),
-            DoobieObject("cities", Subobject(
-              List(Join(ColumnRef("country", "code"), ColumnRef("city", "countrycode")))
-            )),
-            DoobieObject("languages", Subobject(
-              List(Join(ColumnRef("country", "code"), ColumnRef("countryLanguage", "countrycode")))
-            ))
-          ),
+        fieldMappings = List(
+          SqlAttribute("code",       country.code, key = true),
+          SqlField("name",           country.name),
+          SqlField("continent",      country.continent),
+          SqlField("region",         country.region),
+          SqlField("surfacearea",    country.surfacearea),
+          SqlField("indepyear",      country.indepyear),
+          SqlField("population",     country.population),
+          SqlField("lifeexpectancy", country.lifeexpectancy),
+          SqlField("gnp",            country.gnp),
+          SqlField("gnpold",         country.gnpold),
+          SqlField("localname",      country.localname),
+          SqlField("governmentform", country.governmentform),
+          SqlField("headofstate",    country.headofstate),
+          SqlField("capitalId",      country.capitalId),
+          SqlField("code2",          country.code2),
+          SqlObject("cities",        Join(country.code, city.countrycode)),
+          SqlObject("languages",     Join(country.code, countrylanguage.countrycode))
+        ),
       ),
       ObjectMapping(
         tpe = CityType,
-        fieldMappings =
-          List(
-            DoobieAttribute[Int]("id", ColumnRef("city", "id"), key = true),
-            DoobieAttribute[String]("countrycode", ColumnRef("city", "countrycode")),
-            DoobieField("name", ColumnRef("city", "name")),
-            DoobieObject("country", Subobject(
-              List(Join(ColumnRef("city", "countrycode"), ColumnRef("country", "code")))
-            )),
-            DoobieField("district", ColumnRef("city", "district")),
-            DoobieField("population", ColumnRef("city", "population"))
-          )
+        fieldMappings = List(
+          SqlAttribute("id", city.id, key = true),
+          SqlAttribute("countrycode", city.countrycode),
+          SqlField("name", city.name),
+          SqlField("district", city.district),
+          SqlField("population", city.population),
+          SqlObject("country", Join(city.countrycode, country.code)),
+        )
       ),
       ObjectMapping(
         tpe = LanguageType,
-        fieldMappings =
-          List(
-            DoobieField("language", ColumnRef("countryLanguage", "language"), key = true),
-            DoobieField("isOfficial", ColumnRef("countryLanguage", "isOfficial")),
-            DoobieField("percentage", ColumnRef("countryLanguage", "percentage")),
-            DoobieAttribute[String]("countrycode", ColumnRef("countryLanguage", "countrycode")),
-            DoobieObject("countries", Subobject(
-              List(Join(ColumnRef("countryLanguage", "countrycode"), ColumnRef("country", "code")))
-            ))
-          )
+        fieldMappings = List(
+          SqlField("language", countrylanguage.language, key = true),
+          SqlField("isOfficial", countrylanguage.isOfficial),
+          SqlField("percentage", countrylanguage.percentage),
+          SqlAttribute("countrycode", countrylanguage.countrycode),
+          SqlObject("countries", Join(countrylanguage.countrycode, country.code))
+        )
       )
     )
 
   override val selectElaborator = new SelectElaborator(Map(
+
     QueryType -> {
+
       case Select("country", List(Binding("code", StringValue(code))), child) =>
         Select("country", Nil, Unique(Eql(AttrPath(List("code")), Const(code)), child)).rightIor
 
@@ -154,8 +189,10 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
 
       case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
         Select("cities", Nil, Filter(Like(FieldPath(List("name")), namePattern, true), child)).rightIor
+
       case Select("language", List(Binding("language", StringValue(language))), child) =>
         Select("language", Nil, Unique(Eql(FieldPath(List("language")), Const(language)), child)).rightIor
+
       case Select("search", List(Binding("minPopulation", IntValue(min)), Binding("indepSince", IntValue(year))), child) =>
         Select("search", Nil,
           Filter(
@@ -166,11 +203,14 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
             child
           )
         ).rightIor
+
     }
   ))
 }
 
 object WorldMapping extends DoobieMappingCompanion {
-  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): WorldMapping[F] =
-    new DoobieMapping(transactor, monitor) with WorldMapping[F]
+
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
+    new DoobieMapping[F](transactor, monitor) with WorldMapping[F]
+
 }

@@ -6,16 +6,11 @@ package utils
 import scala.concurrent.ExecutionContext
 
 import cats.effect.{ContextShift, IO}
-import cats.tests.CatsSuite
-import com.dimafeng.testcontainers.{ForAllTestContainer, PostgreSQLContainer}
 import doobie.Transactor
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
-import org.scalatest.funsuite.AnyFunSuite
-import org.testcontainers.containers.BindMode
+import grackle.test.SqlDatabaseSuite
 
-trait DatabaseSuite extends AnyFunSuite with CatsSuite with ForAllTestContainer {
-  override val container: PostgreSQLContainer = PostgreSQLContainer()
-  container.container.withClasspathResourceMapping("db", "/docker-entrypoint-initdb.d/", BindMode.READ_ONLY)
+trait DatabaseSuite extends SqlDatabaseSuite {
 
   implicit def contextShift: ContextShift[IO] =
     IO.contextShift(ExecutionContext.global)

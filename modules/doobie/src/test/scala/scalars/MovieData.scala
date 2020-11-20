@@ -3,24 +3,36 @@
 
 package scalars
 
-import java.time.{Duration, Instant, LocalDate, LocalTime, ZonedDateTime, ZoneOffset}
+
+import java.time.Duration
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import java.util.UUID
+
 import scala.util.Try
 
-import cats.{Eq, Order}
+import cats.Eq
+import cats.Order
 import cats.effect.Sync
 import cats.implicits._
 import doobie.Transactor
 import doobie.implicits.javatime.JavaLocalTimeMeta
-import doobie.implicits.legacy.localdate._
 import doobie.implicits.legacy.instant._
-import doobie.postgres.implicits.UuidType
+import doobie.implicits.legacy.localdate._
+import doobie.postgres.implicits._
 import doobie.util.meta.Meta
+import edu.gemini.grackle._
 import io.circe.Encoder
 
-import edu.gemini.grackle._, doobie._
-import Query._, Predicate._, Value._
+import doobie._
+import Query._
+import Predicate._
+import Value._
 import QueryCompiler._
+import scala.reflect.ClassTag
 
 object MovieData {
   sealed trait Genre extends Product with Serializable
@@ -92,6 +104,9 @@ object MovieData {
 
   implicit val durationOrder: Order[Duration] =
     Order.fromComparable[Duration]
+
+  implicit def listMeta[T: ClassTag](implicit m: Meta[Array[T]]): Meta[List[T]] =
+      m.imap(_.toList)(_.toArray)
 }
 
 trait MovieMapping[F[_]] extends DoobieMapping[F] {
@@ -149,49 +164,47 @@ trait MovieMapping[F[_]] extends DoobieMapping[F] {
   val FeatureType = schema.ref("Feature")
   val RatingType = schema.ref("Rating")
 
-  import DoobieFieldMapping._
-
   val typeMappings =
     List(
       ObjectMapping(
         tpe = QueryType,
         fieldMappings =
           List(
-            DoobieRoot("movieById"),
-            DoobieRoot("moviesByGenre"),
-            DoobieRoot("moviesReleasedBetween"),
-            DoobieRoot("moviesLongerThan"),
-            DoobieRoot("moviesShownLaterThan"),
-            DoobieRoot("moviesShownBetween"),
-            DoobieRoot("longMovies")
+            SqlRoot("movieById"),
+            SqlRoot("moviesByGenre"),
+            SqlRoot("moviesReleasedBetween"),
+            SqlRoot("moviesLongerThan"),
+            SqlRoot("moviesShownLaterThan"),
+            SqlRoot("moviesShownBetween"),
+            SqlRoot("longMovies")
           )
       ),
       ObjectMapping(
         tpe = MovieType,
         fieldMappings =
           List(
-            DoobieField("id", ColumnRef("movies", "id"), key = true),
-            DoobieField("title", ColumnRef("movies", "title")),
-            DoobieField("genre", ColumnRef("movies", "genre")),
-            DoobieField("releaseDate", ColumnRef("movies", "releasedate")),
-            DoobieField("showTime", ColumnRef("movies", "showtime")),
-            DoobieField("nextShowing", ColumnRef("movies", "nextshowing")),
+            SqlField("id", ColumnRef("movies", "id", Meta[UUID]), key = true),
+            SqlField("title", ColumnRef("movies", "title", Meta[String])),
+            SqlField("genre", ColumnRef("movies", "genre", Meta[Genre])),
+            SqlField("releaseDate", ColumnRef("movies", "releasedate", Meta[LocalDate])),
+            SqlField("showTime", ColumnRef("movies", "showtime", Meta[LocalTime])),
+            SqlField("nextShowing", ColumnRef("movies", "nextshowing", Meta[ZonedDateTime])),
             CursorField("nextEnding", nextEnding, List("nextShowing", "duration")),
-            DoobieField("duration", ColumnRef("movies", "duration")),
-            DoobieField("categories", ColumnRef("movies", "categories")),
-            DoobieField("features", ColumnRef("movies", "features")),
-            DoobieField("rating", ColumnRef("movies", "rating")),
+            SqlField("duration", ColumnRef("movies", "duration", Meta[Duration])),
+            SqlField("categories", ColumnRef("movies", "categories", Meta[List[String]])),
+            SqlField("features", ColumnRef("movies", "features", Meta[List[Feature]])),
+            // SqlField("rating", ColumnRef("movies", "rating")),
             CursorAttribute("isLong", isLong, List("duration"))
           )
       ),
-      DoobieLeafMapping[UUID](UUIDType),
-      DoobieLeafMapping[LocalTime](TimeType),
-      DoobieLeafMapping[LocalDate](DateType),
-      DoobieLeafMapping[ZonedDateTime](DateTimeType),
-      DoobieLeafMapping[Duration](IntervalType),
-      DoobieLeafMapping[Genre](GenreType),
+      LeafMapping[UUID](UUIDType),
+      LeafMapping[LocalTime](TimeType),
+      LeafMapping[LocalDate](DateType),
+      LeafMapping[ZonedDateTime](DateTimeType),
+      LeafMapping[Duration](IntervalType),
+      LeafMapping[Genre](GenreType),
       LeafMapping[Feature](FeatureType),
-      DoobieLeafMapping[List[Feature]](ListType(FeatureType))
+      LeafMapping[List[Feature]](ListType(FeatureType))
     )
 
   def nextEnding(c: Cursor): Result[ZonedDateTime] =
@@ -282,6 +295,9 @@ trait MovieMapping[F[_]] extends DoobieMapping[F] {
 }
 
 object MovieMapping extends DoobieMappingCompanion {
-  def mkMapping[F[_] : Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): MovieMapping[F] =
-    new DoobieMapping(transactor, monitor) with MovieMapping[F]
+
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
+    new DoobieMapping[F](transactor, monitor) with MovieMapping[F]
+
 }
+

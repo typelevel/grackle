@@ -4,9 +4,10 @@
 package embedding
 
 import cats.effect.Sync
-import doobie.Transactor
-
-import edu.gemini.grackle._, doobie._
+import edu.gemini.grackle._
+import edu.gemini.grackle.doobie._
+import _root_.doobie.util.meta.Meta
+import _root_.doobie.util.transactor.Transactor
 
 trait EmbeddingMapping[F[_]] extends DoobieMapping[F] {
   val schema =
@@ -31,8 +32,8 @@ trait EmbeddingMapping[F[_]] extends DoobieMapping[F] {
           synopses: Synopses!
         }
         type Synopses {
-          short: String!
-          long: String!
+          short: String
+          long: String
         }
       """
     ).right.get
@@ -43,42 +44,40 @@ trait EmbeddingMapping[F[_]] extends DoobieMapping[F] {
   val EpisodeType = schema.ref("Episode")
   val SynopsesType = schema.ref("Synopses")
 
-  import DoobieFieldMapping._
-
   val typeMappings =
     List(
       ObjectMapping(
         tpe = QueryType,
         fieldMappings =
           List(
-            DoobieRoot("films"),
-            DoobieRoot("series")
+            SqlRoot("films"),
+            SqlRoot("series")
           )
       ),
       ObjectMapping(
         tpe = FilmType,
         fieldMappings =
           List(
-            DoobieField("title", ColumnRef("films", "title"), key = true),
-            DoobieObject("synopses", Subobject(Nil))
+            SqlField("title", ColumnRef("films", "title", Meta[String]), key = true),
+            SqlObject("synopses")
           )
       ),
       ObjectMapping(
         tpe = SeriesType,
         fieldMappings =
           List(
-            DoobieField("title", ColumnRef("series", "title"), key = true),
-            DoobieObject("synopses", Subobject(Nil)),
-            DoobieObject("episodes", Subobject(List(Join(ColumnRef("series", "title"), ColumnRef("episodes2", "series_title")))))
+            SqlField("title", ColumnRef("series", "title", Meta[String]), key = true),
+            SqlObject("synopses"),
+            SqlObject("episodes", Join(ColumnRef("series", "title", Meta[String]), ColumnRef("episodes2", "series_title", Meta[String]))),
           )
       ),
       ObjectMapping(
         tpe = EpisodeType,
         fieldMappings =
           List(
-            DoobieField("title", ColumnRef("episodes2", "title"), key = true),
-            DoobieObject("synopses", Subobject(Nil)),
-            DoobieAttribute[String]("series_title", ColumnRef("episodes2", "series_title"))
+            SqlField("title", ColumnRef("episodes2", "title", Meta[String]), key = true),
+            SqlObject("synopses"),
+            SqlAttribute("series_title", ColumnRef("episodes2", "series_title", Meta[String]))
           )
       ),
       PrefixedMapping(
@@ -90,8 +89,8 @@ trait EmbeddingMapping[F[_]] extends DoobieMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    DoobieField("short", ColumnRef("films", "synopsis_short")),
-                    DoobieField("long", ColumnRef("films", "synopsis_long"))
+                    SqlField("short", ColumnRef("films", "synopsis_short", Meta[String])),
+                    SqlField("long", ColumnRef("films", "synopsis_long", Meta[String]))
                   )
               ),
             List("series", "synopses") ->
@@ -99,8 +98,8 @@ trait EmbeddingMapping[F[_]] extends DoobieMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    DoobieField("short", ColumnRef("series", "synopsis_short")),
-                    DoobieField("long", ColumnRef("series", "synopsis_long"))
+                    SqlField("short", ColumnRef("series", "synopsis_short", Meta[String])),
+                    SqlField("long", ColumnRef("series", "synopsis_long", Meta[String]))
                   )
               ),
             List("episodes", "synopses") ->
@@ -108,8 +107,8 @@ trait EmbeddingMapping[F[_]] extends DoobieMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    DoobieField("short", ColumnRef("episodes2", "synopsis_short")),
-                    DoobieField("long", ColumnRef("episodes2", "synopsis_long"))
+                    SqlField("short", ColumnRef("episodes2", "synopsis_short", Meta[String])),
+                    SqlField("long", ColumnRef("episodes2", "synopsis_long", Meta[String]))
                   )
               )
           )
@@ -118,6 +117,8 @@ trait EmbeddingMapping[F[_]] extends DoobieMapping[F] {
 }
 
 object EmbeddingMapping extends DoobieMappingCompanion {
-  def mkMapping[F[_] : Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): EmbeddingMapping[F] =
-    new DoobieMapping(transactor, monitor) with EmbeddingMapping[F]
+
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
+    new DoobieMapping[F](transactor, monitor) with EmbeddingMapping[F]
+
 }

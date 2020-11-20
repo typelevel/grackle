@@ -3,17 +3,21 @@
 
 package composed
 
+import _root_.doobie.util.meta.Meta
+import _root_.doobie.util.transactor.Transactor
 import cats.Monad
 import cats.data.Ior
 import cats.effect.Sync
 import cats.implicits._
-import doobie.Transactor
+import edu.gemini.grackle._
+import edu.gemini.grackle.doobie._
+import edu.gemini.grackle.sql.Like
 
-import edu.gemini.grackle._, doobie._
-import Query._, Predicate._, Value._
+import Query._
+import Predicate._
+import Value._
 import QueryCompiler._
 import QueryInterpreter.mkErrorResult
-import DoobiePredicate._
 
 /* Currency component */
 
@@ -80,7 +84,6 @@ object CurrencyMapping {
 /* World component */
 
 trait WorldMapping[F[_]] extends DoobieMapping[F] {
-  import DoobieFieldMapping._
 
   val schema =
     Schema(
@@ -134,67 +137,65 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
         tpe = QueryType,
         fieldMappings =
           List(
-            DoobieRoot("cities"),
-            DoobieRoot("country"),
-            DoobieRoot("countries")
+            SqlRoot("cities"),
+            SqlRoot("country"),
+            SqlRoot("countries")
           )
       ),
       ObjectMapping(
         tpe = CountryType,
         fieldMappings =
           List(
-            DoobieAttribute[String]("code", ColumnRef("country", "code"), key = true),
-            DoobieField("name", ColumnRef("country", "name")),
-            DoobieField("continent", ColumnRef("country", "continent")),
-            DoobieField("region", ColumnRef("country", "region")),
-            DoobieField("surfacearea", ColumnRef("country", "surfacearea")),
-            DoobieField("indepyear", ColumnRef("country", "indepyear")),
-            DoobieField("population", ColumnRef("country", "population")),
-            DoobieField("lifeexpectancy", ColumnRef("country", "lifeexpectancy")),
-            DoobieField("gnp", ColumnRef("country", "gnp")),
-            DoobieField("gnpold", ColumnRef("country", "gnpold")),
-            DoobieField("localname", ColumnRef("country", "localname")),
-            DoobieField("governmentform", ColumnRef("country", "governmentform")),
-            DoobieField("headofstate", ColumnRef("country", "headofstate")),
-            DoobieField("capitalId", ColumnRef("country", "capitalId")),
-            DoobieField("code2", ColumnRef("country", "code2")),
-            DoobieObject("cities", Subobject(
-              List(Join(ColumnRef("country", "code"), ColumnRef("city", "countrycode"))))),
-            DoobieObject("languages", Subobject(
-              List(Join(ColumnRef("country", "code"), ColumnRef("countryLanguage", "countrycode")))))
+            SqlAttribute("code", ColumnRef("country", "code", Meta[String]), key = true),
+            SqlField("name", ColumnRef("country", "name", Meta[String])),
+            SqlField("continent", ColumnRef("country", "continent", Meta[String])),
+            SqlField("region", ColumnRef("country", "region", Meta[String])),
+            SqlField("surfacearea", ColumnRef("country", "surfacearea", Meta[Float])),
+            SqlField("indepyear", ColumnRef("country", "indepyear", Meta[Short])),
+            SqlField("population", ColumnRef("country", "population", Meta[Int])),
+            SqlField("lifeexpectancy", ColumnRef("country", "lifeexpectancy", Meta[Float])),
+            SqlField("gnp", ColumnRef("country", "gnp", Meta[BigDecimal])),
+            SqlField("gnpold", ColumnRef("country", "gnpold", Meta[BigDecimal])),
+            SqlField("localname", ColumnRef("country", "localname", Meta[String])),
+            SqlField("governmentform", ColumnRef("country", "governmentform", Meta[String])),
+            SqlField("headofstate", ColumnRef("country", "headofstate", Meta[String])),
+            SqlField("capitalId", ColumnRef("country", "capitalId", Meta[Int])),
+            SqlField("code2", ColumnRef("country", "code2", Meta[String])),
+            SqlObject("cities", Join(ColumnRef("country", "code", Meta[String]), ColumnRef("city", "countrycode", Meta[String]))),
+            SqlObject("languages", Join(ColumnRef("country", "code", Meta[String]), ColumnRef("countryLanguage", "countrycode", Meta[String])))
           )
       ),
       ObjectMapping(
         tpe = CityType,
         fieldMappings =
           List(
-            DoobieAttribute[Int]("id", ColumnRef("city", "id"), key = true),
-            DoobieAttribute[String]("countrycode", ColumnRef("city", "countrycode")),
-            DoobieField("name", ColumnRef("city", "name")),
-            DoobieObject("country", Subobject(
-              List(Join(ColumnRef("city", "countrycode"), ColumnRef("country", "code"))))),
-            DoobieField("district", ColumnRef("city", "district")),
-            DoobieField("population", ColumnRef("city", "population"))
+            SqlAttribute("id", ColumnRef("city", "id", Meta[Int]), key = true),
+            SqlAttribute("countrycode", ColumnRef("city", "countrycode", Meta[String])),
+            SqlField("name", ColumnRef("city", "name", Meta[String])),
+            SqlObject("country", Join(ColumnRef("city", "countrycode", Meta[String]), ColumnRef("country", "code", Meta[String]))),
+            SqlField("district", ColumnRef("city", "district", Meta[String])),
+            SqlField("population", ColumnRef("city", "population", Meta[Int]))
           )
       ),
       ObjectMapping(
         tpe = LanguageType,
         fieldMappings =
           List(
-            DoobieField("language", ColumnRef("countryLanguage", "language"), key = true),
-            DoobieField("isOfficial", ColumnRef("countryLanguage", "isOfficial")),
-            DoobieField("percentage", ColumnRef("countryLanguage", "percentage")),
-            DoobieAttribute[String]("countrycode", ColumnRef("countryLanguage", "countrycode")),
-            DoobieObject("countries", Subobject(
-              List(Join(ColumnRef("countryLanguage", "countrycode"), ColumnRef("country", "code")))))
+            SqlField("language", ColumnRef("countryLanguage", "language", Meta[String]), key = true),
+            SqlField("isOfficial", ColumnRef("countryLanguage", "isOfficial", Meta[Boolean])),
+            SqlField("percentage", ColumnRef("countryLanguage", "percentage", Meta[Float])),
+            SqlAttribute("countrycode", ColumnRef("countryLanguage", "countrycode", Meta[String])),
+            SqlObject("countries", Join(ColumnRef("countryLanguage", "countrycode", Meta[String]), ColumnRef("country", "code", Meta[String])))
           )
       )
     )
 }
 
 object WorldMapping extends DoobieMappingCompanion {
-  def mkMapping[F[_] : Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): WorldMapping[F] =
-    new DoobieMapping(transactor, monitor) with WorldMapping[F]
+
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
+    new DoobieMapping[F](transactor, monitor) with WorldMapping[F]
+
 }
 
 /* Composition */
@@ -291,7 +292,8 @@ class ComposedMapping[F[_] : Monad]
   ))
 }
 
-object ComposedMapping {
-  def fromTransactor[F[_] : Sync](xa: Transactor[F]): ComposedMapping[F] =
-    new ComposedMapping[F](WorldMapping.fromTransactor(xa), CurrencyMapping[F])
+object ComposedMapping extends DoobieMappingCompanion {
+
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
+    new ComposedMapping[F](WorldMapping.mkMapping(transactor, monitor), CurrencyMapping[F])
 }

@@ -133,7 +133,7 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
               )
           )
       ),
-      SqlLeafMapping[EntityType](EntityTypeType, EntityType.codec)
+      LeafMapping[EntityType](EntityTypeType)
     )
 
   def entityTypeDiscriminator(c: Cursor): Result[Type] = {

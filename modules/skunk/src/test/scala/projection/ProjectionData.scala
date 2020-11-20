@@ -5,16 +5,17 @@ package projection
 
 import cats.effect.Sync
 import cats.implicits._
-import doobie.Transactor
-import doobie.util.meta.Meta
 
-import edu.gemini.grackle._, doobie._
+import edu.gemini.grackle._, skunk._
 import edu.gemini.grackle.Predicate.{Const, Eql, FieldPath, Project}
 import edu.gemini.grackle.Query.{Binding, Filter, Select}
 import edu.gemini.grackle.QueryCompiler.SelectElaborator
 import edu.gemini.grackle.Value.{BooleanValue, ObjectValue}
+import cats.effect.Resource
+import _root_.skunk.Session
+import _root_.skunk.codec.all._
 
-trait ProjectionMapping[F[_]] extends DoobieMapping[F] {
+trait ProjectionMapping[F[_]] extends SkunkMapping[F] {
 
   val schema =
     Schema(
@@ -62,9 +63,9 @@ trait ProjectionMapping[F[_]] extends DoobieMapping[F] {
         tpe = Level0Type,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("level0", "id", Meta[String]), key = true),
+            SqlField("id", ColumnRef("level0", "id", varchar), key = true),
             SqlObject("level1",
-              Join(ColumnRef("level0", "id", Meta[String]), ColumnRef("level1", "level0_id", Meta[String]))
+              Join(ColumnRef("level0", "id", varchar), ColumnRef("level1", "level0_id", varchar))
             )
           )
       ),
@@ -72,10 +73,10 @@ trait ProjectionMapping[F[_]] extends DoobieMapping[F] {
         tpe = Level1Type,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("level1", "id", Meta[String]), key = true),
-            SqlAttribute("level0_id", ColumnRef("level1", "level0_id", Meta[String])),
+            SqlField("id", ColumnRef("level1", "id", varchar), key = true),
+            SqlAttribute("level0_id", ColumnRef("level1", "level0_id", varchar)),
             SqlObject("level2",
-              Join(ColumnRef("level1", "id", Meta[String]), ColumnRef("level2", "level1_id", Meta[String]))
+              Join(ColumnRef("level1", "id", varchar), ColumnRef("level2", "level1_id", varchar))
             )
           )
       ),
@@ -83,9 +84,9 @@ trait ProjectionMapping[F[_]] extends DoobieMapping[F] {
         tpe = Level2Type,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("level2", "id", Meta[String]), key = true),
-            SqlField("attr", ColumnRef("level2", "attr", Meta[Boolean])),
-            SqlAttribute("level1_id", ColumnRef("level2", "level1_id", Meta[String]))
+            SqlField("id", ColumnRef("level2", "id", varchar), key = true),
+            SqlField("attr", ColumnRef("level2", "attr", bool)),
+            SqlAttribute("level1_id", ColumnRef("level2", "level1_id", varchar))
           )
       )
     )
@@ -168,7 +169,7 @@ trait ProjectionMapping[F[_]] extends DoobieMapping[F] {
   ))
 }
 
-object ProjectionMapping extends DoobieMappingCompanion {
-  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): ProjectionMapping[F] =
-    new DoobieMapping(transactor, monitor) with ProjectionMapping[F]
+object ProjectionMapping extends SkunkMappingCompanion {
+  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
+    new SkunkMapping[F](pool, monitor) with ProjectionMapping[F]
 }

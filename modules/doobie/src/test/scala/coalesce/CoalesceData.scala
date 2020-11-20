@@ -3,10 +3,11 @@
 
 package coalesce
 
+import _root_.doobie.util.meta.Meta
+import _root_.doobie.util.transactor.Transactor
 import cats.effect.Sync
-import doobie.Transactor
-
-import edu.gemini.grackle._, doobie._
+import edu.gemini.grackle._
+import edu.gemini.grackle.doobie._
 
 trait CoalesceMapping[F[_]] extends DoobieMapping[F] {
 
@@ -37,52 +38,48 @@ trait CoalesceMapping[F[_]] extends DoobieMapping[F] {
   val CAType = schema.ref("CA")
   val CBType = schema.ref("CB")
 
-  import DoobieFieldMapping._
-
   val typeMappings =
     List(
       ObjectMapping(
         tpe = QueryType,
         fieldMappings =
           List(
-            DoobieRoot("r")
+            SqlRoot("r")
           )
       ),
       ObjectMapping(
         tpe = RType,
         fieldMappings =
           List(
-            DoobieField("id", ColumnRef("r", "id"), key = true),
-            DoobieObject("ca", Subobject(
-              List(Join(ColumnRef("r", "id"), ColumnRef("ca", "rid")))
-            )),
-            DoobieObject("cb", Subobject(
-              List(Join(ColumnRef("r", "id"), ColumnRef("cb", "rid")))
-            ))
+            SqlField("id", ColumnRef("r", "id", Meta[String]), key = true),
+            SqlObject("ca", Join(ColumnRef("r", "id", Meta[String]), ColumnRef("ca", "rid", Meta[String]))),
+            SqlObject("cb", Join(ColumnRef("r", "id", Meta[String]), ColumnRef("cb", "rid", Meta[String]))),
           )
       ),
       ObjectMapping(
         tpe = CAType,
         fieldMappings =
           List(
-            DoobieField("id", ColumnRef("ca", "id"), key = true),
-            DoobieAttribute[String]("rid", ColumnRef("ca", "rid")),
-            DoobieField("a", ColumnRef("ca", "a"))
+            SqlField("id", ColumnRef("ca", "id", Meta[String]), key = true),
+            SqlAttribute("rid", ColumnRef("ca", "rid", Meta[String])),
+            SqlField("a", ColumnRef("ca", "a", Meta[Int]))
           )
       ),
       ObjectMapping(
         tpe = CBType,
         fieldMappings =
           List(
-            DoobieField("id", ColumnRef("cb", "id"), key = true),
-            DoobieAttribute[String]("rid", ColumnRef("cb", "rid")),
-            DoobieField("b", ColumnRef("cb", "b"))
+            SqlField("id", ColumnRef("cb", "id", Meta[String]), key = true),
+            SqlAttribute("rid", ColumnRef("cb", "rid", Meta[String])),
+            SqlField("b", ColumnRef("cb", "b", Meta[Boolean]))
           )
       )
     )
 }
 
 object CoalesceMapping extends TracedDoobieMappingCompanion {
-  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): CoalesceMapping[F] =
-    new DoobieMapping(transactor, monitor) with CoalesceMapping[F]
+
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
+    new DoobieMapping[F](transactor, monitor) with CoalesceMapping[F]
+
 }

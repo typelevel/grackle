@@ -10,14 +10,13 @@ import edu.gemini.grackle.Query._
 import edu.gemini.grackle.QueryCompiler._
 import edu.gemini.grackle.QueryInterpreter.mkErrorResult
 import edu.gemini.grackle.QueryInterpreter.ProtoJson
-import edu.gemini.grackle.ScalarType._
 import edu.gemini.grackle.sql._
 
 import cats.{ Eq, Monoid }
 import cats.data.{ Chain, Ior, NonEmptyList }
 import cats.implicits._
 
-import io.circe.{ Json, Encoder => JsonEncoder }
+import io.circe.Json
 
 /** An abstract mapping that is backed by a SQL database. */
 trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
@@ -128,13 +127,6 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   }
 
   case class SqlJson(fieldName: String, columnRef: ColumnRef) extends SqlFieldMapping
-
-  case class SqlLeafMapping[T](val tpe: Type, val encoder: JsonEncoder[T], val codec: Codec[T]) extends LeafMapping[T]
-  object SqlLeafMapping {
-    def apply[T](tpe: Type, codec: Codec[T])(implicit encoder: JsonEncoder[T], dummy: DummyImplicit) =
-      new SqlLeafMapping(tpe, encoder, codec)
-  }
-
 
   sealed trait SqlInterfaceMapping extends ObjectMapping {
     def discriminate(cursor: Cursor): Result[Type]
@@ -261,70 +253,52 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
               termColumnForAttribute(path, parent, name)
         }
 
-      def term[T](x: Term[T], put: Encoder[T]): Option[Fragment] =
+      def term[T](x: Term[T], put: Encoder[T], nullable: Boolean): Option[Fragment] =
         x match {
-          case Const(value) => Some(Fragments.bind(put, value))
+          case Const(value) => Some(Fragments.bind(put, nullable, value))
           case other =>
             primaryColumnForTerm(path, tpe, other).map(col => Fragments.const(col.toSql))
         }
 
-      def SqlLeafMapping[T](tpe: Type): Option[SqlLeafMapping[T]] =
-        leafMapping[T](tpe).collectFirst {
-          case dlm: SqlLeafMapping[_] => dlm.asInstanceOf[SqlLeafMapping[T]]
-        }
-
-      def putForPath[T](p: List[String]): Option[Encoder[T]] =
-        (p match {
-          case init :+ last =>
-            val parentTpe = tpe.path(init).underlyingObject
-            if (parentTpe.hasField(last)) {
-              val fieldTpe = parentTpe.field(last).nonNull
-              SqlLeafMapping[T](fieldTpe).map(a => toEncoder(a.codec)).orElse(
-                fieldTpe match {
-                  case StringType  => Some(stringEncoder.asInstanceOf[Encoder[T]])
-                  case IntType     => Some(intEncoder.asInstanceOf[Encoder[T]])
-                  case FloatType   => Some(doubleEncoder.asInstanceOf[Encoder[T]])
-                  case BooleanType => Some(booleanEncoder.asInstanceOf[Encoder[T]])
-                  case _           => None
-                }
-              )
-            } else if (hasAttribute(p, parentTpe, last))
-              fieldMapping(p, parentTpe, last).collect {
-                case da: SqlAttribute => toEncoder(da.col.codec.asInstanceOf[Codec[T]])
-              }
-            else None
-          case Nil => SqlLeafMapping[T](tpe.nonNull).map(a => toEncoder(a.codec))
-        })
-
-      def putForTerm(x: Term[_]): Option[Encoder[_]] =
+      def putForTerm(x: Term[_]): Option[(Encoder[_], Boolean)] =
         x match {
-          case path: Path => putForPath(path.path)
-          case (_: And)|(_: Or)|(_: Not)|(_: Eql[_])|(_: NEql[_])|(_: Lt[_])|(_: LtEql[_])|(_: Gt[_])|(_: GtEql[_])  => Some(booleanEncoder)
-          case (_: AndB)|(_: OrB)|(_: XorB)|(_: NotB) => Some(intEncoder)
-          case (_: ToUpperCase)|(_: ToLowerCase) => Some(stringEncoder)
+          case path: Path =>
+            primaryColumnForTerm(path.path, tpe, path).map(cr =>
+              (toEncoder(cr.codec.asInstanceOf[Codec[Any]]), tpe.path(path.path).isNullable)
+            )
+          case (_: And)|(_: Or)|(_: Not)|(_: Eql[_])|(_: NEql[_])|(_: Lt[_])|(_: LtEql[_])|(_: Gt[_])|(_: GtEql[_])  => Some((booleanEncoder, false))
+          case (_: AndB)|(_: OrB)|(_: XorB)|(_: NotB) => Some((intEncoder, false))
+          case (_: ToUpperCase)|(_: ToLowerCase) => Some((stringEncoder, false))
           case _ => None
         }
 
-      def loop[T](exp: Term[T], put: Option[Encoder[T]]): Option[Fragment] = {
+      def loop[T](exp: Term[T], put: Option[(Encoder[T], Boolean)]): Option[Fragment] = {
 
-        def unify(x: Term[_], y: Term[_]): Option[Encoder[Any]] =
-          putForTerm(x).orElse(putForTerm(y)).orElse(put).asInstanceOf[Option[Encoder[Any]]]
+        def unify(x: Term[_], y: Term[_]): Option[(Encoder[Any], Boolean)] =
+          putForTerm(x).orElse(putForTerm(y)).orElse(put).asInstanceOf[Option[(Encoder[Any], Boolean)]]
+
+        def nonEmpty(frag: Fragment): Option[Fragment] =
+          if (frag == Fragments.empty) None
+          else Some(frag)
 
         exp match {
           case Const(value) =>
-            put.map(pa => Fragments.bind(pa, value))
+            put.map { case (pa, nullable) => Fragments.bind(pa, nullable, value) }
+
+          case Project(prefix, pred) =>
+            fragmentForPred(prefix ++ path, tpe.path(prefix), pred)
 
           case pathTerm: Path =>
             primaryColumnForTerm(path, tpe, pathTerm).map(col => Fragments.const(col.toSql))
 
           case And(x, y) =>
-            Some(Fragments.andOpt(loop(x, None), loop(y, None)))
+            nonEmpty(Fragments.andOpt(loop(x, None), loop(y, None)))
 
           case Or(x, y) =>
-            Some(Fragments.orOpt(loop(x, None), loop(y, None)))
+            nonEmpty(Fragments.orOpt(loop(x, None), loop(y, None)))
 
           case Not(x) =>
-            loop(x, Some(booleanEncoder)).map(x => Fragments.const("NOT ") |+| x)
+            loop(x, Some((booleanEncoder, false))).map(x => Fragments.const("NOT ") |+| x)
 
           case Eql(x, y) =>
             val p = unify(x, y)
@@ -377,44 +351,44 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           case In(x, y) =>
             for {
               p0 <- putForTerm(x)
-              p = p0.asInstanceOf[Encoder[Any]]
-              x <- term(x, p)
+              (p, n) = p0.asInstanceOf[(Encoder[Any], Boolean)]
+              x <- term(x, p, n)
               l <- NonEmptyList.fromList(y)
             } yield Fragments.in(x, l, p)
 
           case AndB(x, y) =>
             for {
-              x <- term(x, intEncoder)
-              y <- term(y, intEncoder)
+              x <- term(x, intEncoder, false)
+              y <- term(y, intEncoder, false)
             } yield x |+| Fragments.const(" & ")|+| y
           case OrB(x, y) =>
             for {
-              x <- term(x, intEncoder)
-              y <- term(y, intEncoder)
+              x <- term(x, intEncoder, false)
+              y <- term(y, intEncoder, false)
             } yield x |+| Fragments.const(" | ")|+| y
           case XorB(x, y) =>
             for {
-              x <- term(x, intEncoder)
-              y <- term(y, intEncoder)
+              x <- term(x, intEncoder, false)
+              y <- term(y, intEncoder, false)
             } yield x |+| Fragments.const(" # ")|+| y
 
           case NotB(x) =>
-            loop(x, Some(intEncoder)).map(x => Fragments.const("~") |+| x)
+            loop(x, Some((intEncoder, false))).map(x => Fragments.const("~") |+| x)
 
           case StartsWith(x, prefix) =>
             for {
-              x <- term(x, stringEncoder)
-            } yield x |+| Fragments.const(" LIKE ") |+| Fragments.bind(stringEncoder, prefix + "%")
+              x <- term(x, stringEncoder, false)
+            } yield x |+| Fragments.const(" LIKE ") |+| Fragments.bind(stringEncoder, false, prefix + "%")
 
           case ToUpperCase(x) =>
-            loop(x, Some(stringEncoder)).map(x => Fragments.const("upper(") |+| x |+| Fragments.const(")"))
+            loop(x, Some((stringEncoder, false))).map(x => Fragments.const("upper(") |+| x |+| Fragments.const(")"))
 
           case ToLowerCase(x) =>
-            loop(x, Some(stringEncoder)).map(x => Fragments.const("lower(") |+| x |+| Fragments.const(")"))
+            loop(x, Some((stringEncoder, false))).map(x => Fragments.const("lower(") |+| x |+| Fragments.const(")"))
 
           case Like(x, pattern, caseInsensitive) =>
             val op = if(caseInsensitive) "ILIKE" else "LIKE"
-            term(x, stringEncoder).map(x => x |+| Fragments.const(s" $op ") |+| Fragments.bind(stringEncoder, pattern))
+            term(x, stringEncoder, false).map(x => x |+| Fragments.const(s" $op ") |+| Fragments.bind(stringEncoder, false, pattern))
 
           case _ =>
             None
@@ -471,6 +445,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
       def paths(t: Term[_]): List[Path] =
         t match {
+          case Project(prefix, x) => paths(x).map(_.extend(prefix))
           case p: Path => List(p)
           case And(x, y) => paths(x) ++ paths(y)
           case Or(x, y) => paths(x) ++ paths(y)
