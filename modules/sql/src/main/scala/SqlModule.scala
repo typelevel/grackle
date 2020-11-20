@@ -23,7 +23,7 @@ trait SqlModule[F[_]] {
   /** Typeclass for SQL fragments. */
   trait SqlFragment[T] extends Monoid[T] {
 
-    def bind[A](encoder: Encoder[A], value: A): T
+    def bind[A](encoder: Encoder[A], nullable: Boolean, value: A): T
 
     def const(s: String): T
 

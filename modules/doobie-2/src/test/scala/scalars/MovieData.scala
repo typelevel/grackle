@@ -197,14 +197,14 @@ trait MovieMapping[F[_]] extends DoobieMapping[F] {
             CursorAttribute("isLong", isLong, List("duration"))
           )
       ),
-      SqlLeafMapping[UUID](UUIDType, Meta[UUID]),
-      SqlLeafMapping[LocalTime](TimeType, Meta[LocalTime]),
-      SqlLeafMapping[LocalDate](DateType, Meta[LocalDate]),
-      SqlLeafMapping[ZonedDateTime](DateTimeType, Meta[ZonedDateTime]),
-      SqlLeafMapping[Duration](IntervalType, Meta[Duration]),
-      SqlLeafMapping[Genre](GenreType, Meta[Genre]),
+      LeafMapping[UUID](UUIDType),
+      LeafMapping[LocalTime](TimeType),
+      LeafMapping[LocalDate](DateType),
+      LeafMapping[ZonedDateTime](DateTimeType),
+      LeafMapping[Duration](IntervalType),
+      LeafMapping[Genre](GenreType),
       LeafMapping[Feature](FeatureType),
-      SqlLeafMapping(ListType(FeatureType), Meta[List[Feature]])
+      LeafMapping[List[Feature]](ListType(FeatureType))
     )
 
   def nextEnding(c: Cursor): Result[ZonedDateTime] =

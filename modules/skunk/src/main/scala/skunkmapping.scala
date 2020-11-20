@@ -36,7 +36,8 @@ abstract class SkunkMapping[F[_]: Sync](
     new SqlFragment[AppliedFragment] {
       def combine(x: AppliedFragment, y: AppliedFragment) = x |+| y
       def empty = AppliedFragment.empty
-      def bind[A](encoder: Encoder[A], value: A) = sql"$encoder".apply(value)
+      def bind[A](encoder: Encoder[A], nullable: Boolean, value: A) =
+        sql"$encoder".apply(if(!nullable) value else Some(value).asInstanceOf[A])
       def const(s: String) = sql"#$s".apply(_root_.skunk.Void)
       def in[G[_]: Reducible, A](f: AppliedFragment, fs: G[A], enc: Encoder[A]): AppliedFragment = fs.toList.map(sql"$enc".apply).foldSmash(f |+| void" IN (", void", ", void")")
       def and(fs: AppliedFragment*): AppliedFragment = fs.toList.map(parentheses).intercalate(void" AND ")

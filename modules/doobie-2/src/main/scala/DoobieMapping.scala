@@ -36,7 +36,7 @@ abstract class DoobieMapping[F[_]: Sync](
     new SqlFragment[Fragment] {
       def combine(x: Fragment, y: Fragment): Fragment = x ++ y
       def empty: Fragment = DoobieFragment.empty
-      def bind[A](encoder: Put[A], value: A): Fragment = { implicit val e = encoder ; sql"$value" }
+      def bind[A](encoder: Put[A], nullable: Boolean, value: A): Fragment = { implicit val e = encoder ; sql"$value" }
       def const(s: String): Fragment = DoobieFragment.const(s)
       def andOpt(fs: Option[Fragment]*): Fragment = fragments.andOpt(fs: _*)
       def orOpt(fs: Option[Fragment]*): Fragment = fragments.orOpt(fs: _*)

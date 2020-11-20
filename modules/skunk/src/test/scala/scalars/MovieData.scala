@@ -188,14 +188,14 @@ trait MovieMapping[F[_]] extends SkunkMapping[F] {
             CursorAttribute("isLong", isLong, List("duration"))
           )
       ),
-      SqlLeafMapping[UUID](UUIDType, uuid),
-      SqlLeafMapping[LocalTime](TimeType, time),
-      SqlLeafMapping[LocalDate](DateType, date),
-      SqlLeafMapping[OffsetDateTime](DateTimeType, timestamptz),
-      SqlLeafMapping[Duration](IntervalType, int8.imap(Duration.ofMillis)(_.toMillis)),
-      SqlLeafMapping[Genre](GenreType, Genre.codec),
+      LeafMapping[UUID](UUIDType),
+      LeafMapping[LocalTime](TimeType),
+      LeafMapping[LocalDate](DateType),
+      LeafMapping[OffsetDateTime](DateTimeType),
+      LeafMapping[Duration](IntervalType),
+      LeafMapping[Genre](GenreType),
       LeafMapping[Feature](FeatureType),
-      // SqlLeafMapping[List[Feature]](ListType(FeatureType))
+      LeafMapping[List[Feature]](ListType(FeatureType))
     )
 
   def nextEnding(c: Cursor): Result[OffsetDateTime] =

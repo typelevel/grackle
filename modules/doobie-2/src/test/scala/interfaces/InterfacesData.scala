@@ -131,7 +131,7 @@ trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
               )
           )
       ),
-      SqlLeafMapping[EntityType](EntityTypeType, Meta[EntityType])
+      LeafMapping[EntityType](EntityTypeType)
     )
 
   def entityTypeDiscriminator(c: Cursor): Result[Type] = {
