@@ -138,7 +138,7 @@ final class SchemaSpec extends CatsSuite {
 
     schema match {
       case Both(a, b)  =>
-        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Interface Character implemented by type Human is not defined", "Interface Contactable implemented by type Human is not defined"))
+        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Interface Character implemented by object Human is not defined", "Interface Contactable implemented by object Human is not defined"))
         assert(b.types.map(_.name) == List("Human"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
@@ -161,7 +161,7 @@ final class SchemaSpec extends CatsSuite {
 
     schema match {
       case Both(a, b)  =>
-        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Expected field id from interface Character is not implemented by type Human", "Expected field email from interface Character is not implemented by type Human"))
+        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Expected field id from interface Character is not implemented by object Human", "Expected field email from interface Character is not implemented by object Human"))
         assert(b.types.map(_.name) == List("Character", "Human"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
@@ -182,7 +182,28 @@ final class SchemaSpec extends CatsSuite {
 
     schema match {
       case Both(a, b)  =>
-        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Expected field name from interface Character is not implemented by type Human"))
+        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Field name has type Int!, however implemented interface Character requires it to be of type String!"))
+        assert(b.types.map(_.name) == List("Character", "Human"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
+  test("schema validation: object implementing interface field with mismatched arguments") {
+    val schema = Schema(
+      """
+         interface Character {
+          name(foo: Int!): String!
+        }
+
+         type Human implements Character {
+           name(foo: String!): String!
+         }
+    """
+    )
+
+    schema match {
+      case Both(a, b)  =>
+        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Field name of object Human has has an argument list that does not match that specified by implemented interface Character"))
         assert(b.types.map(_.name) == List("Character", "Human"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
@@ -208,7 +229,7 @@ final class SchemaSpec extends CatsSuite {
 
     schema match {
       case Both(a, b)  =>
-        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Expected field id from interface Character is not implemented by type Human", "Expected field id from interface Character is not implemented by type Dog"))
+        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Expected field id from interface Character is not implemented by object Human", "Expected field id from interface Character is not implemented by object Dog"))
         assert(b.types.map(_.name) == List("Character", "Human", "Dog"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
@@ -234,13 +255,12 @@ final class SchemaSpec extends CatsSuite {
 
     schema match {
       case Both(a, b)  =>
-        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Expected field id from interface Character is not implemented by type Human", "Expected field email from interface Contactable is not implemented by type Human"))
+        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Expected field id from interface Character is not implemented by object Human", "Expected field email from interface Contactable is not implemented by object Human"))
         assert(b.types.map(_.name) == List("Character", "Contactable", "Human"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
 
-  //FIXME reformat examples
   test("schema validation: object correctly implements transitive interface") {
     val schema = Schema(
       """
@@ -265,11 +285,4 @@ final class SchemaSpec extends CatsSuite {
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
-
-  //FIXME what about when names the same but types differ? arg types differ?
-
-
-  //Out of scope
-  //FIXME add empty interfaces test, another PR?
-  //FIXME check that object implements transative interface
 }

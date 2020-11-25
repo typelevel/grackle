@@ -967,25 +967,28 @@ object SchemaValidator {
       obj.interfaces.flatMap { ifaceName =>
         interfaces.find(_.name == ifaceName.astName) match {
           case Some(interface) => checkImplementation(obj, interface)
-          case None => List(mkError(s"Interface ${ifaceName.astName.value} implemented by type ${obj.name.value} is not defined"))
+          case None => List(mkError(s"Interface ${ifaceName.astName.value} implemented by object ${obj.name.value} is not defined"))
         }
       }
     }
   }
 
-  //FIXME different error for implementing with wrong type
   def checkImplementation(obj: ObjectTypeDefinition, interface: InterfaceTypeDefinition): List[Json] = {
-    val isImplemented = (objectField: FieldDefinition) => obj.fields.exists(implements(objectField, _))
-    val unimplemented = interface.fields.filterNot(isImplemented)
-    unimplemented.map { field =>
-      mkError(s"Expected field ${field.name.value} from interface ${interface.name.value} is not implemented by type ${obj.name.value}")
+    interface.fields.flatMap { ifaceField =>
+      obj.fields.find(_.name == ifaceField.name).map { matching =>
+        if (ifaceField.tpe != matching.tpe) {
+          Some(mkError(s"Field ${matching.name.value} has type ${matching.tpe.name}, however implemented interface ${interface.name.value} requires it to be of type ${ifaceField.tpe.name}"))
+        } else if (!argsMatch(matching, ifaceField)) {
+          Some(mkError(s"Field ${matching.name.value} of object ${obj.name.value} has has an argument list that does not match that specified by implemented interface ${interface.name.value}"))
+        } else {
+          None
+        }
+      }.getOrElse(Some(mkError(s"Expected field ${ifaceField.name.value} from interface ${interface.name.value} is not implemented by object ${obj.name.value}")))
     }
   }
 
-  //FIXME also match up args list
-  def implements(implementing: FieldDefinition, implemented: FieldDefinition): Boolean = implementing.name ==
-    implemented.name && implementing.tpe == implemented.tpe && implemented.args.corresponds(implementing.args) { case (arg, implArg) =>
-      arg.name == implArg.name && arg.tpe == implArg.tpe
+  def argsMatch(fieldOne: FieldDefinition, fieldTwo: FieldDefinition): Boolean = fieldOne.args.corresponds(fieldTwo.args) { case (arg, implArg) =>
+    arg.name == implArg.name && arg.tpe == implArg.tpe
   }
 
   def addLeft[A: Semigroup, B](ior: Ior[A,B], a: A): Ior[A, B] = ior match {
