@@ -955,11 +955,11 @@ object SchemaValidator {
   }
 
   def validateImpls(definitions: List[TypeDefinition]): List[Json] = {
-    val interfaces = definitions.collect[InterfaceTypeDefinition] {
+    val interfaces = definitions.collect {
       case a: InterfaceTypeDefinition => a
     }
 
-    val objects = definitions.collect[ObjectTypeDefinition] {
+    val objects = definitions.collect {
       case a: ObjectTypeDefinition => a
     }
 
