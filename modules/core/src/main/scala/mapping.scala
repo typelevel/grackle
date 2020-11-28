@@ -11,6 +11,8 @@ import io.circe.{Encoder, Json}
 import Query.Select
 import QueryCompiler.{ComponentElaborator, SelectElaborator}
 import QueryInterpreter.mkErrorResult
+import scala.annotation.unused
+import org.tpolecat.typename._
 
 trait QueryExecutor[F[_], T] { outer =>
   implicit val M: Monad[F]
@@ -20,7 +22,8 @@ trait QueryExecutor[F[_], T] { outer =>
   def compileAndRun(text: String, name: Option[String] = None, untypedEnv: Option[Json] = None, useIntrospection: Boolean = true): F[T]
 }
 
-abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, Json] {
+abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, Json] with SchemaValidation {
+
   val schema: Schema
   val typeMappings: List[TypeMapping]
 
@@ -118,15 +121,57 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
     }
 
   trait TypeMapping extends Product with Serializable {
+
     def tpe: Type
-  }
+
+    def validationFailures: Chain[SchemaValidation.Failure] =
+      Chain(warning("Validation is not yet available."))
+
+    protected def failure(severity: SchemaValidation.Severity, fieldName: Option[String], message: String): SchemaValidation.Failure =
+      new SchemaValidation.Failure(severity, tpe, fieldName, productPrefix) {
+        override def text =
+          s"""|${super.text}
+              |$message
+              |""".stripMargin
+      }
+
+    protected def warning(message: String, fieldName: Option[String] = None): SchemaValidation.Failure =
+      failure(SchemaValidation.Severity.Warning, fieldName, message)
+
+    protected def error(message: String, fieldName: Option[String] = None): SchemaValidation.Failure =
+      failure(SchemaValidation.Severity.Error, fieldName, message)
+
+    protected def info(message: String, fieldName: Option[String] = None): SchemaValidation.Failure =
+      failure(SchemaValidation.Severity.Info, fieldName, message)
+
+    }
 
   trait ObjectMapping extends TypeMapping {
     def fieldMappings: List[FieldMapping]
   }
 
   object ObjectMapping {
-    case class DefaultObjectMapping(tpe: Type, fieldMappings: List[FieldMapping]) extends ObjectMapping
+
+    case class DefaultObjectMapping(tpe: Type, fieldMappings: List[FieldMapping]) extends ObjectMapping {
+      override def validationFailures: Chain[SchemaValidation.Failure] =
+        tpe.dealias match {
+          case ot @ ObjectType(_, _, fields, _) => fields.foldMap { f =>
+            fieldMappings.find(_.fieldName == f.name) match {
+              case Some(m) => m.validationFailures(ot, f)
+              case None =>
+                val message =
+                  s"""|- Field $ot.${f.name} appears in a schema defined at ...
+                      |
+                      |However
+                      |
+                      |- It does not appear in the object mapping for $ot defined at ...
+                      |""".stripMargin.trim
+                Chain(error(message, Some(f.name)))
+            }
+          }
+          case other => Chain(error(s"Type mismatch: expected ObjectType, found ${other.productPrefix}."))
+        }
+    }
 
     def apply(tpe: Type, fieldMappings: List[FieldMapping]): ObjectMapping =
       DefaultObjectMapping(tpe, fieldMappings.map(_.withParent(tpe)))
@@ -138,6 +183,28 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
     def fieldName: String
     def isPublic: Boolean
     def withParent(tpe: Type): FieldMapping
+
+    def validationFailures(owner: ObjectType, @unused field: Field): Chain[SchemaValidation.Failure] = {
+      Chain(warning(owner, "Validation is not yet available."))
+    }
+
+    protected def failure(owner: ObjectType, severity: SchemaValidation.Severity, message: String): SchemaValidation.Failure =
+      new SchemaValidation.Failure(severity, owner, Some(fieldName), productPrefix) {
+        override def text =
+          s"""|${super.text}
+              |$message
+              |""".stripMargin
+      }
+
+    protected def warning(owner: ObjectType, message: String): SchemaValidation.Failure =
+      failure(owner, SchemaValidation.Severity.Warning, message)
+
+    protected def error(owner: ObjectType, message: String): SchemaValidation.Failure =
+      failure(owner, SchemaValidation.Severity.Error, message)
+
+    protected def info(owner: ObjectType, message: String): SchemaValidation.Failure =
+      failure(owner, SchemaValidation.Severity.Info, message)
+
   }
 
   trait RootMapping extends FieldMapping {
@@ -149,12 +216,20 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
   trait LeafMapping[T] extends TypeMapping {
     def tpe: Type
     def encoder: Encoder[T]
+    def scalaTypeName: String
   }
   object LeafMapping {
-    case class DefaultLeafMapping[T](tpe: Type, encoder: Encoder[T]) extends LeafMapping[T]
 
-    def apply[T](tpe: Type)(implicit encoder: Encoder[T]): LeafMapping[T] =
-      DefaultLeafMapping(tpe, encoder)
+    case class DefaultLeafMapping[T](tpe: Type, encoder: Encoder[T], scalaTypeName: String) extends LeafMapping[T] {
+      override def validationFailures: Chain[SchemaValidation.Failure] =
+        tpe.dealias match {
+          case ScalarType(_, _) => Chain.empty // these are valid on construction. Nothing to do.
+          case other            => Chain(error(s"Cannot use $productPrefix with ${other.productPrefix}"))
+        }
+    }
+
+    def apply[T: TypeName](tpe: Type)(implicit encoder: Encoder[T]): LeafMapping[T] =
+      DefaultLeafMapping(tpe, encoder, typeName)
 
     def unapply[T](lm: LeafMapping[T]): Option[(Type, Encoder[T])] =
       Some((lm.tpe, lm.encoder))

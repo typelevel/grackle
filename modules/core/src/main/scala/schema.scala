@@ -113,7 +113,7 @@ object Schema {
 /**
  * A GraphQL type definition.
  */
-sealed trait Type {
+sealed trait Type extends Product {
   /**
    * Is this type equivalent to `other`.
    *

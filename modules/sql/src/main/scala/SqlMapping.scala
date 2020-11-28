@@ -17,9 +17,11 @@ import cats.data.{ Chain, Ior, NonEmptyList }
 import cats.implicits._
 
 import io.circe.Json
+import org.tpolecat.typename._
+// import edu.gemini.grackle.validation._
 
 /** An abstract mapping that is backed by a SQL database. */
-trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
+trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] with SqlSchemaValidation[F] {
 
   private def discriminator(om: ObjectMapping): List[ColumnRef] =
     om.fieldMappings.collect {
@@ -41,9 +43,9 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
   /**
    * Name of a SQL schema column and its associated codec. Note that `ColumnRef`s are consider equal
-   * if their names are equal; the codec member is ignored.
+   * if their table and column names are equal.
    */
-  case class ColumnRef(table: String, column: String, codec: Codec[_]) {
+  case class ColumnRef(table: String, column: String, codec: Codec[_], scalaTypeName: String) {
 
     /** This `ColumnRef` as a SQL expression of the form `table.column`. */
     def toSql: String =
@@ -51,12 +53,19 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
     override def equals(other: Any) =
       other match {
-        case ColumnRef(`table`, `column`, _) => true
+        case ColumnRef(`table`, `column`, _, _) => true
         case _ => false
       }
 
     override def hashCode(): Int =
       table.hashCode() + column.hashCode()
+
+  }
+
+  object ColumnRef {
+
+    def apply[A: TypeName](table: String, column: String, codec: Codec[A]): ColumnRef =
+      apply(table, column, codec, typeName)
 
   }
 
@@ -96,6 +105,16 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def withParent(tpe: Type): SqlRoot =
       copy(rootTpe = tpe)
 
+    override def validationFailures(owner: ObjectType, field: Field): Chain[SchemaValidation.Failure] = {
+      val message =
+        s"""|- Field $owner.${field.name} is mapped via a root mapping defined at ...
+            |- This mapping is handled by the selectElaborator of the schema mapping defined at ...
+            |- Programmatic handlers cannot be validated.
+            |- Ensure you have unit tests to cover this mapping.
+            |""".stripMargin.trim
+      Chain(info(owner, message))
+    }
+
   }
 
   sealed trait SqlFieldMapping extends FieldMapping {
@@ -119,7 +138,71 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     columnRef: ColumnRef,
     key: Boolean = false,
     discriminator: Boolean = false
-  ) extends SqlFieldMapping
+  ) extends SqlFieldMapping {
+
+    override def validationFailures(owner: ObjectType, field: Field): Chain[SchemaValidation.Failur] =
+      field.tpe.dealias match {
+
+        case ScalarType.BooleanType if columnRef.scalaTypeName == typeName[Boolean] => Chain.empty
+        case ScalarType.FloatType   if columnRef.scalaTypeName == typeName[Double]  => Chain.empty
+        case ScalarType.StringType  if columnRef.scalaTypeName == typeName[String]  => Chain.empty
+        case ScalarType.IDType      if columnRef.scalaTypeName == typeName[String]  => Chain.empty
+        case ScalarType.IntType     if columnRef.scalaTypeName == typeName[Int]     => Chain.empty
+
+        case NullableType(ScalarType.BooleanType) if columnRef.scalaTypeName == typeName[Option[Boolean]] => Chain.empty
+        case NullableType(ScalarType.FloatType)   if columnRef.scalaTypeName == typeName[Option[Double]]  => Chain.empty
+        case NullableType(ScalarType.StringType)  if columnRef.scalaTypeName == typeName[Option[String]]  => Chain.empty
+        case NullableType(ScalarType.IDType)      if columnRef.scalaTypeName == typeName[Option[String]]  => Chain.empty
+        case NullableType(ScalarType.IntType)     if columnRef.scalaTypeName == typeName[Option[Int]]     => Chain.empty
+
+        case tpe @ ScalarType(name, _) =>
+          typeMapping(tpe) match {
+            case Some(lm: LeafMapping[_]) =>
+              if (lm.scalaTypeName == columnRef.scalaTypeName) Chain.empty
+              else {
+                val message =
+                  s"""|- Field $owner.${field.name} maps to column ${columnRef.table}.${columnRef.column} via a field mapping defined at ...
+                      |- Column ${columnRef.table}.${columnRef.column} maps to Scala type ${columnRef.scalaTypeName} via a column reference defined at ...
+                      |
+                      |However
+                      |
+                      |- Field $owner.${field.name} has GraphQL type ${name} via a schema defined at ...
+                      |- GraphQL type ${name} maps to Scala type ${lm.scalaTypeName} via a leaf mapping defined at ...
+                      |
+                      |This is a problem because
+                      |
+                      |- Scala types ${lm.scalaTypeName} and ${columnRef.scalaTypeName} are mismatched.
+                      """.stripMargin.trim
+                      Chain(error(owner, message))
+              }
+            case _ =>
+              val message =
+                s"""|- Field $owner.${field.name} has GraphQL type ${name} via a schema defined at ....
+                    |
+                    |However
+                    |
+                    |- No leaf mapping for GraphQL type ${name} is defined in the schema mapping defined at ...
+                    """.stripMargin.trim
+              Chain(error(owner, message))
+          }
+
+        case
+          ScalarType(_, _) |
+          NoType |
+          TypeRef(_, _) |
+          ScalarType(_, _) |
+          InterfaceType(_, _, _, _) |
+          ObjectType(_, _, _, _) |
+          UnionType(_, _, _) |
+          EnumType(_, _, _) |
+          InputObjectType(_, _, _) |
+          ListType(_) |
+          NullableType(_) =>
+          Chain(warning(owner, s"Cannot verify that GraphQL type ${field.tpe.dealias} is compatible with Codec[${columnRef.scalaTypeName}]."))
+
+      }
+
+  }
 
   case class SqlObject(fieldName: String, joins: List[Join]) extends SqlFieldMapping
   object SqlObject {

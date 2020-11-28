@@ -13,6 +13,7 @@ val log4catsVersion             = "1.1.1"
 val skunkVersion                = "0.0.21"
 val shapelessVersion            = "2.3.3"
 val testContainersVersion       = "0.37.0"
+val typenameVersion             = "0.1.0"
 
 inThisBuild(Seq(
   homepage := Some(url("https://github.com/gemini-hlsw/gsp-graphql")),
@@ -66,6 +67,7 @@ lazy val core = project
       "io.circe"          %% "circe-optics"           % circeOpticsVersion,
       "io.circe"          %% "circe-parser"           % circeVersion,
       "org.typelevel"     %% "jawn-parser"            % jawnVersion,
+      "org.tpolecat"      %% "typename"               % typenameVersion,
     )
   )
 
