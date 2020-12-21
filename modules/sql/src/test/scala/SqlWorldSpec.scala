@@ -718,6 +718,48 @@ trait SqlWorldSpec extends AnyFunSuite {
     assert(res == expected)
   }
 
+  test("recursive query (7)") {
+    val query = """
+      query {
+        cities(namePattern: "Monte-Carlo") {
+          name
+          country {
+            cities {
+              name
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "cities" : [
+            {
+              "name" : "Monte-Carlo",
+              "country" : {
+                "cities" : [
+                  {
+                    "name" : "Monte-Carlo"
+                  },
+                  {
+                    "name" : "Monaco-Ville"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync
+    //println(res)
+
+    assert(res == expected)
+  }
+
   test("country with no cities") {
     val query = """
       query {

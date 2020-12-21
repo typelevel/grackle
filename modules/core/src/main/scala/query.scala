@@ -15,7 +15,7 @@ import cats.implicits._
 import io.circe.Json
 import io.circe.literal.JsonStringContext
 
-import Query._
+import Query._, Predicate.In
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
 /** GraphQL query Algebra */
@@ -550,10 +550,12 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
         (for {
           cursor <- IorT(mapping.rootCursor(path, rootTpe, "__staged", child))
           value  <- IorT(runValue(Wrap("__staged", child), rootTpe.list, cursor).pure[F])
-        } yield {
-          val Some(List(unpacked)) = ProtoJson.unpackObject(value)
-          unpacked
-        }).value
+        } yield
+          ProtoJson.unpackObject(value) match {
+            case Some(Nil) => ProtoJson.fromValues(Nil)
+            case Some(List(unpacked)) => unpacked
+          }
+        ).value
 
       case PossiblyRenamedSelect(Select(fieldName, _, child), resultName) =>
         (for {
@@ -735,11 +737,8 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
             lc.traverse(c => runValue(query, tpe, c)).map(ProtoJson.fromValues)
           )
 
-        case (Wrap(fieldName, Defer(join, child, rootTpe)), _) =>
-          for {
-            cont        <- join(cursor, child)
-            renamedCont <- mkResult(renameRoot(cont, fieldName))
-          } yield ProtoJson.staged(this, renamedCont, rootTpe)
+        case (Wrap(_, Defer(_, _, _)), _) if cursor.isNull =>
+          ProtoJson.fromJson(Json.Null).rightIor
 
         case (Wrap(fieldName, child), _) =>
           for {
@@ -768,9 +767,17 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
           }
 
         case (Defer(join, child, rootTpe), _) =>
-          for {
-            cont <- join(cursor, child)
-          } yield ProtoJson.staged(this, cont, rootTpe)
+          def stage(cursor: Cursor) =
+            for {
+              cont <- join(cursor, child)
+            } yield ProtoJson.staged(this, cont, rootTpe)
+
+          if (cursor.isNullable)
+            cursor.asNullable match {
+              case Ior.Right(Some(c)) => stage(c)
+              case _ => ProtoJson.fromJson(Json.Null).rightIor
+            }
+          else stage(cursor)
 
         case (Unique(pred, child), _) =>
           val cursors =
@@ -811,13 +818,22 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
           }
 
           val gr: Result[List[ProtoJson]] = grouped.flatMap(_.traverse { cs =>
-            runList(child, ltpe, cs, Kleisli(_.rightIor)).flatMap { orig =>
-              orig match {
-                case PArr(Nil) => ProtoJson.fromJson(Json.Null).rightIor
-                case PArr(List(value)) => value.rightIor
-                case pj => mkErrorResult(s"Grouped result of wrong shape: $pj")
+            if(cs.isEmpty) {
+              // If this group is empty we need to evaluate the continuation
+              // relative to an empty cursor to create the appropriate empty
+              // child
+              child match {
+                case Filter(In(_, _), cont) => runValue(cont, ltpe, Cursor.EmptyCursor(ltpe, Nil))
+                case _ => ProtoJson.fromJson(Json.Null).rightIor
               }
-            }
+            } else
+              runList(child, ltpe, cs, Kleisli(_.rightIor)).flatMap { orig =>
+                orig match {
+                  case PArr(Nil) => ProtoJson.fromJson(Json.Null).rightIor
+                  case PArr(List(value)) => value.rightIor
+                  case pj => mkErrorResult(s"Grouped result of wrong shape: $pj")
+                }
+              }
           })
 
           gr.map(ProtoJson.fromValues)
