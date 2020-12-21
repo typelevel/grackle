@@ -106,6 +106,12 @@ trait Cursor {
       cast[T](attr).toRightIor(mkOneError(s"Expected value of type ${classTag[T]} for field '$attributeName' found '$attr' of type ${attr.getClass.getName}"))
     }
 
+  def isNull: Boolean =
+    isNullable && (asNullable match {
+      case Ior.Right(None) => true
+      case _ => false
+    })
+
   /**
    * Does the possibly nullable value at this `Cursor` have an attributed named
    * `attributeName`?
@@ -280,4 +286,41 @@ object Cursor {
 
   def flatten(cs: List[Cursor]): Result[List[Cursor]] =
     cs.flatTraverse(flatten)
+
+  case class EmptyCursor(
+    tpe:   Type,
+    path:  List[String]
+  ) extends Cursor {
+    def focus: Any = ???
+
+    def isLeaf: Boolean = false
+    def asLeaf: Result[Json] =
+      mkErrorResult(s"Expected Scalar type, found empty $tpe")
+
+    def isList: Boolean = tpe.isList
+    def asList: Result[List[Cursor]] = tpe match {
+      case _: ListType => Nil.rightIor
+      case _ => mkErrorResult(s"Expected List type, found $tpe")
+    }
+
+    def isNullable: Boolean = tpe.isNullable
+    def asNullable: Result[Option[Cursor]] = tpe match {
+      case _: NullableType => None.rightIor
+      case _ => mkErrorResult(s"Expected Nullable type, found $tpe")
+    }
+
+    def narrowsTo(subtpe: TypeRef): Boolean = false
+    def narrow(subtpe: TypeRef): Result[Cursor] =
+      mkErrorResult(s"Empty cursor of static type $tpe cannot be narrowed to $subtpe")
+
+    def hasField(fieldName: String): Boolean =
+      tpe.hasField(fieldName)
+
+    def field(fieldName: String): Result[Cursor] =
+      copy(tpe = tpe.field(fieldName), path = fieldName :: path).rightIor
+
+    def hasAttribute(attrName: String): Boolean = false
+    def attribute(attrName: String): Result[Any] =
+      mkErrorResult(s"Expected attribute '$attrName', found empty $tpe")
+  }
 }

@@ -536,10 +536,13 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         q match {
           case Select(fieldName, _, child) =>
             val fieldTpe = obj.field(fieldName)
-            val cols = columnsForFieldOrAttribute(path, obj, fieldName).toList ++ requiredCols
             val joins = joinsForField(path, obj, fieldName)
+            val joinTpe = fieldTpe.underlyingObject
+            val joinMapping = if(joins.isEmpty) Nil else objectMapping(fieldName :: path, joinTpe).map(om => (om, joinTpe)).toList
+            val joinCols = joins.flatMap(j => List(j.parent, j.child))
+            val cols = columnsForFieldOrAttribute(path, obj, fieldName).toList ++ requiredCols ++ joinCols
 
-            loop(child, fieldName :: path, fieldTpe, (cols, joins, List.empty[(List[String], Type, Predicate)], requiredMappings) |+| acc)
+            loop(child, fieldName :: path, fieldTpe, (cols, joins, List.empty[(List[String], Type, Predicate)], requiredMappings ++ joinMapping) |+| acc)
 
           case Context(contextPath, child) =>
             loop(child, contextPath, tpe, acc)
@@ -649,7 +652,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           // in the schema) if its table introduced on the child side of a `Join`.
           def isJoin(cr: ColumnRef): Boolean = childTables(cr.table)
 
-          loop(typeMappings).map(mn => (isJoin(col), mn)).getOrElse(sys.error(s"No Get for $col"))
+          loop(typeMappings).map(mn => (isJoin(col), mn)).getOrElse(sys.error(s"No Codec for $col"))
         }
 
         columns.map(metaForColumn)
@@ -668,21 +671,31 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           val obj = c.tpe.underlyingObject
           val Some(om) = objectMapping(c.path, obj)
 
-          val joinPreds =
-            Predicate.and(
-              om.fieldMappings.collect {
-                case cm: SqlField if cm.key =>
-                  val fv0 = c.field(cm.fieldName)
-                  val Ior.Right(fv) = fv0
-                  Eql(FieldPath(List(cm.fieldName)), Const(fv.focus))(Eq.fromUniversalEquals)
+          def predForCursor(c: Cursor): Result[Query] = {
+            val pred =
+              Predicate.and(
+                om.fieldMappings.collect {
+                  case cm: SqlField if cm.key =>
+                    val fv0 = c.field(cm.fieldName)
+                    val Ior.Right(fv) = fv0
+                    Eql(FieldPath(List(cm.fieldName)), Const(fv.focus))(Eq.fromUniversalEquals)
 
-                case am: SqlAttribute if am.key =>
-                  val av0 = c.attribute(am.fieldName)
-                  val Ior.Right(av) = av0
-                  Eql(AttrPath(List(am.fieldName)), Const(av))(Eq.fromUniversalEquals)
-              }
-            )
-          Context(c.path, Select("__staged", Nil, Filter(joinPreds, q))).rightIor
+                  case am: SqlAttribute if am.key =>
+                    val av0 = c.attribute(am.fieldName)
+                    val Ior.Right(av) = av0
+                    Eql(AttrPath(List(am.fieldName)), Const(av))(Eq.fromUniversalEquals)
+                }
+              )
+            Context(c.path, Select("__staged", Nil, Filter(pred, q))).rightIor
+          }
+
+          if (c.isNullable)
+            c.asNullable match {
+              case Ior.Right(Some(c)) => predForCursor(c)
+              case _ => Empty.rightIor
+            }
+          else predForCursor(c)
+
 
         case _ => mkErrorResult(s"No staging join for non-Select $q")
       }
