@@ -241,7 +241,16 @@ object QueryCompiler {
         case s@Select(fieldName, _, child)    =>
           val childTpe = tpe.underlyingField(fieldName)
           if (childTpe =:= NoType) mkErrorResult(s"Unknown field '$fieldName' in select")
-          else transform(child, env, schema, childTpe).map(ec => s.copy(child = ec))
+          else {
+            val obj = tpe.underlyingObject
+            val isLeaf = childTpe.isUnderlyingLeaf
+            if (isLeaf && child != Empty)
+              mkErrorResult(s"Leaf field '$fieldName' of $obj must have an empty subselection set")
+            else if (!isLeaf && child == Empty)
+              mkErrorResult(s"Non-leaf field '$fieldName' of $obj must have a non-empty subselection set")
+            else
+              transform(child, env, schema, childTpe).map(ec => s.copy(child = ec))
+          }
 
         case UntypedNarrow(tpnme, child) =>
           schema.definition(tpnme) match {
@@ -273,6 +282,7 @@ object QueryCompiler {
         case o@OrderBy(_, child)      => transform(child, env, schema, tpe).map(ec => o.copy(child = ec))
         case g@GroupBy(_, child)      => transform(child, env, schema, tpe).map(ec => g.copy(child = ec))
         case c@Context(_, child)      => transform(child, env, schema, tpe).map(ec => c.copy(child = ec))
+        case Skipped                  => Skipped.rightIor
         case Empty                    => Empty.rightIor
       }
   }
@@ -291,8 +301,8 @@ object QueryCompiler {
       query match {
         case Group(children) =>
           children.traverse(q => transform(q, env, schema, tpe)).map { eqs =>
-            eqs.filterNot(_ == Empty) match {
-              case Nil => Empty
+            eqs.filterNot(_ == Skipped) match {
+              case Nil => Skipped
               case eq :: Nil => eq
               case eqs => Group(eqs)
             }
@@ -307,7 +317,7 @@ object QueryCompiler {
         case Skip(skip, cond, child) =>
           for {
             c  <- extractCond(env, cond)
-            elaboratedChild <- if(c == skip) Empty.rightIor else transform(child, env, schema, tpe)
+            elaboratedChild <- if(c == skip) Skipped.rightIor else transform(child, env, schema, tpe)
           } yield elaboratedChild
 
         case _ => super.transform(query, env, schema, tpe)
@@ -366,6 +376,11 @@ object QueryCompiler {
    *
    * 3. types narrowing coercions by resolving the target type
    *    against the schema.
+   *
+   * 4. verifies that leaves have an empty subselection set and that
+   *    structured types have a non-empty subselection set.
+   *
+   * 5. eliminates Skipped nodes.
    */
   class SelectElaborator(mapping: Map[TypeRef, PartialFunction[Select, Result[Query]]]) extends Phase {
     override def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] =
@@ -379,12 +394,21 @@ object QueryCompiler {
               case _ => (s: Select) => s.rightIor
             }
 
-            for {
-              elaboratedChild <- transform(child, env, schema, childTpe)
-              elaboratedArgs <- elaborateArgs(tpe, fieldName, args)
-              elaborated <- elaborator(Select(fieldName, elaboratedArgs, elaboratedChild))
-            } yield elaborated
+            val obj = tpe.underlyingObject
+            val isLeaf = childTpe.isUnderlyingLeaf
+            if (isLeaf && child != Empty)
+              mkErrorResult(s"Leaf field '$fieldName' of $obj must have an empty subselection set")
+            else if (!isLeaf && child == Empty)
+              mkErrorResult(s"Non-leaf field '$fieldName' of $obj must have a non-empty subselection set")
+            else
+              for {
+                elaboratedChild <- transform(child, env, schema, childTpe)
+                elaboratedArgs <- elaborateArgs(tpe, fieldName, args)
+                elaborated <- elaborator(Select(fieldName, elaboratedArgs, elaboratedChild))
+              } yield elaborated
           }
+
+        case Skipped => Empty.rightIor
 
         case _ => super.transform(query, env, schema, tpe)
       }

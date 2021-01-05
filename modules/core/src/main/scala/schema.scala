@@ -358,6 +358,39 @@ sealed trait Type {
     case _ => NoType
   }
 
+
+  /**
+   * Is the underlying of this type a leaf type?
+   *
+   * Strip off all aliases, nullability and enclosing list types until
+   * an underlying leaf type is reached, in which case yield true, or an
+   * a object, interface or union type which is reached, in which case
+   * yield false.
+   */
+  def isUnderlyingLeaf: Boolean = this match {
+    case NullableType(tpe) => tpe.isUnderlyingLeaf
+    case ListType(tpe) => tpe.isUnderlyingLeaf
+    case _: TypeRef => dealias.isUnderlyingLeaf
+    case (_: ObjectType)|(_: InterfaceType)|(_: UnionType) => false
+    case _ => true
+  }
+
+  /**
+   * Yield the leaf type underlying this type.
+   *
+   * Strip off all aliases, nullability and enclosing list types until
+   * an underlying leaf type is reached, in which case yield it, or an
+   * a object, interface or union type which is reached, in which case
+   * yield `NoType`.
+   */
+  def underlyingLeaf: Type = this match {
+    case NullableType(tpe) => tpe.underlyingLeaf
+    case ListType(tpe) => tpe.underlyingLeaf
+    case _: TypeRef => dealias.underlyingLeaf
+    case (_: ObjectType)|(_: InterfaceType)|(_: UnionType) => NoType
+    case tpe => tpe
+  }
+
   def isNamed: Boolean = false
 
   def asNamed: Option[NamedType] = None
@@ -832,26 +865,37 @@ object SchemaParser {
       case ScalarTypeDefinition(Name("ID"), _, _) => IDType.rightIor
       case ScalarTypeDefinition(Name(nme), desc, _) => ScalarType(nme, desc).rightIor
       case ObjectTypeDefinition(Name(nme), desc, fields0, ifs0, _) =>
-        for {
-          fields <- fields0.traverse(mkField(schema))
-          ifs = ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
-        } yield ObjectType(nme, desc, fields, ifs)
+        if (fields0.isEmpty) mkErrorResult(s"object type $nme must define at least one field")
+        else
+          for {
+            fields <- fields0.traverse(mkField(schema))
+            ifs = ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+          } yield ObjectType(nme, desc, fields, ifs)
       case InterfaceTypeDefinition(Name(nme), desc, fields0, ifs0, _) =>
-        for {
-          fields <- fields0.traverse(mkField(schema))
-          ifs = ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
-        } yield InterfaceType(nme, desc, fields, ifs)
+        if (fields0.isEmpty) mkErrorResult(s"interface type $nme must define at least one field")
+        else
+          for {
+            fields <- fields0.traverse(mkField(schema))
+            ifs = ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+          } yield InterfaceType(nme, desc, fields, ifs)
       case UnionTypeDefinition(Name(nme), desc, _, members0) =>
-        val members = members0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
-        UnionType(nme, desc, members).rightIor
+        if (members0.isEmpty) mkErrorResult(s"union type $nme must define at least one member")
+        else {
+          val members = members0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+          UnionType(nme, desc, members).rightIor
+        }
       case EnumTypeDefinition(Name(nme), desc, _, values0) =>
-        for {
-          values <- values0.traverse(mkEnumValue)
-        } yield EnumType(nme, desc, values)
+        if (values0.isEmpty) mkErrorResult(s"enum type $nme must define at least one enum value")
+        else
+          for {
+            values <- values0.traverse(mkEnumValue)
+          } yield EnumType(nme, desc, values)
       case InputObjectTypeDefinition(Name(nme), desc, fields0, _) =>
-        for {
-          fields <- fields0.traverse(mkInputValue(schema))
-        } yield InputObjectType(nme, desc, fields)
+        if (fields0.isEmpty) mkErrorResult(s"input object type $nme must define at least one input field")
+        else
+          for {
+            fields <- fields0.traverse(mkInputValue(schema))
+          } yield InputObjectType(nme, desc, fields)
     }
 
     def mkField(schema: Schema)(f: FieldDefinition): Result[Field] = {

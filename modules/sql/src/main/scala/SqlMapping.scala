@@ -573,7 +573,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           case GroupBy(_, child) =>
             loop(child, path, obj, acc)
 
-          case Empty | Query.Component(_, _, _) | (_: Introspect) | (_: Defer) | (_: UntypedNarrow) | (_: Skip) => acc
+          case Empty | Skipped | Query.Component(_, _, _) | (_: Introspect) | (_: Defer) | (_: UntypedNarrow) | (_: Skip) => acc
         }
       }
 
@@ -790,6 +790,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
           case s: Skip                 => mkErrorResult(s"Unexpected Skip ${s.render}")
           case n: UntypedNarrow        => mkErrorResult(s"Unexpected UntypeNarrow ${n.render}")
+          case Skipped                 => mkErrorResult(s"Unexpected Skipped")
         }
       }
 

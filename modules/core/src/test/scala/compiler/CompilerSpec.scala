@@ -4,9 +4,10 @@
 package compiler
 
 import cats.Id
-import cats.data.Ior
+import cats.data.{Chain, Ior}
 import cats.implicits._
 import cats.tests.CatsSuite
+import io.circe.literal.JsonStringContext
 
 import edu.gemini.grackle._
 import Query._, Predicate._, Value._, UntypedOperation._
@@ -212,6 +213,89 @@ final class CompilerSuite extends CatsSuite {
     assert(res == Ior.Right(expected))
   }
 
+  test("invalid: object subselection set empty") {
+    val query = """
+      query {
+        character(id: "1000")
+      }
+    """
+
+    val expected = json"""
+      {
+        "message" : "Non-leaf field 'character' of Query must have a non-empty subselection set"
+      }
+    """
+
+    val res = AtomicMapping.compiler.compile(query)
+
+    assert(res == Ior.Left(Chain(expected)))
+  }
+
+  test("invalid: object subselection set invalid") {
+    val query = """
+      query {
+        character(id: "1000") {
+          foo
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "message" : "Unknown field 'foo' in select"
+      }
+    """
+
+    val res = AtomicMapping.compiler.compile(query)
+
+    assert(res == Ior.Left(Chain(expected)))
+  }
+
+  test("invalid: leaf subselection set not empty (1)") {
+    val query = """
+      query {
+        character(id: "1000") {
+          name {
+            __typename
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "message" : "Leaf field 'name' of Character must have an empty subselection set"
+      }
+    """
+
+    val res = AtomicMapping.compiler.compile(query)
+
+    assert(res == Ior.Left(Chain(expected)))
+  }
+
+
+  test("invalid: leaf subselection set not empty (2)") {
+    val query = """
+      query {
+        character(id: "1000") {
+          name {
+            foo
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "message" : "Leaf field 'name' of Character must have an empty subselection set"
+      }
+    """
+
+    val res = AtomicMapping.compiler.compile(query)
+
+    assert(res == Ior.Left(Chain(expected)))
+  }
+
   test("simple component elaborated query") {
     val query = """
       query {
@@ -221,7 +305,9 @@ final class CompilerSuite extends CatsSuite {
             componentb {
               fieldb1
               fieldb2 {
-                componentc
+                componentc {
+                  fieldc1
+                }
               }
             }
           }
@@ -242,7 +328,9 @@ final class CompilerSuite extends CatsSuite {
                     Select("fieldb2", Nil,
                       Wrap("componentc",
                         Component(ComponentC, TrivialJoin,
-                          Select("componentc", Nil, Empty)
+                          Select("componentc", Nil,
+                            Select("fieldc1", Nil)
+                          )
                         )
                       )
                     )
@@ -288,7 +376,7 @@ object AtomicMapping extends Mapping[Id] {
 }
 
 trait DummyComponent extends Mapping[Id] {
-  val schema = Schema("type Query {}").right.get
+  val schema = Schema("type Query { dummy: Int }").right.get
   val typeMappings = Nil
 }
 
@@ -318,6 +406,7 @@ object ComposedMapping extends Mapping[Id] {
           componentc: ComponentC
         }
         type ComponentC {
+          fieldc1: Int
         }
       """
     ).right.get
