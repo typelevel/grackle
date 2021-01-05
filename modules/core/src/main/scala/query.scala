@@ -207,6 +207,10 @@ object Query {
     }
   }
 
+  case object Skipped extends Query {
+    def render = "<skipped>"
+  }
+
   /** The terminal query */
   case object Empty extends Query {
     def render = ""
