@@ -556,8 +556,8 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
           value  <- IorT(runValue(Wrap("__staged", child), rootTpe.list, cursor).pure[F])
         } yield
           ProtoJson.unpackObject(value) match {
-            case Some(Nil) => ProtoJson.fromValues(Nil)
             case Some(List(unpacked)) => unpacked
+            case _ => ProtoJson.fromValues(Nil)
           }
         ).value
 
@@ -1007,6 +1007,8 @@ object QueryInterpreter {
           case Some(errors) => Ior.Both(errors, value)
           case None => value.rightIor
         }
+      case _ =>
+        mkErrorResult("completeAll yielded impossible result")
     }
 
   /** Complete a collection of possibly deferred results.

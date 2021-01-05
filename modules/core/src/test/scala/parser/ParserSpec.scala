@@ -32,6 +32,7 @@ final class ParserSuite extends CatsSuite {
 
     GraphQLParser.Document.parseOnly(query).option match {
       case Some(List(q)) => assert(q == expected)
+      case _ => assert(false)
     }
   }
 
@@ -63,6 +64,7 @@ final class ParserSuite extends CatsSuite {
 
     GraphQLParser.Document.parseOnly(query).option match {
       case Some(List(q)) => assert(q == expected)
+      case _ => assert(false)
     }
   }
 
@@ -94,6 +96,7 @@ final class ParserSuite extends CatsSuite {
 
     GraphQLParser.Document.parseOnly(query).option match {
       case Some(List(q)) => assert(q == expected)
+      case _ => assert(false)
     }
   }
 
@@ -141,6 +144,7 @@ final class ParserSuite extends CatsSuite {
 
     GraphQLParser.Document.parseOnly(query).option match {
       case Some(List(q)) => assert(q == expected)
+      case _ => assert(false)
     }
   }
 
@@ -182,6 +186,7 @@ final class ParserSuite extends CatsSuite {
 
     GraphQLParser.Document.parseOnly(query).option match {
       case Some(List(q)) => assert(q == expected)
+      case _ => assert(false)
     }
   }
 
@@ -213,6 +218,7 @@ final class ParserSuite extends CatsSuite {
 
     GraphQLParser.Document.parseOnly(query).option match {
       case Some(List(q)) => assert(q == expected)
+      case _ => assert(false)
     }
   }
 
@@ -244,6 +250,7 @@ final class ParserSuite extends CatsSuite {
 
     GraphQLParser.Document.parseOnly(query).option match {
       case Some(List(q)) => assert(q == expected)
+      case _ => assert(false)
     }
   }
 
@@ -275,6 +282,7 @@ final class ParserSuite extends CatsSuite {
 
     GraphQLParser.Document.parseOnly(query).option match {
       case Some(List(q)) => assert(q == expected)
+      case _ => assert(false)
     }
   }
 
@@ -326,6 +334,7 @@ final class ParserSuite extends CatsSuite {
 
     GraphQLParser.Document.parseOnly(query).option match {
       case Some(List(q)) => assert(q == expected)
+      case _ => assert(false)
     }
   }
 }

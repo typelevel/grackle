@@ -89,7 +89,7 @@ trait SqlCoalesceSpec[A <: { def rows: Int ; def cols: Int }] extends AnyFunSuit
       }
     """
 
-    val (res, trace) = mapping.compileAndRun(query).unsafeRunSync
+    val (res, trace) = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)

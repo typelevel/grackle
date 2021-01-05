@@ -1,23 +1,23 @@
 val attoVersion                 = "0.8.0"
-val catsVersion                 = "2.1.1"
-val catsEffectVersion           = "2.1.3"
-val catsTestkitScalaTestVersion = "1.0.1"
+val catsVersion                 = "2.3.1"
+val catsEffectVersion           = "2.3.1"
+val catsTestkitScalaTestVersion = "2.1.0"
 val circeVersion                = "0.13.0"
 val circeOpticsVersion          = "0.13.0"
-val doobieVersion               = "0.9.0"
-val http4sVersion               = "0.21.4"
-val jawnVersion                 = "1.0.0"
+val doobieVersion               = "0.9.4"
+val http4sVersion               = "0.21.15"
+val jawnVersion                 = "1.0.1"
 val kindProjectorVersion        = "0.10.3"
 val logbackVersion              = "1.2.3"
 val log4catsVersion             = "1.1.1"
-val skunkVersion                = "0.0.21"
+val skunkVersion                = "0.0.22"
 val shapelessVersion            = "2.3.3"
-val testContainersVersion       = "0.37.0"
+val testContainersVersion       = "0.38.8"
 
 inThisBuild(Seq(
   homepage := Some(url("https://github.com/gemini-hlsw/gsp-graphql")),
   addCompilerPlugin("org.typelevel" %% "kind-projector" % kindProjectorVersion),
-  scalaVersion := "2.13.2"
+  scalaVersion := "2.13.4"
 ) ++ gspPublishSettings)
 
 lazy val commonSettings = Seq(
@@ -116,8 +116,8 @@ lazy val doobie = project
     fork in Test := true,
     parallelExecution in Test := false,
     libraryDependencies ++= Seq(
-      "org.tpolecat"      %% "doobie-core"            % doobieVersion,
-      "org.tpolecat"      %% "doobie-postgres-circe"        % doobieVersion,
+      "org.tpolecat"      %% "doobie-core"           % doobieVersion,
+      "org.tpolecat"      %% "doobie-postgres-circe" % doobieVersion,
     )
   )
 
@@ -132,8 +132,8 @@ lazy val skunk = project
     fork in Test := true,
     parallelExecution in Test := false,
     libraryDependencies ++= Seq(
-      "org.tpolecat"      %% "skunk-core"            % "0.0.21",
-      "org.tpolecat"      %% "skunk-circe"        % "0.0.21",
+      "org.tpolecat"      %% "skunk-core"  % skunkVersion,
+      "org.tpolecat"      %% "skunk-circe" % skunkVersion,
     )
   )
 

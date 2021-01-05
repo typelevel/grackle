@@ -25,7 +25,7 @@ trait SqlWorldSpec extends AnyFunSuite {
 
     val expected = 239
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     val resSize = root.data.countries.arr.getOption(res).map(_.size)
@@ -52,7 +52,7 @@ trait SqlWorldSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -125,7 +125,7 @@ trait SqlWorldSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -156,7 +156,7 @@ trait SqlWorldSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -200,7 +200,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -287,7 +287,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -436,7 +436,7 @@ trait SqlWorldSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -489,7 +489,7 @@ trait SqlWorldSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -552,7 +552,7 @@ trait SqlWorldSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -625,7 +625,7 @@ trait SqlWorldSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -712,7 +712,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -754,7 +754,7 @@ trait SqlWorldSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -783,7 +783,7 @@ trait SqlWorldSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -801,7 +801,7 @@ trait SqlWorldSpec extends AnyFunSuite {
         }
       }
     """
-    val json      = mapping.compileAndRun(query).unsafeRunSync
+    val json      = mapping.compileAndRun(query).unsafeRunSync()
     val countries = root.data.countries.arr.getOption(json).get
     val map       = countries.map(j => root.name.string.getOption(j).get -> root.cities.arr.getOption(j).get.length).toMap
     assert(map("Kazakstan")  == 21)
@@ -828,7 +828,7 @@ trait SqlWorldSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -855,7 +855,7 @@ trait SqlWorldSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -882,7 +882,7 @@ trait SqlWorldSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -909,7 +909,7 @@ trait SqlWorldSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -936,7 +936,7 @@ trait SqlWorldSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -977,7 +977,7 @@ trait SqlWorldSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -1010,7 +1010,7 @@ trait SqlWorldSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -1047,7 +1047,7 @@ trait SqlWorldSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
