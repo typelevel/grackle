@@ -50,6 +50,7 @@ out/
 .bloop/
 .metals/
 metals.sbt
+.bsp
 
 # Vim
 *.swp

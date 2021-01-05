@@ -45,7 +45,7 @@ trait SqlMovieSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -82,7 +82,7 @@ trait SqlMovieSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -119,7 +119,7 @@ trait SqlMovieSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -152,7 +152,7 @@ trait SqlMovieSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -189,7 +189,7 @@ trait SqlMovieSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -226,7 +226,7 @@ trait SqlMovieSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -271,7 +271,7 @@ trait SqlMovieSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -308,7 +308,7 @@ trait SqlMovieSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -341,7 +341,7 @@ trait SqlMovieSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -371,7 +371,7 @@ trait SqlMovieSpec extends AnyFunSuite {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)

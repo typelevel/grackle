@@ -435,6 +435,7 @@ object JoinType {
   def unapply(ot: ObjectType): Option[(String, Type)] = ot match {
     case ObjectType(nme, None, List(Field(fieldName, None, Nil, tpe, false, None)), Nil) if nme == s"<$fieldName:$tpe>" =>
       Some((fieldName, tpe))
+    case _ => None
   }
 }
 

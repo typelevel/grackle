@@ -48,7 +48,7 @@ final class ProjectionSpec extends DatabaseSuite with SqlProjectionSpec {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -93,7 +93,7 @@ final class ProjectionSpec extends DatabaseSuite with SqlProjectionSpec {
       }
     """
 
-    val res = mapping.compileAndRun(query).unsafeRunSync
+    val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
