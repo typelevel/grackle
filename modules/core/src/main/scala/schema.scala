@@ -5,14 +5,14 @@ package edu.gemini.grackle
 
 import atto.Atto._
 import cats.data.{Ior, NonEmptyChain}
-import cats.implicits._
 import io.circe.Json
-import Ast.{EnumTypeDefinition, ObjectTypeDefinition, TypeDefinition}
+import Ast.{EnumTypeDefinition, FieldDefinition, InterfaceTypeDefinition, ObjectTypeDefinition, TypeDefinition}
 import QueryInterpreter.{mkError, mkErrorResult, mkOneError}
 import ScalarType._
 import Value._
 import cats.data.Ior.Both
 import cats.kernel.Semigroup
+import cats.implicits._
 
 /**
  * Representation of a GraphQL schema
@@ -995,11 +995,45 @@ object SchemaValidator {
   def validateSchema(namedTypes: Result[List[NamedType]], defns: List[TypeDefinition]): Result[List[NamedType]] = {
     val undefinedResults = checkForUndefined(checkForDuplicates(namedTypes), defns)
 
-    val duplicates = NonEmptyChain.fromSeq(checkForEnumValueDuplicates(defns))
+    val errors = NonEmptyChain.fromSeq(checkForEnumValueDuplicates(defns) ++ validateImpls(defns))
+    errors.map(addLeft(undefinedResults, _)).getOrElse(undefinedResults)
+  }
 
-    duplicates.map { errors =>
-      addLeft(undefinedResults, errors)
-    }.getOrElse(undefinedResults)
+  def validateImpls(definitions: List[TypeDefinition]): List[Json] = {
+    val interfaces = definitions.collect {
+      case a: InterfaceTypeDefinition => a
+    }
+
+    val objects = definitions.collect {
+      case a: ObjectTypeDefinition => a
+    }
+
+    objects.flatMap { obj =>
+      obj.interfaces.flatMap { ifaceName =>
+        interfaces.find(_.name == ifaceName.astName) match {
+          case Some(interface) => checkImplementation(obj, interface)
+          case None => List(mkError(s"Interface ${ifaceName.astName.value} implemented by object ${obj.name.value} is not defined"))
+        }
+      }
+    }
+  }
+
+  def checkImplementation(obj: ObjectTypeDefinition, interface: InterfaceTypeDefinition): List[Json] = {
+    interface.fields.flatMap { ifaceField =>
+      obj.fields.find(_.name == ifaceField.name).map { matching =>
+        if (ifaceField.tpe != matching.tpe) {
+          Some(mkError(s"Field ${matching.name.value} has type ${matching.tpe.name}, however implemented interface ${interface.name.value} requires it to be of type ${ifaceField.tpe.name}"))
+        } else if (!argsMatch(matching, ifaceField)) {
+          Some(mkError(s"Field ${matching.name.value} of object ${obj.name.value} has has an argument list that does not match that specified by implemented interface ${interface.name.value}"))
+        } else {
+          None
+        }
+      }.getOrElse(Some(mkError(s"Expected field ${ifaceField.name.value} from interface ${interface.name.value} is not implemented by object ${obj.name.value}")))
+    }
+  }
+
+  def argsMatch(fieldOne: FieldDefinition, fieldTwo: FieldDefinition): Boolean = fieldOne.args.corresponds(fieldTwo.args) { case (arg, implArg) =>
+    arg.name == implArg.name && arg.tpe == implArg.tpe
   }
 
   def addLeft[A: Semigroup, B](ior: Ior[A,B], a: A): Ior[A, B] = ior match {
