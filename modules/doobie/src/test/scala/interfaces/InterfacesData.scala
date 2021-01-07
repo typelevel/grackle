@@ -68,7 +68,7 @@ trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
         tpe = QueryType,
         fieldMappings =
           List(
-            SqlRoot("entities"),
+            SqlRoot("entities")
           )
       ),
       SqlInterfaceMapping(

@@ -311,6 +311,7 @@ sealed trait Type {
     case _: TypeRef => dealias.underlyingObject
     case o: ObjectType => o
     case i: InterfaceType => i
+    case u: UnionType => u
     case _ => NoType
   }
 
