@@ -11,8 +11,6 @@ import CommentedText._
 
 object GraphQLParser {
 
-  // TODO: .token needs to also absorb commas, as do all the paren combinators
-
   def keyword(s: String) = token(string(s))
 
   lazy val Document: Parser[Ast.Document] =
@@ -120,7 +118,7 @@ object GraphQLParser {
     } yield Ast.FieldDefinition(name, desc.map(_.value), args.getOrElse(Nil), tpe, dirs.getOrElse(Nil))
 
   lazy val ArgumentsDefinition =
-    parens(many(InputValueDefinition <~ opt(keyword(","))))
+    parens(many(InputValueDefinition))
 
   lazy val InputFieldsDefinition =
     braces(many(InputValueDefinition))
@@ -139,7 +137,7 @@ object GraphQLParser {
     (keyword("=") ~ opt(keyword("|"))) ~> sepBy(NamedType, keyword("|"))
 
   lazy val EnumValuesDefinition =
-    braces(many(EnumValueDefinition <~ opt(keyword(","))))
+    braces(many(EnumValueDefinition))
 
   lazy val EnumValueDefinition =
     for {
@@ -228,7 +226,7 @@ object GraphQLParser {
     Name <~ keyword(":")
 
   lazy val Arguments: Parser[List[(Ast.Name, Ast.Value)]] =
-    parens(many(Argument <~ opt(keyword(","))))
+    parens(many(Argument))
 
   lazy val Argument: Parser[(Ast.Name, Ast.Value)] =
     (Name <~ keyword(":")) ~ Value
@@ -282,7 +280,7 @@ object GraphQLParser {
     } .map(Ast.Value.EnumValue)
 
   lazy val ListValue: Parser[Ast.Value.ListValue] =
-    token(squareBrackets(many(Value <~ opt(keyword(",")))).map(Ast.Value.ListValue))
+    token(squareBrackets(many(Value)).map(Ast.Value.ListValue))
 
   lazy val IntValue: Parser[Ast.Value.IntValue] =
     token(bigDecimal).filter(_.isValidInt).map(a => Ast.Value.IntValue(a.toInt))
@@ -297,13 +295,13 @@ object GraphQLParser {
     (keyword("true").as(true) | keyword("false").as(false)).map(Ast.Value.BooleanValue)
 
   lazy val ObjectValue: Parser[Ast.Value.ObjectValue] =
-    braces(many(ObjectField <~ opt(keyword(",")))).map(Ast.Value.ObjectValue)
+    braces(many(ObjectField)).map(Ast.Value.ObjectValue)
 
   lazy val ObjectField: Parser[(Ast.Name, Ast.Value)] =
     (Name <~ keyword(":")) ~ Value
 
   lazy val VariableDefinitions =
-    parens(many(VariableDefinition <~ opt(keyword(","))))
+    parens(many(VariableDefinition))
 
   lazy val VariableDefinition: Parser[Ast.VariableDefinition] =
     for {
@@ -311,8 +309,7 @@ object GraphQLParser {
       _    <- keyword(":")
       tpe  <- Type
       dv   <- opt(DefaultValue)
-      dirs <- Directives
-    } yield Ast.VariableDefinition(v.name, tpe, dv, dirs)
+    } yield Ast.VariableDefinition(v.name, tpe, dv)
 
   lazy val Variable: Parser[Ast.Value.Variable] =
     keyword("$") ~> Name.map(Ast.Value.Variable)
@@ -347,6 +344,9 @@ object GraphQLParser {
 }
 
 object CommentedText {
+
+  def skipWhitespace: Parser[Unit] =
+    takeWhile(c => c.isWhitespace || c == ',').void named "whitespace"
 
   /** Parser that consumes a comment */
   def comment: Parser[Unit] = {

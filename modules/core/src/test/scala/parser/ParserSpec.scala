@@ -267,7 +267,7 @@ final class ParserSuite extends CatsSuite {
 
     val expected =
       Operation(Query, Some(Name("getZuckProfile")),
-        List(VariableDefinition(Name("devicePicSize"), Named(Name("Int")), None, Nil)),
+        List(VariableDefinition(Name("devicePicSize"), Named(Name("Int")), None)),
         Nil,
         List(
           Field(None, Name("user"), List((Name("id"), IntValue(4))), Nil,
