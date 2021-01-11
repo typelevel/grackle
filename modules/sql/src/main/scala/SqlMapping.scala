@@ -11,11 +11,9 @@ import edu.gemini.grackle.QueryCompiler._
 import edu.gemini.grackle.QueryInterpreter.mkErrorResult
 import edu.gemini.grackle.QueryInterpreter.ProtoJson
 import edu.gemini.grackle.sql._
-
-import cats.{ Eq, Monoid }
-import cats.data.{ Chain, Ior, NonEmptyList }
+import cats.{Eq, Monoid}
+import cats.data.{Chain, Ior, NonEmptyList}
 import cats.implicits._
-
 import io.circe.Json
 
 /** An abstract mapping that is backed by a SQL database. */
@@ -141,6 +139,24 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
     def apply(tpe: Type, fieldMappings: List[FieldMapping], path: List[String] = Nil, discriminator: Cursor => Result[Type] = defaultDiscriminator): ObjectMapping =
       new DefaultInterfaceMapping(tpe, fieldMappings.map(_.withParent(tpe)), path) {
+        def discriminate(cursor: Cursor): Result[Type] = discriminator(cursor)
+      }
+
+  }
+
+  sealed trait SqlUnionMapping extends ObjectMapping {
+    def discriminate(cursor: Cursor): Result[Type]
+  }
+
+  object SqlUnionMapping {
+
+    sealed abstract case class DefaultUnionMapping(tpe: Type, fieldMappings: List[FieldMapping], path: List[String])
+      extends SqlUnionMapping
+
+    val defaultDiscriminator: Cursor => Result[Type] = (cursor: Cursor) => cursor.tpe.rightIor
+
+    def apply(tpe: Type, fieldMappings: List[FieldMapping], path: List[String] = Nil, discriminator: Cursor => Result[Type] = defaultDiscriminator): ObjectMapping =
+      new DefaultUnionMapping(tpe, fieldMappings.map(_.withParent(tpe)), path) {
         def discriminate(cursor: Cursor): Result[Type] = discriminator(cursor)
       }
 
@@ -548,7 +564,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             loop(child, contextPath, tpe, acc)
 
           case Narrow(subtpe, child) =>
-            loop(child, path, subtpe, acc)
+            loop(child, path, subtpe, (requiredCols, List.empty[Join], List.empty[(List[String], Type, Predicate)], requiredMappings) |+| acc)
           case Filter(pred, child) =>
             loop(child, path, obj, loopPredicate(pred) |+| acc)
           case Unique(pred, child) =>
@@ -932,6 +948,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         objectMapping(path, tpe) match {
           case Some(im: SqlInterfaceMapping) =>
             im.discriminate(this).getOrElse(tpe)
+          case Some(um: SqlUnionMapping) =>
+            um.discriminate(this).getOrElse(tpe)
           case _ => tpe
         }
       if (ctpe =:= tpe)
