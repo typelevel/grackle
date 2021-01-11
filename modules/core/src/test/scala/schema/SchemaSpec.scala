@@ -138,7 +138,7 @@ final class SchemaSpec extends CatsSuite {
 
     schema match {
       case Both(a, b)  =>
-        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Interface Character implemented by object Human is not defined", "Interface Contactable implemented by object Human is not defined"))
+        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Interface Character implemented by Human is not defined", "Interface Contactable implemented by Human is not defined"))
         assert(b.types.map(_.name) == List("Human"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
@@ -161,8 +161,31 @@ final class SchemaSpec extends CatsSuite {
 
     schema match {
       case Both(a, b)  =>
-        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Expected field id from interface Character is not implemented by object Human", "Expected field email from interface Character is not implemented by object Human"))
+        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Expected field id from interface Character is not implemented by Human", "Expected field email from interface Character is not implemented by Human"))
         assert(b.types.map(_.name) == List("Character", "Human"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
+  test("schema validation: interface failing to implement interface fields") {
+    val schema = Schema(
+      """
+         interface Character {
+          id: ID!
+          name: String!
+          email: String!
+        }
+
+         interface Named implements Character {
+           name: String!
+         }
+    """
+    )
+
+    schema match {
+      case Both(a, b)  =>
+        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Expected field id from interface Character is not implemented by Named", "Expected field email from interface Character is not implemented by Named"))
+        assert(b.types.map(_.name) == List("Character", "Named"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -203,7 +226,7 @@ final class SchemaSpec extends CatsSuite {
 
     schema match {
       case Both(a, b)  =>
-        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Field name of object Human has has an argument list that does not match that specified by implemented interface Character"))
+        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Field name of Human has has an argument list that does not match that specified by implemented interface Character"))
         assert(b.types.map(_.name) == List("Character", "Human"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
@@ -229,7 +252,7 @@ final class SchemaSpec extends CatsSuite {
 
     schema match {
       case Both(a, b)  =>
-        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Expected field id from interface Character is not implemented by object Human", "Expected field id from interface Character is not implemented by object Dog"))
+        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Expected field id from interface Character is not implemented by Human", "Expected field id from interface Character is not implemented by Dog"))
         assert(b.types.map(_.name) == List("Character", "Human", "Dog"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
@@ -255,7 +278,7 @@ final class SchemaSpec extends CatsSuite {
 
     schema match {
       case Both(a, b)  =>
-        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Expected field id from interface Character is not implemented by object Human", "Expected field email from interface Contactable is not implemented by object Human"))
+        assert(a.map(_.\\("message").head.asString.get) == NonEmptyChain("Expected field id from interface Character is not implemented by Human", "Expected field email from interface Contactable is not implemented by Human"))
         assert(b.types.map(_.name) == List("Character", "Contactable", "Human"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
