@@ -15,6 +15,8 @@ import cats.{Eq, Monoid}
 import cats.data.{Chain, Ior, NonEmptyList}
 import cats.implicits._
 import io.circe.Json
+import org.tpolecat.typename._
+import org.tpolecat.sourcepos.SourcePos
 
 /** An abstract mapping that is backed by a SQL database. */
 trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
@@ -39,9 +41,11 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
   /**
    * Name of a SQL schema column and its associated codec. Note that `ColumnRef`s are consider equal
-   * if their names are equal; the codec member is ignored.
+   * if their table and column names are equal.
    */
-  case class ColumnRef(table: String, column: String, codec: Codec[_]) {
+  case class ColumnRef(table: String, column: String, codec: Codec[_], scalaTypeName: String)(
+    implicit val pos: SourcePos
+  ) {
 
     /** This `ColumnRef` as a SQL expression of the form `table.column`. */
     def toSql: String =
@@ -49,12 +53,21 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
     override def equals(other: Any) =
       other match {
-        case ColumnRef(`table`, `column`, _) => true
+        case ColumnRef(`table`, `column`, _, _) => true
         case _ => false
       }
 
     override def hashCode(): Int =
       table.hashCode() + column.hashCode()
+
+  }
+
+  object ColumnRef {
+
+    def apply[A: TypeName](table: String, column: String, codec: Codec[A])(
+      implicit pos: SourcePos
+    ): ColumnRef =
+      apply(table, column, codec, typeName)
 
   }
 
@@ -117,7 +130,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     columnRef: ColumnRef,
     key: Boolean = false,
     discriminator: Boolean = false
-  ) extends SqlFieldMapping
+  )(implicit val pos: SourcePos) extends SqlFieldMapping
 
   case class SqlObject(fieldName: String, joins: List[Join]) extends SqlFieldMapping
   object SqlObject {
