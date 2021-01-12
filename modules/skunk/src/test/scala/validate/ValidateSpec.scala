@@ -134,12 +134,17 @@ final class ValidateSpec extends AnyFunSuite {
 
     val v = new SqlMappingValidator(Mapping1)
     v.validateMapping().toList.sortBy(_.severity).foreach { f =>
-      println(s"${f.prefix}$f")
+      println(s"${f.toErrorMessage}")
     }
 
     fail("unimplemented")
 
   }
+
+  import cats.Functor
+
+  val x: Functor[F] forSome { type F[a] } = Functor[List]
+
 
 
   List(

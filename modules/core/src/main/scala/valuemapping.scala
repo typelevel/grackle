@@ -11,10 +11,13 @@ import io.circe.Json
 
 import QueryInterpreter.{mkErrorResult, mkOneError}
 import ScalarType._
+import org.tpolecat.sourcepos.SourcePos
 
 abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
 
-  case class ValueRoot(val tpe: Type, val fieldName: String, root0: () => Any) extends RootMapping {
+  case class ValueRoot(val tpe: Type, val fieldName: String, root0: () => Any)(
+    implicit val pos: SourcePos
+  ) extends RootMapping {
     lazy val root: Any = root0()
     def cursor(query: Query): F[Result[Cursor]] = {
       val fieldTpe = tpe.field(fieldName)
@@ -36,17 +39,17 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
   sealed trait ValueField0[T] extends FieldMapping
   object ValueField0 {
     implicit def wrap[T](fm: FieldMapping): ValueField0[T] = Wrap(fm)
-    case class Wrap[T](fm: FieldMapping) extends ValueField0[T] {
+    case class Wrap[T](fm: FieldMapping)(implicit val pos: SourcePos) extends ValueField0[T] {
       def fieldName = fm.fieldName
       def isPublic = fm.isPublic
       def withParent(tpe: Type): FieldMapping = fm.withParent(tpe)
     }
   }
-  case class ValueField[T](fieldName: String, f: T => Any) extends ValueField0[T] {
+  case class ValueField[T](fieldName: String, f: T => Any)(implicit val pos: SourcePos) extends ValueField0[T] {
     def isPublic = true
     def withParent(tpe: Type): ValueField[T] = this
   }
-  case class ValueAttribute[T](fieldName: String, f: T => Any) extends ValueField0[T] {
+  case class ValueAttribute[T](fieldName: String, f: T => Any)(implicit val pos: SourcePos) extends ValueField0[T] {
     def isPublic = false
     def withParent(tpe: Type): ValueAttribute[T] = this
   }
@@ -55,7 +58,7 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
     tpe: Type,
     fieldMappings: List[FieldMapping],
     classTag: ClassTag[T]
-  ) extends ObjectMapping
+  )(implicit val pos: SourcePos) extends ObjectMapping
 
   def ValueObjectMapping[T: ClassTag](
     tpe: Type,

@@ -10,9 +10,12 @@ import io.circe.Json
 
 import QueryInterpreter.{mkErrorResult, mkOneError}
 import ScalarType._
+import org.tpolecat.sourcepos.SourcePos
 
 abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
-  case class CirceRoot(val tpe: Type, val fieldName: String, root: Json) extends RootMapping {
+  case class CirceRoot(val tpe: Type, val fieldName: String, root: Json)(
+    implicit val pos: SourcePos
+  ) extends RootMapping {
     def cursor(query: Query): F[Result[Cursor]] = {
       val fieldTpe = tpe.field(fieldName)
       val cursorTpe = query match {

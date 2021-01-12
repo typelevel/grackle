@@ -17,6 +17,9 @@ class MappingValidator[M <: Mapping[F] forSome { type F[a] }](val mapping: M) {
     extends Failure(Severity.Info, typeMapping.tpe, None) {
     override def toString: String =
       s"$productPrefix(${typeMapping.tpe}, ${typeMapping.productPrefix})"
+    override def formattedMessage: String =
+      s"""|The ${typeMapping.productPrefix} for ${typeMapping.tpe} cannot be validated.
+          |""".stripMargin
   }
 
   /** Can't validate this kind of `FieldMapping`. */
@@ -24,13 +27,32 @@ class MappingValidator[M <: Mapping[F] forSome { type F[a] }](val mapping: M) {
     extends Failure(Severity.Info, owner, Some(fieldMapping.fieldName)) {
     override def toString: String =
       s"$productPrefix($owner.${field.name}:${field.tpe}, ${fieldMapping.productPrefix})"
+    override def formattedMessage: String =
+      s"""|Field mapping cannot be validated.
+          |
+          |- Field ${graphql(s"$owner.${field.name}")} of type ${graphql(field.tpe)} is defined by a Schema at (1).
+          |- Its mapping to Scala is defined by a ${scala(fieldMapping.productPrefix)} at (2).
+          |- ${UNDERLINED}This kind of mapping canont be validated.$RESET Ensure you have unit tests.
+          |
+          |(1) ${schema.pos}
+          |(2) ${fieldMapping.pos}
+          |""".stripMargin
   }
 
   /** Object type `owner` declares `field` but no such mapping exists. */
-  case class MissingFieldMapping(owner: ObjectType, field: Field)
-    extends Failure(Severity.Error, owner, Some(field.name)) {
+  case class MissingFieldMapping(owner: ObjectMapping, field: Field)
+    extends Failure(Severity.Error, owner.tpe, Some(field.name)) {
     override def toString: String =
       s"$productPrefix($owner.${field.name}:${field.tpe})"
+    override def formattedMessage: String =
+      s"""|Missing field mapping.
+          |
+          |- Field ${graphql(s"${owner.tpe}.${field.name}")} of type ${graphql(field.tpe)} is defined by a Schema at (1).
+          |- The ${scala(owner.productPrefix)} for ${graphql(owner.tpe)} at (2) ${UNDERLINED}does not define a mapping for this field$RESET.
+          |
+          |(1) ${schema.pos}
+          |(2) ${owner.pos}
+          |""".stripMargin
   }
 
   /** GraphQL type isn't applicable for mapping type. */
@@ -67,7 +89,7 @@ class MappingValidator[M <: Mapping[F] forSome { type F[a] }](val mapping: M) {
           case ot @ ObjectType(_, _, fields, _) => fields.foldMap { f =>
             fieldMappings.find(_.fieldName == f.name) match {
               case Some(fm) => validateFieldMapping(ot, f, fm)
-              case None     => Chain(MissingFieldMapping(ot, f))
+              case None     => Chain(MissingFieldMapping(m, f))
             }
           }
           case other =>
@@ -106,9 +128,7 @@ object MappingValidator {
       fieldName:    Option[String],
     ) = this(severity, tpe.toString, fieldName)
 
-    def text: String =
-      s"""|$severity regarding the mapping for $BLUE$graphQLTypeName${fieldName.foldMap("." + _)}$RESET (GraphQL):
-          |""".stripMargin
+    def formattedMessage: String = s"$toString (no detail given)"
 
     val prefix: String =
       severity match {
@@ -117,8 +137,12 @@ object MappingValidator {
         case Severity.Info    => "ℹ️  "
       }
 
-    def toErrorMessage: String =
-      s"""|$text
+    def graphql(a: Any) = s"$BLUE$a$RESET"
+    def scala(a: Any) = s"$RED$a$RESET"
+    def sql(a: Any) = s"$GREEN$a$RESET"
+
+    final def toErrorMessage: String =
+      s"""|$formattedMessage
           |""".stripMargin.linesIterator.mkString(s"$prefix\n$prefix", s"\n$prefix", s"\n$prefix\n")
 
   }
