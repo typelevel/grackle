@@ -30,7 +30,7 @@ class MappingValidator[M <: Mapping[F] forSome { type F[a] }](val mapping: M) {
     override def formattedMessage: String =
       s"""|Field mapping cannot be validated.
           |
-          |- Field ${graphql(s"$owner.${field.name}")} of type ${graphql(field.tpe)} is defined by a Schema at (1).
+          |- Field ${graphql(s"$owner.${field.name}: ${field.tpe}")} is defined by a Schema at (1).
           |- Its mapping to Scala is defined by a ${scala(fieldMapping.productPrefix)} at (2).
           |- ${UNDERLINED}This kind of mapping canont be validated.$RESET Ensure you have unit tests.
           |
@@ -47,7 +47,7 @@ class MappingValidator[M <: Mapping[F] forSome { type F[a] }](val mapping: M) {
     override def formattedMessage: String =
       s"""|Missing field mapping.
           |
-          |- Field ${graphql(s"${owner.tpe}.${field.name}")} of type ${graphql(field.tpe)} is defined by a Schema at (1).
+          |- Field ${graphql(s"${owner.tpe}${field.name}: ${field.tpe}")} is defined by a Schema at (1).
           |- The ${scala(owner.productPrefix)} for ${graphql(owner.tpe)} at (2) ${UNDERLINED}does not define a mapping for this field$RESET.
           |
           |(1) ${schema.pos}
@@ -56,10 +56,20 @@ class MappingValidator[M <: Mapping[F] forSome { type F[a] }](val mapping: M) {
   }
 
   /** GraphQL type isn't applicable for mapping type. */
-  case class InapplicableGraphQLType(typeMapping: TypeMapping, actual: Type)
+  case class InapplicableGraphQLType(typeMapping: TypeMapping, expected: String)
     extends Failure(Severity.Error, typeMapping.tpe, None) {
     override def toString: String =
-      s"$productPrefix(${typeMapping.productPrefix}, ${actual.productPrefix})"
+      s"$productPrefix(${typeMapping.productPrefix}, ${typeMapping.tpe.productPrefix})"
+    override def formattedMessage: String =
+      s"""|Inapplicable GraphQL type.
+          |
+          |- Type ${graphql(typeMapping.tpe)} (${scala(typeMapping.tpe.dealias.productPrefix)}) is defined by a Schema at (1).
+          |- It is mapped by a ${graphql(typeMapping.productPrefix)} at (2), which expects ${scala(expected)}.
+          |- ${UNDERLINED}Use a different kind of mapping for this type.$RESET
+          |
+          |(1) ${schema.pos}
+          |(2) ${typeMapping.pos}
+          |""".stripMargin
   }
 
 
@@ -76,7 +86,7 @@ class MappingValidator[M <: Mapping[F] forSome { type F[a] }](val mapping: M) {
   protected def validateLeafMapping(lm: LeafMapping[_]): Chain[Failure] =
     lm.tpe.dealias match {
       case ScalarType(_, _) => Chain.empty // these are valid on construction. Nothing to do.
-      case other            => Chain(InapplicableGraphQLType(lm, other))
+      case _                => Chain(InapplicableGraphQLType(lm, "ScalarType"))
     }
 
   protected def validateFieldMapping(owner: ObjectType, field: Field, fieldMapping: FieldMapping): Chain[Failure] =
@@ -92,8 +102,8 @@ class MappingValidator[M <: Mapping[F] forSome { type F[a] }](val mapping: M) {
               case None     => Chain(MissingFieldMapping(m, f))
             }
           }
-          case other =>
-            Chain(InapplicableGraphQLType(m, other))
+          case _ =>
+            Chain(InapplicableGraphQLType(m, "ObjectType"))
         }
     }
 
@@ -143,6 +153,8 @@ object MappingValidator {
 
     final def toErrorMessage: String =
       s"""|$formattedMessage
+          |
+          |Color Key: ${scala("◼")} Scala | ${graphql("◼")} GraphQL | ${sql("◼")} SQL
           |""".stripMargin.linesIterator.mkString(s"$prefix\n$prefix", s"\n$prefix", s"\n$prefix\n")
 
   }

@@ -18,8 +18,8 @@ class SqlMappingValidator[M <: SqlMapping[F] forSome { type F[a] }](sqlMapping: 
     override def formattedMessage: String =
       s"""|Inconsistent type mapping.
           |
-          |- Field ${graphql(s"$owner.${field.name}")} of type ${graphql(field.tpe)} is defined by a Schema at (1).
-          |- A ${lm.productPrefix} at (2) maps ${graphql(field.tpe)} to Scala type ${scala(lm.scalaTypeName)}.
+          |- Field ${graphql(s"$owner.${field.name}: ${field.tpe}")} is defined by a Schema at (1).
+          |- A ${scala(lm.productPrefix)} at (2) maps ${graphql(field.tpe)} to Scala type ${scala(lm.scalaTypeName)}.
           |- The ${scala(sf.productPrefix)} at (3) and ${scala(sf.columnRef.productPrefix)} for ${sql(s"${sf.columnRef.table}.${sf.columnRef.column}")} at (4) map ${graphql(field.tpe)} to Scala type ${scala(sf.columnRef.scalaTypeName)}.
           |- ${UNDERLINED}The Scala types are inconsistent.$RESET
           |
@@ -37,7 +37,7 @@ class SqlMappingValidator[M <: SqlMapping[F] forSome { type F[a] }](sqlMapping: 
     override def formattedMessage: String =
       s"""|Missing leaf mapping.
           |
-          |- Field ${graphql(s"$owner.${field.name}")} of type ${graphql(field.tpe)} is defined by a Schema at (1).
+          |- Field ${graphql(s"$owner.${field.name}: ${field.tpe}")} is defined by a Schema at (1).
           |- ${UNDERLINED}No leaf mapping was found$RESET for ${graphql(field.tpe)}.
           |- The ${scala(sf.productPrefix)} at (2) and ${scala(sf.columnRef.productPrefix)} for ${sql(s"${sf.columnRef.table}.${sf.columnRef.column}")} at (3) suggest that ${graphql(field.tpe)} should map to Scala type ${scala(sf.columnRef.scalaTypeName)}.
           |
