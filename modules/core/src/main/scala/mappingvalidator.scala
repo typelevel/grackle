@@ -47,7 +47,7 @@ class MappingValidator[M <: Mapping[F] forSome { type F[a] }](val mapping: M) {
     override def formattedMessage: String =
       s"""|Missing field mapping.
           |
-          |- Field ${graphql(s"${owner.tpe}${field.name}: ${field.tpe}")} is defined by a Schema at (1).
+          |- Field ${graphql(s"${owner.tpe}.${field.name}: ${field.tpe}")} is defined by a Schema at (1).
           |- The ${scala(owner.productPrefix)} for ${graphql(owner.tpe)} at (2) ${UNDERLINED}does not define a mapping for this field$RESET.
           |
           |(1) ${schema.pos}
@@ -71,7 +71,6 @@ class MappingValidator[M <: Mapping[F] forSome { type F[a] }](val mapping: M) {
           |(2) ${typeMapping.pos}
           |""".stripMargin
   }
-
 
   def validateMapping(): Chain[Failure] =
     Chain.fromSeq(typeMappings).foldMap(validateTypeMapping)
@@ -138,18 +137,18 @@ object MappingValidator {
       fieldName:    Option[String],
     ) = this(severity, tpe.toString, fieldName)
 
-    def formattedMessage: String = s"$toString (no detail given)"
+    protected def formattedMessage: String = s"$toString (no detail given)"
 
-    val prefix: String =
+    private val prefix: String =
       severity match {
         case Severity.Error   => "🛑 "
         case Severity.Warning => "⚠️ "
         case Severity.Info    => "ℹ️  "
       }
 
-    def graphql(a: Any) = s"$BLUE$a$RESET"
-    def scala(a: Any) = s"$RED$a$RESET"
-    def sql(a: Any) = s"$GREEN$a$RESET"
+    protected def graphql(a: Any) = s"$BLUE$a$RESET"
+    protected def scala(a: Any) = s"$RED$a$RESET"
+    protected def sql(a: Any) = s"$GREEN$a$RESET"
 
     final def toErrorMessage: String =
       s"""|$formattedMessage

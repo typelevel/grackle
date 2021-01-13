@@ -16,9 +16,12 @@ import shapeless.ops.record.Keys
 
 import QueryInterpreter.{ mkErrorResult, mkOneError }
 import ShapelessUtils._
+import org.tpolecat.sourcepos.SourcePos
 
 abstract class GenericMapping[F[_]: Monad] extends Mapping[F] {
-  case class GenericRoot[T](val tpe: Type, val fieldName: String, t: T, cb: () => CursorBuilder[T]) extends RootMapping {
+  case class GenericRoot[T](val tpe: Type, val fieldName: String, t: T, cb: () => CursorBuilder[T])(
+    implicit val pos: SourcePos
+  ) extends RootMapping {
     lazy val cursorBuilder = cb()
     def cursor(query: Query): F[Result[Cursor]] = cursorBuilder.build(Nil, t).pure[F]
     def withParent(tpe: Type): GenericRoot[T] =

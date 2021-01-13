@@ -30,23 +30,6 @@ class SqlMappingValidator[M <: SqlMapping[F] forSome { type F[a] }](sqlMapping: 
           |""".stripMargin
   }
 
-  /** An expected LeafMapping was not found. */
-  case class MissingLeafMapping(owner: ObjectType, field: Field, sf: SqlField) extends Failure(Severity.Error, owner, Some(sf.fieldName)) {
-    override def toString() =
-      s"$productPrefix(${owner.name}.${sf.fieldName}, ${sf.columnRef.table}.${sf.columnRef.column}:${sf.columnRef.scalaTypeName})"
-    override def formattedMessage: String =
-      s"""|Missing leaf mapping.
-          |
-          |- Field ${graphql(s"$owner.${field.name}: ${field.tpe}")} is defined by a Schema at (1).
-          |- ${UNDERLINED}No leaf mapping was found$RESET for ${graphql(field.tpe)}.
-          |- The ${scala(sf.productPrefix)} at (2) and ${scala(sf.columnRef.productPrefix)} for ${sql(s"${sf.columnRef.table}.${sf.columnRef.column}")} at (3) suggest that ${graphql(field.tpe)} should map to Scala type ${scala(sf.columnRef.scalaTypeName)}.
-          |
-          |(1) ${schema.pos}
-          |(2) ${sf.pos}
-          |(2) ${sf.columnRef.pos}
-          |""".stripMargin
-    }
-
   override protected def validateFieldMapping(owner: ObjectType, field: Field, fieldMapping: mapping.FieldMapping): Chain[MappingValidator.Failure] =
     fieldMapping match {
       case sf @ SqlField(_, columnRef, _, _) =>
@@ -70,7 +53,21 @@ class SqlMappingValidator[M <: SqlMapping[F] forSome { type F[a] }](sqlMapping: 
               case Some(lm: LeafMapping[_]) =>
                 if (lm.scalaTypeName == columnRef.scalaTypeName) Chain.empty
                 else Chain(InconsistentTypeMapping(owner, field, sf, lm))
-              case _ => Chain(MissingLeafMapping(owner, field, sf))
+              case None => Chain.empty // missing type mapping; superclass will catch this
+              case _ => super.validateFieldMapping(owner, field, fieldMapping)
+            }
+
+          case NullableType(ofType) =>
+            ofType.dealias match {
+              case ScalarType(_, _) =>
+                typeMapping(ofType) match {
+                  case Some(lm: LeafMapping[_]) =>
+                    if (lm.scalaTypeName == columnRef.scalaTypeName) Chain.empty
+                    else Chain(InconsistentTypeMapping(owner, field, sf, lm))
+                  case None => Chain.empty // missing type mapping; superclass will catch this
+                  case _ => super.validateFieldMapping(owner, field, fieldMapping)
+                }
+              case _ => super.validateFieldMapping(owner, field, fieldMapping)
             }
 
           case _ => super.validateFieldMapping(owner, field, fieldMapping)
