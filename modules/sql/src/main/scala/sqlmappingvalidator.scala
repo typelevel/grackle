@@ -30,7 +30,7 @@ class SqlMappingValidator[M <: SqlMapping[F] forSome { type F[a] }](sqlMapping: 
           |""".stripMargin
   }
 
-  override protected def validateFieldMapping(owner: ObjectType, field: Field, fieldMapping: mapping.FieldMapping): Chain[MappingValidator.Failure] =
+  override def validateFieldMapping(owner: ObjectType, field: Field, fieldMapping: mapping.FieldMapping): Chain[MappingValidator.Failure] =
     fieldMapping match {
       case sf @ SqlField(_, columnRef, _, _) =>
 

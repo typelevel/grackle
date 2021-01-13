@@ -43,7 +43,7 @@ class MappingValidator[M <: Mapping[F] forSome { type F[a] }](val mapping: M) {
   case class MissingFieldMapping(owner: ObjectMapping, field: Field)
     extends Failure(Severity.Error, owner.tpe, Some(field.name)) {
     override def toString: String =
-      s"$productPrefix($owner.${field.name}:${field.tpe})"
+      s"$productPrefix(${owner.tpe}.${field.name}:${field.tpe})"
     override def formattedMessage: String =
       s"""|Missing field mapping.
           |
@@ -72,35 +72,86 @@ class MappingValidator[M <: Mapping[F] forSome { type F[a] }](val mapping: M) {
           |""".stripMargin
   }
 
+  /** Referenced type does not exist. */
+  case class ReferencedTypeDoesNotExist(typeMapping: TypeMapping)
+    extends Failure(Severity.Error, typeMapping.tpe, None) {
+    override def toString: String =
+      s"$productPrefix(${typeMapping.productPrefix}, ${typeMapping.tpe})"
+    override def formattedMessage: String =
+      s"""|Referenced type does not exist.
+          |
+          |- A ${graphql(typeMapping.productPrefix)} at (1) references type ${graphql(typeMapping.tpe)}.
+          |- ${UNDERLINED}This type is undeclared$RESET in referenced Schema at (2).
+          |
+          |(1) ${typeMapping.pos}
+          |(2) ${schema.pos}
+          |""".stripMargin
+  }
+
+  /** Referenced field does not exist. */
+  case class ReferencedFieldDoesNotExist(objectMapping: ObjectMapping, fieldMapping: FieldMapping)
+    extends Failure(Severity.Error, objectMapping.tpe, Some(fieldMapping.fieldName)) {
+    override def toString: String =
+      s"$productPrefix(${objectMapping.tpe}.${fieldMapping.fieldName})"
+    override def formattedMessage: String =
+      s"""|Referenced field does not exist.
+          |
+          |- ${objectMapping.tpe} is defined in a Schema at (1).
+          |- A ${graphql(objectMapping.productPrefix)} at (2) references field ${graphql(fieldMapping.fieldName)}.
+          |- ${UNDERLINED}This field does not exist in the Schema.$RESET
+          |
+          |(1) ${schema.pos}
+          |(1) ${objectMapping.pos}
+          |""".stripMargin
+  }
+
   def validateMapping(): Chain[Failure] =
     Chain.fromSeq(typeMappings).foldMap(validateTypeMapping)
 
-  protected def validateTypeMapping(tm: TypeMapping): Chain[Failure] =
-    tm match {
+  def x(tm: TypeMapping): Boolean =
+    !tm.tpe.dealias.exists
+
+  def validateTypeMapping(tm: TypeMapping): Chain[Failure] = {
+    if (!tm.tpe.dealias.exists) Chain(ReferencedTypeDoesNotExist(tm))
+    else tm match {
       case om: ObjectMapping  => validateObjectMapping(om)
       case lm: LeafMapping[_] => validateLeafMapping(lm)
       case tm                 => Chain(CannotValidateTypeMapping(tm))
     }
+  }
 
-  protected def validateLeafMapping(lm: LeafMapping[_]): Chain[Failure] =
+  def validateLeafMapping(lm: LeafMapping[_]): Chain[Failure] =
     lm.tpe.dealias match {
       case ScalarType(_, _) => Chain.empty // these are valid on construction. Nothing to do.
       case _                => Chain(InapplicableGraphQLType(lm, "ScalarType"))
     }
 
-  protected def validateFieldMapping(owner: ObjectType, field: Field, fieldMapping: FieldMapping): Chain[Failure] =
+  def validateFieldMapping(owner: ObjectType, field: Field, fieldMapping: FieldMapping): Chain[Failure] =
     Chain(CannotValidateFieldMapping(owner, field, fieldMapping))
 
-  protected def validateObjectMapping(m: ObjectMapping): Chain[Failure] =
+  def validateObjectMapping(m: ObjectMapping): Chain[Failure] =
     m match {
       case ObjectMapping.DefaultObjectMapping(tpe, fieldMappings) =>
         tpe.dealias match {
-          case ot @ ObjectType(_, _, fields, _) => fields.foldMap { f =>
-            fieldMappings.find(_.fieldName == f.name) match {
-              case Some(fm) => validateFieldMapping(ot, f, fm)
-              case None     => Chain(MissingFieldMapping(m, f))
+          case ot @ ObjectType(_, _, fields, _) =>
+
+            // Find each field in our mapping
+            val a = fields.foldMap { f =>
+              fieldMappings.find(_.fieldName == f.name) match {
+                case Some(fm) => validateFieldMapping(ot, f, fm)
+                case None     => Chain(MissingFieldMapping(m, f))
+              }
             }
-          }
+
+            val b = fieldMappings.foldMap { fm =>
+              fields.find(_.name == fm.fieldName) match {
+                case Some(_) => Chain.empty
+                case None => Chain(ReferencedFieldDoesNotExist(m, fm))
+              }
+            }
+
+            a ++ b
+
           case _ =>
             Chain(InapplicableGraphQLType(m, "ObjectType"))
         }
