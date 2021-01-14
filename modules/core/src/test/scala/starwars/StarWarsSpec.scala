@@ -113,7 +113,7 @@ final class StarWarsSpec extends CatsSuite {
             appearsIn
           }
         }
-      }}
+      }
     """
 
     val expected = json"""
