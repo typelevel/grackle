@@ -4,11 +4,17 @@
 package edu.gemini.grackle
 
 import cats._
-import cats.data.Chain
+import cats.data.{ Chain, NonEmptyList }
 import cats.implicits._
 import scala.io.AnsiColor
 
-class MappingValidator[M <: Mapping[F] forSome { type F[a] }](val mapping: M) {
+trait MappingValidator {
+
+  type F[_]
+  type M <: Mapping[F]
+
+  val mapping: M
+
   import MappingValidator._
   import mapping._
 
@@ -105,13 +111,30 @@ class MappingValidator[M <: Mapping[F] forSome { type F[a] }](val mapping: M) {
           |""".stripMargin
   }
 
-  def validateMapping(): Chain[Failure] =
-    Chain.fromSeq(typeMappings).foldMap(validateTypeMapping)
+  /**
+   * Run this validator, yielding a chain of `Failure`s of severity equal to or greater than the
+   * specified `Severity`.
+   */
+  def validateMapping(severity: Severity = Severity.Warning): List[Failure] =
+    typeMappings.foldMap(validateTypeMapping).filter(_.severity >= severity).toList
 
-  def x(tm: TypeMapping): Boolean =
-    !tm.tpe.dealias.exists
+  /**
+   * Run this validator, raising a `ValidationException` in `G` if there are any failures of
+   * severity equal to or greater than the specified `Severity`.
+   */
+  def validate[G[_]](severity: Severity = Severity.Warning)(
+    implicit ev: ApplicativeError[G, Throwable]
+  ): G[Unit] =
+    NonEmptyList.fromList(validateMapping(severity)).foldMapA(nec => ev.raiseError(ValidationException(nec)))
 
-  def validateTypeMapping(tm: TypeMapping): Chain[Failure] = {
+  /**
+   * Run this validator, raising a `ValidationException` if there are any failures of severity equal
+   * to or greater than the specified `Severity`.
+   */
+  def unsafeValidate(severity: Severity = Severity.Warning): Unit =
+    validate[Either[Throwable, *]](severity).fold(throw _, _ => ())
+
+  protected def validateTypeMapping(tm: TypeMapping): Chain[Failure] = {
     if (!tm.tpe.dealias.exists) Chain(ReferencedTypeDoesNotExist(tm))
     else tm match {
       case om: ObjectMapping  => validateObjectMapping(om)
@@ -120,22 +143,22 @@ class MappingValidator[M <: Mapping[F] forSome { type F[a] }](val mapping: M) {
     }
   }
 
-  def validateLeafMapping(lm: LeafMapping[_]): Chain[Failure] =
+  protected def validateLeafMapping(lm: LeafMapping[_]): Chain[Failure] =
     lm.tpe.dealias match {
       case ScalarType(_, _) => Chain.empty // these are valid on construction. Nothing to do.
       case _                => Chain(InapplicableGraphQLType(lm, "ScalarType"))
     }
 
-  def validateFieldMapping(owner: ObjectType, field: Field, fieldMapping: FieldMapping): Chain[Failure] =
+  protected def validateFieldMapping(owner: ObjectType, field: Field, fieldMapping: FieldMapping): Chain[Failure] =
     Chain(CannotValidateFieldMapping(owner, field, fieldMapping))
 
-  def validateObjectMapping(m: ObjectMapping): Chain[Failure] =
+  protected def validateObjectMapping(m: ObjectMapping): Chain[Failure] =
     m match {
+
       case ObjectMapping.DefaultObjectMapping(tpe, fieldMappings) =>
         tpe.dealias match {
           case ot @ ObjectType(_, _, fields, _) =>
 
-            // Find each field in our mapping
             val a = fields.foldMap { f =>
               fieldMappings.find(_.fieldName == f.name) match {
                 case Some(fm) => validateFieldMapping(ot, f, fm)
@@ -152,14 +175,30 @@ class MappingValidator[M <: Mapping[F] forSome { type F[a] }](val mapping: M) {
 
             a ++ b
 
-          case _ =>
-            Chain(InapplicableGraphQLType(m, "ObjectType"))
-        }
+        case InterfaceType(_, _, _, _) =>
+          Chain(CannotValidateTypeMapping(m))
+
+        case _ =>
+          Chain(InapplicableGraphQLType(m, "ObjectType"))
+      }
+
+      case other =>
+        Chain(CannotValidateTypeMapping(other))
+
     }
+
+
 
 }
 
 object MappingValidator {
+
+  def apply[G[_]](m: Mapping[G]): MappingValidator =
+    new MappingValidator {
+      type F[a] = G[a]
+      type M = Mapping[F]
+      val mapping = m
+    }
 
   sealed trait Severity extends Product
   object Severity {
@@ -169,9 +208,9 @@ object MappingValidator {
 
     implicit val OrderSeverity: Order[Severity] =
       Order.by {
-        case Error   => 1
+        case Error   => 3
         case Warning => 2
-        case Info    => 3
+        case Info    => 1
       }
 
   }
@@ -207,6 +246,11 @@ object MappingValidator {
           |Color Key: ${scala("◼")} Scala | ${graphql("◼")} GraphQL | ${sql("◼")} SQL
           |""".stripMargin.linesIterator.mkString(s"$prefix\n$prefix", s"\n$prefix", s"\n$prefix\n")
 
+  }
+
+  final case class ValidationException(failures: NonEmptyList[Failure]) extends RuntimeException {
+    override def getMessage(): String =
+      failures.foldMap(_.toErrorMessage)
   }
 
 }

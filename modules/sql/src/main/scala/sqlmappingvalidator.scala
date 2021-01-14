@@ -7,7 +7,13 @@ package sql
 import cats.data.Chain
 import org.tpolecat.typename.typeName
 
-class SqlMappingValidator[M <: SqlMapping[F] forSome { type F[a] }](sqlMapping: M) extends MappingValidator[M](sqlMapping) {
+trait SqlMappingValidator extends MappingValidator {
+
+  type F[_]
+  type M <: SqlMapping[F]
+
+  val mapping: M
+
   import MappingValidator._
   import mapping._
 
@@ -30,7 +36,7 @@ class SqlMappingValidator[M <: SqlMapping[F] forSome { type F[a] }](sqlMapping: 
           |""".stripMargin
   }
 
-  override def validateFieldMapping(owner: ObjectType, field: Field, fieldMapping: mapping.FieldMapping): Chain[MappingValidator.Failure] =
+  override protected def validateFieldMapping(owner: ObjectType, field: Field, fieldMapping: mapping.FieldMapping): Chain[MappingValidator.Failure] =
     fieldMapping match {
       case sf @ SqlField(_, columnRef, _, _) =>
 
@@ -77,6 +83,17 @@ class SqlMappingValidator[M <: SqlMapping[F] forSome { type F[a] }](sqlMapping: 
 
 
       case other => super.validateFieldMapping(owner, field, other)
+    }
+
+}
+
+object SqlMappingValidator {
+
+  def apply[G[_]](m: SqlMapping[G]): SqlMappingValidator =
+    new SqlMappingValidator {
+      type F[a] = G[a]
+      type M = SqlMapping[F]
+      val mapping = m
     }
 
 }

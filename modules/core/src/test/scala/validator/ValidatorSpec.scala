@@ -8,7 +8,7 @@ import edu.gemini.grackle.Mapping
 import cats.Id
 import edu.gemini.grackle.Schema
 import edu.gemini.grackle.MappingValidator
-import edu.gemini.grackle.MappingValidator.Severity
+import edu.gemini.grackle.MappingValidator.{ Severity, ValidationException }
 
 final class ValidatorSpec extends AnyFunSuite {
 
@@ -19,9 +19,9 @@ final class ValidatorSpec extends AnyFunSuite {
       val typeMappings  = List(ObjectMapping(schema.ref("Foo"), Nil))
     }
 
-    val v =  new MappingValidator(M)
+    val v =  MappingValidator(M)
     val es = v.validateMapping()
-    es.toList match {
+    es match {
       case List(v.MissingFieldMapping(_, f)) if f.name == "bar" => succeed
       case _ => fail(es.toString())
     }
@@ -35,9 +35,9 @@ final class ValidatorSpec extends AnyFunSuite {
       val typeMappings = List(ObjectMapping(schema.ref("Foo"), Nil))
     }
 
-    val v =  new MappingValidator(M)
+    val v =  MappingValidator(M)
     val es = v.validateMapping()
-    es.toList match {
+    es match {
       case List(v.InapplicableGraphQLType(_, _)) => succeed
       case _ => fail(es.toString())
     }
@@ -51,9 +51,9 @@ final class ValidatorSpec extends AnyFunSuite {
       val typeMappings = List(LeafMapping[String](schema.ref("Foo")))
     }
 
-    val v =  new MappingValidator(M)
+    val v =  MappingValidator(M)
     val es = v.validateMapping()
-    es.toList match {
+    es match {
       case List(v.InapplicableGraphQLType(_, _)) => succeed
       case _ => fail(es.toString())
     }
@@ -67,9 +67,9 @@ final class ValidatorSpec extends AnyFunSuite {
       val typeMappings  = List(ObjectMapping(schema.ref("Foo"), Nil))
     }
 
-    val v =  new MappingValidator(M)
+    val v =  MappingValidator(M)
     val es = v.validateMapping()
-    es.toList match {
+    es match {
       case List(v.ReferencedTypeDoesNotExist(_)) => succeed
       case _ => fail(es.toString())
     }
@@ -91,14 +91,24 @@ final class ValidatorSpec extends AnyFunSuite {
       )
     }
 
-    val v =  new MappingValidator(M)
+    val v =  MappingValidator(M)
     val es = v.validateMapping().filter(_.severity == Severity.Error)
 
-    es.toList match {
+    es match {
       case List(v.ReferencedFieldDoesNotExist(_, _)) => succeed
       case _ => fail(es.toString())
     }
 
+  }
+
+  test("unsafeValidate") {
+    object M extends Mapping[Id] {
+      val schema = Schema("scalar Bar").right.get
+      val typeMappings = List(ObjectMapping(schema.ref("Foo"), Nil))
+    }
+    intercept[ValidationException] {
+      MappingValidator(M).unsafeValidate()
+    }
   }
 
 }

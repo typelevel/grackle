@@ -32,7 +32,7 @@ final class ValidatorSpec extends AnyFunSuite {
       )
     }
 
-    val v =  new SqlMappingValidator(M)
+    val v =  SqlMappingValidator(M)
     val es = v.validateMapping()
     es.toList match {
       case List(v.InconsistentTypeMapping(_, _, _, _)) => succeed
