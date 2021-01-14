@@ -1014,27 +1014,37 @@ object SchemaValidator {
       case a: ObjectTypeDefinition => a
     }
 
-    objects.flatMap { obj =>
-      obj.interfaces.flatMap { ifaceName =>
-        interfaces.find(_.name == ifaceName.astName) match {
-          case Some(interface) => checkImplementation(obj, interface)
-          case None => List(mkError(s"Interface ${ifaceName.astName.value} implemented by object ${obj.name.value} is not defined"))
+    def validateImplementor(name: Ast.Name, implements: List[Ast.Type.Named], fields: List[Ast.FieldDefinition]) = {
+      implements.flatMap { ifaceName =>
+          interfaces.find(_.name == ifaceName.astName) match {
+            case Some(interface) => checkImplementation(name, fields, interface)
+            case None => List(mkError(s"Interface ${ifaceName.astName.value} implemented by ${name.value} is not defined"))
+          }
         }
-      }
     }
+
+    val interfaceErrors = interfaces.flatMap { iface =>
+      validateImplementor(iface.name, iface.interfaces, iface.fields)
+    }
+
+    val objectErrors = objects.flatMap { obj =>
+      validateImplementor(obj.name, obj.interfaces, obj.fields)
+    }
+
+    interfaceErrors ++ objectErrors
   }
 
-  def checkImplementation(obj: ObjectTypeDefinition, interface: InterfaceTypeDefinition): List[Json] = {
+  def checkImplementation(name: Ast.Name, implementorFields: List[Ast.FieldDefinition], interface: InterfaceTypeDefinition): List[Json] = {
     interface.fields.flatMap { ifaceField =>
-      obj.fields.find(_.name == ifaceField.name).map { matching =>
+      implementorFields.find(_.name == ifaceField.name).map { matching =>
         if (ifaceField.tpe != matching.tpe) {
           Some(mkError(s"Field ${matching.name.value} has type ${matching.tpe.name}, however implemented interface ${interface.name.value} requires it to be of type ${ifaceField.tpe.name}"))
         } else if (!argsMatch(matching, ifaceField)) {
-          Some(mkError(s"Field ${matching.name.value} of object ${obj.name.value} has has an argument list that does not match that specified by implemented interface ${interface.name.value}"))
+          Some(mkError(s"Field ${matching.name.value} of ${name.value} has has an argument list that does not match that specified by implemented interface ${interface.name.value}"))
         } else {
           None
         }
-      }.getOrElse(Some(mkError(s"Expected field ${ifaceField.name.value} from interface ${interface.name.value} is not implemented by object ${obj.name.value}")))
+      }.getOrElse(Some(mkError(s"Expected field ${ifaceField.name.value} from interface ${interface.name.value} is not implemented by ${name.value}")))
     }
   }
 
