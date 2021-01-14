@@ -14,7 +14,7 @@ object GraphQLParser {
   def keyword(s: String) = token(string(s))
 
   lazy val Document: Parser[Ast.Document] =
-    many(whitespace | comment) ~> many(Definition)
+    many(whitespace | comment) ~> many(Definition) <~ endOfInput
 
   lazy val Definition =
     ExecutableDefinition | TypeSystemDefinition // | TypeSystemExtension
