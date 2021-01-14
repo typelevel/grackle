@@ -337,4 +337,12 @@ final class ParserSuite extends CatsSuite {
       case _ => assert(false)
     }
   }
+
+  test("invalid document") {
+    GraphQLParser.Document.parseOnly("scalar Foo woozle").option match {
+      case Some(_) => fail("should have failed")
+      case None    => succeed
+    }
+  }
+
 }
