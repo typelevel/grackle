@@ -4,7 +4,7 @@
 package edu.gemini.grackle
 
 import cats.Monad
-import cats.data.{Chain, Ior}
+import cats.data.Ior
 import cats.implicits._
 import io.circe.{Encoder, Json}
 
@@ -40,43 +40,8 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
   def typeMapping(tpe: Type): Option[TypeMapping] =
     typeMappings.find(_.tpe.nominal_=:=(tpe))
 
-  def validate: Chain[Json] = {
-    val missingSchemaTypes: List[String] =
-      typeMappings.flatMap(_.tpe.asNamed match {
-        case None => Nil
-        case Some(nt) =>
-          if (schema.ref(nt).isEmpty) List(s"Found mapping for unknown type ${nt.name}")
-          else Nil
-      })
-
-    val oms = typeMappings.collect { case om: ObjectMapping => om }
-
-    val missingSchemaFields: List[String] =
-      oms.flatMap { om =>
-        val obj = om.tpe
-        val on = obj.asNamed.map(_.name).getOrElse("Unknown")
-        om.fieldMappings.collect {
-          case fm if fm.isPublic && !obj.hasField(fm.fieldName) =>
-            s"Found mapping for unknown field ${fm.fieldName} of type $on"
-        }
-      }
-
-    val missingRequiredMappings: List[String] =
-      oms.flatMap { om =>
-        def hasRequired(name: String): Boolean =
-          om.fieldMappings.exists(_.fieldName == name)
-
-        val on = om.tpe.asNamed.map(_.name).getOrElse("Unknown")
-
-        om.fieldMappings.flatMap {
-          case CursorField(_, _, _, required) => required.filterNot(hasRequired)
-          case CursorAttribute(_, _, required) => required.filterNot(hasRequired)
-          case _ => Nil
-        }.map(fan => s"No field/attribute mapping for $fan in object mapping for $on")
-      }
-
-    Chain.fromSeq((missingSchemaTypes ++ missingSchemaFields ++ missingRequiredMappings).map(Json.fromString))
-  }
+  val validator: MappingValidator =
+    MappingValidator(this)
 
   def rootMapping(path: List[String], tpe: Type, fieldName: String): Option[RootMapping] =
     tpe match {

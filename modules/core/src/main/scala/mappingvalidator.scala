@@ -7,6 +7,7 @@ import cats._
 import cats.data.{ Chain, NonEmptyList }
 import cats.implicits._
 import scala.io.AnsiColor
+import scala.util.control.NoStackTrace
 
 trait MappingValidator {
 
@@ -111,12 +112,30 @@ trait MappingValidator {
           |""".stripMargin
   }
 
+  /** Missing type mapping. */
+  case class MissingTypeMapping(tpe: Type)
+    extends Failure(Severity.Error, tpe, None) {
+    override def toString: String =
+      s"$productPrefix($tpe)"
+    override def formattedMessage: String =
+      s"""|Missing type mapping.
+          |
+          |- ${tpe} is defined in a Schema at (1).
+          |- ${UNDERLINED}No mapping was found for this type.$RESET
+          |
+          |(1) ${schema.pos}
+          |""".stripMargin
+  }
+
   /**
    * Run this validator, yielding a chain of `Failure`s of severity equal to or greater than the
    * specified `Severity`.
    */
   def validateMapping(severity: Severity = Severity.Warning): List[Failure] =
-    typeMappings.foldMap(validateTypeMapping).filter(_.severity >= severity).toList
+    List(
+      missingTypeMappings,
+      typeMappings.foldMap(validateTypeMapping).filter(_.severity >= severity)
+    ).foldMap(_.toList)
 
   /**
    * Run this validator, raising a `ValidationException` in `G` if there are any failures of
@@ -133,6 +152,11 @@ trait MappingValidator {
    */
   def unsafeValidate(severity: Severity = Severity.Warning): Unit =
     validate[Either[Throwable, *]](severity).fold(throw _, _ => ())
+
+  protected def missingTypeMappings: Chain[Failure] =
+    schema.types.filter(typeMapping(_).isEmpty).foldMap { tpe =>
+      Chain(MissingTypeMapping(tpe))
+    }
 
   protected def validateTypeMapping(tm: TypeMapping): Chain[Failure] = {
     if (!tm.tpe.dealias.exists) Chain(ReferencedTypeDoesNotExist(tm))
@@ -152,42 +176,53 @@ trait MappingValidator {
   protected def validateFieldMapping(owner: ObjectType, field: Field, fieldMapping: FieldMapping): Chain[Failure] =
     Chain(CannotValidateFieldMapping(owner, field, fieldMapping))
 
-  protected def validateObjectMapping(m: ObjectMapping): Chain[Failure] =
-    m match {
-
-      case ObjectMapping.DefaultObjectMapping(tpe, fieldMappings) =>
-        tpe.dealias match {
-          case ot @ ObjectType(_, _, fields, _) =>
-
-            val a = fields.foldMap { f =>
-              fieldMappings.find(_.fieldName == f.name) match {
-                case Some(fm) => validateFieldMapping(ot, f, fm)
-                case None     => Chain(MissingFieldMapping(m, f))
-              }
-            }
-
-            val b = fieldMappings.foldMap { fm =>
-              fields.find(_.name == fm.fieldName) match {
-                case Some(_) => Chain.empty
-                case None => Chain(ReferencedFieldDoesNotExist(m, fm))
-              }
-            }
-
-            a ++ b
-
-        case InterfaceType(_, _, _, _) =>
-          Chain(CannotValidateTypeMapping(m))
-
-        case _ =>
-          Chain(InapplicableGraphQLType(m, "ObjectType"))
-      }
-
-      case other =>
-        Chain(CannotValidateTypeMapping(other))
-
+  /** All interfaces for `t`, transtiviely, including `t` if it is an interface. */
+  protected def interfaces(t: Type): List[InterfaceType] =
+    t.dealias match {
+      case it: InterfaceType => it :: it.interfaces.flatMap(interfaces)
+      case ot: ObjectType => ot.interfaces.flatMap(interfaces)
+      case _ => Nil
     }
 
+  /**
+   * Mappings for all fields defined transitively for interfaces of `tpe`, including `tpe` if it
+   * is an interface.
+   */
+  protected def transitiveInterfaceFieldMappings(tpe: Type): List[FieldMapping] =
+    interfaces(tpe).flatMap { iface =>
+      typeMapping(iface) match {
+        case Some(om: ObjectMapping) => om.fieldMappings
+        case x => sys.error(s"wat?  $x") // TODO
+      }
+    }
 
+  protected def validateObjectFieldMappings(m: ObjectMapping, tpe: ObjectType): Chain[Failure] = {
+    val fms = m.fieldMappings ++ transitiveInterfaceFieldMappings(tpe)
+    val missing = tpe.fields.foldMap { f =>
+      fms.find(_.fieldName == f.name) match {
+        case Some(fm) => validateFieldMapping(tpe, f, fm)
+        case None     => Chain(MissingFieldMapping(m, f))
+      }
+    }
+    val unknown = fms.foldMap { fm =>
+      tpe.fields.find(_.name == fm.fieldName) match {
+        case Some(_) => Chain.empty
+        case None => Chain(ReferencedFieldDoesNotExist(m, fm))
+      }
+    }
+    missing ++ unknown
+  }
+
+  protected def validateObjectMapping(m: ObjectMapping): Chain[Failure] =
+    m match {
+      case om : ObjectMapping =>
+        om.tpe.dealias match {
+          case ot: ObjectType   => validateObjectFieldMappings(om, ot)
+          case _: InterfaceType => Chain(CannotValidateTypeMapping(m))
+          case _                => Chain(InapplicableGraphQLType(m, "ObjectType"))
+        }
+      case other =>  Chain(CannotValidateTypeMapping(other))
+    }
 
 }
 
@@ -242,15 +277,15 @@ object MappingValidator {
 
     final def toErrorMessage: String =
       s"""|$formattedMessage
-          |
           |Color Key: ${scala("◼")} Scala | ${graphql("◼")} GraphQL | ${sql("◼")} SQL
           |""".stripMargin.linesIterator.mkString(s"$prefix\n$prefix", s"\n$prefix", s"\n$prefix\n")
 
   }
 
-  final case class ValidationException(failures: NonEmptyList[Failure]) extends RuntimeException {
+  final case class ValidationException(failures: NonEmptyList[Failure]) extends RuntimeException with NoStackTrace {
     override def getMessage(): String =
-      failures.foldMap(_.toErrorMessage)
+      s"\n\n${failures.foldMap(_.toErrorMessage)}\n"
   }
 
 }
+

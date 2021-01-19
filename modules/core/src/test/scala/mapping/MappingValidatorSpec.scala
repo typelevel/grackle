@@ -6,11 +6,27 @@ package validator
 import org.scalatest.funsuite.AnyFunSuite
 import edu.gemini.grackle.Mapping
 import cats.Id
+import cats.syntax.all._
 import edu.gemini.grackle.Schema
 import edu.gemini.grackle.MappingValidator
-import edu.gemini.grackle.MappingValidator.{ Severity, ValidationException }
+import edu.gemini.grackle.MappingValidator.ValidationException
 
 final class ValidatorSpec extends AnyFunSuite {
+
+  test("missing type mapping") {
+
+    object M extends Mapping[Id] {
+      val schema = Schema("type Foo { bar: String }").right.get
+      val typeMappings = Nil
+    }
+
+    val es = M.validator.validateMapping()
+    es match {
+      case List(M.validator.MissingTypeMapping(_)) => succeed
+      case _ => fail(es.foldMap(_.toErrorMessage))
+    }
+
+  }
 
   test("missing field mapping") {
 
@@ -19,11 +35,10 @@ final class ValidatorSpec extends AnyFunSuite {
       val typeMappings  = List(ObjectMapping(schema.ref("Foo"), Nil))
     }
 
-    val v =  MappingValidator(M)
-    val es = v.validateMapping()
+    val es = M.validator.validateMapping()
     es match {
-      case List(v.MissingFieldMapping(_, f)) if f.name == "bar" => succeed
-      case _ => fail(es.toString())
+      case List(M.validator.MissingFieldMapping(_, f)) if f.name == "bar" => succeed
+      case _ => fail(es.foldMap(_.toErrorMessage))
     }
 
   }
@@ -35,11 +50,10 @@ final class ValidatorSpec extends AnyFunSuite {
       val typeMappings = List(ObjectMapping(schema.ref("Foo"), Nil))
     }
 
-    val v =  MappingValidator(M)
-    val es = v.validateMapping()
+    val es = M.validator.validateMapping()
     es match {
-      case List(v.InapplicableGraphQLType(_, _)) => succeed
-      case _ => fail(es.toString())
+      case List(M.validator.InapplicableGraphQLType(_, _)) => succeed
+      case _ => fail(es.foldMap(_.toErrorMessage))
     }
 
   }
@@ -51,11 +65,10 @@ final class ValidatorSpec extends AnyFunSuite {
       val typeMappings = List(LeafMapping[String](schema.ref("Foo")))
     }
 
-    val v =  MappingValidator(M)
-    val es = v.validateMapping()
+    val es = M.validator.validateMapping()
     es match {
-      case List(v.InapplicableGraphQLType(_, _)) => succeed
-      case _ => fail(es.toString())
+      case List(M.validator.InapplicableGraphQLType(_, _)) => succeed
+      case _ => fail(es.foldMap(_.toErrorMessage))
     }
 
   }
@@ -63,15 +76,14 @@ final class ValidatorSpec extends AnyFunSuite {
   test("nonexistent type (type mapping)") {
 
     object M extends Mapping[Id] {
-      val schema = Schema("scalar Bar").right.get
+      val schema = Schema("").right.get
       val typeMappings  = List(ObjectMapping(schema.ref("Foo"), Nil))
     }
 
-    val v =  MappingValidator(M)
-    val es = v.validateMapping()
+    val es = M.validator.validateMapping()
     es match {
-      case List(v.ReferencedTypeDoesNotExist(_)) => succeed
-      case _ => fail(es.toString())
+      case List(M.validator.ReferencedTypeDoesNotExist(_)) => succeed
+      case _ => fail(es.foldMap(_.toErrorMessage))
     }
 
   }
@@ -91,12 +103,10 @@ final class ValidatorSpec extends AnyFunSuite {
       )
     }
 
-    val v =  MappingValidator(M)
-    val es = v.validateMapping().filter(_.severity == Severity.Error)
-
+    val es = M.validator.validateMapping()
     es match {
-      case List(v.ReferencedFieldDoesNotExist(_, _)) => succeed
-      case _ => fail(es.toString())
+      case List(M.validator.ReferencedFieldDoesNotExist(_, _)) => succeed
+      case _ => fail(es.foldMap(_.toErrorMessage))
     }
 
   }

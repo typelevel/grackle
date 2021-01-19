@@ -32,7 +32,7 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
   }
 
   object ValueRoot {
-    def apply(fieldName: String, root: => Any): ValueRoot =
+    def apply(fieldName: String, root: => Any)(implicit pos: SourcePos): ValueRoot =
       new ValueRoot(NoType, fieldName, () => root)
   }
 
@@ -63,7 +63,7 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
   def ValueObjectMapping[T: ClassTag](
     tpe: Type,
     fieldMappings: List[ValueField0[T]]
-  )(implicit classTag: ClassTag[T]): ValueObjectMapping[T] =
+  )(implicit classTag: ClassTag[T], pos: SourcePos): ValueObjectMapping[T] =
     new ValueObjectMapping(tpe, fieldMappings.map(_.withParent(tpe)), classTag)
 
   case class ValueCursor(

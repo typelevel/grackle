@@ -21,6 +21,9 @@ import org.tpolecat.sourcepos.SourcePos
 /** An abstract mapping that is backed by a SQL database. */
 trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
+  override val validator: SqlMappingValidator =
+    SqlMappingValidator(this)
+
   private def discriminator(om: ObjectMapping): List[ColumnRef] =
     om.fieldMappings.collect {
       case cm: SqlField if cm.discriminator => cm.columnRef
