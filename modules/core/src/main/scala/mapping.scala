@@ -29,10 +29,13 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
   def run(query: Query, rootTpe: Type): F[Json] =
     interpreter.run(query, rootTpe)
 
+  def run(op: Operation): F[Json] =
+    run(op.query, op.rootTpe)
+
   def compileAndRun(text: String, name: Option[String] = None, untypedEnv: Option[Json] = None, useIntrospection: Boolean = true): F[Json] =
     compiler.compile(text, name, untypedEnv, useIntrospection) match {
-      case Ior.Right(compiledQuery) =>
-        run(compiledQuery, schema.queryType)
+      case Ior.Right(operation) =>
+        run(operation.query, schema.queryType)
       case invalid =>
         QueryInterpreter.mkInvalidResponse(invalid).pure[F]
     }

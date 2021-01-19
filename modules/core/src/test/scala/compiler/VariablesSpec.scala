@@ -11,6 +11,7 @@ import io.circe.literal.JsonStringContext
 import edu.gemini.grackle._
 import Query._, Value._
 import QueryCompiler._
+import edu.gemini.grackle.Operation
 
 final class VariablesSuite extends CatsSuite {
   test("simple variables query") {
@@ -31,12 +32,15 @@ final class VariablesSuite extends CatsSuite {
     """
 
     val expected =
-      Select("user", List(Binding("id", IDValue("4"))),
-        Group(List(
-          Select("id", Nil, Empty),
-          Select("name", Nil, Empty),
-          Select("profilePic", List(Binding("size", IntValue(60))), Empty)
-        ))
+      Operation(
+        Select("user", List(Binding("id", IDValue("4"))),
+          Group(List(
+            Select("id", Nil, Empty),
+            Select("name", Nil, Empty),
+            Select("profilePic", List(Binding("size", IntValue(60))), Empty)
+          ))
+        ),
+        VariablesMapping.schema.queryType
       )
 
     val compiled = VariablesMapping.compiler.compile(query, untypedEnv = Some(variables))
@@ -60,9 +64,12 @@ final class VariablesSuite extends CatsSuite {
     """
 
     val expected =
-      Select("users",
-        List(Binding("ids", ListValue(List(IDValue("1"), IDValue("2"), IDValue("3"))))),
-        Select("name", Nil, Empty)
+      Operation(
+        Select("users",
+          List(Binding("ids", ListValue(List(IDValue("1"), IDValue("2"), IDValue("3"))))),
+          Select("name", Nil, Empty)
+        ),
+        VariablesMapping.schema.queryType
       )
 
     val compiled = VariablesMapping.compiler.compile(query, untypedEnv = Some(variables))
@@ -91,18 +98,21 @@ final class VariablesSuite extends CatsSuite {
     """
 
     val expected =
-      Select("search",
-        List(Binding("pattern",
-          ObjectValue(List(
-            ("name", StringValue("Foo")),
-            ("age", IntValue(23)),
-            ("id", IDValue("123"))
+      Operation(
+        Select("search",
+          List(Binding("pattern",
+            ObjectValue(List(
+              ("name", StringValue("Foo")),
+              ("age", IntValue(23)),
+              ("id", IDValue("123"))
+            ))
+          )),
+          Group(List(
+            Select("name", Nil, Empty),
+            Select("id", Nil, Empty)
           ))
-        )),
-        Group(List(
-          Select("name", Nil, Empty),
-          Select("id", Nil, Empty)
-        ))
+        ),
+        VariablesMapping.schema.queryType
       )
 
     val compiled = VariablesMapping.compiler.compile(query, untypedEnv = Some(variables))

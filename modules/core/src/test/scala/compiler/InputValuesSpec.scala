@@ -10,6 +10,7 @@ import cats.tests.CatsSuite
 import edu.gemini.grackle._
 import Query._, Value._
 import QueryCompiler._
+import edu.gemini.grackle.Operation
 
 final class InputValuesSuite extends CatsSuite {
   test("null value") {
@@ -28,11 +29,14 @@ final class InputValuesSuite extends CatsSuite {
     """
 
     val expected =
-      Group(List(
-        Select("field", List(Binding("arg", AbsentValue)), Select("subfield", Nil, Empty)),
-        Select("field", List(Binding("arg", NullValue)), Select("subfield", Nil, Empty)),
-        Select("field", List(Binding("arg", IntValue(23))), Select("subfield", Nil, Empty))
-      ))
+      Operation(
+        Group(List(
+          Select("field", List(Binding("arg", AbsentValue)), Select("subfield", Nil, Empty)),
+          Select("field", List(Binding("arg", NullValue)), Select("subfield", Nil, Empty)),
+          Select("field", List(Binding("arg", IntValue(23))), Select("subfield", Nil, Empty))
+        )),
+        InputValuesMapping.schema.queryType
+      )
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
     //println(compiled)
@@ -52,14 +56,17 @@ final class InputValuesSuite extends CatsSuite {
     """
 
     val expected =
-      Group(List(
-        Select("listField", List(Binding("arg", ListValue(Nil))),
-          Select("subfield", Nil, Empty)
-        ),
-        Select("listField", List(Binding("arg", ListValue(List(StringValue("foo"),  StringValue("bar"))))),
-          Select("subfield", Nil, Empty)
-        )
-      ))
+      Operation(
+        Group(List(
+          Select("listField", List(Binding("arg", ListValue(Nil))),
+            Select("subfield", Nil, Empty)
+          ),
+          Select("listField", List(Binding("arg", ListValue(List(StringValue("foo"),  StringValue("bar"))))),
+            Select("subfield", Nil, Empty)
+          )
+        )),
+        InputValuesMapping.schema.queryType
+      )
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
     //println(compiled)
@@ -76,17 +83,20 @@ final class InputValuesSuite extends CatsSuite {
     """
 
     val expected =
-      Select("objectField",
-        List(Binding("arg",
-          ObjectValue(List(
-            ("foo", IntValue(23)),
-            ("bar", BooleanValue(true)),
-            ("baz", StringValue("quux")),
-            ("defaulted", StringValue("quux")),
-            ("nullable", AbsentValue)
-          ))
-        )),
-        Select("subfield", Nil, Empty)
+      Operation(
+        Select("objectField",
+          List(Binding("arg",
+            ObjectValue(List(
+              ("foo", IntValue(23)),
+              ("bar", BooleanValue(true)),
+              ("baz", StringValue("quux")),
+              ("defaulted", StringValue("quux")),
+              ("nullable", AbsentValue)
+            ))
+          )),
+          Select("subfield", Nil, Empty)
+        ),
+        InputValuesMapping.schema.queryType
       )
 
     val compiled = InputValuesMapping.compiler.compile(query, None)

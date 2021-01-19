@@ -12,6 +12,7 @@ import io.circe.literal.JsonStringContext
 import edu.gemini.grackle._
 import Query._, Predicate._, Value._, UntypedOperation._
 import QueryCompiler._, ComponentElaborator.TrivialJoin
+import edu.gemini.grackle.Operation
 
 final class CompilerSuite extends CatsSuite {
   test("simple query") {
@@ -197,16 +198,19 @@ final class CompilerSuite extends CatsSuite {
     """
 
     val expected =
-      Select(
-        "character", Nil,
-        Unique(Eql(FieldPath(List("id")), Const("1000")),
-          Select("name", Nil) ~
-            Select(
-              "friends", Nil,
-              Select("name", Nil)
-            )
-        )
-    )
+      Operation(
+        Select(
+          "character", Nil,
+          Unique(Eql(FieldPath(List("id")), Const("1000")),
+            Select("name", Nil) ~
+              Select(
+                "friends", Nil,
+                Select("name", Nil)
+              )
+          )
+       ),
+       AtomicMapping.schema.queryType
+      )
 
     val res = AtomicMapping.compiler.compile(query)
 
@@ -316,20 +320,22 @@ final class CompilerSuite extends CatsSuite {
     """
 
     val expected =
-      Wrap("componenta",
-        Component(ComponentA, TrivialJoin,
-          Select("componenta", Nil,
-            Select("fielda1", Nil) ~
-            Select("fielda2", Nil,
-              Wrap("componentb",
-                Component(ComponentB, TrivialJoin,
-                  Select("componentb", Nil,
-                    Select("fieldb1", Nil) ~
-                    Select("fieldb2", Nil,
-                      Wrap("componentc",
-                        Component(ComponentC, TrivialJoin,
-                          Select("componentc", Nil,
-                            Select("fieldc1", Nil)
+      Operation(
+        Wrap("componenta",
+          Component(ComponentA, TrivialJoin,
+            Select("componenta", Nil,
+              Select("fielda1", Nil) ~
+              Select("fielda2", Nil,
+                Wrap("componentb",
+                  Component(ComponentB, TrivialJoin,
+                    Select("componentb", Nil,
+                      Select("fieldb1", Nil) ~
+                      Select("fieldb2", Nil,
+                        Wrap("componentc",
+                          Component(ComponentC, TrivialJoin,
+                            Select("componentc", Nil,
+                              Select("fieldc1", Nil)
+                            )
                           )
                         )
                       )
@@ -339,7 +345,8 @@ final class CompilerSuite extends CatsSuite {
               )
             )
           )
-        )
+        ),
+        ComposedMapping.schema.queryType
       )
 
     val res = ComposedMapping.compiler.compile(query)

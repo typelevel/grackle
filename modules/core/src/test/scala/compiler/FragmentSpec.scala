@@ -12,6 +12,7 @@ import io.circe.literal.JsonStringContext
 import edu.gemini.grackle._
 import Query._, Predicate._, Value._
 import QueryCompiler._
+import edu.gemini.grackle.Operation
 
 final class FragmentSuite extends CatsSuite {
   test("simple fragment query") {
@@ -35,25 +36,28 @@ final class FragmentSuite extends CatsSuite {
     """
 
     val expected =
-      Select("user", Nil,
-        Unique(Eql(FieldPath(List("id")), Const("1")),
-          Group(List(
-            Select("friends", Nil,
-              Group(List(
-                Select("id", Nil, Empty),
-                Select("name", Nil, Empty),
-                Select("profilePic", Nil, Empty)
-              ))
-            ),
-            Select("mutualFriends", Nil,
-              Group(List(
-                Select("id", Nil, Empty),
-                Select("name", Nil, Empty),
-                Select("profilePic", Nil, Empty)
-              ))
-            )
-          ))
-        )
+      Operation(
+        Select("user", Nil,
+          Unique(Eql(FieldPath(List("id")), Const("1")),
+            Group(List(
+              Select("friends", Nil,
+                Group(List(
+                  Select("id", Nil, Empty),
+                  Select("name", Nil, Empty),
+                  Select("profilePic", Nil, Empty)
+                ))
+              ),
+              Select("mutualFriends", Nil,
+                Group(List(
+                  Select("id", Nil, Empty),
+                  Select("name", Nil, Empty),
+                  Select("profilePic", Nil, Empty)
+                ))
+              )
+            ))
+          )
+      ),
+      FragmentMapping.schema.queryType
     )
 
     val expectedResult = json"""
@@ -93,7 +97,7 @@ final class FragmentSuite extends CatsSuite {
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentMapping.run(compiled.right.get, FragmentMapping.schema.queryType)
+    val res = FragmentMapping.run(compiled.right.get)
     //println(res)
     assert(res == expectedResult)
   }
@@ -123,25 +127,28 @@ final class FragmentSuite extends CatsSuite {
     """
 
     val expected =
-      Select("user", Nil,
-        Unique(Eql(FieldPath(List("id")), Const("1")),
-          Group(List(
-            Select("friends", Nil,
-              Group(List(
-                Select("id", Nil, Empty),
-                Select("name", Nil, Empty),
-                Select("profilePic", Nil, Empty)
-              ))
-            ),
-            Select("mutualFriends", Nil,
-              Group(List(
-                Select("id", Nil, Empty),
-                Select("name", Nil, Empty),
-                Select("profilePic", Nil, Empty)
-              ))
-            )
-          ))
-        )
+      Operation(
+        Select("user", Nil,
+          Unique(Eql(FieldPath(List("id")), Const("1")),
+            Group(List(
+              Select("friends", Nil,
+                Group(List(
+                  Select("id", Nil, Empty),
+                  Select("name", Nil, Empty),
+                  Select("profilePic", Nil, Empty)
+                ))
+              ),
+              Select("mutualFriends", Nil,
+                Group(List(
+                  Select("id", Nil, Empty),
+                  Select("name", Nil, Empty),
+                  Select("profilePic", Nil, Empty)
+                ))
+              )
+            ))
+          )
+        ),
+        FragmentMapping.schema.queryType
       )
 
     val expectedResult = json"""
@@ -181,7 +188,7 @@ final class FragmentSuite extends CatsSuite {
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentMapping.run(compiled.right.get, FragmentMapping.schema.queryType)
+    val res = FragmentMapping.run(compiled.right.get)
     //println(res)
     assert(res == expectedResult)
   }
@@ -210,14 +217,17 @@ final class FragmentSuite extends CatsSuite {
     val Page = FragmentMapping.schema.ref("Page")
 
     val expected =
-      Select("profiles",
-        Nil,
-        Group(List(
-          Select("id", Nil, Empty),
-          Introspect(FragmentMapping.schema, Select("__typename", Nil, Empty)),
-          Narrow(User, Select("name", Nil, Empty)),
-          Narrow(Page, Select("title", Nil, Empty))
-        ))
+      Operation(
+        Select("profiles",
+          Nil,
+          Group(List(
+            Select("id", Nil, Empty),
+            Introspect(FragmentMapping.schema, Select("__typename", Nil, Empty)),
+            Narrow(User, Select("name", Nil, Empty)),
+            Narrow(Page, Select("title", Nil, Empty))
+          ))
+        ),
+        FragmentMapping.schema.queryType
       )
 
     val expectedResult = json"""
@@ -258,7 +268,7 @@ final class FragmentSuite extends CatsSuite {
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentMapping.run(compiled.right.get, FragmentMapping.schema.queryType)
+    val res = FragmentMapping.run(compiled.right.get)
     //println(res)
     assert(res == expectedResult)
   }
@@ -282,12 +292,15 @@ final class FragmentSuite extends CatsSuite {
     val Page = FragmentMapping.schema.ref("Page")
 
     val expected =
-      Select("profiles", Nil,
-        Group(List(
-          Select("id", Nil, Empty),
-          Narrow(User, Select("name", Nil, Empty)),
-          Narrow(Page, Select("title", Nil, Empty))
-        ))
+      Operation(
+        Select("profiles", Nil,
+          Group(List(
+            Select("id", Nil, Empty),
+            Narrow(User, Select("name", Nil, Empty)),
+            Narrow(Page, Select("title", Nil, Empty))
+          ))
+        ),
+        FragmentMapping.schema.queryType
       )
 
     val expectedResult = json"""
@@ -323,7 +336,7 @@ final class FragmentSuite extends CatsSuite {
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentMapping.run(compiled.right.get, FragmentMapping.schema.queryType)
+    val res = FragmentMapping.run(compiled.right.get)
     //println(res)
     assert(res == expectedResult)
   }
@@ -362,41 +375,44 @@ final class FragmentSuite extends CatsSuite {
     val Page = FragmentMapping.schema.ref("Page")
 
     val expected =
-      Group(List(
-        Select("user", Nil,
-          Unique(Eql(FieldPath(List("id")), Const("1")),
-            Select("favourite", Nil,
-              Group(List(
-                Introspect(FragmentMapping.schema, Select("__typename", Nil, Empty)),
+      Operation(
+        Group(List(
+          Select("user", Nil,
+            Unique(Eql(FieldPath(List("id")), Const("1")),
+              Select("favourite", Nil,
                 Group(List(
-                  Narrow(User, Select("id", Nil, Empty)),
-                  Narrow(User, Select("name", Nil, Empty)))),
-                Group(List(
-                  Narrow(Page, Select("id", Nil, Empty)),
-                  Narrow(Page, Select("title", Nil, Empty))
+                  Introspect(FragmentMapping.schema, Select("__typename", Nil, Empty)),
+                  Group(List(
+                    Narrow(User, Select("id", Nil, Empty)),
+                    Narrow(User, Select("name", Nil, Empty)))),
+                  Group(List(
+                    Narrow(Page, Select("id", Nil, Empty)),
+                    Narrow(Page, Select("title", Nil, Empty))
+                  ))
                 ))
-              ))
+              )
             )
-          )
-        ),
-        Rename("page", Select("user", Nil,
-          Unique(Eql(FieldPath(List("id")), Const("2")),
-            Select("favourite", Nil,
-              Group(List(
-                Introspect(FragmentMapping.schema, Select("__typename", Nil, Empty)),
+          ),
+          Rename("page", Select("user", Nil,
+            Unique(Eql(FieldPath(List("id")), Const("2")),
+              Select("favourite", Nil,
                 Group(List(
-                  Narrow(User, Select("id", Nil, Empty)),
-                  Narrow(User, Select("name", Nil, Empty))
-                )),
-                Group(List(
-                  Narrow(Page, Select("id", Nil, Empty)),
-                  Narrow(Page, Select("title", Nil, Empty))
+                  Introspect(FragmentMapping.schema, Select("__typename", Nil, Empty)),
+                  Group(List(
+                    Narrow(User, Select("id", Nil, Empty)),
+                    Narrow(User, Select("name", Nil, Empty))
+                  )),
+                  Group(List(
+                    Narrow(Page, Select("id", Nil, Empty)),
+                    Narrow(Page, Select("title", Nil, Empty))
+                  ))
                 ))
-              ))
+              )
             )
-          )
-        ))
-      ))
+          ))
+        )),
+        FragmentMapping.schema.queryType
+      )
 
     val expectedResult = json"""
       {
@@ -423,7 +439,7 @@ final class FragmentSuite extends CatsSuite {
 
     assert(compiled == Ior.Right(expected))
 
-    val res = FragmentMapping.run(compiled.right.get, FragmentMapping.schema.queryType)
+    val res = FragmentMapping.run(compiled.right.get)
     //println(res)
     assert(res == expectedResult)
   }

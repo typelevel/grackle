@@ -10,6 +10,7 @@ import io.circe.literal.JsonStringContext
 
 import edu.gemini.grackle._
 import Query._
+import edu.gemini.grackle.Operation
 
 final class SkipIncludeSuite extends CatsSuite {
   test("skip/include field") {
@@ -38,10 +39,13 @@ final class SkipIncludeSuite extends CatsSuite {
     """
 
     val expected =
-      Group(List(
-        Rename("b", Select("field", Nil, Select("subfieldB", Nil, Empty))),
-        Rename("c", Select("field", Nil, Select("subfieldA", Nil, Empty)))
-      ))
+      Operation(
+        Group(List(
+          Rename("b", Select("field", Nil, Select("subfieldB", Nil, Empty))),
+          Rename("c", Select("field", Nil, Select("subfieldA", Nil, Empty)))
+        )),
+        SkipIncludeMapping.schema.queryType
+      )
 
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
@@ -80,26 +84,29 @@ final class SkipIncludeSuite extends CatsSuite {
     """
 
     val expected =
-      Group(List(
-        Rename("a", Select("field", Nil, Empty)),
-        Rename("b",
-          Select("field", Nil,
-            Group(List(
-              Select("subfieldA", Nil, Empty),
-              Select("subfieldB", Nil, Empty)
-            ))
-          )
-        ),
-        Rename("c",
-          Select("field", Nil,
-            Group(List(
-              Select("subfieldA", Nil, Empty),
-              Select("subfieldB", Nil, Empty)
-            ))
-          )
-        ),
-        Rename("d", Select("field", Nil, Empty))
-      ))
+      Operation(
+        Group(List(
+          Rename("a", Select("field", Nil, Empty)),
+          Rename("b",
+            Select("field", Nil,
+              Group(List(
+                Select("subfieldA", Nil, Empty),
+                Select("subfieldB", Nil, Empty)
+              ))
+            )
+          ),
+          Rename("c",
+            Select("field", Nil,
+              Group(List(
+                Select("subfieldA", Nil, Empty),
+                Select("subfieldB", Nil, Empty)
+              ))
+            )
+          ),
+          Rename("d", Select("field", Nil, Empty))
+        )),
+        SkipIncludeMapping.schema.queryType
+      )
 
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
@@ -131,11 +138,14 @@ final class SkipIncludeSuite extends CatsSuite {
     """
 
     val expected =
-      Select("field", Nil,
-        Group(List(
-          Rename("b", Select("subfieldB", Nil, Empty)),
-          Rename("c", Select("subfieldA", Nil, Empty))
-        ))
+      Operation(
+        Select("field", Nil,
+          Group(List(
+            Rename("b", Select("subfieldB", Nil, Empty)),
+            Rename("c", Select("subfieldA", Nil, Empty))
+          ))
+        ),
+        SkipIncludeMapping.schema.queryType
       )
 
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
@@ -182,26 +192,29 @@ final class SkipIncludeSuite extends CatsSuite {
     """
 
     val expected =
-      Group(List(
-        Rename("a", Select("field", Nil, Empty)),
-        Rename("b",
-          Select("field", Nil,
-            Group(List(
-              Select("subfieldA", Nil, Empty),
-              Select("subfieldB", Nil, Empty)
-            ))
-          )
-        ),
-        Rename("c",
-          Select("field", Nil,
-            Group(List(
-              Select("subfieldA", Nil, Empty),
-              Select("subfieldB", Nil, Empty)
-            ))
-          )
-        ),
-        Rename("d", Select("field", Nil, Empty))
-      ))
+      Operation(
+        Group(List(
+          Rename("a", Select("field", Nil, Empty)),
+          Rename("b",
+            Select("field", Nil,
+              Group(List(
+                Select("subfieldA", Nil, Empty),
+                Select("subfieldB", Nil, Empty)
+              ))
+            )
+          ),
+          Rename("c",
+            Select("field", Nil,
+              Group(List(
+                Select("subfieldA", Nil, Empty),
+                Select("subfieldB", Nil, Empty)
+              ))
+            )
+          ),
+          Rename("d", Select("field", Nil, Empty))
+        )),
+        SkipIncludeMapping.schema.queryType
+      )
 
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
@@ -231,11 +244,14 @@ final class SkipIncludeSuite extends CatsSuite {
     """
 
     val expected =
-      Select("field", Nil,
-        Group(List(
-          Rename("b", Select("subfieldB", Nil, Empty)),
-          Rename("c", Select("subfieldA", Nil, Empty))
-        ))
+      Operation(
+        Select("field", Nil,
+          Group(List(
+            Rename("b", Select("subfieldB", Nil, Empty)),
+            Rename("c", Select("subfieldA", Nil, Empty))
+          ))
+        ),
+        SkipIncludeMapping.schema.queryType
       )
 
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))

@@ -815,17 +815,20 @@ object SchemaParser {
   }
 
   def parseDocument(doc: Document)(implicit sourcePos: SourcePos): Result[Schema] = {
-    def mkSchemaType(schema: Schema): Result[NamedType] = {
-      def mkRootOperationType(rootTpe: RootOperationTypeDefinition): Result[(OperationType, NamedType)] = {
+
+    // explicit Schema type, if any
+    def mkSchemaType(schema: Schema): Result[Option[NamedType]] = {
+
+      def mkRootOperationType(rootTpe: RootOperationTypeDefinition): Result[(OperationType, Type)] = {
         val RootOperationTypeDefinition(optype, tpe) = rootTpe
         mkType(schema)(tpe).flatMap {
-          case nt: NamedType => (optype, nt).rightIor
-          case _ => mkErrorResult("Root operation types must be named types")
+          case NullableType(nt: NamedType) => (optype, nt).rightIor
+          case other => mkErrorResult(s"Root operation types must be named types, found $other (${other.productPrefix}).")
         }
       }
 
-      def build(query: NamedType, mutation: Option[NamedType], subscription: Option[NamedType]): NamedType = {
-        def mkRootDef(fieldName: String)(tpe: NamedType): Field =
+      def build(query: Type, mutation: Option[Type], subscription: Option[Type]): NamedType = {
+        def mkRootDef(fieldName: String)(tpe: Type): Field =
           Field(fieldName, None, Nil, tpe, false, None)
 
         ObjectType(
@@ -845,11 +848,11 @@ object SchemaParser {
 
       val defns = doc.collect { case schema: SchemaDefinition => schema }
       defns match {
-        case Nil => build(defaultQueryType, None, None).rightIor
+        case Nil => None.rightIor
         case SchemaDefinition(rootTpes, _) :: Nil =>
           rootTpes.traverse(mkRootOperationType).map { ops0 =>
             val ops = ops0.toMap
-            build(ops.get(Query).getOrElse(defaultQueryType), ops.get(Mutation), ops.get(Subscription))
+            Some(build(ops.get(Query).getOrElse(defaultQueryType), ops.get(Mutation), ops.get(Subscription)))
           }
 
         case _ => mkErrorResult("At most one schema definition permitted")
@@ -974,14 +977,14 @@ object SchemaParser {
 
     object schema extends Schema {
       var types: List[NamedType] = Nil
-      var schemaType1: NamedType = null
+      var schemaType1: Option[NamedType] = null
       var pos: SourcePos = sourcePos
 
-      override def schemaType: NamedType = schemaType1
+      override def schemaType: NamedType = schemaType1.getOrElse(super.schemaType)
 
       var directives: List[Directive] = Nil
 
-      def complete(types0: List[NamedType], schemaType0: NamedType, directives0: List[Directive]): this.type = {
+      def complete(types0: List[NamedType], schemaType0: Option[NamedType], directives0: List[Directive]): this.type = {
         types = types0
         schemaType1 = schemaType0
         directives = directives0
