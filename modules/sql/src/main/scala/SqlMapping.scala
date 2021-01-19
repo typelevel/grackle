@@ -585,6 +585,9 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
             loop(child, fieldName :: path, fieldTpe, (cols, joins, List.empty[(List[String], Type, Predicate)], requiredMappings ++ joinMapping) |+| acc)
 
+          case _: Introspect =>
+            ((requiredCols, Nil, Nil, requiredMappings): Acc) |+| acc
+
           case Context(contextPath, child) =>
             loop(child, contextPath, tpe, acc)
 
@@ -614,7 +617,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           case GroupBy(_, child) =>
             loop(child, path, obj, acc)
 
-          case Empty | Skipped | Query.Component(_, _, _) | (_: Introspect) | (_: Defer) | (_: UntypedNarrow) | (_: Skip) => acc
+          case Empty | Skipped | Query.Component(_, _, _) | (_: Defer) | (_: UntypedNarrow) | (_: Skip) => acc
         }
       }
 
