@@ -63,7 +63,7 @@ object QueryParser {
       val vs = vds.map {
         case VariableDefinition(nme, tpe, _) => UntypedVarDef(nme.value, tpe, None)
       }
-      q.map(q => 
+      q.map(q =>
         opType match {
           case OperationType.Query => UntypedQuery(q, vs)
           case OperationType.Mutation => UntypedMutation(q, vs)
@@ -306,8 +306,7 @@ class QueryCompiler(schema: Schema, phases: List[Phase]) {
    *
    * Any errors are accumulated on the left.
    */
-  def compile(text: String, name: Option[String] = None, untypedEnv: Option[Json] = None, useIntrospection: Boolean = true): Result[Query] = {
-    val queryType = schema.queryType
+  def compile(text: String, name: Option[String] = None, untypedEnv: Option[Json] = None, useIntrospection: Boolean = true): Result[Operation] = {
 
     val allPhases =
       if (useIntrospection) IntrospectionElaborator :: VariablesAndSkipElaborator :: phases else VariablesAndSkipElaborator :: phases
@@ -316,8 +315,9 @@ class QueryCompiler(schema: Schema, phases: List[Phase]) {
       parsed  <- QueryParser.parseText(text, name)
       varDefs <- compileVarDefs(parsed.variables)
       env     <- compileEnv(varDefs, untypedEnv)
-      query   <- allPhases.foldLeftM(parsed.query) { (acc, phase) => phase.transform(acc, env, schema, queryType) }
-    } yield query
+      rootTpe <- parsed.rootTpe(schema)
+      query   <- allPhases.foldLeftM(parsed.query) { (acc, phase) => phase.transform(acc, env, schema, rootTpe) }
+    } yield Operation(query, rootTpe)
   }
 
   def compileVarDefs(untypedVarDefs: UntypedVarDefs): Result[VarDefs] =

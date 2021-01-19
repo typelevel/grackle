@@ -210,7 +210,7 @@ final class CompilerSuite extends CatsSuite {
 
     val res = AtomicMapping.compiler.compile(query)
 
-    assert(res == Ior.Right(expected))
+    assert(res.map(_.query) == Ior.Right(expected))
   }
 
   test("invalid: object subselection set empty") {
@@ -344,7 +344,7 @@ final class CompilerSuite extends CatsSuite {
 
     val res = ComposedMapping.compiler.compile(query)
 
-    assert(res == Ior.Right(expected))
+    assert(res.map(_.query) == Ior.Right(expected))
   }
 }
 

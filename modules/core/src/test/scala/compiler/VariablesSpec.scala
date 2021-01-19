@@ -41,7 +41,7 @@ final class VariablesSuite extends CatsSuite {
 
     val compiled = VariablesMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
-    assert(compiled == Ior.Right(expected))
+    assert(compiled.map(_.query) == Ior.Right(expected))
   }
 
   test("list variable query") {
@@ -67,7 +67,7 @@ final class VariablesSuite extends CatsSuite {
 
     val compiled = VariablesMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
-    assert(compiled == Ior.Right(expected))
+    assert(compiled.map(_.query) == Ior.Right(expected))
   }
 
   test("object variable query") {
@@ -107,7 +107,7 @@ final class VariablesSuite extends CatsSuite {
 
     val compiled = VariablesMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
-    assert(compiled == Ior.Right(expected))
+    assert(compiled.map(_.query) == Ior.Right(expected))
   }
 }
 

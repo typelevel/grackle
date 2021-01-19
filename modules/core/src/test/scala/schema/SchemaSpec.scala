@@ -308,4 +308,91 @@ final class SchemaSpec extends CatsSuite {
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
+
+  test("explicit Schema type (complete)") {
+
+    val schema =
+      Schema("""
+
+        schema {
+          query: MyQuery
+          mutation: MyMutation
+          subscription: MySubscription
+        }
+
+        type MyQuery {
+          foo: Int
+        }
+
+        type MyMutation {
+          setFoo(n: Int): Int
+        }
+
+        type MySubscription {
+          watchFoo: Int
+        }
+
+      """).right.get
+
+    assert(schema.queryType                 =:= schema.ref("MyQuery"))
+    assert(schema.mutationType.exists(_     =:= schema.ref("MyMutation")))
+    assert(schema.subscriptionType.exists(_ =:= schema.ref("MySubscription")))
+
+  }
+
+  test("explicit Schema type (partial)") {
+
+    val schema =
+      Schema("""
+
+        schema {
+          query: MyQuery
+          mutation: MyMutation
+        }
+
+        type MyQuery {
+          foo: Int
+        }
+
+        type MyMutation {
+          setFoo(n: Int): Int
+        }
+
+      """).right.get
+
+    assert(schema.queryType             =:= schema.ref("MyQuery"))
+    assert(schema.mutationType.exists(_ =:= schema.ref("MyMutation")))
+    assert(schema.subscriptionType       == None)
+
+  }
+
+  test("implicit Schema type") {
+
+    val schema =
+      Schema("""
+
+        type Query {
+          foo: Int
+        }
+
+        type Mutation {
+          setFoo(n: Int): Int
+        }
+
+        type Subscription {
+          watchFoo: Int
+        }
+
+      """).right.get
+
+    assert(schema.queryType                 =:= schema.ref("Query"))
+    assert(schema.mutationType.exists(_     =:= schema.ref("Mutation")))
+    assert(schema.subscriptionType.exists(_ =:= schema.ref("Subscription")))
+
+  }
+
+  ignore("no query type (crashes)") {
+    Schema("scalar Foo").right.get.queryType
+  }
+
 }
