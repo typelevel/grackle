@@ -116,4 +116,39 @@ trait SqlUnionSpec extends AnyFunSuite {
 
     assert(res == expected)
   }
+
+  test("union query with only introspection") {
+    val query = """
+      query {
+        collection {
+          ... on ItemA {
+            __typename
+          }
+          ... on ItemB {
+            __typename
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "collection" : [
+            {
+              "__typename" : "ItemA"
+            },
+            {
+              "__typename" : "ItemB"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assert(res == expected)
+  }
 }
