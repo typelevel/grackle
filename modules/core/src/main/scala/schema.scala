@@ -13,6 +13,7 @@ import Value._
 import cats.data.Ior.Both
 import cats.kernel.Semigroup
 import cats.implicits._
+import org.tpolecat.sourcepos.SourcePos
 
 /**
  * Representation of a GraphQL schema
@@ -20,6 +21,9 @@ import cats.implicits._
  * A `Schema` is a collection of type and directive declarations.
  */
 trait Schema {
+
+  def pos: SourcePos
+
   /** The types defined by this `Schema`. */
   def types: List[NamedType]
 
@@ -106,14 +110,14 @@ trait Schema {
 }
 
 object Schema {
-  def apply(schemaText: String): Result[Schema] =
+  def apply(schemaText: String)(implicit pos: SourcePos): Result[Schema] =
     SchemaParser.parseText(schemaText)
 }
 
 /**
  * A GraphQL type definition.
  */
-sealed trait Type {
+sealed trait Type extends Product {
   /**
    * Is this type equivalent to `other`.
    *
@@ -800,7 +804,7 @@ object SchemaParser {
    *
    * Yields a Query value on the right and accumulates errors on the left.
    */
-  def parseText(text: String): Result[Schema] = {
+  def parseText(text: String)(implicit pos: SourcePos): Result[Schema] = {
     def toResult[T](pr: Either[String, T]): Result[T] =
       Ior.fromEither(pr).leftMap(mkOneError(_))
 
@@ -810,7 +814,7 @@ object SchemaParser {
     } yield query
   }
 
-  def parseDocument(doc: Document): Result[Schema] = {
+  def parseDocument(doc: Document)(implicit sourcePos: SourcePos): Result[Schema] = {
     def mkSchemaType(schema: Schema): Result[NamedType] = {
       def mkRootOperationType(rootTpe: RootOperationTypeDefinition): Result[(OperationType, NamedType)] = {
         val RootOperationTypeDefinition(optype, tpe) = rootTpe
@@ -971,6 +975,7 @@ object SchemaParser {
     object schema extends Schema {
       var types: List[NamedType] = Nil
       var schemaType1: NamedType = null
+      var pos: SourcePos = sourcePos
 
       override def schemaType: NamedType = schemaType1
 

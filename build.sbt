@@ -7,16 +7,18 @@ val circeOpticsVersion          = "0.13.0"
 val doobieVersion               = "0.9.4"
 val http4sVersion               = "0.21.15"
 val jawnVersion                 = "1.0.1"
-val kindProjectorVersion        = "0.10.3"
+val kindProjectorVersion        = "0.11.2"
 val logbackVersion              = "1.2.3"
 val log4catsVersion             = "1.1.1"
 val skunkVersion                = "0.0.22"
 val shapelessVersion            = "2.3.3"
+val sourcePosVersion            = "0.1.0"
 val testContainersVersion       = "0.38.8"
+val typenameVersion             = "0.1.0"
 
 inThisBuild(Seq(
   homepage := Some(url("https://github.com/gemini-hlsw/gsp-graphql")),
-  addCompilerPlugin("org.typelevel" %% "kind-projector" % kindProjectorVersion),
+  addCompilerPlugin("org.typelevel" %% "kind-projector" % kindProjectorVersion cross CrossVersion.full),
   scalaVersion := "2.13.4"
 ) ++ gspPublishSettings)
 
@@ -66,6 +68,8 @@ lazy val core = project
       "io.circe"          %% "circe-optics"           % circeOpticsVersion,
       "io.circe"          %% "circe-parser"           % circeVersion,
       "org.typelevel"     %% "jawn-parser"            % jawnVersion,
+      "org.tpolecat"      %% "typename"               % typenameVersion,
+      "org.tpolecat"      %% "sourcepos"              % sourcePosVersion,
     )
   )
 

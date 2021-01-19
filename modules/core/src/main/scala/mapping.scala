@@ -11,6 +11,8 @@ import io.circe.{Encoder, Json}
 import Query.Select
 import QueryCompiler.{ComponentElaborator, SelectElaborator}
 import QueryInterpreter.mkErrorResult
+import org.tpolecat.typename._
+import org.tpolecat.sourcepos.SourcePos
 
 trait QueryExecutor[F[_], T] { outer =>
   implicit val M: Monad[F]
@@ -119,6 +121,7 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
 
   trait TypeMapping extends Product with Serializable {
     def tpe: Type
+    def pos: SourcePos
   }
 
   trait ObjectMapping extends TypeMapping {
@@ -126,18 +129,26 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
   }
 
   object ObjectMapping {
-    case class DefaultObjectMapping(tpe: Type, fieldMappings: List[FieldMapping]) extends ObjectMapping
 
-    def apply(tpe: Type, fieldMappings: List[FieldMapping]): ObjectMapping =
+    case class DefaultObjectMapping(tpe: Type, fieldMappings: List[FieldMapping])(
+      implicit val pos: SourcePos
+    ) extends ObjectMapping
+
+    def apply(tpe: Type, fieldMappings: List[FieldMapping])(
+      implicit pos: SourcePos
+    ): ObjectMapping =
       DefaultObjectMapping(tpe, fieldMappings.map(_.withParent(tpe)))
   }
 
-  case class PrefixedMapping(tpe: Type, mappings: List[(List[String], ObjectMapping)]) extends TypeMapping
+  case class PrefixedMapping(tpe: Type, mappings: List[(List[String], ObjectMapping)])(
+    implicit val pos: SourcePos
+  ) extends TypeMapping
 
   trait FieldMapping extends Product with Serializable {
     def fieldName: String
     def isPublic: Boolean
     def withParent(tpe: Type): FieldMapping
+    def pos: SourcePos
   }
 
   trait RootMapping extends FieldMapping {
@@ -149,18 +160,25 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
   trait LeafMapping[T] extends TypeMapping {
     def tpe: Type
     def encoder: Encoder[T]
+    def scalaTypeName: String
+    def pos: SourcePos
   }
   object LeafMapping {
-    case class DefaultLeafMapping[T](tpe: Type, encoder: Encoder[T]) extends LeafMapping[T]
 
-    def apply[T](tpe: Type)(implicit encoder: Encoder[T]): LeafMapping[T] =
-      DefaultLeafMapping(tpe, encoder)
+    case class DefaultLeafMapping[T](tpe: Type, encoder: Encoder[T], scalaTypeName: String)(
+      implicit val pos: SourcePos
+    ) extends LeafMapping[T]
+
+    def apply[T: TypeName](tpe: Type)(implicit encoder: Encoder[T], pos: SourcePos): LeafMapping[T] =
+      DefaultLeafMapping(tpe, encoder, typeName)
 
     def unapply[T](lm: LeafMapping[T]): Option[(Type, Encoder[T])] =
       Some((lm.tpe, lm.encoder))
   }
 
-  case class CursorField[T](fieldName: String, f: Cursor => Result[T], encoder: Encoder[T], required: List[String]) extends FieldMapping {
+  case class CursorField[T](fieldName: String, f: Cursor => Result[T], encoder: Encoder[T], required: List[String])(
+    implicit val pos: SourcePos
+  ) extends FieldMapping {
     def isPublic = true
     def withParent(tpe: Type): CursorField[T] = this
   }
@@ -169,7 +187,9 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
       new CursorField(fieldName, f, encoder, required)
   }
 
-  case class CursorAttribute[T](fieldName: String, f: Cursor => Result[T], required: List[String] = Nil) extends FieldMapping {
+  case class CursorAttribute[T](fieldName: String, f: Cursor => Result[T], required: List[String] = Nil)(
+    implicit val pos: SourcePos
+  ) extends FieldMapping {
     def isPublic = false
     def withParent(tpe: Type): CursorAttribute[T] = this
   }
@@ -178,7 +198,7 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
     fieldName: String,
     interpreter: Mapping[F],
     join: (Cursor, Query) => Result[Query] = ComponentElaborator.TrivialJoin
-  ) extends FieldMapping {
+  )(implicit val pos: SourcePos) extends FieldMapping {
     def isPublic = true
     def withParent(tpe: Type): Delegate = this
   }

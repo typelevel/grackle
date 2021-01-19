@@ -57,8 +57,8 @@ object SkunkMonitor {
 //         logger.info(s"stage completed")
 //     }
 
-  def stateMonitor[F[_]: Applicative]: SkunkMonitor[StateT[F, List[List[SkunkStats]], ?]] =
-    new SkunkMonitor[StateT[F, List[List[SkunkStats]], ?]] {
+  def stateMonitor[F[_]: Applicative]: SkunkMonitor[StateT[F, List[List[SkunkStats]], *]] =
+    new SkunkMonitor[StateT[F, List[List[SkunkStats]], *]] {
 
       def stageStarted: StateT[F, List[List[SkunkStats]], Unit] =
         StateT.modify(states => Nil :: states)
