@@ -92,6 +92,8 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
     def pos: SourcePos
   }
 
+  case class PrimitiveMapping(tpe: Type)(implicit val pos: SourcePos) extends TypeMapping
+
   trait ObjectMapping extends TypeMapping {
     def fieldMappings: List[FieldMapping]
   }
