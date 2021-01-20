@@ -154,23 +154,28 @@ trait MappingValidator {
     validate[Either[Throwable, *]](severity).fold(throw _, _ => ())
 
   protected def missingTypeMappings: Chain[Failure] =
-    schema.types.filter(typeMapping(_).isEmpty).foldMap { tpe =>
+    schema.types.filter {
+      case _: InputObjectType => false
+      case tpe => typeMapping(tpe).isEmpty
+    }.foldMap { tpe =>
       Chain(MissingTypeMapping(tpe))
     }
 
   protected def validateTypeMapping(tm: TypeMapping): Chain[Failure] = {
     if (!tm.tpe.dealias.exists) Chain(ReferencedTypeDoesNotExist(tm))
     else tm match {
-      case om: ObjectMapping  => validateObjectMapping(om)
-      case lm: LeafMapping[_] => validateLeafMapping(lm)
-      case tm                 => Chain(CannotValidateTypeMapping(tm))
+      case om: ObjectMapping   => validateObjectMapping(om)
+      case lm: LeafMapping[_]  => validateLeafMapping(lm)
+      case _: PrimitiveMapping => Chain.empty
+      case tm                  => Chain(CannotValidateTypeMapping(tm))
     }
   }
 
   protected def validateLeafMapping(lm: LeafMapping[_]): Chain[Failure] =
     lm.tpe.dealias match {
-      case ScalarType(_, _) => Chain.empty // these are valid on construction. Nothing to do.
-      case _                => Chain(InapplicableGraphQLType(lm, "ScalarType"))
+      case ScalarType(_, _)|(_: EnumType)|(_: ListType) =>
+        Chain.empty // these are valid on construction. Nothing to do.
+      case _ => Chain(InapplicableGraphQLType(lm, "Leaf Type"))
     }
 
   protected def validateFieldMapping(owner: ObjectType, field: Field, fieldMapping: FieldMapping): Chain[Failure] =
@@ -205,7 +210,7 @@ trait MappingValidator {
       }
     }
     val unknown = fms.foldMap { fm =>
-      tpe.fields.find(_.name == fm.fieldName) match {
+      tpe.fields.find(_.name == fm.fieldName || !fm.isPublic) match {
         case Some(_) => Chain.empty
         case None => Chain(ReferencedFieldDoesNotExist(m, fm))
       }
