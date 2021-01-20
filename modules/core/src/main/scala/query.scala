@@ -1133,7 +1133,7 @@ object QueryInterpreter {
    *  Construct a GraphQL error response from a `Result`, ignoring any
    *  right hand side in `result`.
    */
-  def mkInvalidResponse(result: Result[Query]): Json =
+  def mkInvalidResponse(result: Result[Operation]): Json =
     mkResponse(None, result.left.map(_.toList).getOrElse(Nil))
 
   /** Construct a GraphQL error object */

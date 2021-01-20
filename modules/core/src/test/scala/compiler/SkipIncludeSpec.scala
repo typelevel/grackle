@@ -46,7 +46,7 @@ final class SkipIncludeSuite extends CatsSuite {
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
 
-    assert(compiled == Ior.Right(expected))
+    assert(compiled.map(_.query) == Ior.Right(expected))
   }
 
   test("skip/include fragment spread") {
@@ -104,7 +104,7 @@ final class SkipIncludeSuite extends CatsSuite {
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
 
-    assert(compiled == Ior.Right(expected))
+    assert(compiled.map(_.query) == Ior.Right(expected))
   }
 
   test("fragment spread with nested skip/include") {
@@ -141,7 +141,7 @@ final class SkipIncludeSuite extends CatsSuite {
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
 
-    assert(compiled == Ior.Right(expected))
+    assert(compiled.map(_.query) == Ior.Right(expected))
   }
 
   test("skip/include inline fragment") {
@@ -206,7 +206,7 @@ final class SkipIncludeSuite extends CatsSuite {
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
 
-    assert(compiled == Ior.Right(expected))
+    assert(compiled.map(_.query) == Ior.Right(expected))
   }
 
   test("inline fragment with nested skip/include") {
@@ -241,7 +241,7 @@ final class SkipIncludeSuite extends CatsSuite {
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
     //println(compiled)
 
-    assert(compiled == Ior.Right(expected))
+    assert(compiled.map(_.query) == Ior.Right(expected))
   }
 }
 
