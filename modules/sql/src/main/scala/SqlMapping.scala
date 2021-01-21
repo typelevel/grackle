@@ -553,29 +553,31 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           }
         }
 
-        def loopPredicate(pred: Predicate): Acc = {
-          def loopPath(term: Path): Acc = {
-            def mkSelects(path: List[String]): Query =
-              path.foldRight(Empty: Query) { (fieldName, child) => Select(fieldName, Nil, child) }
+        def loopPath(term: Path): Acc = {
+          def mkSelects(path: List[String]): Query =
+            path.foldRight(Empty: Query) { (fieldName, child) => Select(fieldName, Nil, child) }
 
-            val prefix = term.path.init
-            val parent = obj.path(prefix)
-            val name = term.path.last
+          val prefix = term.path.init
+          val parent = obj.path(prefix)
+          val name = term.path.last
 
-            if (isField(term)) {
-              loop(mkSelects(term.path), path, obj, acc)
-            } else {
-              columnsForFieldOrAttribute(path, parent, name) match {
-                case Nil => loop(mkSelects(prefix), path, obj, acc)
-                case pcols =>
-                  (pcols ++ requiredCols, List.empty[Join], List.empty[(List[String], Type, Predicate)], requiredMappings) |+| loop(mkSelects(prefix), path, obj, acc)
-              }
+          if (isField(term)) {
+            loop(mkSelects(term.path), path, obj, acc)
+          } else {
+            columnsForFieldOrAttribute(path, parent, name) match {
+              case Nil => loop(mkSelects(prefix), path, obj, acc)
+              case pcols =>
+                (pcols ++ requiredCols, List.empty[Join], List.empty[(List[String], Type, Predicate)], requiredMappings) |+| loop(mkSelects(prefix), path, obj, acc)
             }
           }
+        }
 
+        def loopPredicate(pred: Predicate): Acc =
           paths(pred).foldMap(loopPath) |+|
             ((List.empty[ColumnRef], List.empty[Join], List((path, tpe, pred)), List.empty[(ObjectMapping, Type)]))
-        }
+
+        def loopOrderSelections(oss: OrderSelections): Acc =
+          oss.selections.flatMap(os => paths(os.term)).foldMap(loopPath)
 
         q match {
           case Select(fieldName, _, child) =>
@@ -614,8 +616,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             }
           case Limit(_, child) =>
             loop(child, path, obj, acc)
-          case OrderBy(_, child) =>
-            loop(child, path, obj, acc)
+          case OrderBy(oss, child) =>
+            loop(child, path, obj, loopOrderSelections(oss) |+| acc)
 
           case GroupBy(_, child) =>
             loop(child, path, obj, acc)

@@ -148,11 +148,11 @@ object Query {
     }
   }
 
-  case class OrderSelection[T: Order](t: Term[T], ascending: Boolean = true, nullsLast: Boolean = true) {
+  case class OrderSelection[T: Order](term: Term[T], ascending: Boolean = true, nullsLast: Boolean = true) {
     def apply(x: Cursor, y: Cursor): Int = {
       def deref(c: Cursor): Option[T] =
-        if (c.isNullable) c.asNullable.getOrElse(None).flatMap(t(_).toOption)
-        else t(c).toOption
+        if (c.isNullable) c.asNullable.getOrElse(None).flatMap(term(_).toOption)
+        else term(c).toOption
 
       (deref(x), deref(y)) match {
         case (None, None) => 0
