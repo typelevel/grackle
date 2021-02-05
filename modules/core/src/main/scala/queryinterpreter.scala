@@ -13,6 +13,7 @@ import cats.implicits._
 import io.circe.Json
 import io.circe.literal.JsonStringContext
 
+import Cursor.Env
 import Query._, Predicate.In
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
@@ -26,8 +27,8 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
    *  The resulting Json value should include standard GraphQL error
    *  information in the case of failure.
    */
-  def run(query: Query, rootTpe: Type): F[Json] =
-    runRoot(query, rootTpe).map(QueryInterpreter.mkResponse)
+  def run(query: Query, rootTpe: Type, env: Env): F[Json] =
+    runRoot(query, rootTpe, env).map(QueryInterpreter.mkResponse)
 
   /** Interpret `query` with expected type `rootTpe`.
    *
@@ -36,7 +37,7 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
    *
    *  Errors are accumulated on the `Left` of the result.
    */
-  def runRoot(query: Query, rootTpe: Type): F[Result[Json]] = {
+  def runRoot(query: Query, rootTpe: Type, env: Env): F[Result[Json]] = {
     val rootQueries =
       query match {
         case Group(queries) => queries
@@ -48,11 +49,11 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
       introQueries.map {
         case Introspect(schema, query) =>
           val interp = Introspection.interpreter(schema)
-          interp.runRootValue(query, Introspection.schema.queryType)
+          interp.runRootValue(query, Introspection.schema.queryType, env)
       }
 
     val nonIntroQueries = rootQueries.filter { case _: Introspect => false ; case _ => true }
-    val nonIntroResults = runRootValues(nonIntroQueries.zip(Iterator.continually(rootTpe)))
+    val nonIntroResults = runRootValues(nonIntroQueries.map(q => (q, rootTpe, env)))
 
     val mergedResults: F[Result[ProtoJson]] =
       nonIntroResults.map {
@@ -99,14 +100,17 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
    *
    *  Errors are accumulated on the `Left` of the result.
    */
-  def runRootValue0(query: Query, path: List[String], rootTpe: Type): F[Result[ProtoJson]] =
+  def runRootValue0(query: Query, path: List[String], rootTpe: Type, env: Env): F[Result[ProtoJson]] =
     query match {
       case Context(cpath, child) =>
-        runRootValue0(child, cpath ++ path, rootTpe)
+        runRootValue0(child, cpath ++ path, rootTpe, env)
+
+      case Environment(childEnv: Env, child: Query) =>
+        runRootValue0(child, path, rootTpe, env.add(childEnv))
 
       case Select("__staged", _, child) =>
         (for {
-          cursor <- IorT(mapping.rootCursor(path, rootTpe, "__staged", child))
+          cursor <- IorT(mapping.rootCursor(path, rootTpe, "__staged", child, env))
           value  <- IorT(runValue(Wrap("__staged", child), rootTpe.list, cursor).pure[F])
         } yield
           ProtoJson.unpackObject(value) match {
@@ -117,25 +121,25 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
 
       case PossiblyRenamedSelect(Select(fieldName, _, child), resultName) =>
         (for {
-          cursor <- IorT(mapping.rootCursor(path, rootTpe, fieldName, child))
+          cursor <- IorT(mapping.rootCursor(path, rootTpe, fieldName, child, env))
           value  <- IorT(runValue(Wrap(resultName, child), rootTpe.field(fieldName), cursor).pure[F])
         } yield value).value
 
       case q@GroupBy(_, Select(fieldName, _, child)) =>
         val elemTpe = rootTpe.item
         (for {
-          cursor <- IorT(mapping.rootCursor(path, elemTpe, fieldName, child))
+          cursor <- IorT(mapping.rootCursor(path, elemTpe, fieldName, child, env))
           value  <- IorT(runValue(q, rootTpe, cursor).pure[F])
         } yield value).value
 
       case Wrap(_, Component(mapping, _, child)) =>
-        mapping.asInstanceOf[Mapping[F]].interpreter.runRootValue(child, rootTpe)
+        mapping.asInstanceOf[Mapping[F]].interpreter.runRootValue(child, rootTpe, env)
 
       case _ =>
         mkErrorResult(s"Bad root query '${query.render}' in QueryInterpreter").pure[F]
     }
 
-  def runRootValue(query: Query, rootTpe: Type): F[Result[ProtoJson]] = runRootValue0(query, Nil, rootTpe)
+  def runRootValue(query: Query, rootTpe: Type, env: Env): F[Result[ProtoJson]] = runRootValue0(query, Nil, rootTpe, env)
 
   /** Interpret multiple queries with respect to their expected types.
    *
@@ -154,7 +158,7 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
    *  to benefit from combining queries may do so by overriding this
    *  method to implement their specific combinging logic.
    */
-  def runRootValues(queries: List[(Query, Type)]): F[(Chain[Json], List[ProtoJson])] =
+  def runRootValues(queries: List[(Query, Type, Env)]): F[(Chain[Json], List[ProtoJson])] =
     queries.traverse((runRootValue _).tupled).map { rs =>
       (rs.foldLeft((Chain.empty[Json], List.empty[ProtoJson])) {
         case ((errors, elems), elem) =>
@@ -244,6 +248,9 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
         case (Group(siblings), _) =>
           siblings.flatTraverse(query => runFields(query, tpe, cursor))
 
+        case (Environment(childEnv: Env, child: Query), tpe) =>
+          runFields(child, tpe, cursor.withEnv(childEnv))
+
         case _ =>
           mkErrorResult(s"runFields failed: { ${query.render} } $tpe")
       }
@@ -273,7 +280,7 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
   /**
    * Interpret `query` against `cursor` with expected type `tpe`.
    *
-   * If the query is invalid errors will be returned on teh left hand side
+   * If the query is invalid errors will be returned on the left hand side
    * of the result.
    */
   def runValue(query: Query, tpe: Type, cursor: Cursor): Result[ProtoJson] =
@@ -288,6 +295,9 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
       (query, tpe.dealias) match {
         case (Context(_, child), tpe) =>
           runValue(child, tpe, cursor)
+
+        case (Environment(childEnv: Env, child: Query), tpe) =>
+          runValue(child, tpe, cursor.withEnv(childEnv))
 
         case (Wrap(_, Component(_, _, _)), ListType(tpe)) =>
           // Keep the wrapper with the component when going under the list
@@ -312,7 +322,7 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
                   componentName <- mkResult(rootName(cont))
                 } yield
                   ProtoJson.select(
-                    ProtoJson.staged(interpreter, cont, JoinType(componentName, tpe.field(child.name).item)),
+                    ProtoJson.staged(interpreter, cont, JoinType(componentName, tpe.field(child.name).item), cursor.fullEnv),
                     componentName
                   )
               }.map(ProtoJson.fromValues)
@@ -321,14 +331,14 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
               for {
                 componentName <- mkResult(rootName(cont))
                 renamedCont   <- mkResult(renameRoot(cont, resultName))
-              } yield ProtoJson.staged(interpreter, renamedCont, JoinType(componentName, tpe.field(child.name)))
+              } yield ProtoJson.staged(interpreter, renamedCont, JoinType(componentName, tpe.field(child.name)), cursor.fullEnv)
           }
 
         case (Defer(join, child, rootTpe), _) =>
           def stage(cursor: Cursor) =
             for {
               cont <- join(cursor, child)
-            } yield ProtoJson.staged(this, cont, rootTpe)
+            } yield ProtoJson.staged(this, cont, rootTpe, cursor.fullEnv)
 
           if (cursor.isNullable)
             cursor.asNullable match {
@@ -381,7 +391,7 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
               // relative to an empty cursor to create the appropriate empty
               // child
               child match {
-                case Filter(In(_, _), cont) => runValue(cont, ltpe, Cursor.EmptyCursor(ltpe, Nil))
+                case Filter(In(_, _), cont) => runValue(cont, ltpe, Cursor.EmptyCursor(Nil, ltpe))
                 case _ => ProtoJson.fromJson(Json.Null).rightIor
               }
             } else
@@ -434,7 +444,7 @@ object QueryInterpreter {
   object ProtoJson {
     private[QueryInterpreter] sealed trait DeferredJson
     // A result which is deferred to the next stage or component of this interpreter.
-    private[QueryInterpreter] case class StagedJson[F[_]](interpreter: QueryInterpreter[F], query: Query, rootTpe: Type) extends DeferredJson
+    private[QueryInterpreter] case class StagedJson[F[_]](interpreter: QueryInterpreter[F], query: Query, rootTpe: Type, env: Env) extends DeferredJson
     // A partially constructed object which has at least one deferred subtree.
     private[QueryInterpreter] case class ProtoObject(fields: List[(String, ProtoJson)])
     // A partially constructed array which has at least one deferred element.
@@ -446,8 +456,8 @@ object QueryInterpreter {
      * Delegate `query` to the interpreter `interpreter`. When evaluated by
      * that interpreter the query will have expected type `rootTpe`.
      */
-    def staged[F[_]](interpreter: QueryInterpreter[F], query: Query, rootTpe: Type): ProtoJson =
-      wrap(StagedJson(interpreter, query, rootTpe))
+    def staged[F[_]](interpreter: QueryInterpreter[F], query: Query, rootTpe: Type, env: Env): ProtoJson =
+      wrap(StagedJson(interpreter, query, rootTpe, env))
 
     def fromJson(value: Json): ProtoJson = wrap(value)
 
@@ -634,9 +644,9 @@ object QueryInterpreter {
     val collected = pjs.flatMap(gatherDeferred)
 
     val (good, bad, errors0) =
-      collected.foldLeft((List.empty[(DeferredJson, QueryInterpreter[F], (Query, Type))], List.empty[DeferredJson], Chain.empty[Json])) {
-        case ((good, bad, errors), d@StagedJson(interpreter, query, rootTpe)) =>
-          ((d, interpreter.asInstanceOf[QueryInterpreter[F]], (query, rootTpe)) :: good, bad, errors)
+      collected.foldLeft((List.empty[(DeferredJson, QueryInterpreter[F], (Query, Type, Env))], List.empty[DeferredJson], Chain.empty[Json])) {
+        case ((good, bad, errors), d@StagedJson(interpreter, query, rootTpe, env)) =>
+          ((d, interpreter.asInstanceOf[QueryInterpreter[F]], (query, rootTpe, env)) :: good, bad, errors)
       }
 
     val grouped = good.groupMap(_._2)(e => (e._1, e._3)).toList

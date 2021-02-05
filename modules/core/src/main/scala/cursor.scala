@@ -9,6 +9,7 @@ import cats.data.Ior
 import cats.implicits._
 import io.circe.Json
 
+import Cursor.{ cast, Env }
 import QueryInterpreter.{ mkErrorResult, mkOneError }
 
 /**
@@ -16,6 +17,7 @@ import QueryInterpreter.{ mkErrorResult, mkOneError }
  * of a GraphQL query.
  */
 trait Cursor {
+  def parent: Option[Cursor]
   /** The value at the position represented by this `Cursor`. */
   def focus: Any
   /** The GraphQL type of the value at the position represented by this `Cursor`. */
@@ -23,6 +25,11 @@ trait Cursor {
 
   /** The selection path from the root */
   def path: List[String]
+
+  def withEnv(env: Env): Cursor
+  def env: Env
+  def env[T: ClassTag](nme: String): Option[T] = env.get(nme).orElse(parent.flatMap(_.env(nme)))
+  def fullEnv: Env = parent.map(_.fullEnv).getOrElse(Env.empty).add(env)
 
   /**
    * Yield the value at this `Cursor` as a value of type `T` if possible,
@@ -257,25 +264,6 @@ trait Cursor {
           }
     }
   }
-
-  private def cast[T: ClassTag](x: Any): Option[T] = {
-    val clazz = classTag[T].runtimeClass
-    if (
-      clazz.isInstance(x) ||
-      (clazz == classOf[Int] && x.isInstanceOf[java.lang.Integer]) ||
-      (clazz == classOf[Boolean] && x.isInstanceOf[java.lang.Boolean]) ||
-      (clazz == classOf[Long] && x.isInstanceOf[java.lang.Long]) ||
-      (clazz == classOf[Double] && x.isInstanceOf[java.lang.Double]) ||
-      (clazz == classOf[Byte] && x.isInstanceOf[java.lang.Byte]) ||
-      (clazz == classOf[Short] && x.isInstanceOf[java.lang.Short]) ||
-      (clazz == classOf[Char] && x.isInstanceOf[java.lang.Character]) ||
-      (clazz == classOf[Float] && x.isInstanceOf[java.lang.Float]) ||
-      (clazz == classOf[Unit] && x.isInstanceOf[scala.runtime.BoxedUnit])
-    )
-      Some(x.asInstanceOf[T])
-    else
-      None
-  }
 }
 
 object Cursor {
@@ -288,10 +276,13 @@ object Cursor {
     cs.flatTraverse(flatten)
 
   case class EmptyCursor(
-    tpe:   Type,
-    path:  List[String]
+    path: List[String],
+    tpe:  Type,
+    env:  Env = Env.empty
   ) extends Cursor {
+    def parent: Option[Cursor] = None
     def focus: Any = ???
+    def withEnv(env: Env): Cursor = copy(env = env)
 
     def isLeaf: Boolean = false
     def asLeaf: Result[Json] =
@@ -322,5 +313,52 @@ object Cursor {
     def hasAttribute(attrName: String): Boolean = false
     def attribute(attrName: String): Result[Any] =
       mkErrorResult(s"Expected attribute '$attrName', found empty $tpe")
+  }
+
+  sealed trait Env {
+    def add[T](items: (String, T)*): Env
+    def add(env: Env): Env
+    def get[T: ClassTag](name: String): Option[T]
+  }
+
+  object Env {
+    def empty: Env = EmptyEnv
+
+    def apply[T](items: (String, T)*): Env = NonEmptyEnv(Map(items: _*))
+
+    case object EmptyEnv extends Env {
+      def add[T](items: (String, T)*): Env = NonEmptyEnv(Map(items: _*))
+      def add(env: Env): Env = env
+      def get[T: ClassTag](name: String): Option[T] = None
+    }
+
+    case class NonEmptyEnv(elems: Map[String, Any]) extends Env {
+      def add[T](items: (String, T)*): Env = NonEmptyEnv(elems++items)
+      def add(other: Env): Env = other match {
+        case EmptyEnv => this
+        case NonEmptyEnv(elems0) => NonEmptyEnv(elems++elems0)
+      }
+      def get[T: ClassTag](name: String): Option[T] =
+        elems.get(name).flatMap(cast[T])
+    }
+  }
+
+  private def cast[T: ClassTag](x: Any): Option[T] = {
+    val clazz = classTag[T].runtimeClass
+    if (
+      clazz.isInstance(x) ||
+      (clazz == classOf[Int] && x.isInstanceOf[java.lang.Integer]) ||
+      (clazz == classOf[Boolean] && x.isInstanceOf[java.lang.Boolean]) ||
+      (clazz == classOf[Long] && x.isInstanceOf[java.lang.Long]) ||
+      (clazz == classOf[Double] && x.isInstanceOf[java.lang.Double]) ||
+      (clazz == classOf[Byte] && x.isInstanceOf[java.lang.Byte]) ||
+      (clazz == classOf[Short] && x.isInstanceOf[java.lang.Short]) ||
+      (clazz == classOf[Char] && x.isInstanceOf[java.lang.Character]) ||
+      (clazz == classOf[Float] && x.isInstanceOf[java.lang.Float]) ||
+      (clazz == classOf[Unit] && x.isInstanceOf[scala.runtime.BoxedUnit])
+    )
+      Some(x.asInstanceOf[T])
+    else
+      None
   }
 }

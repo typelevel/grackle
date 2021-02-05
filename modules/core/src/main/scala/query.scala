@@ -4,9 +4,11 @@
 package edu.gemini.grackle
 
 import scala.annotation.tailrec
+
 import cats.kernel.{ Eq, Order }
 import cats.implicits._
 
+import Cursor.Env
 import Query._
 
 /** GraphQL query Algebra */
@@ -79,6 +81,10 @@ object Query {
 
   case class Context(path: List[String], child: Query) extends Query {
     def render = s"<context: $path ${child.render}>"
+  }
+
+  case class Environment(env: Env, child: Query) extends Query {
+    def render = s"<environment: $env ${child.render}>"
   }
 
   /**
@@ -213,7 +219,7 @@ object Query {
 
   type UntypedVarDefs = List[UntypedVarDef]
   type VarDefs = List[InputValue]
-  type Env = Map[String, (Type, Value)]
+  type Vars = Map[String, (Type, Value)]
 
   case class UntypedVarDef(name: String, tpe: Ast.Type, default: Option[Value])
 

@@ -13,6 +13,8 @@ import cats.implicits._
 import io.chrisdavenport.log4cats.Logger
 import io.circe.Json
 
+import Cursor.Env
+
 trait DoobieMappingCompanion {
   def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F]
 
@@ -43,11 +45,11 @@ trait TracedDoobieMappingCompanion {
     new QueryExecutor[F, (Json, List[List[DoobieStats]])] {
       implicit val M: Monad[F] = Sync[F]
 
-      def run(query: Query, rootTpe: Type): F[(Json, List[List[DoobieStats]])] =
-        stateMapping.run(query, rootTpe).run(Nil).map(_.swap)
+      def run(query: Query, rootTpe: Type, env: Env): F[(Json, List[List[DoobieStats]])] =
+        stateMapping.run(query, rootTpe, env).run(Nil).map(_.swap)
 
-      def compileAndRun(text: String, name: Option[String] = None, untypedEnv: Option[Json] = None, useIntrospection: Boolean = true): F[(Json, List[List[DoobieStats]])] =
-        stateMapping.compileAndRun(text, name, untypedEnv, useIntrospection).run(Nil).map(_.swap)
+      def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, useIntrospection: Boolean = true, env: Env = Env.empty): F[(Json, List[List[DoobieStats]])] =
+        stateMapping.compileAndRun(text, name, untypedVars, useIntrospection).run(Nil).map(_.swap)
     }
   }
 }

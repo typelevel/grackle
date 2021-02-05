@@ -306,7 +306,7 @@ class QueryCompiler(schema: Schema, phases: List[Phase]) {
    *
    * Any errors are accumulated on the left.
    */
-  def compile(text: String, name: Option[String] = None, untypedEnv: Option[Json] = None, useIntrospection: Boolean = true): Result[Operation] = {
+  def compile(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, useIntrospection: Boolean = true): Result[Operation] = {
 
     val allPhases =
       if (useIntrospection) IntrospectionElaborator :: VariablesAndSkipElaborator :: phases else VariablesAndSkipElaborator :: phases
@@ -314,9 +314,9 @@ class QueryCompiler(schema: Schema, phases: List[Phase]) {
     for {
       parsed  <- QueryParser.parseText(text, name)
       varDefs <- compileVarDefs(parsed.variables)
-      env     <- compileEnv(varDefs, untypedEnv)
+      vars    <- compileVars(varDefs, untypedVars)
       rootTpe <- parsed.rootTpe(schema)
-      query   <- allPhases.foldLeftM(parsed.query) { (acc, phase) => phase.transform(acc, env, schema, rootTpe) }
+      query   <- allPhases.foldLeftM(parsed.query) { (acc, phase) => phase.transform(acc, vars, schema, rootTpe) }
     } yield Operation(query, rootTpe)
   }
 
@@ -326,11 +326,11 @@ class QueryCompiler(schema: Schema, phases: List[Phase]) {
         compileType(untypedTpe).map(tpe => InputValue(name, None, tpe, default))
     }
 
-  def compileEnv(varDefs: VarDefs, untypedEnv: Option[Json]): Result[Env] =
-    untypedEnv match {
+  def compileVars(varDefs: VarDefs, untypedVars: Option[Json]): Result[Vars] =
+    untypedVars match {
       case None => Map.empty.rightIor
-      case Some(untypedEnv) =>
-        untypedEnv.asObject match {
+      case Some(untypedVars) =>
+        untypedVars.asObject match {
           case None =>
             mkErrorResult(s"Variables must be represented as a Json object")
           case Some(obj) =>
@@ -359,7 +359,7 @@ object QueryCompiler {
      * Transform the supplied query algebra term `query` with expected type
      * `tpe`.
      */
-    def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] =
+    def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
       query match {
         case s@Select(fieldName, _, child)    =>
           val childTpe = tpe.underlyingField(fieldName)
@@ -372,58 +372,59 @@ object QueryCompiler {
             else if (!isLeaf && child == Empty)
               mkErrorResult(s"Non-leaf field '$fieldName' of $obj must have a non-empty subselection set")
             else
-              transform(child, env, schema, childTpe).map(ec => s.copy(child = ec))
+              transform(child, vars, schema, childTpe).map(ec => s.copy(child = ec))
           }
 
         case UntypedNarrow(tpnme, child) =>
           schema.definition(tpnme) match {
             case None => mkErrorResult(s"Unknown type '$tpnme' in type condition")
             case Some(subtpe) =>
-              transform(child, env, schema, subtpe).map { ec =>
+              transform(child, vars, schema, subtpe).map { ec =>
                 if (tpe.underlyingObject =:= subtpe) ec else Narrow(schema.ref(tpnme), ec)
               }
           }
 
         case i@Introspect(_, child) if tpe =:= schema.queryType =>
-          transform(child, env, Introspection.schema, Introspection.schema.queryType).map(ec => i.copy(child = ec))
+          transform(child, vars, Introspection.schema, Introspection.schema.queryType).map(ec => i.copy(child = ec))
 
         case i@Introspect(_, child) =>
           val typenameTpe = ObjectType(s"__Typename", None, List(Field("__typename", None, Nil, StringType, false, None)), Nil)
-          transform(child, env, Introspection.schema, typenameTpe).map(ec => i.copy(child = ec))
+          transform(child, vars, Introspection.schema, typenameTpe).map(ec => i.copy(child = ec))
 
-        case n@Narrow(subtpe, child)  => transform(child, env, schema, subtpe).map(ec => n.copy(child = ec))
-        case w@Wrap(_, child)         => transform(child, env, schema, tpe).map(ec => w.copy(child = ec))
-        case r@Rename(_, child)       => transform(child, env, schema, tpe).map(ec => r.copy(child = ec))
-        case g@Group(children)        => children.traverse(q => transform(q, env, schema, tpe)).map(eqs => g.copy(queries = eqs))
-        case g@GroupList(children)    => children.traverse(q => transform(q, env, schema, tpe)).map(eqs => g.copy(queries = eqs))
-        case u@Unique(_, child)       => transform(child, env, schema, tpe.nonNull).map(ec => u.copy(child = ec))
-        case f@Filter(_, child)       => transform(child, env, schema, tpe.item).map(ec => f.copy(child = ec))
-        case c@Component(_, _, child) => transform(child, env, schema, tpe).map(ec => c.copy(child = ec))
-        case d@Defer(_, child, _)     => transform(child, env, schema, tpe).map(ec => d.copy(child = ec))
-        case s@Skip(_, _, child)      => transform(child, env, schema, tpe).map(ec => s.copy(child = ec))
-        case l@Limit(_, child)        => transform(child, env, schema, tpe).map(ec => l.copy(child = ec))
-        case o@OrderBy(_, child)      => transform(child, env, schema, tpe).map(ec => o.copy(child = ec))
-        case g@GroupBy(_, child)      => transform(child, env, schema, tpe).map(ec => g.copy(child = ec))
-        case c@Context(_, child)      => transform(child, env, schema, tpe).map(ec => c.copy(child = ec))
+        case n@Narrow(subtpe, child)  => transform(child, vars, schema, subtpe).map(ec => n.copy(child = ec))
+        case w@Wrap(_, child)         => transform(child, vars, schema, tpe).map(ec => w.copy(child = ec))
+        case r@Rename(_, child)       => transform(child, vars, schema, tpe).map(ec => r.copy(child = ec))
+        case g@Group(children)        => children.traverse(q => transform(q, vars, schema, tpe)).map(eqs => g.copy(queries = eqs))
+        case g@GroupList(children)    => children.traverse(q => transform(q, vars, schema, tpe)).map(eqs => g.copy(queries = eqs))
+        case u@Unique(_, child)       => transform(child, vars, schema, tpe.nonNull).map(ec => u.copy(child = ec))
+        case f@Filter(_, child)       => transform(child, vars, schema, tpe.item).map(ec => f.copy(child = ec))
+        case c@Component(_, _, child) => transform(child, vars, schema, tpe).map(ec => c.copy(child = ec))
+        case d@Defer(_, child, _)     => transform(child, vars, schema, tpe).map(ec => d.copy(child = ec))
+        case s@Skip(_, _, child)      => transform(child, vars, schema, tpe).map(ec => s.copy(child = ec))
+        case l@Limit(_, child)        => transform(child, vars, schema, tpe).map(ec => l.copy(child = ec))
+        case o@OrderBy(_, child)      => transform(child, vars, schema, tpe).map(ec => o.copy(child = ec))
+        case g@GroupBy(_, child)      => transform(child, vars, schema, tpe).map(ec => g.copy(child = ec))
+        case c@Context(_, child)      => transform(child, vars, schema, tpe).map(ec => c.copy(child = ec))
+        case e@Environment(_, child)  => transform(child, vars, schema, tpe).map(ec => e.copy(child = ec))
         case Skipped                  => Skipped.rightIor
         case Empty                    => Empty.rightIor
       }
   }
 
   object IntrospectionElaborator extends Phase {
-    override def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] =
+    override def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
       query match {
         case s@PossiblyRenamedSelect(Select("__typename" | "__schema" | "__type", _, _), _) =>
           Introspect(schema, s).rightIor
-        case _ => super.transform(query, env, schema, tpe)
+        case _ => super.transform(query, vars, schema, tpe)
       }
   }
 
   object VariablesAndSkipElaborator extends Phase {
-    override def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] =
+    override def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
       query match {
         case Group(children) =>
-          children.traverse(q => transform(q, env, schema, tpe)).map { eqs =>
+          children.traverse(q => transform(q, vars, schema, tpe)).map { eqs =>
             eqs.filterNot(_ == Skipped) match {
               case Nil => Skipped
               case eq :: Nil => eq
@@ -433,32 +434,32 @@ object QueryCompiler {
         case Select(fieldName, args, child) =>
           tpe.withUnderlyingField(fieldName) { childTpe =>
             for {
-              elaboratedChild <- transform(child, env, schema, childTpe)
-              elaboratedArgs  <- args.traverse(elaborateVariable(env))
+              elaboratedChild <- transform(child, vars, schema, childTpe)
+              elaboratedArgs  <- args.traverse(elaborateVariable(vars))
             } yield Select(fieldName, elaboratedArgs, elaboratedChild)
           }
         case Skip(skip, cond, child) =>
           for {
-            c  <- extractCond(env, cond)
-            elaboratedChild <- if(c == skip) Skipped.rightIor else transform(child, env, schema, tpe)
+            c  <- extractCond(vars, cond)
+            elaboratedChild <- if(c == skip) Skipped.rightIor else transform(child, vars, schema, tpe)
           } yield elaboratedChild
 
-        case _ => super.transform(query, env, schema, tpe)
+        case _ => super.transform(query, vars, schema, tpe)
       }
 
-    def elaborateVariable(env: Env)(b: Binding): Result[Binding] = b match {
+    def elaborateVariable(vars: Vars)(b: Binding): Result[Binding] = b match {
       case Binding(name, UntypedVariableValue(varName)) =>
-        env.get(varName) match {
+        vars.get(varName) match {
           case Some((_, value)) => Binding(name, value).rightIor
           case None => mkErrorResult(s"Undefined variable '$varName'")
         }
       case other => other.rightIor
     }
 
-    def extractCond(env: Env, value: Value): Result[Boolean] =
+    def extractCond(vars: Vars, value: Value): Result[Boolean] =
       value match {
         case UntypedVariableValue(varName) =>
-          env.get(varName) match {
+          vars.get(varName) match {
             case Some((tpe, BooleanValue(value))) if tpe.nonNull =:= BooleanType => value.rightIor
             case Some((_, _)) => mkErrorResult(s"Argument of skip/include must be boolean")
             case None => mkErrorResult(s"Undefined variable '$varName'")
@@ -506,7 +507,7 @@ object QueryCompiler {
    * 5. eliminates Skipped nodes.
    */
   class SelectElaborator(mapping: Map[TypeRef, PartialFunction[Select, Result[Query]]]) extends Phase {
-    override def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] =
+    override def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
       query match {
         case Select(fieldName, args, child) =>
           tpe.withUnderlyingField(fieldName) { childTpe =>
@@ -525,15 +526,21 @@ object QueryCompiler {
               mkErrorResult(s"Non-leaf field '$fieldName' of $obj must have a non-empty subselection set")
             else
               for {
-                elaboratedChild <- transform(child, env, schema, childTpe)
+                elaboratedChild <- transform(child, vars, schema, childTpe)
                 elaboratedArgs <- elaborateArgs(tpe, fieldName, args)
                 elaborated <- elaborator(Select(fieldName, elaboratedArgs, elaboratedChild))
               } yield elaborated
           }
 
+        case _: Rename =>
+          super.transform(query, vars, schema, tpe).map(_ match {
+            case Rename(nme, Environment(e, child)) => Environment(e, Rename(nme, child))
+            case q => q
+          })
+
         case Skipped => Empty.rightIor
 
-        case _ => super.transform(query, env, schema, tpe)
+        case _ => super.transform(query, vars, schema, tpe)
       }
 
     def elaborateArgs(tpe: Type, fieldName: String, args: List[Binding]): Result[List[Binding]] =
@@ -590,23 +597,23 @@ object QueryCompiler {
    *    from the parent query.
    */
   class ComponentElaborator[F[_]] private (cmapping: Map[(Type, String), (Mapping[F], (Cursor, Query) => Result[Query])]) extends Phase {
-    override def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] =
+    override def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
       query match {
         case PossiblyRenamedSelect(Select(fieldName, args, child), resultName) =>
           tpe.withUnderlyingField(fieldName) { childTpe =>
             schema.ref(tpe.underlyingObject).flatMap(ref => cmapping.get((ref, fieldName))) match {
               case Some((mapping, join)) =>
-                transform(child, env, schema, childTpe).map { elaboratedChild =>
+                transform(child, vars, schema, childTpe).map { elaboratedChild =>
                   Wrap(resultName, Component(mapping, join, PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)))
                 }
               case None =>
-                transform(child, env, schema, childTpe).map { elaboratedChild =>
+                transform(child, vars, schema, childTpe).map { elaboratedChild =>
                   PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)
                 }
             }
           }
 
-        case _ => super.transform(query, env, schema, tpe)
+        case _ => super.transform(query, vars, schema, tpe)
       }
   }
 
