@@ -8,6 +8,7 @@ import cats.data.Ior
 import cats.implicits._
 import io.circe.{Encoder, Json}
 
+import Cursor.Env
 import Query.Select
 import QueryCompiler.{ComponentElaborator, SelectElaborator}
 import QueryInterpreter.mkErrorResult
@@ -17,25 +18,25 @@ import org.tpolecat.sourcepos.SourcePos
 trait QueryExecutor[F[_], T] { outer =>
   implicit val M: Monad[F]
 
-  def run(query: Query, rootTpe: Type): F[T]
+  def run(query: Query, rootTpe: Type, env: Env): F[T]
 
-  def compileAndRun(text: String, name: Option[String] = None, untypedEnv: Option[Json] = None, useIntrospection: Boolean = true): F[T]
+  def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, useIntrospection: Boolean = true, env: Env = Env.empty): F[T]
 }
 
 abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, Json] {
   val schema: Schema
   val typeMappings: List[TypeMapping]
 
-  def run(query: Query, rootTpe: Type): F[Json] =
-    interpreter.run(query, rootTpe)
+  def run(query: Query, rootTpe: Type, env: Env): F[Json] =
+    interpreter.run(query, rootTpe, env)
 
-  def run(op: Operation): F[Json] =
-    run(op.query, op.rootTpe)
+  def run(op: Operation, env: Env = Env.empty): F[Json] =
+    run(op.query, op.rootTpe, env)
 
-  def compileAndRun(text: String, name: Option[String] = None, untypedEnv: Option[Json] = None, useIntrospection: Boolean = true): F[Json] =
-    compiler.compile(text, name, untypedEnv, useIntrospection) match {
+  def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, useIntrospection: Boolean = true, env: Env = Env.empty): F[Json] =
+    compiler.compile(text, name, untypedVars, useIntrospection) match {
       case Ior.Right(operation) =>
-        run(operation.query, schema.queryType)
+        run(operation.query, schema.queryType, env)
       case invalid =>
         QueryInterpreter.mkInvalidResponse(invalid).pure[F]
     }
@@ -56,10 +57,10 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
         }
     }
 
-  def rootCursor(path: List[String], rootTpe: Type, fieldName: String, child: Query): F[Result[Cursor]] =
+  def rootCursor(path: List[String], rootTpe: Type, fieldName: String, child: Query, env: Env): F[Result[Cursor]] =
     rootMapping(path, rootTpe, fieldName) match {
       case Some(root) =>
-        root.cursor(child)
+        root.cursor(child, env)
       case None =>
         mkErrorResult(s"No root field '$fieldName' in $rootTpe").pure[F]
     }
@@ -123,7 +124,7 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
 
   trait RootMapping extends FieldMapping {
     def isPublic = true
-    def cursor(query: Query): F[Result[Cursor]]
+    def cursor(query: Query, env: Env): F[Result[Cursor]]
     def withParent(tpe: Type): RootMapping
   }
 

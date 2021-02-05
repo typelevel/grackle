@@ -12,6 +12,8 @@ import cats.Monad
 import cats.syntax.functor._
 import io.circe.Json
 
+import Cursor.Env
+
 trait SkunkMappingCompanion {
 
   def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F]
@@ -50,11 +52,11 @@ trait TracedSkunkMappingCompanion {
     new QueryExecutor[F, (Json, List[List[SkunkStats]])] {
       implicit val M: Monad[F] = Sync[F]
 
-      def run(query: Query, rootTpe: Type): F[(Json, List[List[SkunkStats]])] =
-        stateMapping.run(query, rootTpe).run(Nil).map(_.swap)
+      def run(query: Query, rootTpe: Type, env: Env): F[(Json, List[List[SkunkStats]])] =
+        stateMapping.run(query, rootTpe, env).run(Nil).map(_.swap)
 
-      def compileAndRun(text: String, name: Option[String] = None, untypedEnv: Option[Json] = None, useIntrospection: Boolean = true): F[(Json, List[List[SkunkStats]])] =
-        stateMapping.compileAndRun(text, name, untypedEnv, useIntrospection).run(Nil).map(_.swap)
+      def compileAndRun(text: String, name: Option[String] = None, untypedEnv: Option[Json] = None, useIntrospection: Boolean = true, env: Env = Env.empty): F[(Json, List[List[SkunkStats]])] =
+        stateMapping.compileAndRun(text, name, untypedEnv, useIntrospection, env).run(Nil).map(_.swap)
     }
   }
 }

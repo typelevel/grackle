@@ -43,7 +43,7 @@ final class SkipIncludeSuite extends CatsSuite {
         Rename("c", Select("field", Nil, Select("subfieldA", Nil, Empty)))
       ))
 
-    val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
+    val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
 
     assert(compiled.map(_.query) == Ior.Right(expected))
@@ -101,7 +101,7 @@ final class SkipIncludeSuite extends CatsSuite {
         Rename("d", Select("field", Nil, Empty))
       ))
 
-    val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
+    val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
 
     assert(compiled.map(_.query) == Ior.Right(expected))
@@ -138,7 +138,7 @@ final class SkipIncludeSuite extends CatsSuite {
         ))
       )
 
-    val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
+    val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
 
     assert(compiled.map(_.query) == Ior.Right(expected))
@@ -203,7 +203,7 @@ final class SkipIncludeSuite extends CatsSuite {
         Rename("d", Select("field", Nil, Empty))
       ))
 
-    val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
+    val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
 
     assert(compiled.map(_.query) == Ior.Right(expected))
@@ -238,7 +238,7 @@ final class SkipIncludeSuite extends CatsSuite {
         ))
       )
 
-    val compiled = SkipIncludeMapping.compiler.compile(query, untypedEnv = Some(variables))
+    val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
 
     assert(compiled.map(_.query) == Ior.Right(expected))

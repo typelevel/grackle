@@ -8,6 +8,7 @@ import cats.Monad
 import cats.implicits._
 import io.circe.Json
 
+import Cursor.Env
 import QueryInterpreter.{mkErrorResult, mkOneError}
 import ScalarType._
 import org.tpolecat.sourcepos.SourcePos
@@ -16,13 +17,13 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
   case class CirceRoot(val tpe: Type, val fieldName: String, root: Json)(
     implicit val pos: SourcePos
   ) extends RootMapping {
-    def cursor(query: Query): F[Result[Cursor]] = {
+    def cursor(query: Query, env: Env): F[Result[Cursor]] = {
       val fieldTpe = tpe.field(fieldName)
       val cursorTpe = query match {
         case _: Query.Unique => fieldTpe.nonNull.list
         case _ => fieldTpe
       }
-      CirceCursor(cursorTpe, root, Nil).rightIor.pure[F].widen
+      CirceCursor(Nil, cursorTpe, root, None, env).rightIor.pure[F].widen
     }
     def withParent(tpe: Type): CirceRoot =
       new CirceRoot(tpe, fieldName, root)
@@ -34,10 +35,17 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
   }
 
   case class CirceCursor(
-    tpe:   Type,
-    focus: Json,
-    path:  List[String]
+    path:   List[String],
+    tpe:    Type,
+    focus:  Json,
+    parent: Option[Cursor],
+    env:    Env
   ) extends Cursor {
+    def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
+
+    def mkChild(path: List[String] = path, tpe: Type = tpe, focus: Json = focus): CirceCursor =
+      CirceCursor(path, tpe, focus, Some(this), Env.empty)
+
     def isLeaf: Boolean =
       tpe.dealias match {
         case BooleanType => focus.isBoolean
@@ -66,7 +74,7 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
 
     def asList: Result[List[Cursor]] = tpe match {
       case ListType(elemTpe) if focus.isArray =>
-        focus.asArray.map(_.map(e => copy(tpe = elemTpe, focus = e)).toList)
+        focus.asArray.map(_.map(e => mkChild(tpe = elemTpe, focus = e)).toList)
           .toRightIor(mkOneError(s"Expected List type, found $tpe for focus ${focus.noSpaces}"))
       case _ =>
         mkErrorResult(s"Expected List type, found $tpe for focus ${focus.noSpaces}")
@@ -77,7 +85,7 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
     def asNullable: Result[Option[Cursor]] = tpe match {
       case NullableType(tpe) =>
         if (focus.isNull) None.rightIor
-        else Some(copy(tpe = tpe)).rightIor
+        else Some(mkChild(tpe = tpe)).rightIor
       case _ => mkErrorResult(s"Expected Nullable type, found $focus for $tpe")
     }
 
@@ -94,7 +102,7 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
 
     def narrow(subtpe: TypeRef): Result[Cursor] =
       if (narrowsTo(subtpe))
-        copy(tpe = subtpe).rightIor
+        mkChild(tpe = subtpe).rightIor
       else
         mkErrorResult(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
 
@@ -105,8 +113,8 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
       val f = focus.asObject.flatMap(_(fieldName))
       val ftpe = tpe.field(fieldName)
       f match {
-        case None if ftpe.isNullable => copy(tpe = ftpe, Json.Null, path = fieldName :: path).rightIor
-        case Some(json) => copy(tpe = ftpe, json, path = fieldName :: path).rightIor
+        case None if ftpe.isNullable => mkChild(path = fieldName :: path, tpe = ftpe, focus = Json.Null).rightIor
+        case Some(json) => mkChild(path = fieldName :: path, tpe = ftpe, focus = json).rightIor
         case _ =>
           mkErrorResult(s"No field '$fieldName' for type $tpe")
       }
