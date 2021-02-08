@@ -36,7 +36,7 @@ final class InputValuesSuite extends CatsSuite {
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
     //println(compiled)
-    assert(compiled == Ior.Right(expected))
+    assert(compiled.map(_.query) == Ior.Right(expected))
   }
 
   test("list value") {
@@ -63,7 +63,7 @@ final class InputValuesSuite extends CatsSuite {
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
     //println(compiled)
-    assert(compiled == Ior.Right(expected))
+    assert(compiled.map(_.query) == Ior.Right(expected))
   }
 
   test("input object value") {
@@ -91,7 +91,7 @@ final class InputValuesSuite extends CatsSuite {
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
     //println(compiled)
-    assert(compiled == Ior.Right(expected))
+    assert(compiled.map(_.query) == Ior.Right(expected))
   }
 }
 

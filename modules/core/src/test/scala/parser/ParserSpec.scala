@@ -267,7 +267,7 @@ final class ParserSuite extends CatsSuite {
 
     val expected =
       Operation(Query, Some(Name("getZuckProfile")),
-        List(VariableDefinition(Name("devicePicSize"), Named(Name("Int")), None, Nil)),
+        List(VariableDefinition(Name("devicePicSize"), Named(Name("Int")), None)),
         Nil,
         List(
           Field(None, Name("user"), List((Name("id"), IntValue(4))), Nil,
@@ -337,4 +337,12 @@ final class ParserSuite extends CatsSuite {
       case _ => assert(false)
     }
   }
+
+  test("invalid document") {
+    GraphQLParser.Document.parseOnly("scalar Foo woozle").option match {
+      case Some(_) => fail("should have failed")
+      case None    => succeed
+    }
+  }
+
 }

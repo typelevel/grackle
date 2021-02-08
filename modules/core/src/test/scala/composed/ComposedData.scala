@@ -201,4 +201,5 @@ object ComposedMapping extends Mapping[Id] {
       case _ =>
         mkErrorResult(s"Unexpected cursor focus type in countryCurrencyJoin")
     }
+
 }

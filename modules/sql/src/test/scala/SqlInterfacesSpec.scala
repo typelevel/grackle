@@ -473,4 +473,46 @@ trait SqlInterfacesSpec extends AnyFunSuite {
 
     assert(res == expected)
   }
+
+  test("interface query with only introspection fields") {
+    val query = """
+      query {
+        entities {
+          __typename
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "entities" : [
+            {
+              "__typename" : "Film"
+            },
+            {
+              "__typename" : "Film"
+            },
+            {
+              "__typename" : "Film"
+            },
+            {
+              "__typename" : "Series"
+            },
+            {
+              "__typename" : "Series"
+            },
+            {
+              "__typename" : "Series"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assert(res == expected)
+  }
 }

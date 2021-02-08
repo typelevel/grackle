@@ -13,6 +13,7 @@ import Value._
 import cats.data.Ior.Both
 import cats.kernel.Semigroup
 import cats.implicits._
+import org.tpolecat.sourcepos.SourcePos
 
 /**
  * Representation of a GraphQL schema
@@ -20,6 +21,9 @@ import cats.implicits._
  * A `Schema` is a collection of type and directive declarations.
  */
 trait Schema {
+
+  def pos: SourcePos
+
   /** The types defined by this `Schema`. */
   def types: List[NamedType]
 
@@ -106,14 +110,14 @@ trait Schema {
 }
 
 object Schema {
-  def apply(schemaText: String): Result[Schema] =
+  def apply(schemaText: String)(implicit pos: SourcePos): Result[Schema] =
     SchemaParser.parseText(schemaText)
 }
 
 /**
  * A GraphQL type definition.
  */
-sealed trait Type {
+sealed trait Type extends Product {
   /**
    * Is this type equivalent to `other`.
    *
@@ -311,6 +315,7 @@ sealed trait Type {
     case _: TypeRef => dealias.underlyingObject
     case o: ObjectType => o
     case i: InterfaceType => i
+    case u: UnionType => u
     case _ => NoType
   }
 
@@ -799,7 +804,7 @@ object SchemaParser {
    *
    * Yields a Query value on the right and accumulates errors on the left.
    */
-  def parseText(text: String): Result[Schema] = {
+  def parseText(text: String)(implicit pos: SourcePos): Result[Schema] = {
     def toResult[T](pr: Either[String, T]): Result[T] =
       Ior.fromEither(pr).leftMap(mkOneError(_))
 
@@ -809,18 +814,21 @@ object SchemaParser {
     } yield query
   }
 
-  def parseDocument(doc: Document): Result[Schema] = {
-    def mkSchemaType(schema: Schema): Result[NamedType] = {
-      def mkRootOperationType(rootTpe: RootOperationTypeDefinition): Result[(OperationType, NamedType)] = {
+  def parseDocument(doc: Document)(implicit sourcePos: SourcePos): Result[Schema] = {
+
+    // explicit Schema type, if any
+    def mkSchemaType(schema: Schema): Result[Option[NamedType]] = {
+
+      def mkRootOperationType(rootTpe: RootOperationTypeDefinition): Result[(OperationType, Type)] = {
         val RootOperationTypeDefinition(optype, tpe) = rootTpe
         mkType(schema)(tpe).flatMap {
-          case nt: NamedType => (optype, nt).rightIor
-          case _ => mkErrorResult("Root operation types must be named types")
+          case NullableType(nt: NamedType) => (optype, nt).rightIor
+          case other => mkErrorResult(s"Root operation types must be named types, found $other (${other.productPrefix}).")
         }
       }
 
-      def build(query: NamedType, mutation: Option[NamedType], subscription: Option[NamedType]): NamedType = {
-        def mkRootDef(fieldName: String)(tpe: NamedType): Field =
+      def build(query: Type, mutation: Option[Type], subscription: Option[Type]): NamedType = {
+        def mkRootDef(fieldName: String)(tpe: Type): Field =
           Field(fieldName, None, Nil, tpe, false, None)
 
         ObjectType(
@@ -840,11 +848,11 @@ object SchemaParser {
 
       val defns = doc.collect { case schema: SchemaDefinition => schema }
       defns match {
-        case Nil => build(defaultQueryType, None, None).rightIor
+        case Nil => None.rightIor
         case SchemaDefinition(rootTpes, _) :: Nil =>
           rootTpes.traverse(mkRootOperationType).map { ops0 =>
             val ops = ops0.toMap
-            build(ops.get(Query).getOrElse(defaultQueryType), ops.get(Mutation), ops.get(Subscription))
+            Some(build(ops.get(Query).getOrElse(defaultQueryType), ops.get(Mutation), ops.get(Subscription)))
           }
 
         case _ => mkErrorResult("At most one schema definition permitted")
@@ -969,13 +977,14 @@ object SchemaParser {
 
     object schema extends Schema {
       var types: List[NamedType] = Nil
-      var schemaType1: NamedType = null
+      var schemaType1: Option[NamedType] = null
+      var pos: SourcePos = sourcePos
 
-      override def schemaType: NamedType = schemaType1
+      override def schemaType: NamedType = schemaType1.getOrElse(super.schemaType)
 
       var directives: List[Directive] = Nil
 
-      def complete(types0: List[NamedType], schemaType0: NamedType, directives0: List[Directive]): this.type = {
+      def complete(types0: List[NamedType], schemaType0: Option[NamedType], directives0: List[Directive]): this.type = {
         types = types0
         schemaType1 = schemaType0
         directives = directives0
@@ -1008,27 +1017,37 @@ object SchemaValidator {
       case a: ObjectTypeDefinition => a
     }
 
-    objects.flatMap { obj =>
-      obj.interfaces.flatMap { ifaceName =>
-        interfaces.find(_.name == ifaceName.astName) match {
-          case Some(interface) => checkImplementation(obj, interface)
-          case None => List(mkError(s"Interface ${ifaceName.astName.value} implemented by object ${obj.name.value} is not defined"))
+    def validateImplementor(name: Ast.Name, implements: List[Ast.Type.Named], fields: List[Ast.FieldDefinition]) = {
+      implements.flatMap { ifaceName =>
+          interfaces.find(_.name == ifaceName.astName) match {
+            case Some(interface) => checkImplementation(name, fields, interface)
+            case None => List(mkError(s"Interface ${ifaceName.astName.value} implemented by ${name.value} is not defined"))
+          }
         }
-      }
     }
+
+    val interfaceErrors = interfaces.flatMap { iface =>
+      validateImplementor(iface.name, iface.interfaces, iface.fields)
+    }
+
+    val objectErrors = objects.flatMap { obj =>
+      validateImplementor(obj.name, obj.interfaces, obj.fields)
+    }
+
+    interfaceErrors ++ objectErrors
   }
 
-  def checkImplementation(obj: ObjectTypeDefinition, interface: InterfaceTypeDefinition): List[Json] = {
+  def checkImplementation(name: Ast.Name, implementorFields: List[Ast.FieldDefinition], interface: InterfaceTypeDefinition): List[Json] = {
     interface.fields.flatMap { ifaceField =>
-      obj.fields.find(_.name == ifaceField.name).map { matching =>
+      implementorFields.find(_.name == ifaceField.name).map { matching =>
         if (ifaceField.tpe != matching.tpe) {
           Some(mkError(s"Field ${matching.name.value} has type ${matching.tpe.name}, however implemented interface ${interface.name.value} requires it to be of type ${ifaceField.tpe.name}"))
         } else if (!argsMatch(matching, ifaceField)) {
-          Some(mkError(s"Field ${matching.name.value} of object ${obj.name.value} has has an argument list that does not match that specified by implemented interface ${interface.name.value}"))
+          Some(mkError(s"Field ${matching.name.value} of ${name.value} has has an argument list that does not match that specified by implemented interface ${interface.name.value}"))
         } else {
           None
         }
-      }.getOrElse(Some(mkError(s"Expected field ${ifaceField.name.value} from interface ${interface.name.value} is not implemented by object ${obj.name.value}")))
+      }.getOrElse(Some(mkError(s"Expected field ${ifaceField.name.value} from interface ${interface.name.value} is not implemented by ${name.value}")))
     }
   }
 

@@ -1052,4 +1052,58 @@ trait SqlWorldSpec extends AnyFunSuite {
 
     assert(res == expected)
   }
+
+  test("query with ordering, ordering field not selected") {
+    val query = """
+      query {
+        countries(limit: 10, byPopulation: true) {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "countries" : [
+            {
+              "name" : "Antarctica"
+            },
+            {
+              "name" : "French Southern territories"
+            },
+            {
+              "name" : "Bouvet Island"
+            },
+            {
+              "name" : "Heard Island and McDonald Islands"
+            },
+            {
+              "name" : "British Indian Ocean Territory"
+            },
+            {
+              "name" : "South Georgia and the South Sandwich Islands"
+            },
+            {
+              "name" : "United States Minor Outlying Islands"
+            },
+            {
+              "name" : "Pitcairn"
+            },
+            {
+              "name" : "Cocos (Keeling) Islands"
+            },
+            {
+              "name" : "Holy See (Vatican City State)"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assert(res == expected)
+  }
 }

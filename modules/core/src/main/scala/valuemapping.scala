@@ -9,44 +9,48 @@ import cats.Monad
 import cats.implicits._
 import io.circe.Json
 
+import Cursor.Env
 import QueryInterpreter.{mkErrorResult, mkOneError}
 import ScalarType._
+import org.tpolecat.sourcepos.SourcePos
 
 abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
 
-  case class ValueRoot(val tpe: Type, val fieldName: String, root0: () => Any) extends RootMapping {
+  case class ValueRoot(val tpe: Type, val fieldName: String, root0: () => Any)(
+    implicit val pos: SourcePos
+  ) extends RootMapping {
     lazy val root: Any = root0()
-    def cursor(query: Query): F[Result[Cursor]] = {
+    def cursor(query: Query, env: Env): F[Result[Cursor]] = {
       val fieldTpe = tpe.field(fieldName)
       val cursorTpe = query match {
         case _: Query.Unique => fieldTpe.nonNull.list
         case _ => fieldTpe
       }
-      ValueCursor(cursorTpe, root, Nil).rightIor.pure[F].widen
+      ValueCursor(Nil, cursorTpe, root, None, env).rightIor.pure[F].widen
     }
     def withParent(tpe: Type): ValueRoot =
       new ValueRoot(tpe, fieldName, root0)
   }
 
   object ValueRoot {
-    def apply(fieldName: String, root: => Any): ValueRoot =
+    def apply(fieldName: String, root: => Any)(implicit pos: SourcePos): ValueRoot =
       new ValueRoot(NoType, fieldName, () => root)
   }
 
   sealed trait ValueField0[T] extends FieldMapping
   object ValueField0 {
     implicit def wrap[T](fm: FieldMapping): ValueField0[T] = Wrap(fm)
-    case class Wrap[T](fm: FieldMapping) extends ValueField0[T] {
+    case class Wrap[T](fm: FieldMapping)(implicit val pos: SourcePos) extends ValueField0[T] {
       def fieldName = fm.fieldName
       def isPublic = fm.isPublic
       def withParent(tpe: Type): FieldMapping = fm.withParent(tpe)
     }
   }
-  case class ValueField[T](fieldName: String, f: T => Any) extends ValueField0[T] {
+  case class ValueField[T](fieldName: String, f: T => Any)(implicit val pos: SourcePos) extends ValueField0[T] {
     def isPublic = true
     def withParent(tpe: Type): ValueField[T] = this
   }
-  case class ValueAttribute[T](fieldName: String, f: T => Any) extends ValueField0[T] {
+  case class ValueAttribute[T](fieldName: String, f: T => Any)(implicit val pos: SourcePos) extends ValueField0[T] {
     def isPublic = false
     def withParent(tpe: Type): ValueAttribute[T] = this
   }
@@ -55,19 +59,26 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
     tpe: Type,
     fieldMappings: List[FieldMapping],
     classTag: ClassTag[T]
-  ) extends ObjectMapping
+  )(implicit val pos: SourcePos) extends ObjectMapping
 
   def ValueObjectMapping[T: ClassTag](
     tpe: Type,
     fieldMappings: List[ValueField0[T]]
-  )(implicit classTag: ClassTag[T]): ValueObjectMapping[T] =
+  )(implicit classTag: ClassTag[T], pos: SourcePos): ValueObjectMapping[T] =
     new ValueObjectMapping(tpe, fieldMappings.map(_.withParent(tpe)), classTag)
 
   case class ValueCursor(
-    tpe:   Type,
-    focus: Any,
-    path:  List[String]
+    path:   List[String],
+    tpe:    Type,
+    focus:  Any,
+    parent: Option[Cursor],
+    env:    Env
   ) extends Cursor {
+    def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
+
+    def mkChild(path: List[String] = path, tpe: Type = tpe, focus: Any = focus): ValueCursor =
+      ValueCursor(path, tpe, focus, Some(this), Env.empty)
+
     def isLeaf: Boolean =
       tpe.dealias match {
         case (_: ScalarType)|(_: EnumType) => true
@@ -98,7 +109,7 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
     }
 
     def asList: Result[List[Cursor]] = (tpe, focus) match {
-      case (ListType(tpe), it: List[_]) => it.map(f => copy(tpe = tpe, focus = f)).rightIor
+      case (ListType(tpe), it: List[_]) => it.map(f => mkChild(tpe = tpe, focus = f)).rightIor
       case _ => mkErrorResult(s"Expected List type, found $tpe")
     }
 
@@ -108,7 +119,7 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
     }
 
     def asNullable: Result[Option[Cursor]] = (tpe, focus) match {
-      case (NullableType(tpe), o: Option[_]) => o.map(f => copy(tpe = tpe, focus = f)).rightIor
+      case (NullableType(tpe), o: Option[_]) => o.map(f => mkChild(tpe = tpe, focus = f)).rightIor
       case (_: NullableType, _) => mkErrorResult(s"Found non-nullable $focus for $tpe")
       case _ => mkErrorResult(s"Expected Nullable type, found $focus for $tpe")
     }
@@ -124,7 +135,7 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
 
     def narrow(subtpe: TypeRef): Result[Cursor] =
       if (narrowsTo(subtpe))
-        copy(tpe = subtpe).rightIor
+        mkChild(tpe = subtpe).rightIor
       else
         mkErrorResult(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
 
@@ -134,9 +145,9 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
     def field(fieldName: String): Result[Cursor] =
       fieldMapping(path, tpe, fieldName) match {
         case Some(ValueField(_, f)) =>
-          copy(tpe = tpe.field(fieldName), focus = f.asInstanceOf[Any => Any](focus), path = fieldName :: path).rightIor
+          mkChild(tpe = tpe.field(fieldName), focus = f.asInstanceOf[Any => Any](focus), path = fieldName :: path).rightIor
         case Some(CursorField(_, f, _, _)) =>
-          f(this).map(res => copy(tpe = tpe.field(fieldName), focus = res))
+          f(this).map(res => mkChild(tpe = tpe.field(fieldName), focus = res))
         case _ =>
           mkErrorResult(s"No field '$fieldName' for type $tpe")
       }

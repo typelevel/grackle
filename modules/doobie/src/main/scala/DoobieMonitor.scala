@@ -72,8 +72,8 @@ object DoobieMonitor {
         logger.info(s"stage completed")
     }
 
-  def stateMonitor[F[_]: Applicative]: DoobieMonitor[StateT[F, List[List[DoobieStats]], ?]] =
-    new DoobieMonitor[StateT[F, List[List[DoobieStats]], ?]] {
+  def stateMonitor[F[_]: Applicative]: DoobieMonitor[StateT[F, List[List[DoobieStats]], *]] =
+    new DoobieMonitor[StateT[F, List[List[DoobieStats]], *]] {
 
       def stageStarted: StateT[F, List[List[DoobieStats]], Unit] =
         StateT.modify(states => Nil :: states)

@@ -91,9 +91,9 @@ final class FragmentSuite extends CatsSuite {
 
     val compiled = FragmentMapping.compiler.compile(query)
 
-    assert(compiled == Ior.Right(expected))
+    assert(compiled.map(_.query) == Ior.Right(expected))
 
-    val res = FragmentMapping.run(compiled.right.get, FragmentMapping.schema.queryType)
+    val res = FragmentMapping.run(compiled.right.get)
     //println(res)
     assert(res == expectedResult)
   }
@@ -179,9 +179,9 @@ final class FragmentSuite extends CatsSuite {
 
     val compiled = FragmentMapping.compiler.compile(query)
 
-    assert(compiled == Ior.Right(expected))
+    assert(compiled.map(_.query) == Ior.Right(expected))
 
-    val res = FragmentMapping.run(compiled.right.get, FragmentMapping.schema.queryType)
+    val res = FragmentMapping.run(compiled.right.get)
     //println(res)
     assert(res == expectedResult)
   }
@@ -256,9 +256,9 @@ final class FragmentSuite extends CatsSuite {
 
     val compiled = FragmentMapping.compiler.compile(query)
 
-    assert(compiled == Ior.Right(expected))
+    assert(compiled.map(_.query) == Ior.Right(expected))
 
-    val res = FragmentMapping.run(compiled.right.get, FragmentMapping.schema.queryType)
+    val res = FragmentMapping.run(compiled.right.get)
     //println(res)
     assert(res == expectedResult)
   }
@@ -321,9 +321,9 @@ final class FragmentSuite extends CatsSuite {
 
     val compiled = FragmentMapping.compiler.compile(query)
 
-    assert(compiled == Ior.Right(expected))
+    assert(compiled.map(_.query) == Ior.Right(expected))
 
-    val res = FragmentMapping.run(compiled.right.get, FragmentMapping.schema.queryType)
+    val res = FragmentMapping.run(compiled.right.get)
     //println(res)
     assert(res == expectedResult)
   }
@@ -421,9 +421,9 @@ final class FragmentSuite extends CatsSuite {
 
     val compiled = FragmentMapping.compiler.compile(query)
 
-    assert(compiled == Ior.Right(expected))
+    assert(compiled.map(_.query) == Ior.Right(expected))
 
-    val res = FragmentMapping.run(compiled.right.get, FragmentMapping.schema.queryType)
+    val res = FragmentMapping.run(compiled.right.get)
     //println(res)
     assert(res == expectedResult)
   }

@@ -75,7 +75,6 @@ object Ast {
     name:         Name,
     tpe:          Type,
     defaultValue: Option[Value],
-    directives:   List[Directive]
   )
 
   sealed trait Value
