@@ -121,7 +121,6 @@ object StarWarsMapping extends ValueMapping[Id] {
            character(id: ID!): Character
            human(id: ID!): Human
            droid(id: ID!): Droid
-
          }
          enum Episode {
            NEWHOPE
