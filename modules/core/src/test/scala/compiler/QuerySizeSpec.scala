@@ -3,7 +3,10 @@
 
 package compiler
 
+import cats.data.{Chain, Ior}
 import cats.tests.CatsSuite
+import io.circe.literal.JsonStringContext
+
 import starwars.StarWarsMapping
 
 class QuerySizeSpec extends CatsSuite {
@@ -17,7 +20,7 @@ class QuerySizeSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get
+    val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
     val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery)
 
     assert(res == ((2,1)))
@@ -33,7 +36,7 @@ class QuerySizeSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get
+    val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
     val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery)
 
     assert(res == ((2,2)))
@@ -50,7 +53,7 @@ class QuerySizeSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get
+    val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
     val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery)
 
     assert(res == ((3,1)))
@@ -71,7 +74,7 @@ class QuerySizeSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get
+    val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
     val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery)
 
     assert(res == ((4,3)))
@@ -87,7 +90,7 @@ class QuerySizeSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get
+    val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
     val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery)
 
     assert(res == ((2,1)))
@@ -104,7 +107,7 @@ class QuerySizeSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get
+    val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
     val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery)
 
     assert(res == ((2,1)))
@@ -129,7 +132,7 @@ class QuerySizeSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get
+    val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
     val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery)
 
     assert(res == ((3,5)))
@@ -145,7 +148,7 @@ class QuerySizeSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get
+    val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
     val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery)
 
     assert(res._2 == 2)
@@ -168,7 +171,7 @@ class QuerySizeSpec extends CatsSuite {
       }
     """
 
-    val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get
+    val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
     val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery)
 
     assert(res._2 == 5)
@@ -201,9 +204,15 @@ class QuerySizeSpec extends CatsSuite {
       }
     """
 
-    val res = StarWarsMapping.compiler.compile(query).left.get.head.asString.get
-    val maxDepth = 5
-    assert(res == s"Query is too deep: max depth $maxDepth levels")
+    val expected =
+      json"""
+        {
+          "message" : "Query is too deep: depth is 8 levels, maximum is 5"
+        }
+      """
+
+    val res = StarWarsMapping.compiler.compile(query)
+    assert(res == Ior.Left(Chain(expected)))
   }
 
   test("query too wide") {
@@ -224,8 +233,15 @@ class QuerySizeSpec extends CatsSuite {
       }
     """
 
-    val res = StarWarsMapping.compiler.compile(query).left.get.head.asString.get
-    val maxWidth = 5
-    assert(res == s"Query is too wide: max width $maxWidth leaves")
+
+    val expected =
+      json"""
+        {
+          "message" : "Query is too wide: width is 6 leaves, maximum is 5"
+        }
+      """
+
+    val res = StarWarsMapping.compiler.compile(query)
+    assert(res == Ior.Left(Chain(expected)))
   }
 }

@@ -203,5 +203,7 @@ object StarWarsMapping extends ValueMapping[Id] {
     }
   ))
 
-  override val querySizeValidator: QuerySizeValidator = new QuerySizeValidator(5, 5)
+  val querySizeValidator = new QuerySizeValidator(5, 5)
+
+  override def compilerPhases = super.compilerPhases :+ querySizeValidator
 }

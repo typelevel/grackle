@@ -4,7 +4,7 @@
 package edu.gemini.grackle
 
 import atto.Atto._
-import cats.data.{Ior, NonEmptyChain}
+import cats.data.Ior
 import cats.implicits._
 import io.circe.Json
 
@@ -628,12 +628,12 @@ object QueryCompiler {
       new ComponentElaborator(mappings.map(m => ((m.tpe, m.fieldName), (m.mapping, m.join))).toMap)
   }
 
-  class QuerySizeValidator(maxDepth: Int = 10, maxWidth: Int = 100) extends Phase {
-    override def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] =
+  class QuerySizeValidator(maxDepth: Int, maxWidth: Int) extends Phase {
+    override def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
       querySize(query) match {
-        case (depth, _) if depth > maxDepth => Ior.left(NonEmptyChain(Json.fromString(s"Query is too deep: max depth $maxDepth levels")))
-        case (_, width) if width > maxWidth => Ior.left(NonEmptyChain(Json.fromString(s"Query is too wide: max width $maxWidth leaves")))
-        case (depth, width) if depth > maxDepth && width > maxWidth => Ior.left(NonEmptyChain(Json.fromString("Query is too complex")))
+        case (depth, _) if depth > maxDepth => mkErrorResult(s"Query is too deep: depth is $depth levels, maximum is $maxDepth")
+        case (_, width) if width > maxWidth => mkErrorResult(s"Query is too wide: width is $width leaves, maximum is $maxWidth")
+        case (depth, width) if depth > maxDepth && width > maxWidth => mkErrorResult(s"Query is too complex: width/depth is $width/$depth leaves/levels, maximum is $maxWidth/$maxDepth")
         case (_, _) => Ior.Right(query)
       }
 
@@ -657,6 +657,7 @@ object QueryCompiler {
           case GroupList(queries) => handleGroupedQueries(queries, depth, width)
           case Component(_, _, child) => loop(child, depth, width, false)
           case Context(_, child) => loop(child, depth, width, false)
+          case Environment(_, child) => loop(child, depth, width, false)
           case Empty => (depth, width)
           case Defer(_, child, _) => loop(child, depth, width, false)
           case Filter(_, child) => loop(child, depth, width, false)

@@ -10,7 +10,7 @@ import io.circe.{Encoder, Json}
 
 import Cursor.Env
 import Query.Select
-import QueryCompiler.{ComponentElaborator, QuerySizeValidator, SelectElaborator}
+import QueryCompiler.{ComponentElaborator, SelectElaborator}
 import QueryInterpreter.mkErrorResult
 import org.tpolecat.typename._
 import org.tpolecat.sourcepos.SourcePos
@@ -190,9 +190,7 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
     ComponentElaborator(componentMappings)
   }
 
-  val querySizeValidator = new QuerySizeValidator()
-
-  def compilerPhases: List[QueryCompiler.Phase] = List(selectElaborator, componentElaborator, querySizeValidator)
+  def compilerPhases: List[QueryCompiler.Phase] = List(selectElaborator, componentElaborator)
 
   lazy val compiler = new QueryCompiler(schema, compilerPhases)
 
