@@ -202,4 +202,8 @@ object StarWarsMapping extends ValueMapping[Id] {
         Select(f, Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
     }
   ))
+
+  val querySizeValidator = new QuerySizeValidator(5, 5)
+
+  override def compilerPhases = super.compilerPhases :+ querySizeValidator
 }

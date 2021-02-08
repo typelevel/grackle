@@ -13,6 +13,8 @@ import QueryCompiler._
 import QueryInterpreter.{ mkErrorResult, mkOneError }
 import ScalarType._
 
+import scala.annotation.tailrec
+
 /**
  * GraphQL query parser
  */
@@ -624,5 +626,55 @@ object QueryCompiler {
 
     def apply[F[_]](mappings: List[ComponentMapping[F]]): ComponentElaborator[F] =
       new ComponentElaborator(mappings.map(m => ((m.tpe, m.fieldName), (m.mapping, m.join))).toMap)
+  }
+
+  class QuerySizeValidator(maxDepth: Int, maxWidth: Int) extends Phase {
+    override def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
+      querySize(query) match {
+        case (depth, _) if depth > maxDepth => mkErrorResult(s"Query is too deep: depth is $depth levels, maximum is $maxDepth")
+        case (_, width) if width > maxWidth => mkErrorResult(s"Query is too wide: width is $width leaves, maximum is $maxWidth")
+        case (depth, width) if depth > maxDepth && width > maxWidth => mkErrorResult(s"Query is too complex: width/depth is $width/$depth leaves/levels, maximum is $maxWidth/$maxDepth")
+        case (_, _) => Ior.Right(query)
+      }
+
+    def querySize(query: Query): (Int, Int) = {
+      def handleGroupedQueries(childQueries: List[Query], depth: Int, width: Int): (Int, Int) = {
+        val fragmentQueries = childQueries.diff(childQueries.collect { case n: Narrow => n })
+        val childSizes =
+          if (fragmentQueries.isEmpty) childQueries.map(gq => loop(gq, depth, width, true))
+          else childQueries.map(gq => loop(gq, depth + 1, width, true))
+
+        val childDepths = (childSizes.map(size => size._1)).max
+        val childWidths = childSizes.map(_._2).sum
+        (childDepths, childWidths)
+      }
+      @tailrec
+      def loop(q: Query, depth: Int, width: Int, group: Boolean): (Int, Int) =
+        q match {
+          case Select(_, _, Empty) => if (group) (depth, width + 1) else (depth + 1, width + 1)
+          case Select(_, _, child) => if (group) loop(child, depth, width, false) else loop(child, depth + 1, width, false)
+          case Group(queries) => handleGroupedQueries(queries, depth, width)
+          case GroupList(queries) => handleGroupedQueries(queries, depth, width)
+          case Component(_, _, child) => loop(child, depth, width, false)
+          case Context(_, child) => loop(child, depth, width, false)
+          case Environment(_, child) => loop(child, depth, width, false)
+          case Empty => (depth, width)
+          case Defer(_, child, _) => loop(child, depth, width, false)
+          case Filter(_, child) => loop(child, depth, width, false)
+          case GroupBy(_, child) => loop(child, depth, width, false)
+          case Introspect(_, _) => (depth, width)
+          case Limit(_, child) => loop(child, depth, width, false)
+          case Narrow(_, child) => loop(child, depth, width, true)
+          case OrderBy(_, child) => loop(child, depth, width, false)
+          case Rename(_, child) => loop(child, depth, width, false)
+          case Skip(_, _, child) => loop(child, depth, width, false)
+          case Skipped => (depth, width)
+          case Unique(_, child) => loop(child, depth, width, false)
+          case UntypedNarrow(_, child) => loop(child, depth, width, false)
+          case Wrap(_, child) => loop(child, depth, width, false)
+        }
+
+      loop(query, 0, 0, false)
+    }
   }
 }
