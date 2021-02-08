@@ -7,12 +7,10 @@ import atto.Atto._
 import cats.data.{Ior, NonEmptyChain}
 import cats.implicits._
 import io.circe.Json
-import Query._
-import Predicate._
-import Value._
-import UntypedOperation._
+
+import Query._, Predicate._, Value._, UntypedOperation._
 import QueryCompiler._
-import QueryInterpreter.{mkErrorResult, mkOneError}
+import QueryInterpreter.{ mkErrorResult, mkOneError }
 import ScalarType._
 
 import scala.annotation.tailrec
