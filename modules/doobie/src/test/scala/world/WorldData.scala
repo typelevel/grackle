@@ -206,6 +206,8 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
 
     }
   ))
+
+  override val querySizeValidator: QuerySizeValidator = new QuerySizeValidator(12, 100)
 }
 
 object WorldMapping extends DoobieMappingCompanion {

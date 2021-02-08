@@ -7,9 +7,8 @@ import cats.Monad
 import cats.data.{Chain, Ior}
 import cats.implicits._
 import io.circe.{Encoder, Json}
-
 import Query.Select
-import QueryCompiler.{ComponentElaborator, SelectElaborator}
+import QueryCompiler.{ComponentElaborator, QuerySizeValidator, SelectElaborator}
 import QueryInterpreter.mkErrorResult
 
 trait QueryExecutor[F[_], T] { outer =>
@@ -199,7 +198,9 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
     ComponentElaborator(componentMappings)
   }
 
-  def compilerPhases: List[QueryCompiler.Phase] = List(selectElaborator, componentElaborator)
+  val querySizeValidator = new QuerySizeValidator()
+
+  def compilerPhases: List[QueryCompiler.Phase] = List(selectElaborator, componentElaborator, querySizeValidator)
 
   lazy val compiler = new QueryCompiler(schema, compilerPhases)
 

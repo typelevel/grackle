@@ -4,14 +4,18 @@
 package edu.gemini.grackle
 
 import atto.Atto._
-import cats.data.Ior
+import cats.data.{Ior, NonEmptyChain}
 import cats.implicits._
 import io.circe.Json
-
-import Query._, Predicate._, Value._, UntypedOperation._
+import Query._
+import Predicate._
+import Value._
+import UntypedOperation._
 import QueryCompiler._
-import QueryInterpreter.{ mkErrorResult, mkOneError }
+import QueryInterpreter.{mkErrorResult, mkOneError}
 import ScalarType._
+
+import scala.annotation.tailrec
 
 /**
  * GraphQL query parser
@@ -494,5 +498,54 @@ object QueryCompiler {
 
     def apply[F[_]](mappings: List[ComponentMapping[F]]): ComponentElaborator[F] =
       new ComponentElaborator(mappings.map(m => ((m.tpe, m.fieldName), (m.mapping, m.join))).toMap)
+  }
+
+  class QuerySizeValidator(maxDepth: Int = 10, maxWidth: Int = 100) extends Phase {
+    override def transform(query: Query, env: Env, schema: Schema, tpe: Type): Result[Query] =
+      querySize(query) match {
+        case (depth, _) if depth > maxDepth => Ior.left(NonEmptyChain(Json.fromString(s"Query is too deep: max depth $maxDepth levels")))
+        case (_, width) if width > maxWidth => Ior.left(NonEmptyChain(Json.fromString(s"Query is too wide: max width $maxWidth leaves")))
+        case (depth, width) if depth > maxDepth && width > maxWidth => Ior.left(NonEmptyChain(Json.fromString("Query is too complex")))
+        case (_, _) => Ior.Right(query)
+      }
+
+    def querySize(query: Query): (Int, Int) = {
+      def handleGroupedQueries(childQueries: List[Query], depth: Int, width: Int): (Int, Int) = {
+        val fragmentQueries = childQueries.diff(childQueries.collect { case n: Narrow => n })
+        val childSizes =
+          if (fragmentQueries.isEmpty) childQueries.map(gq => loop(gq, depth, width, true))
+          else childQueries.map(gq => loop(gq, depth + 1, width, true))
+
+        val childDepths = (childSizes.map(size => size._1)).max
+        val childWidths = childSizes.map(_._2).sum
+        (childDepths, childWidths)
+      }
+      @tailrec
+      def loop(q: Query, depth: Int, width: Int, group: Boolean): (Int, Int) =
+        q match {
+          case Select(_, _, Empty) => if (group) (depth, width + 1) else (depth + 1, width + 1)
+          case Select(_, _, child) => if (group) loop(child, depth, width, false) else loop(child, depth + 1, width, false)
+          case Group(queries) => handleGroupedQueries(queries, depth, width)
+          case GroupList(queries) => handleGroupedQueries(queries, depth, width)
+          case Component(_, _, child) => loop(child, depth, width, false)
+          case Context(_, child) => loop(child, depth, width, false)
+          case Empty => (depth, width)
+          case Defer(_, child, _) => loop(child, depth, width, false)
+          case Filter(_, child) => loop(child, depth, width, false)
+          case GroupBy(_, child) => loop(child, depth, width, false)
+          case Introspect(_, _) => (depth, width)
+          case Limit(_, child) => loop(child, depth, width, false)
+          case Narrow(_, child) => loop(child, depth, width, true)
+          case OrderBy(_, child) => loop(child, depth, width, false)
+          case Rename(_, child) => loop(child, depth, width, false)
+          case Skip(_, _, child) => loop(child, depth, width, false)
+          case Skipped => (depth, width)
+          case Unique(_, child) => loop(child, depth, width, false)
+          case UntypedNarrow(_, child) => loop(child, depth, width, false)
+          case Wrap(_, child) => loop(child, depth, width, false)
+        }
+
+      loop(query, 0, 0, false)
+    }
   }
 }

@@ -121,6 +121,7 @@ object StarWarsMapping extends ValueMapping[Id] {
            character(id: ID!): Character
            human(id: ID!): Human
            droid(id: ID!): Droid
+
          }
          enum Episode {
            NEWHOPE
@@ -202,4 +203,6 @@ object StarWarsMapping extends ValueMapping[Id] {
         Select(f, Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
     }
   ))
+
+  override val querySizeValidator: QuerySizeValidator = new QuerySizeValidator(5, 5)
 }
