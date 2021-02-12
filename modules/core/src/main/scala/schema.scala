@@ -1005,7 +1005,7 @@ object SchemaValidator {
     val undefinedResults = checkForUndefined(checkForDuplicates(namedTypes), defns)
 
     val errors = NonEmptyChain.fromSeq(checkForEnumValueDuplicates(defns) ++ validateImpls(defns))
-    errors.map(addLeft(undefinedResults, _)).getOrElse(undefinedResults)
+    errors.map(undefinedResults.addLeft(_)).getOrElse(undefinedResults)
   }
 
   def validateImpls(definitions: List[TypeDefinition]): List[Json] = {
@@ -1053,12 +1053,6 @@ object SchemaValidator {
 
   def argsMatch(fieldOne: FieldDefinition, fieldTwo: FieldDefinition): Boolean = fieldOne.args.corresponds(fieldTwo.args) { case (arg, implArg) =>
     arg.name == implArg.name && arg.tpe == implArg.tpe
-  }
-
-  def addLeft[A: Semigroup, B](ior: Ior[A,B], a: A): Ior[A, B] = ior match {
-    case Ior.Right(r) => Both(a, r)
-    case Both(l, r) => Both(l combine a, r)
-    case Ior.Left(l) => Ior.left(l combine a)
   }
 
   def checkForEnumValueDuplicates(definitions: List[TypeDefinition]): List[Json] =
