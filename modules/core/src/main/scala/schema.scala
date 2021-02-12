@@ -10,8 +10,6 @@ import Ast.{EnumTypeDefinition, FieldDefinition, InterfaceTypeDefinition, Object
 import QueryInterpreter.{mkError, mkErrorResult, mkOneError}
 import ScalarType._
 import Value._
-import cats.data.Ior.Both
-import cats.kernel.Semigroup
 import cats.implicits._
 import org.tpolecat.sourcepos.SourcePos
 
