@@ -466,10 +466,10 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     // such that a valid query is guaranteed to be covered.
     def apply(q: Query, path: List[String], tpe: Type): MappedQuery = {
 
-      type Acc = (List[ColumnRef], List[Join], List[(List[String], Type, Predicate)], List[(ObjectMapping, Type)])
+      type Acc = (List[ColumnRef], List[Join], List[(List[String], Type, Predicate)])
       implicit object MonoidAcc extends Monoid[Acc] {
-        def combine(x: Acc, y: Acc): Acc = (x._1 ++ y._1, x._2 ++ y._2, x._3 ++ y._3, x._4 ++ y._4)
-        def empty: Acc =  (Nil, Nil, Nil, Nil)
+        def combine(x: Acc, y: Acc): Acc = (x._1 ++ y._1, x._2 ++ y._2, x._3 ++ y._3)
+        def empty: Acc =  (Nil, Nil, Nil)
       }
 
       def discriminatorColumnsForType(path: List[String], tpe: Type): List[ColumnRef] = {
@@ -542,10 +542,6 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         def requiredCols: List[ColumnRef] =
           discriminatorColumnsForType(path, obj) ++ interfaces.flatMap(discriminatorColumnsForType(path, _)) ++ keyColumnsForType(path, obj)
 
-        def requiredMappings: List[(ObjectMapping, Type)] =
-          objectMapping(path, obj).map(om => (om, obj)).toList ++
-          interfaces.flatMap(i => objectMapping(path, i).map(im => (im, i)).toList)
-
         def joinsForField(path: List[String], tpe: Type, fieldName: String): List[Join] = {
           val obj = tpe.underlyingObject
           fieldMapping(path, obj, fieldName) match {
@@ -568,14 +564,14 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             columnsForFieldOrAttribute(path, parent, name) match {
               case Nil => loop(mkSelects(prefix), path, obj, acc)
               case pcols =>
-                (pcols ++ requiredCols, List.empty[Join], List.empty[(List[String], Type, Predicate)], requiredMappings) |+| loop(mkSelects(prefix), path, obj, acc)
+                (pcols ++ requiredCols, List.empty[Join], List.empty[(List[String], Type, Predicate)]) |+| loop(mkSelects(prefix), path, obj, acc)
             }
           }
         }
 
         def loopPredicate(pred: Predicate): Acc =
           paths(pred).foldMap(loopPath) |+|
-            ((List.empty[ColumnRef], List.empty[Join], List((path, tpe, pred)), List.empty[(ObjectMapping, Type)]))
+            ((List.empty[ColumnRef], List.empty[Join], List((path, tpe, pred))))
 
         def loopOrderSelections(oss: OrderSelections): Acc =
           oss.selections.flatMap(os => paths(os.term)).foldMap(loopPath)
@@ -584,15 +580,13 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           case Select(fieldName, _, child) =>
             val fieldTpe = obj.field(fieldName)
             val joins = joinsForField(path, obj, fieldName)
-            val joinTpe = fieldTpe.underlyingObject
-            val joinMapping = if(joins.isEmpty) Nil else objectMapping(fieldName :: path, joinTpe).map(om => (om, joinTpe)).toList
             val joinCols = joins.flatMap(j => List(j.parent, j.child))
             val cols = columnsForFieldOrAttribute(path, obj, fieldName).toList ++ requiredCols ++ joinCols
 
-            loop(child, fieldName :: path, fieldTpe, (cols, joins, List.empty[(List[String], Type, Predicate)], requiredMappings ++ joinMapping) |+| acc)
+            loop(child, fieldName :: path, fieldTpe, (cols, joins, List.empty[(List[String], Type, Predicate)]) |+| acc)
 
           case _: Introspect =>
-            ((requiredCols, Nil, Nil, requiredMappings): Acc) |+| acc
+            ((requiredCols, Nil, Nil): Acc) |+| acc
 
           case Context(contextPath, child) =>
             loop(child, contextPath, tpe, acc)
@@ -601,7 +595,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             loop(child, path, tpe, acc)
 
           case Narrow(subtpe, child) =>
-            loop(child, path, subtpe, (requiredCols, List.empty[Join], List.empty[(List[String], Type, Predicate)], requiredMappings) |+| acc)
+            loop(child, path, subtpe, (requiredCols, List.empty[Join], List.empty[(List[String], Type, Predicate)]) |+| acc)
           case Filter(pred, child) =>
             loop(child, path, obj, loopPredicate(pred) |+| acc)
           case Unique(pred, child) =>
@@ -630,10 +624,9 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         }
       }
 
-      val (columns0, joins0, predicates, mappings0) = loop(q, path, tpe, MonoidAcc.empty)
+      val (columns0, joins0, predicates) = loop(q, path, tpe, MonoidAcc.empty)
 
       val columns = columns0.distinct
-      val mappings = mappings0.toMap
       val joins = joins0.distinctBy(_.normalize)
 
       def numChildren(t: String): Int =
@@ -671,8 +664,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
                   case om: ObjectMapping =>
                     om.fieldMappings.collectFirst {
 
-                      case SqlField(fieldName, `col`, _, _) if mappings.contains(om) =>
-                        val obj = mappings(om)
+                      case SqlField(fieldName, `col`, _, _) =>
+                        val obj = om.tpe.underlyingObject
                         val fieldTpe0 = obj.field(fieldName)
                         val fieldTpe =
                           if (obj.variantField(fieldName)) fieldTpe0.nullable
@@ -682,10 +675,10 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
                           case _ => (col.codec, NoNulls)
                         }
 
-                      case SqlJson(fieldName, `col`) if mappings.contains(om) =>
-                        val obj = mappings(om)
+                      case SqlJson(fieldName, `col`) =>
+                        val obj = om.tpe.underlyingObject
                         val nullable = obj.field(fieldName).isNullable || obj.variantField(fieldName)
-                        (`col`.codec, if (nullable) Nullable else NoNulls)
+                        (col.codec, if (nullable) Nullable else NoNulls)
 
                       case SqlAttribute(_, `col`, _, nullable, _) =>
                         (col.codec, if (nullable) Nullable else NoNulls)
