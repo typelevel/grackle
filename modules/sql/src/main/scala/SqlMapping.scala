@@ -658,6 +658,20 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         orderJoins(Set(rootTable), joins, Nil).reverse
       }
 
+      // Currently the SQL compiler doesn't generate subqueries in where clauses, and so projected
+      // predicates (which would naturally compile to subqueries in where clauses) end up being
+      // compiled as joins. Where there is more than one of these, or where one of these is
+      // combined with a legitimate join, we end up generating multiple left joins with the same
+      // child table. Postgres rejects this.
+      //
+      // This is a workaround for that, in advance of a reworking of the compiler which
+      // generates subqueries, which checks for duplicate joins and converts all but the first to
+      // where clauses.
+      //
+      // This is not valid in general, but works for some currently critical cases of projected
+      // predicates. It should be removed as soon as projected predicates are compiled more
+      // sensibly.
+
       def extractDuplicates(joins: List[Join]): (List[Join], List[Join]) = {
         @tailrec
         def loop(joins: List[Join], js: List[Join], ws: List[Join]): (List[Join], List[Join]) =
