@@ -4,6 +4,8 @@
 package edu.gemini.grackle
 package sql
 
+import scala.annotation.tailrec
+
 import cats.{Eq, Monoid}
 import cats.data.{Chain, Ior, NonEmptyList}
 import cats.implicits._
@@ -89,6 +91,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def toSql: String =
       s"LEFT JOIN ${child.table} ON ${parent.toSql} = ${child.toSql}"
 
+    def toWhere: Fragment =
+      Fragments.const(s"${parent.toSql} = ${child.toSql}")
   }
 
   case class SqlRoot(fieldName: String, path: List[String] = Nil, rootTpe: Type = NoType)(
@@ -196,7 +200,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     columns: List[ColumnRef],
     metas: List[(Boolean, (Codec[_], NullabilityKnown))],
     predicates: List[(List[String], Type, Predicate)],
-    joins: List[Join]
+    joins: List[Join],
+    conditions: List[Fragment]
   ) {
 
     def fetch: F[Table] = self.fetch(fragment, metas)
@@ -446,7 +451,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     lazy val fragment: Fragment = {
       val cols = columns.map(_.toSql)
 
-      val preds = predicates.map((fragmentForPred _).tupled)
+      val preds = predicates.map((fragmentForPred _).tupled) ++ conditions.map(Some(_))
       val where = Fragments.whereAndOpt(preds: _*)
 
       val select = Fragments.const(
@@ -639,19 +644,47 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         case _ => tables.maxBy(numChildren)
       }
 
-      val orderedJoins = {
+      val orderedJoins0 = {
         def orderJoins(seen: Set[String], joins: List[Join], acc: List[Join]): List[Join] = {
           if (joins.isEmpty) acc
           else {
             val (admissable, rest) = joins.partition(j => seen(j.parent.table))
             if (admissable.isEmpty) sys.error(s"unable to order joins $joins given $seen")
-            val ats = admissable.map(_.child.table)
-            orderJoins(seen ++ ats, rest, admissable ++ acc)
+            val ats = admissable.map(_.child.table).toSet
+            orderJoins(ats, rest, admissable ++ acc)
           }
         }
 
         orderJoins(Set(rootTable), joins, Nil).reverse
       }
+
+      // Currently the SQL compiler doesn't generate subqueries in where clauses, and so projected
+      // predicates (which would naturally compile to subqueries in where clauses) end up being
+      // compiled as joins. Where there is more than one of these, or where one of these is
+      // combined with a legitimate join, we end up generating multiple left joins with the same
+      // child table. Postgres rejects this.
+      //
+      // This is a workaround for that, in advance of a reworking of the compiler which
+      // generates subqueries, which checks for duplicate joins and converts all but the first to
+      // where clauses.
+      //
+      // This is not valid in general, but works for some currently critical cases of projected
+      // predicates. It should be removed as soon as projected predicates are compiled more
+      // sensibly.
+
+      def extractDuplicates(joins: List[Join]): (List[Join], List[Join]) = {
+        @tailrec
+        def loop(joins: List[Join], js: List[Join], ws: List[Join]): (List[Join], List[Join]) =
+          joins match {
+            case Nil => (js.reverse, ws.reverse)
+            case hd :: tl =>
+              if(js.exists(_.child.table == hd.child.table)) loop(tl, js, hd :: ws)
+              else loop(tl, hd :: js, ws)
+          }
+        loop(joins, Nil, Nil)
+      }
+
+      val (orderedJoins, conditions) = extractDuplicates(orderedJoins0)
 
       val metas = {
         def metaForColumn(col: ColumnRef): (Boolean, (Codec[_], NullabilityKnown)) = {
@@ -704,7 +737,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         columns.map(metaForColumn)
       }
 
-      new MappedQuery(rootTable, columns, metas, predicates, orderedJoins)
+      new MappedQuery(rootTable, columns, metas, predicates, orderedJoins, conditions.map(_.toWhere))
     }
 
   }
