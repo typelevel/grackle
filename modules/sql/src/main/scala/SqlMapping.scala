@@ -815,6 +815,38 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         }
       }
 
+      def containsFilter(query: Query): Boolean =
+        query match {
+          case _: Filter             => true
+
+          case Select(_, _, child)   => containsFilter(child)
+
+          case Context(_, child)     => containsFilter(child)
+          case Environment(_, child) => containsFilter(child)
+
+          case Narrow(_, child)      => containsFilter(child)
+          case Wrap(_, child)        => containsFilter(child)
+          case Rename(_, child)      => containsFilter(child)
+
+          case Group(queries)        => queries.exists(containsFilter)
+          case GroupList(queries)    => queries.exists(containsFilter)
+
+          case Unique(_, child)      => containsFilter(child)
+          case Limit(_, child)       => containsFilter(child)
+          case OrderBy(_, child)     => containsFilter(child)
+
+          case GroupBy(_, child)     => containsFilter(child)
+
+          case Query.Component(_, _, _) => false
+          case _: Introspect         => false
+          case _: Defer              => false
+          case Empty                 => false
+
+          case _: Skip               => false
+          case _: UntypedNarrow      => false
+          case Skipped               => false
+        }
+
       def loop(path: List[String], tpe: Type, seen: Seen[Query]): Result[Seen[Query]] = {
         seen.context match {
           case s@Select(fieldName, _, child) =>
@@ -829,6 +861,12 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
                 val elaboratedSelect = loop(fieldName :: path, childTpe, seen.withType(child, fieldName :: path, tpe))
                 elaboratedSelect.map(ec => ec.withList(s.copy(child = ec.context), nonLeafList(path, tpe, fieldName)))
               }
+            }
+
+          case n@Narrow(subtpe, s@Select(fieldName, _, child)) if containsFilter(child) =>
+            subtpe.withUnderlyingField(fieldName) { childTpe =>
+              val elaboratedSelect = loop(fieldName :: path, childTpe, Seen(child)).map(ec => s.copy(child = ec.context))
+              elaboratedSelect.map(ec => seen.withQuery(n.copy(child = Wrap(fieldName, Defer(stagingJoin, ec, subtpe.underlyingObject)))))
             }
 
           case c@Context(cPath, child) => loop(cPath, tpe, seen.withQuery(child)).map(_.map(q => c.copy(child = q)))
@@ -849,19 +887,19 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             }.map(_.map(qs => g.copy(queries = qs.reverse)))
 
           case u@Unique(_, child)      =>
-            loop(path, tpe.nonNull, seen.withType(child, path, tpe)).map(_.map(q => u.copy(child = q)))
+            loop(path, ListType(tpe), seen.withQuery(child)).map(_.map(q => u.copy(child = q)))
 
           case f@Filter(_, child)      =>
-            loop(path, tpe.item, seen.withType(child, path, tpe)).map(_.map(q => f.copy(child = q)))
+            loop(path, tpe, seen.withQuery(child)).map(_.map(q => f.copy(child = q)))
 
-          case l@Limit(_, child)      =>
-            loop(path, tpe.item, seen.withType(child, path, tpe)).map(_.map(q => l.copy(child = q)))
+          case l@Limit(_, child)       =>
+            loop(path, tpe, seen.withQuery(child)).map(_.map(q => l.copy(child = q)))
 
-          case o@OrderBy(_, child)      =>
-            loop(path, tpe.item, seen.withType(child, path, tpe)).map(_.map(q => o.copy(child = q)))
+          case o@OrderBy(_, child)     =>
+            loop(path, tpe, seen.withQuery(child)).map(_.map(q => o.copy(child = q)))
 
-          case g@GroupBy(_, child)      =>
-            loop(path, tpe.item, seen.withType(child, path, tpe)).map(_.map(q => g.copy(child = q)))
+          case g@GroupBy(_, child)     =>
+            loop(path, ListType(tpe), seen.withType(child, path, tpe)).map(_.map(q => g.copy(child = q)))
 
           case c@Query.Component(_, _, _) => seen.withQuery(c).rightIor
           case i: Introspect           => seen.withQuery(i).rightIor
@@ -1096,7 +1134,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     else Some(SqlRoot(fieldName, path, tpe))
 
   override def compilerPhases: List[QueryCompiler.Phase] =
-    StagingElaborator :: super.compilerPhases
+    super.compilerPhases ++ List(StagingElaborator)
 
   override val interpreter: QueryInterpreter[F] =
     new QueryInterpreter(this) {
