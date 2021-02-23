@@ -704,6 +704,8 @@ object Value {
         iv.defaultValue.get.rightIor
       case (_: NullableType, None) =>
         AbsentValue.rightIor
+      case (_: NullableType, Some(AbsentValue)) =>
+        AbsentValue.rightIor
       case (_: NullableType, Some(NullValue)) =>
         NullValue.rightIor
       case (NullableType(tpe), Some(_)) =>
@@ -770,7 +772,7 @@ object Value {
         }.map(vs => ListValue(vs.toList))
       case (InputObjectType(_, _, ivs), Some(jsonObject(obj))) =>
         ivs.traverse(iv => checkVarValue(iv, obj(iv.name)).map(v => (iv.name, v))).map(ObjectValue)
-      //case (ScalarType, Some(value)) => value.rightIor
+      case (_: ScalarType, Some(jsonString(value))) => StringValue(value).rightIor
       case (tpe, Some(value)) => mkErrorResult(s"Expected $tpe found '$value' for '${iv.name}'")
       case (tpe, None) => mkErrorResult(s"Value of type $tpe required for '${iv.name}'")
     }
