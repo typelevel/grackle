@@ -70,6 +70,58 @@ final class VariablesSuite extends CatsSuite {
     assert(compiled.map(_.query) == Ior.Right(expected))
   }
 
+  test("enum variable query") {
+    val query = """
+      query getUserType($userType: UserType) {
+        usersByType(userType: $userType) {
+          name
+        }
+      }
+    """
+
+    val variables = json"""
+      {
+        "userType": "ADMIN"
+      }
+    """
+
+    val expected =
+      Select("usersByType",
+        List(Binding("userType", TypedEnumValue(EnumValue("ADMIN", None, false, None)))),
+        Select("name", Nil, Empty)
+      )
+
+    val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
+    //println(compiled)
+    assert(compiled.map(_.query) == Ior.Right(expected))
+  }
+
+  test("scalar variable query") {
+    val query = """
+      query getLoggedInByDate($date: Date) {
+        usersLoggedInByDate(date: $date) {
+          name
+        }
+      }
+    """
+
+    val variables = json"""
+      {
+        "date": "2021-02-22"
+      }
+    """
+
+    val expected =
+      Select("usersLoggedInByDate",
+        List(Binding("date", StringValue("2021-02-22"))),
+        Select("name", Nil, Empty)
+      )
+
+    val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
+    //println(compiled)
+    assert(compiled.map(_.query) == Ior.Right(expected))
+  }
+
   test("object variable query") {
     val query = """
       query doSearch($pattern: Pattern) {
@@ -96,7 +148,149 @@ final class VariablesSuite extends CatsSuite {
           ObjectValue(List(
             ("name", StringValue("Foo")),
             ("age", IntValue(23)),
-            ("id", IDValue("123"))
+            ("id", IDValue("123")),
+            ("userType", AbsentValue),
+            ("date", AbsentValue)
+          ))
+        )),
+        Group(List(
+          Select("name", Nil, Empty),
+          Select("id", Nil, Empty)
+        ))
+      )
+
+    val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
+    //println(compiled)
+    assert(compiled.map(_.query) == Ior.Right(expected))
+  }
+
+  test("variable within list query") {
+    val query = """
+      query getProfile($id: ID!) {
+        users(ids: [1, $id, 3]) {
+          name
+        }
+      }
+    """
+
+    val variables = json"""
+      {
+        "id": 2
+      }
+    """
+
+    val expected =
+      Select("users",
+        List(Binding("ids", ListValue(List(IDValue("1"), IDValue("2"), IDValue("3"))))),
+        Select("name", Nil, Empty)
+      )
+
+    val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
+    //println(compiled)
+    assert(compiled.map(_.query) == Ior.Right(expected))
+  }
+
+  test("simple variable within an object query") {
+    val query = """
+      query doSearch($age: Int) {
+        search(pattern: { name: "Foo", age: $age, id: 123} ) {
+          name
+          id
+        }
+      }
+    """
+
+    val variables = json"""
+      {
+        "age": 23
+      }
+    """
+
+    val expected =
+      Select("search",
+        List(Binding("pattern",
+          ObjectValue(List(
+            ("name", StringValue("Foo")),
+            ("age", IntValue(23)),
+            ("id", IDValue("123")),
+            ("userType", AbsentValue),
+            ("date", AbsentValue)
+          ))
+        )),
+        Group(List(
+          Select("name", Nil, Empty),
+          Select("id", Nil, Empty)
+        ))
+      )
+
+    val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
+    //println(compiled)
+    assert(compiled.map(_.query) == Ior.Right(expected))
+  }
+
+  test("enum variable within an object query") {
+    val query = """
+      query doSearch($userType: UserType) {
+        search(pattern: { name: "Foo", age: 23, id: 123, userType: $userType} ) {
+          name
+          id
+        }
+      }
+    """
+
+    val variables = json"""
+      {
+        "userType": "ADMIN"
+      }
+    """
+
+    val expected =
+      Select("search",
+        List(Binding("pattern",
+          ObjectValue(List(
+            ("name", StringValue("Foo")),
+            ("age", IntValue(23)),
+            ("id", IDValue("123")),
+            ("userType", TypedEnumValue(EnumValue("ADMIN", None, false, None))),
+            ("date", AbsentValue)
+          ))
+        )),
+        Group(List(
+          Select("name", Nil, Empty),
+          Select("id", Nil, Empty)
+        ))
+      )
+
+    val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
+    //println(compiled)
+    assert(compiled.map(_.query) == Ior.Right(expected))
+  }
+
+  test("scalar variable within an object query") {
+    val query = """
+      query doSearch($date: Date) {
+        search(pattern: { name: "Foo", age: 23, id: 123, date: $date} ) {
+          name
+          id
+        }
+      }
+    """
+
+    val variables = json"""
+      {
+        "date": "2021-02-22"
+      }
+    """
+
+    val expected =
+      Select("search",
+        List(Binding("pattern",
+          ObjectValue(List(
+            ("name", StringValue("Foo")),
+            ("age", IntValue(23)),
+            ("id", IDValue("123")),
+            ("userType", AbsentValue),
+            ("date", StringValue("2021-02-22"))
           ))
         )),
         Group(List(
@@ -119,6 +313,8 @@ object VariablesMapping extends Mapping[Id] {
           user(id: ID!): User!
           users(ids: [ID!]!): [User!]!
           search(pattern: Pattern!): [User!]!
+          usersByType(userType: UserType!): [User!]!
+          usersLoggedInByDate(date: Date!): [User!]!
         }
         type User {
           id: String!
@@ -129,7 +325,14 @@ object VariablesMapping extends Mapping[Id] {
           name: String
           age: Int
           id: ID
+          userType: UserType
+          date: Date
         }
+        enum UserType {
+          ADMIN
+          NORMAL
+        }
+        scalar Date
       """
     ).right.get
 

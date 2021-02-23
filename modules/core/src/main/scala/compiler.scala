@@ -437,7 +437,7 @@ object QueryCompiler {
           tpe.withUnderlyingField(fieldName) { childTpe =>
             for {
               elaboratedChild <- transform(child, vars, schema, childTpe)
-              elaboratedArgs  <- args.traverse(elaborateVariable(vars))
+              elaboratedArgs  <- args.traverse(elaborateBinding(vars))
             } yield Select(fieldName, elaboratedArgs, elaboratedChild)
           }
         case Skip(skip, cond, child) =>
@@ -449,14 +449,23 @@ object QueryCompiler {
         case _ => super.transform(query, vars, schema, tpe)
       }
 
-    def elaborateVariable(vars: Vars)(b: Binding): Result[Binding] = b match {
-      case Binding(name, UntypedVariableValue(varName)) =>
-        vars.get(varName) match {
-          case Some((_, value)) => Binding(name, value).rightIor
-          case None => mkErrorResult(s"Undefined variable '$varName'")
+    def elaborateBinding(vars: Vars)(b: Binding): Result[Binding] =
+      elaborateValue(vars)(b.value).map(ev => b.copy(value = ev))
+
+    def elaborateValue(vars: Vars)(value: Value): Result[Value] =
+      value match {
+        case UntypedVariableValue(varName) =>
+          vars.get(varName) match {
+            case Some((_, value)) => value.rightIor
+            case None => mkErrorResult(s"Undefined variable '$varName'")
+          }
+          case ObjectValue(fields) =>
+            val (keys, values) = fields.unzip
+            values.traverse(elaborateValue(vars)).map(evs => ObjectValue(keys.zip(evs)))
+          case ListValue(elems) => elems.traverse(elaborateValue(vars)).map(ListValue)
+          case other => other.rightIor
         }
-      case other => other.rightIor
-    }
+
 
     def extractCond(vars: Vars, value: Value): Result[Boolean] =
       value match {
