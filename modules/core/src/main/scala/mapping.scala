@@ -7,20 +7,21 @@ import cats.Monad
 import cats.data.Ior
 import cats.implicits._
 import io.circe.{Encoder, Json}
+import org.tpolecat.typename._
+import org.tpolecat.sourcepos.SourcePos
 
 import Cursor.Env
 import Query.Select
-import QueryCompiler.{ComponentElaborator, SelectElaborator}
+import QueryCompiler.{ComponentElaborator, SelectElaborator, IntrospectionLevel}
 import QueryInterpreter.mkErrorResult
-import org.tpolecat.typename._
-import org.tpolecat.sourcepos.SourcePos
+import IntrospectionLevel._
 
 trait QueryExecutor[F[_], T] { outer =>
   implicit val M: Monad[F]
 
   def run(query: Query, rootTpe: Type, env: Env): F[T]
 
-  def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, useIntrospection: Boolean = true, env: Env = Env.empty): F[T]
+  def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): F[T]
 }
 
 abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, Json] {
@@ -33,8 +34,8 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
   def run(op: Operation, env: Env = Env.empty): F[Json] =
     run(op.query, op.rootTpe, env)
 
-  def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, useIntrospection: Boolean = true, env: Env = Env.empty): F[Json] =
-    compiler.compile(text, name, untypedVars, useIntrospection) match {
+  def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): F[Json] =
+    compiler.compile(text, name, untypedVars, introspectionLevel) match {
       case Ior.Right(operation) =>
         run(operation.query, schema.queryType, env)
       case invalid =>
