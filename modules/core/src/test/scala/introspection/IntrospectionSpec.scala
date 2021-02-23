@@ -10,6 +10,8 @@ import io.circe.literal.JsonStringContext
 import io.circe.optics.JsonPath.root
 
 import edu.gemini.grackle._
+import QueryCompiler.IntrospectionLevel
+import IntrospectionLevel._
 
 final class IntrospectionSuite extends CatsSuite {
   def standardTypeName(name: String): Boolean = name match {
@@ -1253,7 +1255,38 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val res = TestMapping.compileAndRun(query, useIntrospection = false)
+    val res = TestMapping.compileAndRun(query, introspectionLevel = Disabled)
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("introspection disabled typename allowed") {
+    val query = """
+      {
+        users {
+          __typename
+          renamed: __typename
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "users" : [
+            {
+              "__typename" : "User",
+              "renamed" : "User",
+              "name" : "Luke Skywalker"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = SmallMapping.compileAndRun(query, introspectionLevel = TypenameOnly)
     //println(res)
 
     assert(res == expected)

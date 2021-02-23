@@ -302,16 +302,18 @@ object QueryMinimizer {
  * query algebra term which can be directly interpreted.
  */
 class QueryCompiler(schema: Schema, phases: List[Phase]) {
+  import IntrospectionLevel._
+
   /**
    * Compiles the GraphQL query `text` to a query algebra term which
    * can be directly executed.
    *
    * Any errors are accumulated on the left.
    */
-  def compile(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, useIntrospection: Boolean = true): Result[Operation] = {
+  def compile(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full): Result[Operation] = {
 
     val allPhases =
-      if (useIntrospection) IntrospectionElaborator :: VariablesAndSkipElaborator :: phases else VariablesAndSkipElaborator :: phases
+      IntrospectionElaborator(introspectionLevel).toList ++ (VariablesAndSkipElaborator :: phases)
 
     for {
       parsed  <- QueryParser.parseText(text, name)
@@ -355,6 +357,15 @@ class QueryCompiler(schema: Schema, phases: List[Phase]) {
 }
 
 object QueryCompiler {
+  sealed trait IntrospectionLevel
+  object IntrospectionLevel {
+    case object Full extends IntrospectionLevel
+    case object TypenameOnly extends IntrospectionLevel
+    case object Disabled extends IntrospectionLevel
+  }
+
+  import IntrospectionLevel._
+
   /** A QueryCompiler phase. */
   trait Phase {
     /**
@@ -413,12 +424,27 @@ object QueryCompiler {
       }
   }
 
-  object IntrospectionElaborator extends Phase {
+  class IntrospectionElaborator(level: IntrospectionLevel) extends Phase {
     override def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
       query match {
-        case s@PossiblyRenamedSelect(Select("__typename" | "__schema" | "__type", _, _), _) =>
-          Introspect(schema, s).rightIor
+        case s@PossiblyRenamedSelect(Select(fieldName @ ("__typename" | "__schema" | "__type"), _, _), _) =>
+          (fieldName, level) match {
+            case ("__typename", Disabled) =>
+              mkErrorResult("Introspection is disabled")
+            case ("__schema" | "__type", TypenameOnly | Disabled) =>
+              mkErrorResult("Introspection is disabled")
+            case _ =>
+              Introspect(schema, s).rightIor
+          }
         case _ => super.transform(query, vars, schema, tpe)
+      }
+  }
+
+  object IntrospectionElaborator {
+    def apply(level: IntrospectionLevel): Option[IntrospectionElaborator] =
+      level match {
+        case Disabled => None
+        case other => Some(new IntrospectionElaborator(other))
       }
   }
 

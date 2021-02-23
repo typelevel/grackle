@@ -14,6 +14,8 @@ import io.chrisdavenport.log4cats.Logger
 import io.circe.Json
 
 import Cursor.Env
+import QueryCompiler.IntrospectionLevel
+import IntrospectionLevel.Full
 
 trait DoobieMappingCompanion {
   def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F]
@@ -48,8 +50,8 @@ trait TracedDoobieMappingCompanion {
       def run(query: Query, rootTpe: Type, env: Env): F[(Json, List[List[DoobieStats]])] =
         stateMapping.run(query, rootTpe, env).run(Nil).map(_.swap)
 
-      def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, useIntrospection: Boolean = true, env: Env = Env.empty): F[(Json, List[List[DoobieStats]])] =
-        stateMapping.compileAndRun(text, name, untypedVars, useIntrospection).run(Nil).map(_.swap)
+      def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): F[(Json, List[List[DoobieStats]])] =
+        stateMapping.compileAndRun(text, name, untypedVars, introspectionLevel).run(Nil).map(_.swap)
     }
   }
 }
