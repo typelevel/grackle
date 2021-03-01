@@ -732,9 +732,13 @@ object Value {
         arr.traverse { elem =>
           checkValue(iv.copy(tpe = tpe, defaultValue = None), Some(elem))
         }.map(ListValue)
-      case (InputObjectType(_, _, ivs), Some(ObjectValue(fs))) =>
+      case (InputObjectType(nme, _, ivs), Some(ObjectValue(fs))) =>
         val obj = fs.toMap
-        ivs.traverse(iv => checkValue(iv, obj.get(iv.name)).map(v => (iv.name, v))).map(ObjectValue)
+        val unknownFields = fs.map(_._1).filterNot(f => ivs.exists(_.name == f))
+        if (unknownFields.nonEmpty)
+          mkErrorResult(s"Unknown field(s) ${unknownFields.map(s => s"'$s'").mkString("", ", ", "")} in input object value of type ${nme}")
+        else
+          ivs.traverse(iv => checkValue(iv, obj.get(iv.name)).map(v => (iv.name, v))).map(ObjectValue)
       case (_: ScalarType, Some(value)) => value.rightIor
       case (tpe, Some(value)) => mkErrorResult(s"Expected $tpe found '$value' for '${iv.name}'")
       case (tpe, None) => mkErrorResult(s"Value of type $tpe required for '${iv.name}'")
@@ -770,8 +774,12 @@ object Value {
         arr.traverse { elem =>
           checkVarValue(iv.copy(tpe = tpe, defaultValue = None), Some(elem))
         }.map(vs => ListValue(vs.toList))
-      case (InputObjectType(_, _, ivs), Some(jsonObject(obj))) =>
-        ivs.traverse(iv => checkVarValue(iv, obj(iv.name)).map(v => (iv.name, v))).map(ObjectValue)
+      case (InputObjectType(nme, _, ivs), Some(jsonObject(obj))) =>
+        val unknownFields = obj.keys.filterNot(f => ivs.exists(_.name == f))
+        if (unknownFields.nonEmpty)
+          mkErrorResult(s"Unknown field(s) ${unknownFields.map(s => s"'$s'").mkString("", ", ", "")} in input object value of type ${nme}")
+        else
+          ivs.traverse(iv => checkVarValue(iv, obj(iv.name)).map(v => (iv.name, v))).map(ObjectValue)
       case (_: ScalarType, Some(jsonString(value))) => StringValue(value).rightIor
       case (tpe, Some(value)) => mkErrorResult(s"Expected $tpe found '$value' for '${iv.name}'")
       case (tpe, None) => mkErrorResult(s"Value of type $tpe required for '${iv.name}'")

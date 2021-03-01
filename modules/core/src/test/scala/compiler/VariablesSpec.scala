@@ -4,7 +4,7 @@
 package compiler
 
 import cats.Id
-import cats.data.Ior
+import cats.data.{Chain, Ior}
 import cats.tests.CatsSuite
 import io.circe.literal.JsonStringContext
 
@@ -162,6 +162,39 @@ final class VariablesSuite extends CatsSuite {
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
     assert(compiled.map(_.query) == Ior.Right(expected))
+  }
+
+  test("invalid: bogus input object field") {
+    val query = """
+      query doSearch($pattern: Pattern) {
+        search(pattern: $pattern) {
+          name
+          id
+        }
+      }
+    """
+
+    val variables = json"""
+      {
+        "pattern": {
+          "name": "Foo",
+          "age": 23,
+          "id": 123,
+          "quux": 23
+        }
+      }
+    """
+
+    val expected =
+      json"""
+        {
+          "message" : "Unknown field(s) 'quux' in input object value of type Pattern"
+        }
+      """
+
+    val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
+    //println(compiled)
+    assert(compiled.map(_.query) == Ior.Left(Chain.one(expected)))
   }
 
   test("variable within list query") {
