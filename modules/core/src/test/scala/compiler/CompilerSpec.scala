@@ -273,7 +273,6 @@ final class CompilerSuite extends CatsSuite {
     assert(res == Ior.Left(Chain(expected)))
   }
 
-
   test("invalid: leaf subselection set not empty (2)") {
     val query = """
       query {
@@ -288,6 +287,26 @@ final class CompilerSuite extends CatsSuite {
     val expected = json"""
       {
         "message" : "Leaf field 'name' of Character must have an empty subselection set"
+      }
+    """
+
+    val res = AtomicMapping.compiler.compile(query)
+
+    assert(res == Ior.Left(Chain(expected)))
+  }
+
+  test("invalid: bogus field argument") {
+    val query = """
+      query {
+        character(id: "1000", quux: 23) {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "message" : "Unknown argument(s) 'quux' in field character of type Query"
       }
     """
 

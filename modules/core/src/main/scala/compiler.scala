@@ -586,8 +586,13 @@ object QueryCompiler {
           twf.fieldInfo(fieldName) match {
             case Some(field) =>
               val infos = field.args
-              val argMap = args.groupMapReduce(_.name)(_.value)((x, _) => x)
-              infos.traverse(info => checkValue(info, argMap.get(info.name)).map(v => Binding(info.name, v)))
+              val unknownArgs = args.filterNot(arg => infos.exists(_.name == arg.name))
+              if (unknownArgs.nonEmpty)
+                mkErrorResult(s"Unknown argument(s) ${unknownArgs.map(s => s"'${s.name}'").mkString("", ", ", "")} in field $fieldName of type ${twf.name}")
+              else {
+                val argMap = args.groupMapReduce(_.name)(_.value)((x, _) => x)
+                infos.traverse(info => checkValue(info, argMap.get(info.name)).map(v => Binding(info.name, v)))
+              }
             case _ => mkErrorResult(s"No field '$fieldName' in type $tpe")
           }
         case _ => mkErrorResult(s"Type $tpe is not an object or interface type")
