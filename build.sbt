@@ -1,25 +1,24 @@
-val attoVersion                 = "0.8.0"
-val catsVersion                 = "2.3.1"
-val catsEffectVersion           = "2.3.1"
-val catsTestkitScalaTestVersion = "2.1.0"
+val attoVersion                 = "0.9.2"
+val catsVersion                 = "2.4.2"
+val catsEffectVersion           = "2.3.3"
+val catsTestkitScalaTestVersion = "2.1.2"
 val circeVersion                = "0.13.0"
 val circeOpticsVersion          = "0.13.0"
-val doobieVersion               = "0.9.4"
-val http4sVersion               = "0.21.15"
-val jawnVersion                 = "1.0.1"
-val kindProjectorVersion        = "0.11.2"
+val doobieVersion               = "0.10.0"
+val http4sVersion               = "0.21.20"
+val kindProjectorVersion        = "0.11.3"
 val logbackVersion              = "1.2.3"
 val log4catsVersion             = "1.1.1"
-val skunkVersion                = "0.0.22"
+val skunkVersion                = "0.0.24"
 val shapelessVersion            = "2.3.3"
-val sourcePosVersion            = "0.1.0"
-val testContainersVersion       = "0.38.8"
-val typenameVersion             = "0.1.0"
+val sourcePosVersion            = "0.1.1"
+val testContainersVersion       = "0.39.3"
+val typenameVersion             = "0.1.5"
 
 inThisBuild(Seq(
   homepage := Some(url("https://github.com/gemini-hlsw/gsp-graphql")),
   addCompilerPlugin("org.typelevel" %% "kind-projector" % kindProjectorVersion cross CrossVersion.full),
-  scalaVersion := "2.13.4"
+  scalaVersion := "2.13.5"
 ) ++ gspPublishSettings)
 
 lazy val commonSettings = Seq(
@@ -67,9 +66,8 @@ lazy val core = project
       "io.circe"          %% "circe-literal"          % circeVersion,
       "io.circe"          %% "circe-optics"           % circeOpticsVersion,
       "io.circe"          %% "circe-parser"           % circeVersion,
-      "org.typelevel"     %% "jawn-parser"            % jawnVersion,
       "org.tpolecat"      %% "typename"               % typenameVersion,
-      "org.tpolecat"      %% "sourcepos"              % sourcePosVersion,
+      "org.tpolecat"      %% "sourcepos"              % sourcePosVersion
     )
   )
 
@@ -87,8 +85,7 @@ lazy val circe = project
       "io.circe"          %% "circe-core"             % circeVersion,
       "io.circe"          %% "circe-literal"          % circeVersion,
       "io.circe"          %% "circe-optics"           % circeOpticsVersion,
-      "io.circe"          %% "circe-parser"           % circeVersion,
-      "org.typelevel"     %% "jawn-parser"            % jawnVersion,
+      "io.circe"          %% "circe-parser"           % circeVersion
     )
   )
 
@@ -156,8 +153,7 @@ lazy val generic = project
       "io.circe"          %% "circe-literal"          % circeVersion,
       "io.circe"          %% "circe-optics"           % circeOpticsVersion,
       "io.circe"          %% "circe-parser"           % circeVersion,
-      "org.typelevel"     %% "jawn-parser"            % jawnVersion,
-      "com.chuusai"       %% "shapeless"              % shapelessVersion,
+      "com.chuusai"       %% "shapeless"              % shapelessVersion
     )
   )
 

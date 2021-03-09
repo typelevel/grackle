@@ -183,7 +183,7 @@ object Query {
         else t(c).toOption
 
       val tagged: List[(Cursor, Int)] = cs.map { c =>
-        (c, deref(c).map { t => ds.indexOf(t) }.getOrElse(-1))
+        (c, deref(c).map { t => ds.indexWhere(_ === t) }.getOrElse(-1))
       }
 
       val sorted: List[(Cursor, Int)] = tagged.sortBy(_._2).dropWhile(_._2 == -1)
