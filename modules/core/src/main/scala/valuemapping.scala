@@ -61,7 +61,7 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
     classTag: ClassTag[T]
   )(implicit val pos: SourcePos) extends ObjectMapping
 
-  def ValueObjectMapping[T: ClassTag](
+  def ValueObjectMapping[T](
     tpe: Type,
     fieldMappings: List[ValueField0[T]]
   )(implicit classTag: ClassTag[T], pos: SourcePos): ValueObjectMapping[T] =

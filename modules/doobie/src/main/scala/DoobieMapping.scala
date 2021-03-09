@@ -9,8 +9,8 @@ import edu.gemini.grackle.sql._
 import cats.effect.Sync
 import edu.gemini.grackle.sql.NullabilityKnown
 import _root_.doobie.{ Meta, Put, Fragment => DoobieFragment, Read, Transactor }
-import _root_.doobie.enum.{ Nullability => DoobieNullability }
-import _root_.doobie.enum.Nullability.{ NullabilityKnown => DoobieNullabilityKnown }
+import _root_.doobie.enumerated.{ Nullability => DoobieNullability }
+import _root_.doobie.enumerated.Nullability.{ NullabilityKnown => DoobieNullabilityKnown }
 import _root_.doobie.implicits._
 import _root_.doobie.util.fragments
 import java.sql.ResultSet

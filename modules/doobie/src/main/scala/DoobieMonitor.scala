@@ -51,7 +51,7 @@ object DoobieMonitor {
       def stageCompleted: F[Unit] = ().pure[F]
     }
 
-  def loggerMonitor[F[_]: Applicative](logger: Logger[F]): DoobieMonitor[F] =
+  def loggerMonitor[F[_]](logger: Logger[F]): DoobieMonitor[F] =
     new DoobieMonitor[F] {
 
       def stageStarted: F[Unit] =
