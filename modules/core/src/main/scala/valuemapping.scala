@@ -16,7 +16,7 @@ import org.tpolecat.sourcepos.SourcePos
 
 abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
 
-  case class ValueRoot(val tpe: Type, val fieldName: String, root0: () => Any)(
+  case class ValueRoot(val tpe: Type, val fieldName: String, root0: () => Any, mutation: Mutation)(
     implicit val pos: SourcePos
   ) extends RootMapping {
     lazy val root: Any = root0()
@@ -29,12 +29,12 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
       ValueCursor(Nil, cursorTpe, root, None, env).rightIor.pure[F].widen
     }
     def withParent(tpe: Type): ValueRoot =
-      new ValueRoot(tpe, fieldName, root0)
+      new ValueRoot(tpe, fieldName, root0, mutation)
   }
 
   object ValueRoot {
-    def apply(fieldName: String, root: => Any)(implicit pos: SourcePos): ValueRoot =
-      new ValueRoot(NoType, fieldName, () => root)
+    def apply(fieldName: String, root: => Any, mutation: Mutation = Mutation.None)(implicit pos: SourcePos): ValueRoot =
+      new ValueRoot(NoType, fieldName, () => root, mutation)
   }
 
   sealed trait ValueField0[T] extends FieldMapping

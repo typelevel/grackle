@@ -4,7 +4,7 @@
 package edu.gemini.grackle
 
 import cats.Monad
-import cats.data.Ior
+import cats.data.{ Ior, IorT }
 import cats.implicits._
 import io.circe.{Encoder, Json}
 import org.tpolecat.typename._
@@ -37,7 +37,7 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
   def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): F[Json] =
     compiler.compile(text, name, untypedVars, introspectionLevel) match {
       case Ior.Right(operation) =>
-        run(operation.query, schema.queryType, env)
+        run(operation.query, operation.rootTpe, env)
       case invalid =>
         QueryInterpreter.mkInvalidResponse(invalid).pure[F]
     }
@@ -58,10 +58,10 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
         }
     }
 
-  def rootCursor(path: List[String], rootTpe: Type, fieldName: String, child: Query, env: Env): F[Result[Cursor]] =
+  def rootCursor(path: List[String], rootTpe: Type, fieldName: String, child: Query, env: Env): F[Result[(Query, Cursor)]] =
     rootMapping(path, rootTpe, fieldName) match {
       case Some(root) =>
-        root.cursor(child, env)
+        root.run(child, env)
       case None =>
         mkErrorResult(s"No root field '$fieldName' in $rootTpe").pure[F]
     }
@@ -123,7 +123,37 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
     def pos: SourcePos
   }
 
+  /**
+   * Root mappings can perform a mutation prior to constructing the result `Cursor`. A `Mutation`
+   * may perform a Unit effect and simply return the passed arguments; or it may refine the passed
+   * `Query` and/or `Env` that will be used to interpret the resulting `Cursor`.
+   */
+  case class Mutation(run: (Query, Env) => F[Result[(Query, Env)]])
+  object Mutation {
+
+    /** The no-op mutation. */
+    val None: Mutation =
+      Mutation((q, e) => (q, e).rightIor.pure[F])
+
+    /** A mutation that peforms a Unit effect and yields its arguments unchanged. */
+    def unit(f: (Query, Env) => F[Result[Unit]]): Mutation =
+      Mutation((q, e) => f(q, e).map(_.as((q, e))))
+
+  }
+
+
   trait RootMapping extends FieldMapping {
+    def mutation: Mutation
+
+    /**
+     * Run this `RootMapping`'s mutation, if any, then construct and return the result cursor along
+     * with the [possibly updated] query.
+     */
+    final def run(query: Query, env: Env): F[Result[(Query, Cursor)]] =
+      IorT(mutation.run(query, env)).flatMap { case (q, e) =>
+        IorT(cursor(q, e)).tupleLeft(q)
+      } .value
+
     def isPublic = true
     def cursor(query: Query, env: Env): F[Result[Cursor]]
     def withParent(tpe: Type): RootMapping

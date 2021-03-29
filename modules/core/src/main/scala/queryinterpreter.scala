@@ -110,8 +110,8 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
 
       case Select("__staged", _, child) =>
         (for {
-          cursor <- IorT(mapping.rootCursor(path, rootTpe, "__staged", child, env))
-          value  <- IorT(runValue(Wrap("__staged", child), rootTpe.list, cursor).pure[F])
+          qc     <- IorT(mapping.rootCursor(path, rootTpe, "__staged", child, env))
+          value  <- IorT(runValue(Wrap("__staged", qc._1), rootTpe.list, qc._2).pure[F])
         } yield
           ProtoJson.unpackObject(value) match {
             case Some(List(unpacked)) => unpacked
@@ -121,15 +121,16 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
 
       case PossiblyRenamedSelect(Select(fieldName, _, child), resultName) =>
         (for {
-          cursor <- IorT(mapping.rootCursor(path, rootTpe, fieldName, child, env))
-          value  <- IorT(runValue(Wrap(resultName, child), rootTpe.field(fieldName), cursor).pure[F])
+          qc     <- IorT(mapping.rootCursor(path, rootTpe, fieldName, child, env))
+          value  <- IorT(runValue(Wrap(resultName, qc._1), rootTpe.field(fieldName), qc._2).pure[F])
         } yield value).value
 
-      case q@GroupBy(_, Select(fieldName, _, child)) =>
+      case GroupBy(disc, Select(fieldName, args, child)) =>
         val elemTpe = rootTpe.item
         (for {
-          cursor <- IorT(mapping.rootCursor(path, elemTpe, fieldName, child, env))
-          value  <- IorT(runValue(q, rootTpe, cursor).pure[F])
+          qc     <- IorT(mapping.rootCursor(path, elemTpe, fieldName, child, env))
+          qʹ      = GroupBy(disc, Select(fieldName, args, qc._1))
+          value  <- IorT(runValue(qʹ, rootTpe, qc._2).pure[F])
         } yield value).value
 
       case Wrap(_, Component(mapping, _, child)) =>
