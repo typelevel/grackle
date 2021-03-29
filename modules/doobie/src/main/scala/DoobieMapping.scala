@@ -16,7 +16,7 @@ import _root_.doobie.util.fragments
 import java.sql.ResultSet
 
 abstract class DoobieMapping[F[_]: Sync](
-      transactor: Transactor[F],
+  val transactor: Transactor[F],
   val monitor:    DoobieMonitor[F]
 ) extends SqlMapping[F] {
 

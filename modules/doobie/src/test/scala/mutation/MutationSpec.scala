@@ -7,5 +7,5 @@ import utils.DatabaseSuite
 import grackle.test.SqlMutationSpec
 
 final class MutationSpec extends DatabaseSuite with SqlMutationSpec {
-  lazy val mapping = MutationMapping.mkMapping(pool)
+  lazy val mapping = MutationMapping.fromTransactor(xa)
 }

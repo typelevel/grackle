@@ -1,7 +1,7 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package mutation
+package grackle.test
 
 import org.scalatest.funsuite.AnyFunSuite
 import edu.gemini.grackle.QueryExecutor
@@ -15,29 +15,6 @@ trait SqlMutationSpec extends AnyFunSuite {
 
   def check(query: String, expected: Json) =
     assert(mapping.compileAndRun(query).unsafeRunSync() == expected)
-
-  test("sanity check") {
-    check("""
-        query {
-          city(id: 1) {
-            name
-            population
-          }
-        }
-      """,
-      json"""
-        {
-          "data": {
-            "city": {
-              "name": "Kabul",
-              "population" : 1780000
-            }
-          }
-        }
-      """
-    )
-  }
-
 
   test("simple update") {
     check("""
