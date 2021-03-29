@@ -3,20 +3,21 @@
 
 package mutation
 
+import _root_.skunk.codec.all._
+import _root_.skunk.implicits._
+import _root_.skunk.Session
+import cats.data.IorT
 import cats.effect.{ Bracket, Resource, Sync }
 import cats.syntax.all._
 import edu.gemini.grackle._
-import edu.gemini.grackle.QueryCompiler._
-import edu.gemini.grackle.Query._
-import edu.gemini.grackle.Value._
 import edu.gemini.grackle.Predicate._
+import edu.gemini.grackle.Query._
+import edu.gemini.grackle.QueryCompiler._
 import edu.gemini.grackle.skunk._
-import _root_.skunk.Session
-import _root_.skunk.implicits._
-import _root_.skunk.codec.all._
-import cats.data.IorT
+import edu.gemini.grackle.Value._
+import grackle.test.SqlMutationSchema
 
-trait MutationSchema[F[_]] extends SkunkMapping[F] {
+trait MutationSchema[F[_]] extends SkunkMapping[F] with SqlMutationSchema {
 
   class TableDef(name: String) {
     def col(colName: String, codec: Codec[_]): ColumnRef =
@@ -40,27 +41,6 @@ trait MutationSchema[F[_]] extends SkunkMapping[F] {
 trait MutationMapping[F[_]] extends MutationSchema[F] {
 
   implicit def ev: Bracket[F, Throwable]
-
-  val schema =
-    Schema(
-      """
-        type Query {
-          city(id: Int!): City
-        }
-        type Mutation {
-          updatePopulation(id: Int!, population: Int!): City
-        }
-        type City {
-          name: String!
-          country: Country!
-          population: Int!
-        }
-        type Country {
-          name: String!
-          cities: [City!]!
-        }
-      """
-    ).right.get
 
   val QueryType    = schema.ref("Query")
   val MutationType = schema.ref("Mutation")
@@ -86,6 +66,25 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
                 pool.use { s =>
                   s.prepare(sql"update city set population=$int4 where id=$int4".command).use { ps =>
                     IorT.right(ps.execute(pop ~ id).void).value // awkward
+                  }
+                }
+              }
+          }),
+          SqlRoot("createCity", mutation = Mutation { (child, e) =>
+            (e.get[String]("name"), e.get[String]("countryCode"), e.get[Int]("population")).tupled match {
+              case None =>
+                QueryInterpreter.mkErrorResult(s"Implementation error: expected name, countryCode and population in $e.").pure[F]
+              case Some((name, cc, pop)) =>
+                pool.use { s =>
+                  val q = sql"""
+                      INSERT INTO city (id, name, countrycode, district, population)
+                      VALUES (nextval('city_id'), $varchar, ${bpchar(3)}, 'ignored', $int4)
+                      RETURNING id
+                    """.query(int4)
+                  s.prepare(q).use { ps =>
+                    ps.unique(name ~ cc ~ pop).map { id =>
+                      (Unique(Eql(AttrPath(List("id")), Const(id)), child), e).rightIor
+                    }
                   }
                 }
               }
@@ -118,15 +117,22 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
         Select("city", Nil, Unique(Eql(AttrPath(List("id")), Const(id)), child)).rightIor
     },
     MutationType -> {
+
       case Select("updatePopulation", List(Binding("id", IntValue(id)), Binding("population", IntValue(pop))), child) =>
         Environment(
           Cursor.Env("id" -> id, "population" -> pop),
           Select("updatePopulation", Nil,
-            // We could also do this in the SqlRoot's mutation, and in fact would need to do so if
-            // the mutation generated a new id. But for now it seems easiest to do it here.
+            // We already know the final form of the query so we can rewrite it here.
             Unique(Eql(AttrPath(List("id")), Const(id)), child)
           )
         ).rightIor
+
+        case Select("createCity", List(Binding("name", StringValue(name)), Binding("countryCode", StringValue(code)), Binding("population", IntValue(pop))), child) =>
+          Environment(
+            Cursor.Env("name" -> name, "countryCode" -> code, "population" -> pop),
+            Select("createCity", Nil, child)
+          ).rightIor
+
     }
   ))
 }

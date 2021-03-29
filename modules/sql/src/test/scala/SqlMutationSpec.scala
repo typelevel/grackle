@@ -8,6 +8,37 @@ import edu.gemini.grackle.QueryExecutor
 import cats.effect.IO
 import io.circe.Json
 import io.circe.literal._
+import edu.gemini.grackle.Schema
+
+trait SqlMutationSchema {
+
+  val schema =
+    Schema(
+      """
+        type Query {
+          city(id: Int!): City
+        }
+        type Mutation {
+          updatePopulation(id: Int!, population: Int!): City
+          createCity(
+            name: String!
+            countryCode: String!
+            population: Int!
+          ): City
+        }
+        type City {
+          name: String!
+          country: Country!
+          population: Int!
+        }
+        type Country {
+          name: String!
+          cities: [City!]!
+        }
+      """
+    ).right.get
+
+}
 
 trait SqlMutationSpec extends AnyFunSuite {
 
@@ -16,6 +47,7 @@ trait SqlMutationSpec extends AnyFunSuite {
   def check(query: String, expected: Json) =
     assert(mapping.compileAndRun(query).unsafeRunSync() == expected)
 
+  // In this test the query is fully elaborated prior to execution.
   test("simple update") {
     check("""
         mutation {
@@ -44,5 +76,34 @@ trait SqlMutationSpec extends AnyFunSuite {
     )
   }
 
+  // In this test the query must be elaborated *after* execution because the ID of the inserted
+  // city isn't known until then.
+  test("insert") {
+    check("""
+        mutation {
+          createCity(name: "Wiggum", countryCode: "USA", population: 789) {
+            name
+            population
+            country {
+              name
+            }
+          }
+        }
+      """,
+      json"""
+        {
+          "data" : {
+            "createCity" : {
+              "name" : "Wiggum",
+              "population" : 789,
+              "country" : {
+                "name" : "United States"
+              }
+            }
+          }
+        }
+      """
+    )
+  }
 
 }
