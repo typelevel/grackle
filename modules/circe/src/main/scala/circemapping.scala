@@ -14,7 +14,7 @@ import ScalarType._
 import org.tpolecat.sourcepos.SourcePos
 
 abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
-  case class CirceRoot(val tpe: Type, val fieldName: String, root: Json)(
+  case class CirceRoot(val tpe: Type, val fieldName: String, root: Json, mutation: Mutation)(
     implicit val pos: SourcePos
   ) extends RootMapping {
     def cursor(query: Query, env: Env): F[Result[Cursor]] = {
@@ -26,12 +26,12 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
       CirceCursor(Nil, cursorTpe, root, None, env).rightIor.pure[F].widen
     }
     def withParent(tpe: Type): CirceRoot =
-      new CirceRoot(tpe, fieldName, root)
+      new CirceRoot(tpe, fieldName, root, mutation)
   }
 
   object CirceRoot {
-    def apply(fieldName: String, root: Json): CirceRoot =
-      new CirceRoot(NoType, fieldName, root)
+    def apply(fieldName: String, root: Json, mutation: Mutation = Mutation.None): CirceRoot =
+      new CirceRoot(NoType, fieldName, root, mutation)
   }
 
   case class CirceCursor(

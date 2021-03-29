@@ -14,7 +14,7 @@ import edu.gemini.grackle.sql._
 import scala.util.control.NonFatal
 
 abstract class SkunkMapping[F[_]: Sync](
-      pool:    Resource[F, Session[F]],
+  val pool:    Resource[F, Session[F]],
   val monitor: SkunkMonitor[F]
 ) extends SqlMapping[F] { outer =>
 

@@ -95,7 +95,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       Fragments.const(s"${parent.toSql} = ${child.toSql}")
   }
 
-  case class SqlRoot(fieldName: String, path: List[String] = Nil, rootTpe: Type = NoType)(
+  case class SqlRoot(fieldName: String, path: List[String] = Nil, rootTpe: Type = NoType, mutation: Mutation = Mutation.None)(
     implicit val pos: SourcePos
   ) extends RootMapping {
 
@@ -1130,7 +1130,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   // overrides
 
   override def rootMapping(path: List[String], tpe: Type, fieldName: String): Option[RootMapping] =
-    if (tpe =:= schema.queryType) super.rootMapping(path, tpe, fieldName)
+    if (tpe =:= schema.queryType || schema.mutationType.exists(_ == tpe)) super.rootMapping(path, tpe, fieldName)
     else Some(SqlRoot(fieldName, path, tpe))
 
   override def compilerPhases: List[QueryCompiler.Phase] =

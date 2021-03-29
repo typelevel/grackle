@@ -20,17 +20,17 @@ import ShapelessUtils._
 import org.tpolecat.sourcepos.SourcePos
 
 abstract class GenericMapping[F[_]: Monad] extends Mapping[F] {
-  case class GenericRoot[T](val tpe: Type, val fieldName: String, t: T, cb: () => CursorBuilder[T])(
+  case class GenericRoot[T](val tpe: Type, val fieldName: String, t: T, cb: () => CursorBuilder[T], mutation: Mutation)(
     implicit val pos: SourcePos
   ) extends RootMapping {
     lazy val cursorBuilder = cb()
     def cursor(query: Query, env: Env): F[Result[Cursor]] = cursorBuilder.build(Nil, t, None, env).pure[F]
     def withParent(tpe: Type): GenericRoot[T] =
-      new GenericRoot(tpe, fieldName, t, cb)
+      new GenericRoot(tpe, fieldName, t, cb, mutation)
   }
 
-  def GenericRoot[T](fieldName: String, t: T)(implicit cb: => CursorBuilder[T]): GenericRoot[T] =
-    new GenericRoot(NoType, fieldName, t, () => cb)
+  def GenericRoot[T](fieldName: String, t: T, mutation: Mutation = Mutation.None)(implicit cb: => CursorBuilder[T]): GenericRoot[T] =
+    new GenericRoot(NoType, fieldName, t, () => cb, mutation)
 }
 
 object semiauto {
