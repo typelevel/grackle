@@ -5,6 +5,7 @@ val catsTestkitScalaTestVersion = "2.1.2"
 val circeVersion                = "0.13.0"
 val circeOpticsVersion          = "0.13.0"
 val doobieVersion               = "0.10.0"
+val fs2Version                  = "2.5.4"
 val http4sVersion               = "0.21.20"
 val kindProjectorVersion        = "0.11.3"
 val logbackVersion              = "1.2.3"
@@ -67,7 +68,9 @@ lazy val core = project
       "io.circe"          %% "circe-optics"           % circeOpticsVersion,
       "io.circe"          %% "circe-parser"           % circeVersion,
       "org.tpolecat"      %% "typename"               % typenameVersion,
-      "org.tpolecat"      %% "sourcepos"              % sourcePosVersion
+      "org.tpolecat"      %% "sourcepos"              % sourcePosVersion,
+      "org.typelevel"     %% "cats-effect"            % catsEffectVersion % Test,
+      "co.fs2"            %% "fs2-core"               % fs2Version        % Test,
     )
   )
 

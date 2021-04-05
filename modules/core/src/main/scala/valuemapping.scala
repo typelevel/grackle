@@ -37,6 +37,27 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
       new ValueRoot(NoType, fieldName, () => root, mutation)
   }
 
+  /** A root mapping that computes an effectful value each time it constructs a cursor. */
+  case class ValueComputedRoot(val tpe: Type, val fieldName: String, root: F[Any], mutation: Mutation)(
+    implicit val pos: SourcePos
+  ) extends RootMapping {
+    def cursor(query: Query, env: Env): F[Result[Cursor]] = {
+      val fieldTpe = tpe.field(fieldName)
+      val cursorTpe = query match {
+        case _: Query.Unique => fieldTpe.nonNull.list
+        case _ => fieldTpe
+      }
+      root.map(value => ValueCursor(Nil, cursorTpe, value, None, env).rightIor)
+    }
+    def withParent(tpe: Type): ValueComputedRoot =
+      new ValueComputedRoot(tpe, fieldName, root, mutation)
+  }
+
+  object ValueComputedRoot {
+    def apply(fieldName: String, root: F[Any], mutation: Mutation = Mutation.None)(implicit pos: SourcePos): ValueComputedRoot =
+      new ValueComputedRoot(NoType, fieldName, root, mutation)
+  }
+
   sealed trait ValueField0[T] extends FieldMapping
   object ValueField0 {
     implicit def wrap[T](fm: FieldMapping): ValueField0[T] = Wrap(fm)
