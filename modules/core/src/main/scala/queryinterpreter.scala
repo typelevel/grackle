@@ -7,17 +7,18 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
-import cats.{ Monad, Monoid }
+import cats.Monoid
 import cats.data.{ Chain, Ior, IorT, Kleisli, NonEmptyChain }
 import cats.implicits._
 import io.circe.Json
 import io.circe.literal.JsonStringContext
+import fs2.Stream
 
 import Cursor.Env
 import Query._, Predicate.In
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
-class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
+class QueryInterpreter[F[_]](mapping: Mapping[F]) {
 
   /** Interpret `query` with expected type `rootTpe`.
    *
@@ -27,7 +28,7 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
    *  The resulting Json value should include standard GraphQL error
    *  information in the case of failure.
    */
-  def run(query: Query, rootTpe: Type, env: Env): F[Json] =
+  def run(query: Query, rootTpe: Type, env: Env): Stream[F,Json] =
     runRoot(query, rootTpe, env).map(QueryInterpreter.mkResponse)
 
   /** Interpret `query` with expected type `rootTpe`.
@@ -37,7 +38,7 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
    *
    *  Errors are accumulated on the `Left` of the result.
    */
-  def runRoot(query: Query, rootTpe: Type, env: Env): F[Result[Json]] = {
+  def runRoot(query: Query, rootTpe: Type, env: Env): Stream[F,Result[Json]] = {
     val rootQueries =
       query match {
         case Group(queries) => queries
@@ -50,12 +51,12 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
         case Introspect(schema, query) =>
           val interp = Introspection.interpreter(schema)
           interp.runRootValue(query, Introspection.schema.queryType, env)
-      }
+      } .flatMap(_.compile.toList) // this is Stream[Id, *] so we can toList it
 
     val nonIntroQueries = rootQueries.filter { case _: Introspect => false ; case _ => true }
     val nonIntroResults = runRootValues(nonIntroQueries.map(q => (q, rootTpe, env)))
 
-    val mergedResults: F[Result[ProtoJson]] =
+    val mergedResults: Stream[F,Result[ProtoJson]] =
       nonIntroResults.map {
         case (nonIntroErrors, nonIntroValues) =>
 
@@ -100,7 +101,7 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
    *
    *  Errors are accumulated on the `Left` of the result.
    */
-  def runRootValue0(query: Query, path: List[String], rootTpe: Type, env: Env): F[Result[ProtoJson]] =
+  def runRootValue0(query: Query, path: List[String], rootTpe: Type, env: Env): Stream[F,Result[ProtoJson]] =
     query match {
       case Context(cpath, child) =>
         runRootValue0(child, cpath ++ path, rootTpe, env)
@@ -111,7 +112,7 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
       case Select("__staged", _, child) =>
         (for {
           qc     <- IorT(mapping.rootCursor(path, rootTpe, "__staged", child, env))
-          value  <- IorT(runValue(Wrap("__staged", qc._1), rootTpe.list, qc._2).pure[F])
+          value  <- IorT(runValue(Wrap("__staged", qc._1), rootTpe.list, qc._2).pure[Stream[F,*]])
         } yield
           ProtoJson.unpackObject(value) match {
             case Some(List(unpacked)) => unpacked
@@ -121,27 +122,27 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
 
       case PossiblyRenamedSelect(Select(fieldName, _, child), resultName) =>
         (for {
-          fieldTpe <- IorT.fromOption[F](rootTpe.field(fieldName), QueryInterpreter.mkOneError(s"Root type $rootTpe has no field '$fieldName'"))
+          fieldTpe <- IorT.fromOption[Stream[F,*]](rootTpe.field(fieldName), QueryInterpreter.mkOneError(s"Root type $rootTpe has no field '$fieldName'"))
           qc       <- IorT(mapping.rootCursor(path, rootTpe, fieldName, child, env))
-          value    <- IorT(runValue(Wrap(resultName, qc._1), fieldTpe, qc._2).pure[F])
+          value    <- IorT(runValue(Wrap(resultName, qc._1), fieldTpe, qc._2).pure[Stream[F,*]])
         } yield value).value
 
       case GroupBy(disc, Select(fieldName, args, child)) =>
         (for {
-          elemTpe <- IorT.fromOption[F](rootTpe.item, QueryInterpreter.mkOneError(s"Root type $rootTpe is not a list type"))
+          elemTpe <- IorT.fromOption[Stream[F,*]](rootTpe.item, QueryInterpreter.mkOneError(s"Root type $rootTpe is not a list type"))
           qc      <- IorT(mapping.rootCursor(path, elemTpe, fieldName, child, env))
           q0      =  GroupBy(disc, Select(fieldName, args, qc._1))
-          value   <- IorT(runValue(q0, rootTpe, qc._2).pure[F])
+          value   <- IorT(runValue(q0, rootTpe, qc._2).pure[Stream[F,*]])
         } yield value).value
 
       case Wrap(_, Component(mapping, _, child)) =>
         mapping.asInstanceOf[Mapping[F]].interpreter.runRootValue(child, rootTpe, env)
 
       case _ =>
-        mkErrorResult(s"Bad root query '${query.render}' in QueryInterpreter").pure[F]
+        mkErrorResult(s"Bad root query '${query.render}' in QueryInterpreter").pure[Stream[F,*]]
     }
 
-  def runRootValue(query: Query, rootTpe: Type, env: Env): F[Result[ProtoJson]] = runRootValue0(query, Nil, rootTpe, env)
+  def runRootValue(query: Query, rootTpe: Type, env: Env): Stream[F, Result[ProtoJson]] = runRootValue0(query, Nil, rootTpe, env)
 
   /** Interpret multiple queries with respect to their expected types.
    *
@@ -160,7 +161,7 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
    *  to benefit from combining queries may do so by overriding this
    *  method to implement their specific combinging logic.
    */
-  def runRootValues(queries: List[(Query, Type, Env)]): F[(Chain[Json], List[ProtoJson])] =
+  def runRootValues(queries: List[(Query, Type, Env)]): Stream[F, (Chain[Json], List[ProtoJson])] =
     queries.traverse((runRootValue _).tupled).map { rs =>
       (rs.foldLeft((Chain.empty[Json], List.empty[ProtoJson])) {
         case ((errors, elems), elem) =>
@@ -570,7 +571,7 @@ object QueryInterpreter {
    * Completes a single possibly partial result as described for
    * `completeAll`.
    */
-  def complete[F[_]: Monad](pj: ProtoJson): F[Result[Json]] =
+  def complete[F[_]](pj: ProtoJson): Stream[F,Result[Json]] =
     completeAll[F](List(pj)).map {
       case (errors, List(value)) =>
         NonEmptyChain.fromChain(errors) match {
@@ -597,7 +598,7 @@ object QueryInterpreter {
    *  Errors are aggregated across all the results and are accumulated
    *  on the `Left` of the result.
    */
-  def completeAll[F[_]: Monad](pjs: List[ProtoJson]): F[(Chain[Json], List[Json])] = {
+  def completeAll[F[_]](pjs: List[ProtoJson]): Stream[F, (Chain[Json], List[Json])] = {
     def gatherDeferred(pj: ProtoJson): List[DeferredJson] = {
       @tailrec
       def loop(pending: Chain[ProtoJson], acc: List[DeferredJson]): List[DeferredJson] =

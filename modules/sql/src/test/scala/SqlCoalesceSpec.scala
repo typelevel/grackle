@@ -8,11 +8,15 @@ import org.scalatest.funsuite.AnyFunSuite
 import edu.gemini.grackle.QueryExecutor
 import cats.effect.IO
 import io.circe.Json
-import scala.language.reflectiveCalls
+
+// N.B. stats-collection is turned off for now; see commented lines below
+
+// import scala.language.reflectiveCalls
 
 trait SqlCoalesceSpec[A <: { def rows: Int ; def cols: Int }] extends AnyFunSuite {
 
-  def mapping: QueryExecutor[IO, (Json, List[List[A]])]
+  // def mapping: QueryExecutor[IO, (Json, List[List[A]])]
+  def mapping: QueryExecutor[IO, Json]
 
   test("simple coalesced query") {
     val query = """
@@ -89,19 +93,19 @@ trait SqlCoalesceSpec[A <: { def rows: Int ; def cols: Int }] extends AnyFunSuit
       }
     """
 
-    val (res, trace) = mapping.compileAndRun(query).unsafeRunSync()
-    //println(res)
+    // val (res, trace) = mapping.compileAndRun(query).unsafeRunSync()
+    val res = mapping.compileAndRun(query).unsafeRunSync()
 
     assert(res == expected)
 
-    val numStages = trace.size
-    val numCells = trace.foldLeft(0) { case (acc, stage) =>
-      acc+stage.foldLeft(0) { case (acc, stats) =>
-        acc+(stats.rows*stats.cols)
-      }
-    }
+    // val numStages = trace.size
+    // val numCells = trace.foldLeft(0) { case (acc, stage) =>
+    //   acc+stage.foldLeft(0) { case (acc, stats) =>
+    //     acc+(stats.rows*stats.cols)
+    //   }
+    // }
 
-    assert(numStages == 2)
-    assert(numCells == 32)
+    // assert(numStages == 2)
+    // assert(numCells == 32)
   }
 }

@@ -8,5 +8,5 @@ import edu.gemini.grackle.skunk.SkunkStats
 import grackle.test.SqlCoalesceSpec
 
 final class CoalesceSpec extends DatabaseSuite with SqlCoalesceSpec[SkunkStats] {
-  lazy val mapping = CoalesceMapping.fromSessionPool(pool)
+  lazy val mapping = CoalesceMapping.mkMapping(pool)
 }

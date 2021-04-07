@@ -8,6 +8,7 @@ import scala.reflect.ClassTag
 import cats.Monad
 import cats.implicits._
 import io.circe.Json
+import fs2.Stream
 
 import Cursor.Env
 import QueryInterpreter.{mkErrorResult, mkOneError}
@@ -20,7 +21,7 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
     implicit val pos: SourcePos
   ) extends RootMapping {
     lazy val root: Any = root0()
-    def cursor(query: Query, env: Env): F[Result[Cursor]] = {
+    def cursor(query: Query, env: Env): Stream[F,Result[Cursor]] = {
       (for {
         tpe      <- otpe
         fieldTpe <- tpe.field(fieldName)
@@ -29,8 +30,8 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
           case _: Query.Unique => fieldTpe.nonNull.list
           case _ => fieldTpe
         }
-        ValueCursor(Nil, cursorTpe, root, None, env).rightIor
-      }).getOrElse(mkErrorResult(s"Type ${otpe.getOrElse("unspecified type")} has no field '$fieldName'")).pure[F].widen
+        Result(ValueCursor(Nil, cursorTpe, root, None, env)).pure[Stream[F,*]]
+      }).getOrElse(mkErrorResult[Cursor](s"Type ${otpe.getOrElse("unspecified type")} has no field '$fieldName'").pure[Stream[F,*]])
     }
 
     def withParent(tpe: Type): ValueRoot =

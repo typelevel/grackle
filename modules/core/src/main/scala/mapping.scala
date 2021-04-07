@@ -15,31 +15,51 @@ import Query.Select
 import QueryCompiler.{ComponentElaborator, SelectElaborator, IntrospectionLevel}
 import QueryInterpreter.mkErrorResult
 import IntrospectionLevel._
+import fs2.Stream
 
 trait QueryExecutor[F[_], T] { outer =>
-  implicit val M: Monad[F]
 
-  def run(query: Query, rootTpe: Type, env: Env): F[T]
+  def run(query: Query, rootTpe: Type, env: Env): Stream[F,T]
 
-  def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): F[T]
+  // TODO: deprecate
+  def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty)(
+    implicit sc: Stream.Compiler[F,F]
+  ): F[T] =
+    compileAndRunOne(text, name, untypedVars, introspectionLevel, env)
+
+  def compileAndRunAll(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): Stream[F,T]
+
+  def compileAndRunOne(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty)(
+    implicit sc: Stream.Compiler[F,F]
+  ): F[T]
+
 }
 
 abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, Json] {
   val schema: Schema
   val typeMappings: List[TypeMapping]
 
-  def run(query: Query, rootTpe: Type, env: Env): F[Json] =
+  def run(query: Query, rootTpe: Type, env: Env): Stream[F,Json] =
     interpreter.run(query, rootTpe, env)
 
-  def run(op: Operation, env: Env = Env.empty): F[Json] =
+  def run(op: Operation, env: Env = Env.empty): Stream[F,Json] =
     run(op.query, op.rootTpe, env)
 
-  def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): F[Json] =
+  def compileAndRunOne(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty)(
+    implicit sc: Stream.Compiler[F,F]
+  ): F[Json] =
+    compileAndRunAll(text, name, untypedVars, introspectionLevel, env).compile.toList.map {
+      case List(j) => j
+      case Nil     => QueryInterpreter.mkError("Result stream was empty.")
+      case js      => QueryInterpreter.mkError(s"Result stream contained ${js.length} results; expected exactly one.")
+    }
+
+  def compileAndRunAll(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): Stream[F,Json] =
     compiler.compile(text, name, untypedVars, introspectionLevel) match {
       case Ior.Right(operation) =>
         run(operation.query, operation.rootTpe, env)
       case invalid =>
-        QueryInterpreter.mkInvalidResponse(invalid).pure[F]
+        QueryInterpreter.mkInvalidResponse(invalid).pure[Stream[F,*]]
     }
 
   def typeMapping(tpe: Type): Option[TypeMapping] =
@@ -58,12 +78,12 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
         }
     }
 
-  def rootCursor(path: List[String], rootTpe: Type, fieldName: String, child: Query, env: Env): F[Result[(Query, Cursor)]] =
+  def rootCursor(path: List[String], rootTpe: Type, fieldName: String, child: Query, env: Env): Stream[F,Result[(Query, Cursor)]] =
     rootMapping(path, rootTpe, fieldName) match {
       case Some(root) =>
         root.run(child, env)
       case None =>
-        mkErrorResult(s"No root field '$fieldName' in $rootTpe").pure[F]
+        mkErrorResult[(Query, Cursor)](s"No root field '$fieldName' in $rootTpe").pure[Stream[F,*]]
     }
 
   def objectMapping(path: List[String], tpe: Type): Option[ObjectMapping] =
@@ -128,15 +148,15 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
    * may perform a Unit effect and simply return the passed arguments; or it may refine the passed
    * `Query` and/or `Env` that will be used to interpret the resulting `Cursor`.
    */
-  case class Mutation(run: (Query, Env) => F[Result[(Query, Env)]])
+  case class Mutation(run: (Query, Env) => Stream[F,Result[(Query, Env)]])
   object Mutation {
 
     /** The no-op mutation. */
     val None: Mutation =
-      Mutation((q, e) => (q, e).rightIor.pure[F])
+      Mutation((q, e) => Result((q, e)).pure[Stream[F,*]])
 
     /** A mutation that peforms a Unit effect and yields its arguments unchanged. */
-    def unit(f: (Query, Env) => F[Result[Unit]]): Mutation =
+    def unit(f: (Query, Env) => Stream[F, Result[Unit]]): Mutation =
       Mutation((q, e) => f(q, e).map(_.as((q, e))))
 
   }
@@ -149,13 +169,13 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
      * Run this `RootMapping`'s mutation, if any, then construct and return the result cursor along
      * with the [possibly updated] query.
      */
-    final def run(query: Query, env: Env): F[Result[(Query, Cursor)]] =
+    final def run(query: Query, env: Env): Stream[F, Result[(Query, Cursor)]] =
       IorT(mutation.run(query, env)).flatMap { case (q, e) =>
         IorT(cursor(q, e)).tupleLeft(q)
       } .value
 
     def isPublic = true
-    def cursor(query: Query, env: Env): F[Result[Cursor]]
+    def cursor(query: Query, env: Env): Stream[F, Result[Cursor]]
     def withParent(tpe: Type): RootMapping
   }
 

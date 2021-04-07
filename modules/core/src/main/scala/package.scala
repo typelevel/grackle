@@ -5,6 +5,7 @@ package edu.gemini
 
 import cats.data.IorNec
 import io.circe.Json
+import cats.data.Ior
 
 package object grackle {
   /**
@@ -14,4 +15,10 @@ package object grackle {
    * Json, or both.
    */
   type Result[T] = IorNec[Json, T]
+
+  object Result {
+    // A successful result, infers better than `x.rightIor`
+    def apply[A](a: A): Result[A] = Ior.right(a)
+  }
+
 }
