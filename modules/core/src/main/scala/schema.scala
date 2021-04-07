@@ -77,7 +77,7 @@ trait Schema {
   /**
    * Look up by name a type defined in this `Schema`.
    *
-   * Yields the type, if defined, `NoType` otherwise.
+   * Yields the type, if defined, `None` otherwise.
    */
   def definition(name: String): Option[NamedType] =
     types.find(_.name == name).orElse(ScalarType(name)).map(_.dealias)
@@ -96,13 +96,13 @@ trait Schema {
   def schemaType: NamedType = definition("Schema").getOrElse(defaultSchemaType)
 
   /** The type of queries defined by this `Schema`*/
-  def queryType: NamedType = schemaType.field("query").asNamed.get
+  def queryType: NamedType = schemaType.field("query").flatMap(_.asNamed).get
 
   /** The type of mutations defined by this `Schema`*/
-  def mutationType: Option[NamedType] = schemaType.field("mutation").asNamed
+  def mutationType: Option[NamedType] = schemaType.field("mutation").flatMap(_.asNamed)
 
   /** The type of subscriptions defined by this `Schema`*/
-  def subscriptionType: Option[NamedType] = schemaType.field("subscription").asNamed
+  def subscriptionType: Option[NamedType] = schemaType.field("subscription").flatMap(_.asNamed)
 
   override def toString = SchemaRenderer.renderSchema(this)
 }
@@ -142,36 +142,20 @@ sealed trait Type extends Product {
       })
 
   /**
-   * This type if it isn't `NoType`, `other` otherwise.
-   */
-  def orElse(other: => Type): Type = this match {
-    case NoType => other
-    case _ => this
-  }
-
-  /**
-   * Some of this type if it isn't `NoType`, `None` otherwise.
-   */
-  def toOption: Option[Type] = this match {
-    case NoType => None
-    case _ => Some(this)
-  }
-
-  /**
    * Yield the type of the field of this type named `fieldName` or
-   * `NoType` if there is no such field.
+   * `None` if there is no such field.
    */
-  def field(fieldName: String): Type = this match {
+  def field(fieldName: String): Option[Type] = this match {
     case NullableType(tpe) => tpe.field(fieldName)
     case TypeRef(_, _) if exists => dealias.field(fieldName)
-    case ObjectType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
-    case InterfaceType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
-    case _ => NoType
+    case ObjectType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe)
+    case InterfaceType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe)
+    case _ => None
   }
 
   /** `true` if this type has a field named `fieldName`, false otherwise. */
   def hasField(fieldName: String): Boolean =
-    field(fieldName) != NoType
+    field(fieldName).isDefined
 
   /**
    * `true` if this type has a field named `fieldName` which is undefined in
@@ -179,31 +163,28 @@ sealed trait Type extends Product {
    */
   def variantField(fieldName: String): Boolean =
     underlyingObject match {
-      case ObjectType(_, _, _, interfaces) =>
+      case Some(ObjectType(_, _, _, interfaces)) =>
         hasField(fieldName) && interfaces.exists(!_.hasField(fieldName))
       case _ => false
     }
 
-  def withField[T](fieldName: String)(body: Type => Result[T]): Result[T] = {
-    val childTpe = field(fieldName)
-    if (childTpe =:= NoType) mkErrorResult(s"Unknown field '$fieldName' in '$this'")
-    else body(childTpe)
-  }
+  def withField[T](fieldName: String)(body: Type => Result[T]): Result[T] =
+    field(fieldName).map(body).getOrElse(mkErrorResult(s"Unknown field '$fieldName' in '$this'"))
 
   /**
    * Yield the type of the field at the end of the path `fns` starting
-   * from this type, or `NoType` if there is no such field.
+   * from this type, or `None` if there is no such field.
    */
-  def path(fns: List[String]): Type = (fns, this) match {
-    case (Nil, _) => this
+  def path(fns: List[String]): Option[Type] = (fns, this) match {
+    case (Nil, _) => Some(this)
     case (_, ListType(tpe)) => tpe.path(fns)
     case (_, NullableType(tpe)) => tpe.path(fns)
     case (_, TypeRef(_, _)) => dealias.path(fns)
     case (fieldName :: rest, ObjectType(_, _, fields, _)) =>
-      fields.find(_.name == fieldName).map(_.tpe.path(rest)).getOrElse(NoType)
+      fields.find(_.name == fieldName).flatMap(_.tpe.path(rest))
     case (fieldName :: rest, InterfaceType(_, _, fields, _)) =>
-      fields.find(_.name == fieldName).map(_.tpe.path(rest)).getOrElse(NoType)
-    case _ => NoType
+      fields.find(_.name == fieldName).flatMap(_.tpe.path(rest))
+    case _ => None
   }
 
   /**
@@ -258,7 +239,6 @@ sealed trait Type extends Product {
 
   /** This type if it is nullable, `Nullable(this)` otherwise. */
   def nullable: Type = this match {
-    case NoType => NoType
     case t: NullableType => t
     case t => NullableType(t)
   }
@@ -284,12 +264,12 @@ sealed trait Type extends Product {
    * The element type of this type.
    *
    * If this type is is a list, yield the non-list underlying type.
-   * Otherwise yield `NoType`.
+   * Otherwise yield `None`.
    */
-  def item: Type = this match {
+  def item: Option[Type] = this match {
     case NullableType(tpe) => tpe.item
-    case ListType(tpe) => tpe
-    case _ => NoType
+    case ListType(tpe) => Some(tpe)
+    case _ => None
   }
 
   /** This type if it is a (nullable) list, `ListType(this)` otherwise. */
@@ -305,16 +285,16 @@ sealed trait Type extends Product {
    * Strip off all aliases, nullability and enclosing list types until
    * an underlying object type is reached, in which case yield it, or a
    * non-object type which isn't further reducible is reached, in which
-   * case yield `NoType`.
+   * case yield `None`.
    */
-  def underlyingObject: Type = this match {
+  def underlyingObject: Option[Type] = this match {
     case NullableType(tpe) => tpe.underlyingObject
     case ListType(tpe) => tpe.underlyingObject
     case _: TypeRef => dealias.underlyingObject
-    case o: ObjectType => o
-    case i: InterfaceType => i
-    case u: UnionType => u
-    case _ => NoType
+    case o: ObjectType => Some(o)
+    case i: InterfaceType => Some(i)
+    case u: UnionType => Some(u)
+    case _ => None
   }
 
   /**
@@ -324,19 +304,19 @@ sealed trait Type extends Product {
    * Strip off all aliases, nullability and enclosing list types until
    * an underlying object type is reached which has a field named
    * `fieldName`, in which case yield the type of that field; if there
-   * is no such field, yields `NoType`.
+   * is no such field, yields `None`.
    */
-  def underlyingField(fieldName: String): Type = this match {
+  def underlyingField(fieldName: String): Option[Type] = this match {
     case NullableType(tpe) => tpe.underlyingField(fieldName)
     case ListType(tpe) => tpe.underlyingField(fieldName)
     case TypeRef(_, _) => dealias.underlyingField(fieldName)
-    case ObjectType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
-    case InterfaceType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe).getOrElse(NoType)
-    case _ => NoType
+    case ObjectType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe)
+    case InterfaceType(_, _, fields, _) => fields.find(_.name == fieldName).map(_.tpe)
+    case _ => None
   }
 
   def withUnderlyingField[T](fieldName: String)(body: Type => Result[T]): Result[T] =
-    underlyingObject.withField(fieldName)(body)
+    underlyingObject.toRightIor(mkOneError(s"$this is not an object or interface type")).flatMap(_.withField(fieldName)(body))
 
   /** Is this type a leaf type?
    *
@@ -352,13 +332,13 @@ sealed trait Type extends Product {
 
   /**
    * If the underlying type of this type is a scalar or an enum then yield it
-   * otherwise yield `NoType`.
+   * otherwise yield `None`.
    */
-  def asLeaf: Type = this match {
+  def asLeaf: Option[Type] = this match {
     case TypeRef(_, _) => dealias.asLeaf
-    case _: ScalarType => this
-    case _: EnumType => this
-    case _ => NoType
+    case _: ScalarType => Some(this)
+    case _: EnumType => Some(this)
+    case _ => None
   }
 
 
@@ -384,14 +364,14 @@ sealed trait Type extends Product {
    * Strip off all aliases, nullability and enclosing list types until
    * an underlying leaf type is reached, in which case yield it, or an
    * a object, interface or union type which is reached, in which case
-   * yield `NoType`.
+   * yield `None`.
    */
-  def underlyingLeaf: Type = this match {
+  def underlyingLeaf: Option[Type] = this match {
     case NullableType(tpe) => tpe.underlyingLeaf
     case ListType(tpe) => tpe.underlyingLeaf
     case _: TypeRef => dealias.underlyingLeaf
-    case (_: ObjectType)|(_: InterfaceType)|(_: UnionType) => NoType
-    case tpe => tpe
+    case (_: ObjectType)|(_: InterfaceType)|(_: UnionType) => None
+    case tpe => Some(tpe)
   }
 
   def isNamed: Boolean = false
@@ -421,11 +401,6 @@ sealed trait NamedType extends Type {
 
   override def toString: String = name
 }
-
-/**
- * A sentinel value indicating the absence of a type.
- */
-case object NoType extends Type
 
 /**
  * A synthetic type representing the join between a component/stage and its
@@ -1192,7 +1167,6 @@ object SchemaRenderer {
         case NullableType(tpe) => loop(tpe, true)
         case ListType(tpe) => wrap(s"[${loop(tpe, false)}]")
         case nt: NamedType => wrap(nt.name)
-        case NoType => "NoType"
       }
     }
 

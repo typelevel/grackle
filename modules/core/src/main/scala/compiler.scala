@@ -375,10 +375,10 @@ object QueryCompiler {
     def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
       query match {
         case s@Select(fieldName, _, child)    =>
-          val childTpe = tpe.underlyingField(fieldName)
-          if (childTpe =:= NoType) mkErrorResult(s"Unknown field '$fieldName' in select")
-          else {
-            val obj = tpe.underlyingObject
+          (for {
+            obj      <- tpe.underlyingObject
+            childTpe <- obj.field(fieldName)
+          } yield {
             val isLeaf = childTpe.isUnderlyingLeaf
             if (isLeaf && child != Empty)
               mkErrorResult(s"Leaf field '$fieldName' of $obj must have an empty subselection set")
@@ -386,16 +386,16 @@ object QueryCompiler {
               mkErrorResult(s"Non-leaf field '$fieldName' of $obj must have a non-empty subselection set")
             else
               transform(child, vars, schema, childTpe).map(ec => s.copy(child = ec))
-          }
+          }).getOrElse(mkErrorResult(s"Unknown field '$fieldName' in select"))
 
         case UntypedNarrow(tpnme, child) =>
-          schema.definition(tpnme) match {
-            case None => mkErrorResult(s"Unknown type '$tpnme' in type condition")
-            case Some(subtpe) =>
-              transform(child, vars, schema, subtpe).map { ec =>
-                if (tpe.underlyingObject =:= subtpe) ec else Narrow(schema.ref(tpnme), ec)
-              }
-          }
+          (for {
+            subtpe <- schema.definition(tpnme)
+          } yield {
+            transform(child, vars, schema, subtpe).map { ec =>
+              if (tpe.underlyingObject.map(_ =:= subtpe).getOrElse(false)) ec else Narrow(schema.ref(tpnme), ec)
+            }
+          }).getOrElse(mkErrorResult(s"Unknown type '$tpnme' in type condition"))
 
         case i@Introspect(_, child) if tpe =:= schema.queryType =>
           transform(child, vars, Introspection.schema, Introspection.schema.queryType).map(ec => i.copy(child = ec))
@@ -410,7 +410,7 @@ object QueryCompiler {
         case g@Group(children)        => children.traverse(q => transform(q, vars, schema, tpe)).map(eqs => g.copy(queries = eqs))
         case g@GroupList(children)    => children.traverse(q => transform(q, vars, schema, tpe)).map(eqs => g.copy(queries = eqs))
         case u@Unique(_, child)       => transform(child, vars, schema, tpe.nonNull).map(ec => u.copy(child = ec))
-        case f@Filter(_, child)       => transform(child, vars, schema, tpe.item).map(ec => f.copy(child = ec))
+        case f@Filter(_, child)       => tpe.item.toRightIor(mkOneError(s"Filter of non-List type $tpe")).flatMap(item => transform(child, vars, schema, item).map(ec => f.copy(child = ec)))
         case c@Component(_, _, child) => transform(child, vars, schema, tpe).map(ec => c.copy(child = ec))
         case d@Defer(_, child, _)     => transform(child, vars, schema, tpe).map(ec => d.copy(child = ec))
         case s@Skip(_, _, child)      => transform(child, vars, schema, tpe).map(ec => s.copy(child = ec))
@@ -550,10 +550,11 @@ object QueryCompiler {
           tpe.withUnderlyingField(fieldName) { childTpe =>
             val mapping0 = if (schema eq Introspection.schema) introspectionMapping else mapping
             val elaborator: Select => Result[Query] =
-              schema.ref(tpe.underlyingObject).flatMap(mapping0.get) match {
-              case Some(e) => (s: Select) => if (e.isDefinedAt(s)) e(s) else s.rightIor
-              case _ => (s: Select) => s.rightIor
-            }
+              (for {
+                obj <- tpe.underlyingObject
+                ref <- schema.ref(obj)
+                e   <- mapping0.get(ref)
+              } yield (s: Select) => if (e.isDefinedAt(s)) e(s) else s.rightIor).getOrElse((s: Select) => s.rightIor)
 
             val obj = tpe.underlyingObject
             val isLeaf = childTpe.isUnderlyingLeaf
@@ -582,7 +583,7 @@ object QueryCompiler {
 
     def elaborateArgs(tpe: Type, fieldName: String, args: List[Binding]): Result[List[Binding]] =
       tpe.underlyingObject match {
-        case twf: TypeWithFields =>
+        case Some(twf: TypeWithFields) =>
           twf.fieldInfo(fieldName) match {
             case Some(field) =>
               val infos = field.args
@@ -642,18 +643,19 @@ object QueryCompiler {
     override def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
       query match {
         case PossiblyRenamedSelect(Select(fieldName, args, child), resultName) =>
-          tpe.withUnderlyingField(fieldName) { childTpe =>
-            schema.ref(tpe.underlyingObject).flatMap(ref => cmapping.get((ref, fieldName))) match {
-              case Some((mapping, join)) =>
-                transform(child, vars, schema, childTpe).map { elaboratedChild =>
+          (for {
+            obj      <- tpe.underlyingObject
+            childTpe <- obj.field(fieldName)
+          } yield {
+            transform(child, vars, schema, childTpe).map { elaboratedChild =>
+              schema.ref(obj).flatMap(ref => cmapping.get((ref, fieldName))) match {
+                case Some((mapping, join)) =>
                   Wrap(resultName, Component(mapping, join, PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)))
-                }
-              case None =>
-                transform(child, vars, schema, childTpe).map { elaboratedChild =>
+                case None =>
                   PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)
-                }
+              }
             }
-          }
+          }).getOrElse(mkErrorResult(s"Type $tpe has no field '$fieldName'"))
 
         case _ => super.transform(query, vars, schema, tpe)
       }

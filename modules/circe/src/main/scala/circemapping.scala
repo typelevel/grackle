@@ -14,24 +14,29 @@ import ScalarType._
 import org.tpolecat.sourcepos.SourcePos
 
 abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
-  case class CirceRoot(val tpe: Type, val fieldName: String, root: Json, mutation: Mutation)(
+  case class CirceRoot(val otpe: Option[Type], val fieldName: String, root: Json, mutation: Mutation)(
     implicit val pos: SourcePos
   ) extends RootMapping {
     def cursor(query: Query, env: Env): F[Result[Cursor]] = {
-      val fieldTpe = tpe.field(fieldName)
-      val cursorTpe = query match {
-        case _: Query.Unique => fieldTpe.nonNull.list
-        case _ => fieldTpe
-      }
-      CirceCursor(Nil, cursorTpe, root, None, env).rightIor.pure[F].widen
+      (for {
+        tpe      <- otpe
+        fieldTpe <- tpe.field(fieldName)
+      } yield {
+        val cursorTpe = query match {
+          case _: Query.Unique => fieldTpe.nonNull.list
+          case _ => fieldTpe
+        }
+        CirceCursor(Nil, cursorTpe, root, None, env).rightIor
+      }).getOrElse(mkErrorResult(s"Type ${otpe.getOrElse("unspecified type")} has no field '$fieldName'")).pure[F].widen
     }
+
     def withParent(tpe: Type): CirceRoot =
-      new CirceRoot(tpe, fieldName, root, mutation)
+      new CirceRoot(Some(tpe), fieldName, root, mutation)
   }
 
   object CirceRoot {
     def apply(fieldName: String, root: Json, mutation: Mutation = Mutation.None): CirceRoot =
-      new CirceRoot(NoType, fieldName, root, mutation)
+      new CirceRoot(None, fieldName, root, mutation)
   }
 
   case class CirceCursor(
@@ -111,10 +116,9 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
 
     def field(fieldName: String): Result[Cursor] = {
       val f = focus.asObject.flatMap(_(fieldName))
-      val ftpe = tpe.field(fieldName)
-      f match {
-        case None if ftpe.isNullable => mkChild(path = fieldName :: path, tpe = ftpe, focus = Json.Null).rightIor
-        case Some(json) => mkChild(path = fieldName :: path, tpe = ftpe, focus = json).rightIor
+      (tpe.field(fieldName), f) match {
+        case (Some(ftpe), None) if ftpe.isNullable => mkChild(path = fieldName :: path, tpe = ftpe, focus = Json.Null).rightIor
+        case (Some(ftpe), Some(json)) => mkChild(path = fieldName :: path, tpe = ftpe, focus = json).rightIor
         case _ =>
           mkErrorResult(s"No field '$fieldName' for type $tpe")
       }

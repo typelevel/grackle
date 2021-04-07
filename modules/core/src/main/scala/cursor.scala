@@ -308,7 +308,7 @@ object Cursor {
       tpe.hasField(fieldName)
 
     def field(fieldName: String): Result[Cursor] =
-      copy(tpe = tpe.field(fieldName), path = fieldName :: path).rightIor
+      tpe.field(fieldName).map(fieldTpe => copy(tpe = fieldTpe, path = fieldName :: path)).toRightIor(mkOneError(s"Type $tpe has no field '$fieldName'"))
 
     def hasAttribute(attrName: String): Boolean = false
     def attribute(attrName: String): Result[Any] =
