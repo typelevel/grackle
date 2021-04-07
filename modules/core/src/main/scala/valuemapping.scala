@@ -16,25 +16,30 @@ import org.tpolecat.sourcepos.SourcePos
 
 abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
 
-  case class ValueRoot(val tpe: Type, val fieldName: String, root0: () => Any, mutation: Mutation)(
+  case class ValueRoot(val otpe: Option[Type], val fieldName: String, root0: () => Any, mutation: Mutation)(
     implicit val pos: SourcePos
   ) extends RootMapping {
     lazy val root: Any = root0()
     def cursor(query: Query, env: Env): F[Result[Cursor]] = {
-      val fieldTpe = tpe.field(fieldName)
-      val cursorTpe = query match {
-        case _: Query.Unique => fieldTpe.nonNull.list
-        case _ => fieldTpe
-      }
-      ValueCursor(Nil, cursorTpe, root, None, env).rightIor.pure[F].widen
+      (for {
+        tpe      <- otpe
+        fieldTpe <- tpe.field(fieldName)
+      } yield {
+        val cursorTpe = query match {
+          case _: Query.Unique => fieldTpe.nonNull.list
+          case _ => fieldTpe
+        }
+        ValueCursor(Nil, cursorTpe, root, None, env).rightIor
+      }).getOrElse(mkErrorResult(s"Type ${otpe.getOrElse("unspecified type")} has no field '$fieldName'")).pure[F].widen
     }
+
     def withParent(tpe: Type): ValueRoot =
-      new ValueRoot(tpe, fieldName, root0, mutation)
+      new ValueRoot(Some(tpe), fieldName, root0, mutation)
   }
 
   object ValueRoot {
     def apply(fieldName: String, root: => Any, mutation: Mutation = Mutation.None)(implicit pos: SourcePos): ValueRoot =
-      new ValueRoot(NoType, fieldName, () => root, mutation)
+      new ValueRoot(None, fieldName, () => root, mutation)
   }
 
   sealed trait ValueField0[T] extends FieldMapping
@@ -143,14 +148,18 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
       tpe.hasField(fieldName) && fieldMapping(path, tpe, fieldName).isDefined
 
     def field(fieldName: String): Result[Cursor] =
-      fieldMapping(path, tpe, fieldName) match {
-        case Some(ValueField(_, f)) =>
-          mkChild(tpe = tpe.field(fieldName), focus = f.asInstanceOf[Any => Any](focus), path = fieldName :: path).rightIor
-        case Some(CursorField(_, f, _, _)) =>
-          f(this).map(res => mkChild(tpe = tpe.field(fieldName), focus = res))
-        case _ =>
-          mkErrorResult(s"No field '$fieldName' for type $tpe")
-      }
+      (for {
+        fieldTpe <- tpe.field(fieldName)
+      } yield {
+        fieldMapping(path, tpe, fieldName) match {
+          case Some(ValueField(_, f)) =>
+            mkChild(tpe = fieldTpe, focus = f.asInstanceOf[Any => Any](focus), path = fieldName :: path).rightIor
+          case Some(CursorField(_, f, _, _)) =>
+            f(this).map(res => mkChild(tpe = fieldTpe, focus = res))
+          case _ =>
+            mkErrorResult(s"No field '$fieldName' for type $tpe")
+        }
+      }).getOrElse(mkErrorResult(s"No field '$fieldName' for type $tpe"))
 
     def hasAttribute(attrName: String): Boolean =
       !tpe.hasField(attrName) && fieldMapping(path, tpe, attrName).isDefined

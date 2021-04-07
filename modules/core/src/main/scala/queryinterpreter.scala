@@ -121,16 +121,17 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
 
       case PossiblyRenamedSelect(Select(fieldName, _, child), resultName) =>
         (for {
-          qc     <- IorT(mapping.rootCursor(path, rootTpe, fieldName, child, env))
-          value  <- IorT(runValue(Wrap(resultName, qc._1), rootTpe.field(fieldName), qc._2).pure[F])
+          fieldTpe <- IorT.fromOption[F](rootTpe.field(fieldName), QueryInterpreter.mkOneError(s"Root type $rootTpe has no field '$fieldName'"))
+          qc       <- IorT(mapping.rootCursor(path, rootTpe, fieldName, child, env))
+          value    <- IorT(runValue(Wrap(resultName, qc._1), fieldTpe, qc._2).pure[F])
         } yield value).value
 
       case GroupBy(disc, Select(fieldName, args, child)) =>
-        val elemTpe = rootTpe.item
         (for {
-          qc     <- IorT(mapping.rootCursor(path, elemTpe, fieldName, child, env))
-          qʹ      = GroupBy(disc, Select(fieldName, args, qc._1))
-          value  <- IorT(runValue(qʹ, rootTpe, qc._2).pure[F])
+          elemTpe <- IorT.fromOption[F](rootTpe.item, QueryInterpreter.mkOneError(s"Root type $rootTpe is not a list type"))
+          qc      <- IorT(mapping.rootCursor(path, elemTpe, fieldName, child, env))
+          q0      =  GroupBy(disc, Select(fieldName, args, qc._1))
+          value   <- IorT(runValue(q0, rootTpe, qc._2).pure[F])
         } yield value).value
 
       case Wrap(_, Component(mapping, _, child)) =>
@@ -179,7 +180,8 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
         case _ => tpe
       }
 
-    cursorTpe =:= NoType || (strip(tpe) nominal_=:= strip(cursorTpe))
+    (strip(tpe).isLeaf && strip(cursorTpe).isLeaf) ||
+    (strip(tpe) nominal_=:= strip(cursorTpe))
   }
 
   /**
@@ -232,8 +234,9 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
 
         case (PossiblyRenamedSelect(Select(fieldName, _, child), resultName), tpe) =>
           for {
-            c     <- cursor.field(fieldName)
-            value <- runValue(child, tpe.field(fieldName), c)
+            fieldTpe <- tpe.field(fieldName).toRightIor(QueryInterpreter.mkOneError(s"Type $tpe has no field '$fieldName'"))
+            c        <- cursor.field(fieldName)
+            value    <- runValue(child, fieldTpe, c)
           } yield List((resultName, value))
 
         case (Rename(resultName, Wrap(_, child)), tpe) =>
@@ -321,9 +324,10 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
               conts.traverse { case cont =>
                 for {
                   componentName <- mkResult(rootName(cont))
+                  itemTpe       <- tpe.field(child.name).flatMap(_.item).toRightIor(QueryInterpreter.mkOneError(s"Type $tpe has no list field '${child.name}'"))
                 } yield
                   ProtoJson.select(
-                    ProtoJson.staged(interpreter, cont, JoinType(componentName, tpe.field(child.name).item), cursor.fullEnv),
+                    ProtoJson.staged(interpreter, cont, JoinType(componentName, itemTpe), cursor.fullEnv),
                     componentName
                   )
               }.map(ProtoJson.fromValues)
@@ -332,7 +336,8 @@ class QueryInterpreter[F[_] : Monad](mapping: Mapping[F]) {
               for {
                 componentName <- mkResult(rootName(cont))
                 renamedCont   <- mkResult(renameRoot(cont, resultName))
-              } yield ProtoJson.staged(interpreter, renamedCont, JoinType(componentName, tpe.field(child.name)), cursor.fullEnv)
+                fieldTpe      <- tpe.field(child.name).toRightIor(QueryInterpreter.mkOneError(s"Type $tpe has no field '${child.name}'"))
+              } yield ProtoJson.staged(interpreter, renamedCont, JoinType(componentName, fieldTpe), cursor.fullEnv)
           }
 
         case (Defer(join, child, rootTpe), _) =>

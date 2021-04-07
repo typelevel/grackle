@@ -20,17 +20,17 @@ import ShapelessUtils._
 import org.tpolecat.sourcepos.SourcePos
 
 abstract class GenericMapping[F[_]: Monad] extends Mapping[F] {
-  case class GenericRoot[T](val tpe: Type, val fieldName: String, t: T, cb: () => CursorBuilder[T], mutation: Mutation)(
+  case class GenericRoot[T](val tpe: Option[Type], val fieldName: String, t: T, cb: () => CursorBuilder[T], mutation: Mutation)(
     implicit val pos: SourcePos
   ) extends RootMapping {
     lazy val cursorBuilder = cb()
     def cursor(query: Query, env: Env): F[Result[Cursor]] = cursorBuilder.build(Nil, t, None, env).pure[F]
     def withParent(tpe: Type): GenericRoot[T] =
-      new GenericRoot(tpe, fieldName, t, cb, mutation)
+      new GenericRoot(Some(tpe), fieldName, t, cb, mutation)
   }
 
   def GenericRoot[T](fieldName: String, t: T, mutation: Mutation = Mutation.None)(implicit cb: => CursorBuilder[T]): GenericRoot[T] =
-    new GenericRoot(NoType, fieldName, t, () => cb, mutation)
+    new GenericRoot(None, fieldName, t, () => cb, mutation)
 }
 
 object semiauto {
@@ -256,7 +256,7 @@ object CursorBuilder {
   }
 
   implicit def enumerationCursorBuilder[T <: Enumeration#Value]: CursorBuilder[T] =
-    deriveEnumerationCursorBuilder(NoType)
+    deriveEnumerationCursorBuilder(StringType)
 
   implicit def optionCursorBuiler[T](implicit elemBuilder: CursorBuilder[T]): CursorBuilder[Option[T]] = {
     case class OptionCursor(path: List[String], tpe: Type, focus: Option[T], parent: Option[Cursor], env: Env) extends AbstractCursor[Option[T]] {
@@ -307,7 +307,7 @@ object CursorBuilder {
     }
 
   implicit def leafCursorBuilder[T](implicit encoder: Encoder[T]): CursorBuilder[T] =
-    deriveLeafCursorBuilder(NoType)
+    deriveLeafCursorBuilder(StringType)
 }
 
 abstract class AbstractCursor[T] extends Cursor {
