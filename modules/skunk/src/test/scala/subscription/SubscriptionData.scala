@@ -22,7 +22,6 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
       """
         type Query {
           city(id: Int!): City
-          channel: City!
         }
         type Subscription {
           channel: City!
@@ -69,16 +68,6 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
         tpe = QueryType,
         fieldMappings = List(
           SqlRoot("city"),
-          SqlRoot(
-            fieldName = "channel",
-            mutation  = Mutation { (q, e) =>
-              for {
-                s  <- fs2.Stream.resource(pool)
-                id <- s.channel(id"city_channel").listen(256).map(_.value.toInt)
-                qʹ  = Unique(Eql(AttrPath(List("id")), Const(id)), q)
-              } yield Result((qʹ, e))
-            }
-          ),
         ),
       ),
       ObjectMapping(
@@ -107,7 +96,7 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
             mutation  = Mutation { (q, e) =>
               for {
                 s  <- fs2.Stream.resource(pool)
-                id <- s.channel(id"city_changes").listen(256).map(_.value.toInt)
+                id <- s.channel(id"city_channel").listen(256).map(_.value.toInt)
                 qʹ  = Unique(Eql(AttrPath(List("id")), Const(id)), q)
               } yield Result((qʹ, e))
             }

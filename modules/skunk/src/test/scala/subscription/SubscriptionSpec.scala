@@ -16,7 +16,7 @@ class SubscriptionSpec extends DatabaseSuite {
   test("subscription driven by a Postgres channel") {
 
     val query = """
-      query {
+      subscription {
         channel {
           name
           country {
@@ -57,7 +57,7 @@ class SubscriptionSpec extends DatabaseSuite {
       for {
 
         // start a fiber that subscibes and takes the first two notifications
-        fi <- mapping.compileAndRunAll(query).take(2).compile.toList.start
+        fi <- mapping.compileAndRunAll(query).evalTap(r => IO(println(s"got $r"))).take(2).compile.toList.start
 
         // We're racing now, so wait a sec before starting notifications
         _  <- IO.sleep(1.second)

@@ -1168,7 +1168,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   // overrides
 
   override def rootMapping(path: List[String], tpe: Type, fieldName: String): Option[RootMapping] =
-    if (tpe =:= schema.queryType || schema.mutationType.exists(_ == tpe)) super.rootMapping(path, tpe, fieldName)
+    if (tpe =:= schema.queryType || schema.mutationType.exists(_ == tpe) || schema.subscriptionType.exists(_ == tpe)) super.rootMapping(path, tpe, fieldName)
     else Some(SqlRoot(fieldName, path, Some(tpe)))
 
   override def compilerPhases: List[QueryCompiler.Phase] =
