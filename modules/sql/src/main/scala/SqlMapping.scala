@@ -51,7 +51,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
    */
   case class ColumnRef(table: String, column: String, codec: Codec[_], scalaTypeName: String)(
     implicit val pos: SourcePos
-  ) {
+  ) { outer =>
 
     /** This `ColumnRef` as a SQL expression of the form `table.column`. */
     def toSql: String =
@@ -66,6 +66,47 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     override def hashCode(): Int =
       table.hashCode() + column.hashCode()
 
+    def codecAndNullability: (Codec[_], NullabilityKnown) = (codec, if(nullable) Nullable else NoNulls)
+
+    lazy val nullable: Boolean = {
+      // This should simplify once fields and attributes are unified
+      def loop(tms: List[TypeMapping]): Option[Boolean] =
+        tms match {
+          case Nil => None
+          case tm :: tl =>
+            tm match {
+              case om: ObjectMapping =>
+                om.fieldMappings.collectFirstSome {
+                  case SqlField(fieldName, `outer`, _, _) =>
+                    for {
+                      obj      <- om.tpe.underlyingObject
+                      fieldTpe <- obj.field(fieldName)
+                    } yield fieldTpe.isNullable || obj.variantField(fieldName)
+
+                  case SqlJson(fieldName, `outer`) =>
+                    for {
+                      obj      <- om.tpe.underlyingObject
+                      fieldTpe <- obj.field(fieldName)
+                    } yield fieldTpe.isNullable || obj.variantField(fieldName)
+
+                  case SqlAttribute(_, `outer`, _, nullable, _) =>
+                    Some(nullable)
+
+                  case _ => None
+
+                } orElse loop(tl)
+
+              case pm: PrefixedMapping =>
+                loop(pm.mappings.map(_._2)).orElse(loop(tl))
+
+              case _ =>
+                loop(tl)
+
+            }
+        }
+
+      loop(typeMappings).getOrElse(true)
+    }
   }
 
   object ColumnRef {
@@ -74,7 +115,6 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       implicit pos: SourcePos
     ): ColumnRef =
       apply(table, column, codec, typeName)
-
   }
 
   /** A pair of `ColumnRef`s, representing a SQL join. `ColumnRef`s have a canonical form. */
@@ -321,9 +361,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         x match {
           case path: Path =>
             for {
-              fieldTpe <- tpe.path(path.path)
-              cr       <- primaryColumnForTerm(path.path, tpe, path)
-            } yield (toEncoder(cr.codec.asInstanceOf[Codec[Any]]), fieldTpe.isNullable)
+              cr <- primaryColumnForTerm(path.path, tpe, path)
+            } yield (toEncoder(cr.codec.asInstanceOf[Codec[Any]]), cr.nullable)
 
           case (_: And)|(_: Or)|(_: Not)|(_: Eql[_])|(_: NEql[_])|(_: Lt[_])|(_: LtEql[_])|(_: Gt[_])|(_: GtEql[_])  => Some((booleanEncoder, false))
           case (_: AndB)|(_: OrB)|(_: XorB)|(_: NotB) => Some((intEncoder, false))
@@ -706,52 +745,11 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
       val metas = {
         def metaForColumn(col: ColumnRef): (Boolean, (Codec[_], NullabilityKnown)) = {
-          def loop(tms: List[TypeMapping]): Option[(Codec[_], NullabilityKnown)] =
-            tms match {
-              case Nil => None
-              case tm :: tl =>
-                tm match {
-                  case om: ObjectMapping =>
-                    om.fieldMappings.collectFirstSome {
-                      case SqlField(fieldName, `col`, _, _) =>
-                        for {
-                          obj       <- om.tpe.underlyingObject
-                          fieldTpe <- obj.field(fieldName)
-                        } yield {
-                          val nullable = fieldTpe.isNullable || obj.variantField(fieldName)
-                          (col.codec, if (nullable) Nullable else NoNulls)
-                        }
-
-                      case SqlJson(fieldName, `col`) =>
-                        for {
-                          obj      <- om.tpe.underlyingObject
-                          fieldTpe <- obj.field(fieldName)
-                        } yield {
-                          val nullable = fieldTpe.isNullable || obj.variantField(fieldName)
-                          (col.codec, if (nullable) Nullable else NoNulls)
-                        }
-
-                      case SqlAttribute(_, `col`, _, nullable, _) =>
-                        Some((col.codec, if (nullable) Nullable else NoNulls))
-
-                      case _ => None
-
-                    } orElse loop(tl)
-
-                  case pm: PrefixedMapping =>
-                    loop(pm.mappings.map(_._2)).orElse(loop(tl))
-
-                  case _ =>
-                    loop(tl)
-
-                }
-            }
-
           // A column is the product of an outer join (and may therefore be null even if it's non-nullable
           // in the schema) if its table introduced on the child side of a `Join`.
           def isJoin(cr: ColumnRef): Boolean = childTables(cr.table)
 
-          loop(typeMappings).map(mn => (isJoin(col), mn)).getOrElse(sys.error(s"No Codec for $col"))
+          (isJoin(col), (col.codec, if (col.nullable) Nullable else NoNulls))
         }
 
         columns.map(metaForColumn)
