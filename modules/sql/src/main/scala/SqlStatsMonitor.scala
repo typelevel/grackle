@@ -45,12 +45,18 @@ abstract class SqlStatsMonitor[F[_]: Applicative, A](
 
 object SqlStatsMonitor {
 
-  case class SqlStats(
-    query: Query,
-    sql:   String,
-    args:  List[Any],
-    rows:  Int,
-    cols:  Int
-  )
+  final case class SqlStats(
+    val query: Query,
+    val sql:   String,
+    val args:  List[Any],
+    val rows:  Int,
+    val cols:  Int
+  ) {
+
+    /** Normalize whitespace in `query` for easier testing. */
+    def normalize: SqlStats =
+      copy(sql = sql.replaceAll("\\s+", " ").trim)
+
+  }
 
 }
