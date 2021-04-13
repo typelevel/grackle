@@ -13,6 +13,7 @@ import shapeless.{ Coproduct, Generic, ::, HList, HNil, Inl, Inr, LabelledGeneri
 import shapeless.ops.hlist.{ LiftAll => PLiftAll }
 import shapeless.ops.coproduct.{ LiftAll => CLiftAll }
 import shapeless.ops.record.Keys
+import fs2.Stream
 
 import Cursor.Env
 import QueryInterpreter.{ mkErrorResult, mkOneError }
@@ -24,7 +25,7 @@ abstract class GenericMapping[F[_]: Monad] extends Mapping[F] {
     implicit val pos: SourcePos
   ) extends RootMapping {
     lazy val cursorBuilder = cb()
-    def cursor(query: Query, env: Env): F[Result[Cursor]] = cursorBuilder.build(Nil, t, None, env).pure[F]
+    def cursor(query: Query, env: Env): Stream[F,Result[Cursor]] = cursorBuilder.build(Nil, t, None, env).pure[Stream[F,*]]
     def withParent(tpe: Type): GenericRoot[T] =
       new GenericRoot(Some(tpe), fieldName, t, cb, mutation)
   }

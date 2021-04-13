@@ -78,7 +78,7 @@ trait CoalesceMapping[F[_]] extends SkunkMapping[F] {
     )
 }
 
-object CoalesceMapping extends TracedSkunkMappingCompanion {
+object CoalesceMapping extends SkunkMappingCompanion {
 
   def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
     new SkunkMapping[F](pool, monitor) with CoalesceMapping[F]

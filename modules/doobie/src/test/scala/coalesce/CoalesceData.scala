@@ -77,7 +77,7 @@ trait CoalesceMapping[F[_]] extends DoobieMapping[F] {
     )
 }
 
-object CoalesceMapping extends TracedDoobieMappingCompanion {
+object CoalesceMapping extends DoobieMappingCompanion {
 
   def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
     new DoobieMapping[F](transactor, monitor) with CoalesceMapping[F]

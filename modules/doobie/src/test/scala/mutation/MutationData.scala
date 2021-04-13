@@ -3,7 +3,7 @@
 
 package mutation
 
-import _root_.doobie._
+import _root_.doobie.{ Meta, Transactor }
 import _root_.doobie.implicits._
 import cats.effect.{ Bracket, Sync }
 import cats.syntax.all._
@@ -16,6 +16,7 @@ import edu.gemini.grackle.Query._
 import edu.gemini.grackle.QueryCompiler._
 import edu.gemini.grackle.Value._
 import grackle.test.SqlMutationSchema
+import fs2.Stream
 
 trait MutationSchema[F[_]] extends DoobieMapping[F] with SqlMutationSchema {
 
@@ -61,20 +62,23 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
           SqlRoot("updatePopulation", mutation = Mutation.unit { (_, e) =>
             (e.get[Int]("id"), e.get[Int]("population")).tupled match {
               case None =>
-                QueryInterpreter.mkErrorResult(s"Implementation error, expected id and population in $e.").pure[F]
+                QueryInterpreter.mkErrorResult[Unit](s"Implementation error, expected id and population in $e.").pure[Stream[F,*]]
               case Some((id, pop)) =>
-                sql"update city set population=$pop where id=$id"
-                  .update
-                  .run
-                  .transact(transactor)
-                  .as(().rightIor)
+                Stream.eval {
+                  sql"update city set population=$pop where id=$id"
+                    .update
+                    .run
+                    .transact(transactor)
+                    .as(().rightIor)
+                }
               }
           }),
           SqlRoot("createCity", mutation = Mutation { (child, e) =>
             (e.get[String]("name"), e.get[String]("countryCode"), e.get[Int]("population")).tupled match {
               case None =>
-                QueryInterpreter.mkErrorResult(s"Implementation error: expected name, countryCode and population in $e.").pure[F]
+                QueryInterpreter.mkErrorResult[(Query, Cursor.Env)](s"Implementation error: expected name, countryCode and population in $e.").pure[Stream[F,*]]
               case Some((name, cc, pop)) =>
+                Stream.eval {
                   sql"""
                       INSERT INTO city (id, name, countrycode, district, population)
                       VALUES (nextval('city_id'), $name, $cc, 'ignored', $pop)
@@ -83,6 +87,7 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
                       .unique
                       .transact(transactor)
                       .map { id => (Unique(Eql(AttrPath(List("id")), Const(id)), child), e).rightIor }
+                }
             }
           }),
         ),

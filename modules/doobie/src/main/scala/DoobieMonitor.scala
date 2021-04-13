@@ -6,18 +6,13 @@ package doobie
 
 import _root_.doobie.Fragment
 import cats.Applicative
-import cats.data.StateT
 import cats.implicits._
 import edu.gemini.grackle.QueryInterpreter.ProtoJson
 import edu.gemini.grackle.sql.Row
 import io.chrisdavenport.log4cats.Logger
-
-trait DoobieMonitor[F[_]] extends edu.gemini.grackle.sql.SqlMonitor[F, Fragment] {
-  def stageStarted: F[Unit]
-  def queryMapped(query: Query, fragment: Fragment, table: List[Row]): F[Unit]
-  def resultComputed(result: Result[ProtoJson]): F[Unit]
-  def stageCompleted: F[Unit]
-}
+import edu.gemini.grackle.sql.SqlStatsMonitor
+import cats.effect.concurrent.Ref
+import cats.effect.Sync
 
 case class DoobieStats(
   query: Query,
@@ -30,6 +25,7 @@ case class DoobieStats(
 object DoobieMonitor {
 
   private implicit class FragmentOps(f: Fragment) {
+
     def sql: String = {
       val m = f.getClass.getDeclaredField("sql")
       m.setAccessible(true)
@@ -72,32 +68,12 @@ object DoobieMonitor {
         logger.info(s"stage completed")
     }
 
-  def stateMonitor[F[_]: Applicative]: DoobieMonitor[StateT[F, List[List[DoobieStats]], *]] =
-    new DoobieMonitor[StateT[F, List[List[DoobieStats]], *]] {
-
-      def stageStarted: StateT[F, List[List[DoobieStats]], Unit] =
-        StateT.modify(states => Nil :: states)
-
-      def queryMapped(query: Query, fragment: Fragment, table: List[Row]): StateT[F, List[List[DoobieStats]], Unit] = {
-        val stats =
-          DoobieStats(
-            query,
-            fragment.sql,
-            fragment.args,
-            table.size,
-            table.headOption.map(_.elems.size).getOrElse(0),
-          )
-
-        StateT.modify {
-          case Nil => List(List(stats))
-          case hd :: tl => (stats :: hd) :: tl
-        }
+  def statsMonitor[F[_]: Sync]: F[SqlStatsMonitor[F, Fragment]] =
+    Ref[F].of(List.empty[SqlStatsMonitor.SqlStats]).map { ref =>
+      new SqlStatsMonitor[F, Fragment](ref) {
+        def inspect(fragment: Fragment): (String, List[Any]) =
+          (fragment.sql, fragment.args)
       }
-
-      def resultComputed(result: Result[ProtoJson]): StateT[F, List[List[DoobieStats]], Unit] =
-        StateT.pure(())
-
-      def stageCompleted: StateT[F, List[List[DoobieStats]], Unit] =
-        StateT.pure(())
     }
+
 }

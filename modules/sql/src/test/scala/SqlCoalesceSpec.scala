@@ -7,12 +7,18 @@ import io.circe.literal.JsonStringContext
 import org.scalatest.funsuite.AnyFunSuite
 import edu.gemini.grackle.QueryExecutor
 import cats.effect.IO
+import cats.syntax.all._
 import io.circe.Json
-import scala.language.reflectiveCalls
+import edu.gemini.grackle.sql.SqlStatsMonitor
+import edu.gemini.grackle.sql.SqlMonitor
 
-trait SqlCoalesceSpec[A <: { def rows: Int ; def cols: Int }] extends AnyFunSuite {
+trait SqlCoalesceSpec extends AnyFunSuite {
 
-  def mapping: QueryExecutor[IO, (Json, List[List[A]])]
+  type Fragment
+
+  def monitor: IO[SqlStatsMonitor[IO, Fragment]]
+
+  def mapping(monitor: SqlMonitor[IO, Fragment]): QueryExecutor[IO, Json]
 
   test("simple coalesced query") {
     val query = """
@@ -89,19 +95,23 @@ trait SqlCoalesceSpec[A <: { def rows: Int ; def cols: Int }] extends AnyFunSuit
       }
     """
 
-    val (res, trace) = mapping.compileAndRun(query).unsafeRunSync()
-    //println(res)
+    val prog: IO[(Json, List[SqlStatsMonitor.SqlStats])] =
+      for {
+        mon <- monitor
+        map  = mapping(mon)
+        res <- map.compileAndRun(query)
+        ss  <- mon.take
+      } yield (res, ss)
+
+    val (res, stats) = prog.unsafeRunSync()
 
     assert(res == expected)
 
-    val numStages = trace.size
-    val numCells = trace.foldLeft(0) { case (acc, stage) =>
-      acc+stage.foldLeft(0) { case (acc, stats) =>
-        acc+(stats.rows*stats.cols)
-      }
-    }
+    val numQueries = stats.length
+    val numCells   = stats.foldMap(s => s.rows * s.cols)
 
-    assert(numStages == 2)
-    assert(numCells == 32)
+    assert(numQueries == 2)
+    assert(numCells   == 32)
+
   }
 }

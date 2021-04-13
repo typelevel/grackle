@@ -93,7 +93,7 @@ final class FragmentSuite extends CatsSuite {
 
     assert(compiled.map(_.query) == Ior.Right(expected))
 
-    val res = FragmentMapping.run(compiled.right.get)
+    val res = FragmentMapping.run(compiled.right.get).compile.toList.head
     //println(res)
     assert(res == expectedResult)
   }
@@ -181,7 +181,7 @@ final class FragmentSuite extends CatsSuite {
 
     assert(compiled.map(_.query) == Ior.Right(expected))
 
-    val res = FragmentMapping.run(compiled.right.get)
+    val res = FragmentMapping.run(compiled.right.get).compile.toList.head
     //println(res)
     assert(res == expectedResult)
   }
@@ -258,7 +258,7 @@ final class FragmentSuite extends CatsSuite {
 
     assert(compiled.map(_.query) == Ior.Right(expected))
 
-    val res = FragmentMapping.run(compiled.right.get)
+    val res = FragmentMapping.run(compiled.right.get).compile.toList.head
     //println(res)
     assert(res == expectedResult)
   }
@@ -323,7 +323,7 @@ final class FragmentSuite extends CatsSuite {
 
     assert(compiled.map(_.query) == Ior.Right(expected))
 
-    val res = FragmentMapping.run(compiled.right.get)
+    val res = FragmentMapping.run(compiled.right.get).compile.toList.head
     //println(res)
     assert(res == expectedResult)
   }
@@ -423,7 +423,7 @@ final class FragmentSuite extends CatsSuite {
 
     assert(compiled.map(_.query) == Ior.Right(expected))
 
-    val res = FragmentMapping.run(compiled.right.get)
+    val res = FragmentMapping.run(compiled.right.get).compile.toList.head
     //println(res)
     assert(res == expectedResult)
   }

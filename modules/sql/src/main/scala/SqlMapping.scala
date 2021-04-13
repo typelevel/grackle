@@ -12,6 +12,7 @@ import cats.implicits._
 import io.circe.Json
 import org.tpolecat.typename._
 import org.tpolecat.sourcepos.SourcePos
+import fs2.Stream
 
 import Cursor.Env
 import Predicate._
@@ -148,16 +149,18 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       } yield SqlCursor(fieldPath, cursorType, table, mapped, None, env).rightIor
     }
 
-    def cursor(query: Query, env: Env): F[Result[Cursor]] =
-      if (fieldName === "__staged")
-        orootTpe.map(rootTpe => mkRootCursor(query, path, rootTpe, env)).getOrElse(mkErrorResult(s"No root type").pure[F])
-      else
-        (for {
-          rootTpe  <- orootTpe
-          fieldTpe <- rootTpe.underlyingField(fieldName)
-        } yield {
-          mkRootCursor(query, fieldName :: path, fieldTpe, env)
-        }).getOrElse(mkErrorResult(s"Type ${orootTpe.getOrElse("unspecified type")} has no field '$fieldName'").pure[F])
+    def cursor(query: Query, env: Env): Stream[F,Result[Cursor]] =
+      Stream.eval {
+        if (fieldName === "__staged")
+          orootTpe.map(rootTpe => mkRootCursor(query, path, rootTpe, env)).getOrElse(mkErrorResult(s"No root type").pure[F])
+        else
+          (for {
+            rootTpe  <- orootTpe
+            fieldTpe <- rootTpe.underlyingField(fieldName)
+          } yield {
+            mkRootCursor(query, fieldName :: path, fieldTpe, env)
+          }).getOrElse(mkErrorResult(s"Type ${orootTpe.getOrElse("unspecified type")} has no field '$fieldName'").pure[F])
+        }
 
     def withParent(tpe: Type): SqlRoot =
       copy(orootTpe = Some(tpe))
@@ -1163,7 +1166,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   // overrides
 
   override def rootMapping(path: List[String], tpe: Type, fieldName: String): Option[RootMapping] =
-    if (tpe =:= schema.queryType || schema.mutationType.exists(_ == tpe)) super.rootMapping(path, tpe, fieldName)
+    if (tpe =:= schema.queryType || schema.mutationType.exists(_ == tpe) || schema.subscriptionType.exists(_ == tpe)) super.rootMapping(path, tpe, fieldName)
     else Some(SqlRoot(fieldName, path, Some(tpe)))
 
   override def compilerPhases: List[QueryCompiler.Phase] =
@@ -1172,20 +1175,20 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   override val interpreter: QueryInterpreter[F] =
     new QueryInterpreter(this) {
 
-      override def runRootValues(queries: List[(Query, Type, Env)]): F[(Chain[Json], List[ProtoJson])] =
+      override def runRootValues(queries: List[(Query, Type, Env)]): Stream[F,(Chain[Json], List[ProtoJson])] =
         for {
-          _   <- monitor.stageStarted
+          _   <- Stream.eval(monitor.stageStarted)
           res <- runRootValues0(queries)
-          _   <- monitor.stageCompleted
+          _   <- Stream.eval(monitor.stageCompleted)
         } yield res
 
-      override def runRootValue(query: Query, rootTpe: Type, env: Env): F[Result[ProtoJson]] =
+      override def runRootValue(query: Query, rootTpe: Type, env: Env): Stream[F,Result[ProtoJson]] =
         for {
           res <- super.runRootValue(query, rootTpe, env)
-          _   <- monitor.resultComputed(res)
+          _   <- Stream.eval(monitor.resultComputed(res))
         } yield res
 
-      def runRootValues0(queries: List[(Query, Type, Env)]): F[(Chain[Json], List[ProtoJson])] = {
+      def runRootValues0(queries: List[(Query, Type, Env)]): Stream[F,(Chain[Json], List[ProtoJson])] = {
         if (queries.length === 1)
           super.runRootValues(queries)
         else {

@@ -7,6 +7,7 @@ package circe
 import cats.Monad
 import cats.implicits._
 import io.circe.Json
+import fs2.Stream
 
 import Cursor.Env
 import QueryInterpreter.{mkErrorResult, mkOneError}
@@ -17,7 +18,7 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
   case class CirceRoot(val otpe: Option[Type], val fieldName: String, root: Json, mutation: Mutation)(
     implicit val pos: SourcePos
   ) extends RootMapping {
-    def cursor(query: Query, env: Env): F[Result[Cursor]] = {
+    def cursor(query: Query, env: Env): Stream[F,Result[Cursor]] = {
       (for {
         tpe      <- otpe
         fieldTpe <- tpe.field(fieldName)
@@ -27,7 +28,7 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
           case _ => fieldTpe
         }
         CirceCursor(Nil, cursorTpe, root, None, env).rightIor
-      }).getOrElse(mkErrorResult(s"Type ${otpe.getOrElse("unspecified type")} has no field '$fieldName'")).pure[F].widen
+      }).getOrElse(mkErrorResult(s"Type ${otpe.getOrElse("unspecified type")} has no field '$fieldName'")).pure[Stream[F,*]]
     }
 
     def withParent(tpe: Type): CirceRoot =
