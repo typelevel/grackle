@@ -4,9 +4,23 @@
 package coalesce
 
 import utils.DatabaseSuite
-import edu.gemini.grackle.skunk.SkunkStats
 import grackle.test.SqlCoalesceSpec
+import edu.gemini.grackle.sql.{SqlStatsMonitor}
+import cats.effect.IO
+import edu.gemini.grackle.QueryExecutor
+import edu.gemini.grackle.sql.SqlMonitor
+import io.circe.Json
+import skunk.AppliedFragment
+import edu.gemini.grackle.skunk.SkunkMonitor
 
-final class CoalesceSpec extends DatabaseSuite with SqlCoalesceSpec[SkunkStats] {
-  lazy val mapping = CoalesceMapping.mkMapping(pool)
+final class CoalesceSpec extends DatabaseSuite with SqlCoalesceSpec {
+
+  type Fragment = AppliedFragment
+
+  def monitor: IO[SqlStatsMonitor[IO,Fragment]] =
+    SkunkMonitor.statsMonitor[IO]
+
+  def mapping(monitor: SqlMonitor[IO,Fragment]): QueryExecutor[IO,Json] =
+    CoalesceMapping.mkMapping(pool, monitor)
+
 }
