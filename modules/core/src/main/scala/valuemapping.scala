@@ -17,10 +17,9 @@ import org.tpolecat.sourcepos.SourcePos
 
 abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
 
-  case class ValueRoot(val otpe: Option[Type], val fieldName: String, root0: () => Any, mutation: Mutation)(
+  case class ValueRoot(otpe: Option[Type], fieldName: String, root: F[Any], mutation: Mutation)(
     implicit val pos: SourcePos
   ) extends RootMapping {
-    lazy val root: Any = root0()
     def cursor(query: Query, env: Env): Stream[F,Result[Cursor]] = {
       (for {
         tpe      <- otpe
@@ -30,17 +29,28 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
           case _: Query.Unique => fieldTpe.nonNull.list
           case _ => fieldTpe
         }
-        Result(ValueCursor(Nil, cursorTpe, root, None, env)).pure[Stream[F,*]]
+        Stream.eval(root).map(r => Result(ValueCursor(Nil, cursorTpe, r, None, env)))
       }).getOrElse(mkErrorResult[Cursor](s"Type ${otpe.getOrElse("unspecified type")} has no field '$fieldName'").pure[Stream[F,*]])
     }
 
     def withParent(tpe: Type): ValueRoot =
-      new ValueRoot(Some(tpe), fieldName, root0, mutation)
+      new ValueRoot(Some(tpe), fieldName, root, mutation)
   }
 
   object ValueRoot {
-    def apply(fieldName: String, root: => Any, mutation: Mutation = Mutation.None)(implicit pos: SourcePos): ValueRoot =
-      new ValueRoot(None, fieldName, () => root, mutation)
+
+    // TODO: deprecate
+    def apply(fieldName: String, root: Any, mutation: Mutation = Mutation.None)(implicit pos: SourcePos): ValueRoot =
+      pure(fieldName, root, mutation)
+
+    /** Construct a `ValueRoot` with constant value `root`. */
+    def pure(fieldName: String, root: Any, mutation: Mutation = Mutation.None)(implicit pos: SourcePos): ValueRoot =
+      liftF(fieldName, root.pure[F], mutation)
+
+    /** Construct a `ValueRoot` with computed value `root`. */
+    def liftF(fieldName: String, root: F[Any], mutation: Mutation = Mutation.None)(implicit pos: SourcePos): ValueRoot =
+      new ValueRoot(None, fieldName, root, mutation)
+
   }
 
   sealed trait ValueField0[T] extends FieldMapping
