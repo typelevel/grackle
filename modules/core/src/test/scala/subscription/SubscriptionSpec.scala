@@ -120,7 +120,7 @@ final class SubscriptionSpec extends CatsSuite {
           map  = mapping(ref)
           fib <- map.compileAndRunAll("subscription { watch }").take(3).compile.toList.start
           _   <- map.compileAndRunOne("mutation { put(n: 123) }")
-          _   <- IO.sleep(100.milli)
+          _   <- IO.sleep(100.milli) // this is the best we can do for now; I will try to improve in a followup
           _   <- map.compileAndRunOne("mutation { put(n: 42) }")
           _   <- IO.sleep(100.milli)
           _   <- map.compileAndRunOne("mutation { put(n: 77) }")
