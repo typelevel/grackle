@@ -14,4 +14,4 @@ jobs:
         with:
           java-version: adopt@1.11
       - name: Run compile
-        run: csbt headerCheck +compile +test +doc
+        run: sbt headerCheck +compile +test +doc
