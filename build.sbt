@@ -1,20 +1,20 @@
-val attoVersion                 = "0.9.2"
-val catsVersion                 = "2.4.2"
-val catsEffectVersion           = "2.3.3"
-val catsTestkitScalaTestVersion = "2.1.2"
+val attoVersion                 = "0.9.3"
+val catsVersion                 = "2.5.0"
+val catsEffectVersion           = "2.4.1"
+val catsTestkitScalaTestVersion = "2.1.3"
 val circeVersion                = "0.13.0"
 val circeOpticsVersion          = "0.13.0"
-val doobieVersion               = "0.10.0"
+val doobieVersion               = "0.12.1"
 val fs2Version                  = "2.5.4"
-val http4sVersion               = "0.21.20"
+val http4sVersion               = "0.21.22"
 val kindProjectorVersion        = "0.11.3"
 val logbackVersion              = "1.2.3"
 val log4catsVersion             = "1.1.1"
-val skunkVersion                = "0.0.24"
-val shapelessVersion            = "2.3.3"
-val sourcePosVersion            = "0.1.1"
+val skunkVersion                = "0.0.25"
+val shapelessVersion            = "2.3.4"
+val sourcePosVersion            = "0.1.2"
 val testContainersVersion       = "0.39.3"
-val typenameVersion             = "0.1.5"
+val typenameVersion             = "0.1.6"
 
 inThisBuild(Seq(
   homepage := Some(url("https://github.com/gemini-hlsw/gsp-graphql")),
@@ -31,7 +31,7 @@ lazy val commonSettings = Seq(
 )
 
 lazy val noPublishSettings = Seq(
-  skip in publish := true
+  publish / skip := true
 )
 
 lazy val modules: List[ProjectReference] = List(
@@ -50,7 +50,7 @@ lazy val `gsp-graphql` = project.in(file("."))
   .aggregate(modules:_*)
   .disablePlugins(RevolverPlugin)
   .settings(
-    makeSite := { (makeSite in docs).value }
+    makeSite := { (docs / makeSite).value }
   )
 
 lazy val core = project
@@ -116,8 +116,8 @@ lazy val doobie = project
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-doobie",
-    fork in Test := true,
-    parallelExecution in Test := false,
+    Test / fork := true,
+    Test / parallelExecution := false,
     libraryDependencies ++= Seq(
       "org.tpolecat"      %% "doobie-core"           % doobieVersion,
       "org.tpolecat"      %% "doobie-postgres-circe" % doobieVersion,
@@ -132,8 +132,8 @@ lazy val skunk = project
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-skunk",
-    fork in Test := true,
-    parallelExecution in Test := false,
+    Test / fork := true,
+    Test / parallelExecution := false,
     libraryDependencies ++= Seq(
       "org.tpolecat"      %% "skunk-core"  % skunkVersion,
       "org.tpolecat"      %% "skunk-circe" % skunkVersion,
@@ -186,7 +186,7 @@ lazy val docs = project
     paradoxTheme         := Some(builtinParadoxTheme("generic")),
     previewLaunchBrowser := false,
     paradoxProperties ++= Map(
-      "scala-versions"          -> (crossScalaVersions in core).value.map(CrossVersion.partialVersion).flatten.map(_._2).mkString("2.", "/", ""),
+      "scala-versions"          -> (core / crossScalaVersions).value.map(CrossVersion.partialVersion).flatten.map(_._2).mkString("2.", "/", ""),
       "org"                     -> organization.value,
       "scala.binary.version"    -> s"2.${CrossVersion.partialVersion(scalaVersion.value).get._2}",
       "core-dep"                -> s"${(core / name).value}_2.${CrossVersion.partialVersion(scalaVersion.value).get._2}",

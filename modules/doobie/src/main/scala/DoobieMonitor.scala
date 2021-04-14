@@ -24,21 +24,6 @@ case class DoobieStats(
 
 object DoobieMonitor {
 
-  private implicit class FragmentOps(f: Fragment) {
-
-    def sql: String = {
-      val m = f.getClass.getDeclaredField("sql")
-      m.setAccessible(true)
-      m.get(f).asInstanceOf[String]
-    }
-
-    def args: List[Any] = {
-      val m = f.getClass.getDeclaredMethod("args")
-      m.setAccessible(true)
-      m.invoke(f).asInstanceOf[List[Any]]
-    }
-  }
-
   def noopMonitor[F[_]: Applicative]: DoobieMonitor[F] =
     new DoobieMonitor[F] {
       def stageStarted: F[Unit] = ().pure[F]
@@ -56,8 +41,8 @@ object DoobieMonitor {
       def queryMapped(query: Query, fragment: Fragment, table: List[Row]): F[Unit] =
         logger.info(
           s"""query: $query
-             |sql: ${fragment.sql}
-             |args: ${fragment.args.mkString(", ")}
+             |sql: ${fragment.internals.sql}
+             |args: ${fragment.internals.elements.mkString(", ")}
              |fetched ${table.size} row(s) of ${table.headOption.map(_.elems.size).getOrElse(0)} column(s)
            """.stripMargin)
 
@@ -72,7 +57,7 @@ object DoobieMonitor {
     Ref[F].of(List.empty[SqlStatsMonitor.SqlStats]).map { ref =>
       new SqlStatsMonitor[F, Fragment](ref) {
         def inspect(fragment: Fragment): (String, List[Any]) =
-          (fragment.sql, fragment.args)
+          (fragment.internals.sql, fragment.internals.elements)
       }
     }
 
