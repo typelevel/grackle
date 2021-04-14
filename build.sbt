@@ -8,6 +8,7 @@ val doobieVersion               = "0.10.0"
 val fs2Version                  = "2.5.4"
 val http4sVersion               = "0.21.20"
 val kindProjectorVersion        = "0.11.3"
+val literallyVersion            = "1.0.0"
 val logbackVersion              = "1.2.3"
 val log4catsVersion             = "1.1.1"
 val skunkVersion                = "0.0.24"
@@ -63,6 +64,7 @@ lazy val core = project
     libraryDependencies ++= Seq(
       "org.tpolecat"      %% "atto-core"              % attoVersion,
       "org.typelevel"     %% "cats-core"              % catsVersion,
+      "org.typelevel"     %% "literally"              % literallyVersion,
       "io.circe"          %% "circe-core"             % circeVersion,
       "io.circe"          %% "circe-literal"          % circeVersion,
       "io.circe"          %% "circe-optics"           % circeOpticsVersion,
