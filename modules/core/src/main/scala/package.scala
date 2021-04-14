@@ -6,6 +6,7 @@ package edu.gemini
 import cats.data.IorNec
 import io.circe.Json
 import cats.data.Ior
+import cats.data.NonEmptyChain
 
 package object grackle {
   /**
@@ -14,11 +15,21 @@ package object grackle {
    * A result of type `T`, a non-empty collection of errors encoded as
    * Json, or both.
    */
-  type Result[T] = IorNec[Json, T]
+  type Result[+T] = IorNec[Json, T]
 
   object Result {
-    // A successful result, infers better than `x.rightIor`
+
+    val unit: Result[Unit] =
+      apply(())
+
     def apply[A](a: A): Result[A] = Ior.right(a)
+
+    def failure[A](s: String): Result[A] =
+      failure(Json.fromString(s))
+
+    def failure[A](j: Json): Result[A] =
+      Ior.left(NonEmptyChain(j))
+
   }
 
 }
