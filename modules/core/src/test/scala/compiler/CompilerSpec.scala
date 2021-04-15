@@ -7,8 +7,6 @@ import cats.Id
 import cats.data.{Chain, Ior}
 import cats.implicits._
 import cats.tests.CatsSuite
-import io.circe.literal.JsonStringContext
-
 import edu.gemini.grackle._
 import Query._, Predicate._, Value._, UntypedOperation._
 import QueryCompiler._, ComponentElaborator.TrivialJoin
@@ -220,11 +218,7 @@ final class CompilerSuite extends CatsSuite {
       }
     """
 
-    val expected = json"""
-      {
-        "message" : "Non-leaf field 'character' of Query must have a non-empty subselection set"
-      }
-    """
+    val expected = Problem("Non-leaf field 'character' of Query must have a non-empty subselection set")
 
     val res = AtomicMapping.compiler.compile(query)
 
@@ -240,11 +234,7 @@ final class CompilerSuite extends CatsSuite {
       }
     """
 
-    val expected = json"""
-      {
-        "message" : "Unknown field 'foo' in select"
-      }
-    """
+    val expected = Problem("Unknown field 'foo' in select")
 
     val res = AtomicMapping.compiler.compile(query)
 
@@ -262,11 +252,7 @@ final class CompilerSuite extends CatsSuite {
       }
     """
 
-    val expected = json"""
-      {
-        "message" : "Leaf field 'name' of Character must have an empty subselection set"
-      }
-    """
+    val expected = Problem("Leaf field 'name' of Character must have an empty subselection set")
 
     val res = AtomicMapping.compiler.compile(query)
 
@@ -284,11 +270,7 @@ final class CompilerSuite extends CatsSuite {
       }
     """
 
-    val expected = json"""
-      {
-        "message" : "Leaf field 'name' of Character must have an empty subselection set"
-      }
-    """
+    val expected = Problem("Leaf field 'name' of Character must have an empty subselection set")
 
     val res = AtomicMapping.compiler.compile(query)
 
@@ -304,11 +286,7 @@ final class CompilerSuite extends CatsSuite {
       }
     """
 
-    val expected = json"""
-      {
-        "message" : "Unknown argument(s) 'quux' in field character of type Query"
-      }
-    """
+    val expected = Problem("Unknown argument(s) 'quux' in field character of type Query")
 
     val res = AtomicMapping.compiler.compile(query)
 

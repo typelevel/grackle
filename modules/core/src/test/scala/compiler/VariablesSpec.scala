@@ -185,12 +185,7 @@ final class VariablesSuite extends CatsSuite {
       }
     """
 
-    val expected =
-      json"""
-        {
-          "message" : "Unknown field(s) 'quux' in input object value of type Pattern"
-        }
-      """
+    val expected = Problem("Unknown field(s) 'quux' in input object value of type Pattern")
 
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)

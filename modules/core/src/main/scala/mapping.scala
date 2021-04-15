@@ -7,6 +7,7 @@ import cats.Monad
 import cats.data.{ Ior, IorT }
 import cats.implicits._
 import io.circe.{Encoder, Json}
+import io.circe.syntax._
 import org.tpolecat.typename._
 import org.tpolecat.sourcepos.SourcePos
 
@@ -50,8 +51,8 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
   ): F[Json] =
     compileAndRunAll(text, name, untypedVars, introspectionLevel, env).compile.toList.map {
       case List(j) => j
-      case Nil     => QueryInterpreter.mkError("Result stream was empty.")
-      case js      => QueryInterpreter.mkError(s"Result stream contained ${js.length} results; expected exactly one.")
+      case Nil     => QueryInterpreter.mkError("Result stream was empty.").asJson
+      case js      => QueryInterpreter.mkError(s"Result stream contained ${js.length} results; expected exactly one.").asJson
     }
 
   def compileAndRunAll(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): Stream[F,Json] =
