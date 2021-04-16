@@ -6,7 +6,6 @@ package compiler
 import cats.Id
 import cats.data.{Chain, Ior}
 import cats.tests.CatsSuite
-import io.circe.literal.JsonStringContext
 
 import edu.gemini.grackle._
 import Query._, Value._
@@ -104,12 +103,7 @@ final class InputValuesSuite extends CatsSuite {
       }
     """
 
-    val expected =
-      json"""
-        {
-          "message" : "Unknown field(s) 'wibble' in input object value of type InObj"
-        }
-      """
+    val expected = Problem("Unknown field(s) 'wibble' in input object value of type InObj")
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
     //println(compiled)

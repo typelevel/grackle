@@ -5,10 +5,8 @@ package scalars
 
 
 import java.time.Duration
-import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import java.util.UUID
 
@@ -19,9 +17,6 @@ import cats.Order
 import cats.effect.Sync
 import cats.implicits._
 import doobie.Transactor
-import doobie.implicits.javatime.JavaLocalTimeMeta
-import doobie.implicits.legacy.instant._
-import doobie.implicits.legacy.localdate._
 import doobie.postgres.implicits._
 import doobie.util.meta.Meta
 import edu.gemini.grackle._
@@ -86,9 +81,6 @@ object MovieData {
 
   implicit val durationMeta: Meta[Duration] =
     Meta[Long].timap(Duration.ofMillis)(_.toMillis)
-
-  implicit val zonedDateTimeMeta: Meta[ZonedDateTime] =
-    Meta[Instant].timap(i => ZonedDateTime.ofInstant(i, ZoneOffset.UTC))(_.toInstant)
 
   implicit val featureListMeta: Meta[List[Feature]] =
     Meta.Advanced.array[String]("VARCHAR", "_VARCHAR").imap(_.toList.map(Feature.fromString))(_.map(_.toString).toArray)

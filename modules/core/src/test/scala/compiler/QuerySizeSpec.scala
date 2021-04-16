@@ -5,8 +5,7 @@ package compiler
 
 import cats.data.{Chain, Ior}
 import cats.tests.CatsSuite
-import io.circe.literal.JsonStringContext
-
+import edu.gemini.grackle.Problem
 import starwars.StarWarsMapping
 
 class QuerySizeSpec extends CatsSuite {
@@ -204,12 +203,7 @@ class QuerySizeSpec extends CatsSuite {
       }
     """
 
-    val expected =
-      json"""
-        {
-          "message" : "Query is too deep: depth is 8 levels, maximum is 5"
-        }
-      """
+    val expected = Problem("Query is too deep: depth is 8 levels, maximum is 5")
 
     val res = StarWarsMapping.compiler.compile(query)
     assert(res == Ior.Left(Chain(expected)))
@@ -234,12 +228,7 @@ class QuerySizeSpec extends CatsSuite {
     """
 
 
-    val expected =
-      json"""
-        {
-          "message" : "Query is too wide: width is 6 leaves, maximum is 5"
-        }
-      """
+    val expected = Problem("Query is too wide: width is 6 leaves, maximum is 5")
 
     val res = StarWarsMapping.compiler.compile(query)
     assert(res == Ior.Left(Chain(expected)))

@@ -1175,7 +1175,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   override val interpreter: QueryInterpreter[F] =
     new QueryInterpreter(this) {
 
-      override def runRootValues(queries: List[(Query, Type, Env)]): Stream[F,(Chain[Json], List[ProtoJson])] =
+      override def runRootValues(queries: List[(Query, Type, Env)]): Stream[F,(Chain[Problem], List[ProtoJson])] =
         for {
           _   <- Stream.eval(monitor.stageStarted)
           res <- runRootValues0(queries)
@@ -1188,7 +1188,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           _   <- Stream.eval(monitor.resultComputed(res))
         } yield res
 
-      def runRootValues0(queries: List[(Query, Type, Env)]): Stream[F,(Chain[Json], List[ProtoJson])] = {
+      def runRootValues0(queries: List[(Query, Type, Env)]): Stream[F,(Chain[Problem], List[ProtoJson])] = {
         if (queries.length === 1)
           super.runRootValues(queries)
         else {

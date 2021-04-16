@@ -991,7 +991,7 @@ object SchemaValidator {
     errors.map(undefinedResults.addLeft(_)).getOrElse(undefinedResults)
   }
 
-  def validateImpls(definitions: List[TypeDefinition]): List[Json] = {
+  def validateImpls(definitions: List[TypeDefinition]): List[Problem] = {
     val interfaces = definitions.collect {
       case a: InterfaceTypeDefinition => a
     }
@@ -1020,7 +1020,7 @@ object SchemaValidator {
     interfaceErrors ++ objectErrors
   }
 
-  def checkImplementation(name: Ast.Name, implementorFields: List[Ast.FieldDefinition], interface: InterfaceTypeDefinition): List[Json] = {
+  def checkImplementation(name: Ast.Name, implementorFields: List[Ast.FieldDefinition], interface: InterfaceTypeDefinition): List[Problem] = {
     interface.fields.flatMap { ifaceField =>
       implementorFields.find(_.name == ifaceField.name).map { matching =>
         if (ifaceField.tpe != matching.tpe) {
@@ -1038,7 +1038,7 @@ object SchemaValidator {
     arg.name == implArg.name && arg.tpe == implArg.tpe
   }
 
-  def checkForEnumValueDuplicates(definitions: List[TypeDefinition]): List[Json] =
+  def checkForEnumValueDuplicates(definitions: List[TypeDefinition]): List[Problem] =
   {
     val enums = definitions.collect[EnumTypeDefinition] {
       case a: EnumTypeDefinition => a

@@ -11,7 +11,7 @@ import cats.Monoid
 import cats.data.{ Chain, Ior, IorT, Kleisli, NonEmptyChain }
 import cats.implicits._
 import io.circe.Json
-import io.circe.literal.JsonStringContext
+import io.circe.syntax._
 import fs2.Stream
 
 import Cursor.Env
@@ -161,9 +161,9 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
    *  to benefit from combining queries may do so by overriding this
    *  method to implement their specific combinging logic.
    */
-  def runRootValues(queries: List[(Query, Type, Env)]): Stream[F, (Chain[Json], List[ProtoJson])] =
+  def runRootValues(queries: List[(Query, Type, Env)]): Stream[F, (Chain[Problem], List[ProtoJson])] =
     queries.traverse((runRootValue _).tupled).map { rs =>
-      (rs.foldLeft((Chain.empty[Json], List.empty[ProtoJson])) {
+      (rs.foldLeft((Chain.empty[Problem], List.empty[ProtoJson])) {
         case ((errors, elems), elem) =>
           elem match {
             case Ior.Left(errs) => (errs.toChain ++ errors, ProtoJson.fromJson(Json.Null) :: elems)
@@ -598,7 +598,7 @@ object QueryInterpreter {
    *  Errors are aggregated across all the results and are accumulated
    *  on the `Left` of the result.
    */
-  def completeAll[F[_]](pjs: List[ProtoJson]): Stream[F, (Chain[Json], List[Json])] = {
+  def completeAll[F[_]](pjs: List[ProtoJson]): Stream[F, (Chain[Problem], List[Json])] = {
     def gatherDeferred(pj: ProtoJson): List[DeferredJson] = {
       @tailrec
       def loop(pending: Chain[ProtoJson], acc: List[DeferredJson]): List[DeferredJson] =
@@ -651,7 +651,7 @@ object QueryInterpreter {
     val collected = pjs.flatMap(gatherDeferred)
 
     val (good, bad, errors0) =
-      collected.foldLeft((List.empty[(DeferredJson, QueryInterpreter[F], (Query, Type, Env))], List.empty[DeferredJson], Chain.empty[Json])) {
+      collected.foldLeft((List.empty[(DeferredJson, QueryInterpreter[F], (Query, Type, Env))], List.empty[DeferredJson], Chain.empty[Problem])) {
         case ((good, bad, errors), d@StagedJson(interpreter, query, rootTpe, env)) =>
           ((d, interpreter.asInstanceOf[QueryInterpreter[F]], (query, rootTpe, env)) :: good, bad, errors)
       }
@@ -685,13 +685,13 @@ object QueryInterpreter {
    * Construct a GraphQL response from the possibly absent result `data`
    * and a collection of errors.
    */
-  def mkResponse(data: Option[Json], errors: List[Json]): Json = {
+  def mkResponse(data: Option[Json], errors: List[Problem]): Json = {
     val dataField = data.map { value => ("data", value) }.toList
     val fields =
       (dataField, errors) match {
-        case (Nil, Nil)   => List(("errors", Json.fromValues(List(mkError("Invalid query")))))
+        case (Nil, Nil)   => List(("errors", Json.fromValues(List(mkError("Invalid query").asJson))))
         case (data, Nil)  => data
-        case (data, errs) => ("errors", Json.fromValues(errs)) :: data
+        case (data, errs) => ("errors", errs.asJson) :: data
       }
     Json.fromFields(fields)
   }
@@ -708,22 +708,10 @@ object QueryInterpreter {
     mkResponse(None, result.left.map(_.toList).getOrElse(Nil))
 
   /** Construct a GraphQL error object */
-  def mkError(message: String, locations: List[(Int, Int)] = Nil, path: List[String] = Nil): Json = {
-    val locationsField =
-      if (locations.isEmpty) Nil
-      else
-        List((
-          "locations",
-          Json.fromValues(locations.map { case (line, col) => json""" { "line": $line, "col": $col } """ })
-        ))
-    val pathField =
-      if (path.isEmpty) Nil
-      else List(("path", Json.fromValues(path.map(Json.fromString))))
+  def mkError(message: String, locations: List[(Int, Int)] = Nil, path: List[String] = Nil): Problem =
+    Problem(message, locations, path)
 
-    Json.fromFields(("message", Json.fromString(message)) :: locationsField ++ pathField)
-  }
-
-  def mkOneError(message: String, locations: List[(Int, Int)] = Nil, path: List[String] = Nil): NonEmptyChain[Json] =
+  def mkOneError(message: String, locations: List[(Int, Int)] = Nil, path: List[String] = Nil): NonEmptyChain[Problem] =
     NonEmptyChain.one(mkError(message, locations, path))
 
   /** Construct a GraphQL error object as the left hand side of a `Result` */
