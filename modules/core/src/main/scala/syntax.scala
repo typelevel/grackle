@@ -20,7 +20,7 @@ object syntax {
     def validate(c: Context)(s: String): Either[String,c.Expr[Schema]] = {
       import c.universe._
       Schema(s).toEither.bimap(
-        nec => s"Invalid schema: ${Json.fromValues(nec.toList)}",
+        nec => s"Invalid schema:${nec.toList.distinct.mkString("\n  🐞 ", "\n  🐞 ", "\n")}",
         _ => c.Expr(q"_root_.edu.gemini.grackle.Schema($s).right.get")
       )
     }

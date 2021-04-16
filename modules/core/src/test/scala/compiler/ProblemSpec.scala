@@ -83,4 +83,28 @@ final class ProblemSpec extends CatsSuite {
     )
   }
 
+  test("toString (full)") {
+    assert(
+      Problem("foo", List(1 -> 2, 5 -> 6), List("bar", "baz")).toString == "foo (at bar/baz: 1..2, 5..6)"
+    )
+  }
+
+  test("toString (no path)") {
+    assert(
+      Problem("foo", List(1 -> 2, 5 -> 6), Nil).toString == "foo (at 1..2, 5..6)"
+    )
+  }
+
+  test("toString (no locations)") {
+    assert(
+      Problem("foo", Nil, List("bar", "baz")).toString == "foo (at bar/baz)"
+    )
+  }
+
+  test("toString (message only)") {
+    assert(
+      Problem("foo", Nil, Nil).toString == "foo"
+    )
+  }
+
 }
