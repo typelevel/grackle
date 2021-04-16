@@ -4,7 +4,6 @@
 package edu.gemini
 
 import cats.data.IorNec
-import io.circe.Json
 import cats.data.Ior
 import cats.data.NonEmptyChain
 
@@ -15,7 +14,7 @@ package object grackle {
    * A result of type `T`, a non-empty collection of errors encoded as
    * Json, or both.
    */
-  type Result[+T] = IorNec[Json, T]
+  type Result[+T] = IorNec[Problem, T]
 
   object Result {
 
@@ -25,10 +24,10 @@ package object grackle {
     def apply[A](a: A): Result[A] = Ior.right(a)
 
     def failure[A](s: String): Result[A] =
-      failure(Json.fromString(s))
+      failure(Problem(s))
 
-    def failure[A](j: Json): Result[A] =
-      Ior.left(NonEmptyChain(j))
+    def failure[A](p: Problem): Result[A] =
+      Ior.left(NonEmptyChain(p))
 
   }
 
