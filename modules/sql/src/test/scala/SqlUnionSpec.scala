@@ -6,7 +6,7 @@ package grackle.test
 import cats.effect.IO
 import edu.gemini.grackle.QueryExecutor
 import io.circe.Json
-import io.circe.literal.JsonStringContext
+import edu.gemini.grackle.syntax._
 import org.scalatest.funsuite.AnyFunSuite
 
 trait SqlUnionSpec extends AnyFunSuite {

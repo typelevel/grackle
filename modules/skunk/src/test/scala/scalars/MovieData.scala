@@ -15,6 +15,7 @@ import cats.syntax.all._
 import io.circe.Encoder
 
 import edu.gemini.grackle._, skunk._
+import edu.gemini.grackle.syntax._
 import Query._, Predicate._, Value._
 import QueryCompiler._
 import _root_.skunk.Codec
@@ -104,45 +105,43 @@ trait MovieMapping[F[_]] extends SkunkMapping[F] {
   import MovieData._
 
   val schema =
-    Schema(
-      """
-        type Query {
-          movieById(id: UUID!): Movie
-          moviesByGenre(genre: Genre!): [Movie!]!
-          moviesReleasedBetween(from: Date!, to: Date!): [Movie!]!
-          moviesLongerThan(duration: Interval!): [Movie!]!
-          moviesShownLaterThan(time: Time!): [Movie!]!
-          moviesShownBetween(from: DateTime!, to: DateTime!): [Movie!]!
-          longMovies: [Movie!]!
-        }
-        scalar UUID
-        scalar Time
-        scalar Date
-        scalar DateTime
-        scalar Interval
-        enum Genre {
-          DRAMA
-          ACTION
-          COMEDY
-        }
-        enum Feature {
-          HD
-          HLS
-        }
-        type Movie {
-          id: UUID!
-          title: String!
-          genre: Genre!
-          releaseDate: Date!
-          showTime: Time!
-          nextShowing: DateTime!
-          nextEnding: DateTime!
-          duration: Interval!
-          categories: [String!]!
-          features: [Feature!]!
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        movieById(id: UUID!): Movie
+        moviesByGenre(genre: Genre!): [Movie!]!
+        moviesReleasedBetween(from: Date!, to: Date!): [Movie!]!
+        moviesLongerThan(duration: Interval!): [Movie!]!
+        moviesShownLaterThan(time: Time!): [Movie!]!
+        moviesShownBetween(from: DateTime!, to: DateTime!): [Movie!]!
+        longMovies: [Movie!]!
+      }
+      scalar UUID
+      scalar Time
+      scalar Date
+      scalar DateTime
+      scalar Interval
+      enum Genre {
+        DRAMA
+        ACTION
+        COMEDY
+      }
+      enum Feature {
+        HD
+        HLS
+      }
+      type Movie {
+        id: UUID!
+        title: String!
+        genre: Genre!
+        releaseDate: Date!
+        showTime: Time!
+        nextShowing: DateTime!
+        nextEnding: DateTime!
+        duration: Interval!
+        categories: [String!]!
+        features: [Feature!]!
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val MovieType = schema.ref("Movie")

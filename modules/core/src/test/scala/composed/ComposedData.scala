@@ -7,6 +7,7 @@ import cats.Id
 import cats.implicits._
 
 import edu.gemini.grackle._
+import edu.gemini.grackle.syntax._
 import Query._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.mkErrorResult
@@ -29,17 +30,15 @@ object CurrencyMapping extends ValueMapping[Id] {
   import CurrencyData._
 
   val schema =
-    Schema(
-      """
-        type Query {
-          fx(code: String): Currency
-        }
-        type Currency {
-          code: String!
-          exchangeRate: Float!
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        fx(code: String): Currency
+      }
+      type Currency {
+        code: String!
+        exchangeRate: Float!
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val CurrencyType = schema.ref("Currency")
@@ -91,18 +90,16 @@ object CountryMapping extends ValueMapping[Id] {
   import CountryData._
 
   val schema =
-    Schema(
-      """
-        type Query {
-          country(code: String): Country
-          countries: [Country!]!
-        }
-        type Country {
-          code: String!
-          name: String!
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        country(code: String): Country
+        countries: [Country!]!
+      }
+      type Country {
+        code: String!
+        name: String!
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val CountryType = schema.ref("Country")
@@ -141,24 +138,22 @@ object CountryMapping extends ValueMapping[Id] {
 
 object ComposedMapping extends Mapping[Id] {
   val schema =
-    Schema(
-      """
-        type Query {
-          country(code: String): Country
-          fx(code: String): Currency
-          countries: [Country!]!
-        }
-        type Currency {
-          code: String!
-          exchangeRate: Float!
-        }
-        type Country {
-          code: String!
-          name: String!
-          currency: Currency!
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        country(code: String): Country
+        fx(code: String): Currency
+        countries: [Country!]!
+      }
+      type Currency {
+        code: String!
+        exchangeRate: Float!
+      }
+      type Country {
+        code: String!
+        name: String!
+        currency: Currency!
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val CountryType = schema.ref("Country")

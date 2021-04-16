@@ -5,7 +5,7 @@ package coalesce
 
 import cats.effect.Sync
 
-import edu.gemini.grackle._, skunk._
+import edu.gemini.grackle._, skunk._, syntax._
 import _root_.skunk.codec.all._
 import cats.effect.Resource
 import _root_.skunk.Session
@@ -13,26 +13,24 @@ import _root_.skunk.Session
 trait CoalesceMapping[F[_]] extends SkunkMapping[F] {
 
   val schema =
-    Schema(
-      """
-        type Query {
-          r: [R!]!
-        }
-        type R {
-          id: String!
-          ca: [CA!]!
-          cb: [CB!]!
-        }
-        type CA {
-          id: String!
-          a: Int!
-        }
-        type CB {
-          id: String!
-          b: Boolean!
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        r: [R!]!
+      }
+      type R {
+        id: String!
+        ca: [CA!]!
+        cb: [CB!]!
+      }
+      type CA {
+        id: String!
+        a: Int!
+      }
+      type CB {
+        id: String!
+        b: Boolean!
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val RType = schema.ref("R")

@@ -8,6 +8,7 @@ val doobieVersion               = "0.12.1"
 val fs2Version                  = "2.5.4"
 val http4sVersion               = "0.21.22"
 val kindProjectorVersion        = "0.11.3"
+val literallyVersion            = "1.0.0"
 val logbackVersion              = "1.2.3"
 val log4catsVersion             = "1.1.1"
 val skunkVersion                = "0.0.25"
@@ -63,8 +64,8 @@ lazy val core = project
     libraryDependencies ++= Seq(
       "org.tpolecat"      %% "atto-core"              % attoVersion,
       "org.typelevel"     %% "cats-core"              % catsVersion,
+      "org.typelevel"     %% "literally"              % literallyVersion,
       "io.circe"          %% "circe-core"             % circeVersion,
-      "io.circe"          %% "circe-literal"          % circeVersion,
       "io.circe"          %% "circe-optics"           % circeOpticsVersion,
       "io.circe"          %% "circe-parser"           % circeVersion,
       "org.tpolecat"      %% "typename"               % typenameVersion,
@@ -85,7 +86,6 @@ lazy val circe = project
       "org.tpolecat"      %% "atto-core"              % attoVersion,
       "org.typelevel"     %% "cats-core"              % catsVersion,
       "io.circe"          %% "circe-core"             % circeVersion,
-      "io.circe"          %% "circe-literal"          % circeVersion,
       "io.circe"          %% "circe-optics"           % circeOpticsVersion,
       "io.circe"          %% "circe-parser"           % circeVersion
     )
@@ -152,7 +152,6 @@ lazy val generic = project
       "org.tpolecat"      %% "atto-core"              % attoVersion,
       "org.typelevel"     %% "cats-core"              % catsVersion,
       "io.circe"          %% "circe-core"             % circeVersion,
-      "io.circe"          %% "circe-literal"          % circeVersion,
       "io.circe"          %% "circe-optics"           % circeOpticsVersion,
       "io.circe"          %% "circe-parser"           % circeVersion,
       "com.chuusai"       %% "shapeless"              % shapelessVersion

@@ -9,50 +9,49 @@ import cats.effect.Sync
 import cats.kernel.Eq
 import edu.gemini.grackle._
 import edu.gemini.grackle.doobie._
+import edu.gemini.grackle.syntax._
 import io.circe.Encoder
 
 trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
   val schema =
-    Schema(
-      """
-        type Query {
-          entities: [Entity!]!
-        }
-        interface Entity {
-          id: ID!
-          entityType: EntityType!
-          title: String
-          synopses: Synopses
-        }
-        type Film implements Entity {
-          id: ID!
-          entityType: EntityType!
-          title: String
-          synopses: Synopses
-          rating: String
-        }
-        type Series implements Entity {
-          id: ID!
-          entityType: EntityType!
-          title: String
-          numberOfEpisodes: Int
-          episodes: [Episode!]!
-        }
-        type Episode {
-          id: ID!
-          title: String
-          synopses: Synopses
-        }
-        type Synopses {
-          short: String
-          long: String
-        }
-        enum EntityType {
-          FILM
-          SERIES
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        entities: [Entity!]!
+      }
+      interface Entity {
+        id: ID!
+        entityType: EntityType!
+        title: String
+        synopses: Synopses
+      }
+      type Film implements Entity {
+        id: ID!
+        entityType: EntityType!
+        title: String
+        synopses: Synopses
+        rating: String
+      }
+      type Series implements Entity {
+        id: ID!
+        entityType: EntityType!
+        title: String
+        numberOfEpisodes: Int
+        episodes: [Episode!]!
+      }
+      type Episode {
+        id: ID!
+        title: String
+        synopses: Synopses
+      }
+      type Synopses {
+        short: String
+        long: String
+      }
+      enum EntityType {
+        FILM
+        SERIES
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val EType = schema.ref("Entity")

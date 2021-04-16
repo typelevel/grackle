@@ -7,36 +7,33 @@ import org.scalatest.funsuite.AnyFunSuite
 import edu.gemini.grackle.QueryExecutor
 import cats.effect.IO
 import io.circe.Json
-import io.circe.literal._
-import edu.gemini.grackle.Schema
+import edu.gemini.grackle.syntax._
 
 trait SqlMutationSchema {
 
   val schema =
-    Schema(
-      """
-        type Query {
-          city(id: Int!): City
-        }
-        type Mutation {
-          updatePopulation(id: Int!, population: Int!): City
-          createCity(
-            name: String!
-            countryCode: String!
-            population: Int!
-          ): City
-        }
-        type City {
+    schema"""
+      type Query {
+        city(id: Int!): City
+      }
+      type Mutation {
+        updatePopulation(id: Int!, population: Int!): City
+        createCity(
           name: String!
-          country: Country!
+          countryCode: String!
           population: Int!
-        }
-        type Country {
-          name: String!
-          cities: [City!]!
-        }
-      """
-    ).right.get
+        ): City
+      }
+      type City {
+        name: String!
+        country: Country!
+        population: Int!
+      }
+      type Country {
+        name: String!
+        cities: [City!]!
+      }
+    """
 
 }
 

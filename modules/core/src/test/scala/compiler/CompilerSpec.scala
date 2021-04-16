@@ -8,6 +8,7 @@ import cats.data.{Chain, Ior}
 import cats.implicits._
 import cats.tests.CatsSuite
 import edu.gemini.grackle._
+import edu.gemini.grackle.syntax._
 import Query._, Predicate._, Value._, UntypedOperation._
 import QueryCompiler._, ComponentElaborator.TrivialJoin
 
@@ -347,18 +348,16 @@ final class CompilerSuite extends CatsSuite {
 
 object AtomicMapping extends Mapping[Id] {
   val schema =
-    Schema(
-      """
-        type Query {
-          character(id: String!): Character
-        }
-        type Character {
-          id: String!
-          name: String
-          friends: [Character!]
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        character(id: String!): Character
+      }
+      type Character {
+        id: String!
+        name: String
+        friends: [Character!]
+      }
+    """
 
   val QueryType = schema.ref("Query")
 
@@ -373,7 +372,7 @@ object AtomicMapping extends Mapping[Id] {
 }
 
 trait DummyComponent extends Mapping[Id] {
-  val schema = Schema("type Query { dummy: Int }").right.get
+  val schema = schema"type Query { dummy: Int }"
   val typeMappings = Nil
 }
 
@@ -383,30 +382,28 @@ object ComponentC extends DummyComponent
 
 object ComposedMapping extends Mapping[Id] {
   val schema =
-    Schema(
-      """
-        type Query {
-          componenta: ComponentA!
-        }
-        type ComponentA {
-          fielda1: String!
-          fielda2: FieldA2
-        }
-        type FieldA2 {
-          componentb: ComponentB
-        }
-        type ComponentB {
-          fieldb1: String!
-          fieldb2: FieldB2
-        }
-        type FieldB2 {
-          componentc: ComponentC
-        }
-        type ComponentC {
-          fieldc1: Int
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        componenta: ComponentA!
+      }
+      type ComponentA {
+        fielda1: String!
+        fielda2: FieldA2
+      }
+      type FieldA2 {
+        componentb: ComponentB
+      }
+      type ComponentB {
+        fieldb1: String!
+        fieldb2: FieldB2
+      }
+      type FieldB2 {
+        componentc: ComponentC
+      }
+      type ComponentC {
+        fieldc1: Int
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val FieldA2Type = schema.ref("FieldA2")

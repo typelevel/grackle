@@ -5,7 +5,7 @@ package edu.gemini.grackle
 package circetests
 
 import cats.tests.CatsSuite
-import io.circe.literal.JsonStringContext
+import edu.gemini.grackle.syntax._
 
 final class CirceSpec extends CatsSuite {
   test("scalars") {

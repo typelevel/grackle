@@ -12,6 +12,7 @@ import cats.implicits._
 import edu.gemini.grackle._
 import edu.gemini.grackle.doobie._
 import edu.gemini.grackle.sql.Like
+import edu.gemini.grackle.syntax._
 
 import Query._
 import Predicate._
@@ -40,18 +41,16 @@ class CurrencyMapping[F[_] : Monad] extends ValueMapping[F] {
   import CurrencyData._
 
   val schema =
-    Schema(
-      """
-        type Query {
-          allCurrencies: [Currency!]!
-        }
-        type Currency {
-          code: String!
-          exchangeRate: Float!
-          countryCode: String!
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        allCurrencies: [Currency!]!
+      }
+      type Currency {
+        code: String!
+        exchangeRate: Float!
+        countryCode: String!
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val CurrencyType = schema.ref("Currency")
@@ -86,45 +85,43 @@ object CurrencyMapping {
 trait WorldMapping[F[_]] extends DoobieMapping[F] {
 
   val schema =
-    Schema(
-      """
-        type Query {
-          cities(namePattern: String = "%"): [City!]
-          country(code: String): Country
-          countries: [Country!]
-        }
-        type City {
-          name: String!
-          country: Country!
-          district: String!
-          population: Int!
-        }
-        type Language {
-          language: String!
-          isOfficial: Boolean!
-          percentage: Float!
-          countries: [Country!]!
-        }
-        type Country {
-          name: String!
-          continent: String!
-          region: String!
-          surfacearea: Float!
-          indepyear: Int
-          population: Int!
-          lifeexpectancy: Float
-          gnp: String
-          gnpold: String
-          localname: String!
-          governmentform: String!
-          headofstate: String
-          capitalId: Int
-          code2: String!
-          cities: [City!]!
-          languages: [Language!]!
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        cities(namePattern: String = "%"): [City!]
+        country(code: String): Country
+        countries: [Country!]
+      }
+      type City {
+        name: String!
+        country: Country!
+        district: String!
+        population: Int!
+      }
+      type Language {
+        language: String!
+        isOfficial: Boolean!
+        percentage: Float!
+        countries: [Country!]!
+      }
+      type Country {
+        name: String!
+        continent: String!
+        region: String!
+        surfacearea: Float!
+        indepyear: Int
+        population: Int!
+        lifeexpectancy: Float
+        gnp: String
+        gnpold: String
+        localname: String!
+        governmentform: String!
+        headofstate: String
+        capitalId: Int
+        code2: String!
+        cities: [City!]!
+        languages: [Language!]!
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val CountryType = schema.ref("Country")
@@ -203,52 +200,50 @@ object WorldMapping extends DoobieMappingCompanion {
 class ComposedMapping[F[_] : Monad]
   (world: Mapping[F], currency: Mapping[F]) extends Mapping[F] {
   val schema =
-    Schema(
-      """
-        type Query {
-          cities(namePattern: String = "%"): [City!]
-          country(code: String): Country
-          countries: [Country!]
-          currencies: [Currency!]!
-        }
-        type City {
-          name: String!
-          country: Country!
-          district: String!
-          population: Int!
-        }
-        type Language {
-          language: String!
-          isOfficial: Boolean!
-          percentage: Float!
-          countries: [Country!]!
-        }
-        type Currency {
-          code: String!
-          exchangeRate: Float!
-          countryCode: String!
-        }
-        type Country {
-          name: String!
-          continent: String!
-          region: String!
-          surfacearea: Float!
-          indepyear: Int
-          population: Int!
-          lifeexpectancy: Float
-          gnp: String
-          gnpold: String
-          localname: String!
-          governmentform: String!
-          headofstate: String
-          capitalId: Int
-          code2: String!
-          cities: [City!]!
-          languages: [Language!]!
-          currencies: [Currency!]!
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        cities(namePattern: String = "%"): [City!]
+        country(code: String): Country
+        countries: [Country!]
+        currencies: [Currency!]!
+      }
+      type City {
+        name: String!
+        country: Country!
+        district: String!
+        population: Int!
+      }
+      type Language {
+        language: String!
+        isOfficial: Boolean!
+        percentage: Float!
+        countries: [Country!]!
+      }
+      type Currency {
+        code: String!
+        exchangeRate: Float!
+        countryCode: String!
+      }
+      type Country {
+        name: String!
+        continent: String!
+        region: String!
+        surfacearea: Float!
+        indepyear: Int
+        population: Int!
+        lifeexpectancy: Float
+        gnp: String
+        gnpold: String
+        localname: String!
+        governmentform: String!
+        headofstate: String
+        capitalId: Int
+        code2: String!
+        cities: [City!]!
+        languages: [Language!]!
+        currencies: [Currency!]!
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val CountryType = schema.ref("Country")

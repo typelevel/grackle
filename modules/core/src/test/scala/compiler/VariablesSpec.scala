@@ -6,9 +6,9 @@ package compiler
 import cats.Id
 import cats.data.{Chain, Ior}
 import cats.tests.CatsSuite
-import io.circe.literal.JsonStringContext
 
 import edu.gemini.grackle._
+import edu.gemini.grackle.syntax._
 import Query._, Value._
 import QueryCompiler._
 
@@ -335,34 +335,32 @@ final class VariablesSuite extends CatsSuite {
 
 object VariablesMapping extends Mapping[Id] {
   val schema =
-    Schema(
-      """
-        type Query {
-          user(id: ID!): User!
-          users(ids: [ID!]!): [User!]!
-          search(pattern: Pattern!): [User!]!
-          usersByType(userType: UserType!): [User!]!
-          usersLoggedInByDate(date: Date!): [User!]!
-        }
-        type User {
-          id: String!
-          name: String!
-          profilePic(size: Int): String!
-        }
-        input Pattern {
-          name: String
-          age: Int
-          id: ID
-          userType: UserType
-          date: Date
-        }
-        enum UserType {
-          ADMIN
-          NORMAL
-        }
-        scalar Date
-      """
-    ).right.get
+    schema"""
+      type Query {
+        user(id: ID!): User!
+        users(ids: [ID!]!): [User!]!
+        search(pattern: Pattern!): [User!]!
+        usersByType(userType: UserType!): [User!]!
+        usersLoggedInByDate(date: Date!): [User!]!
+      }
+      type User {
+        id: String!
+        name: String!
+        profilePic(size: Int): String!
+      }
+      input Pattern {
+        name: String
+        age: Int
+        id: ID
+        userType: UserType
+        date: Date
+      }
+      enum UserType {
+        ADMIN
+        NORMAL
+      }
+      scalar Date
+    """
 
   val typeMappings = Nil
 

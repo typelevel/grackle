@@ -4,7 +4,7 @@
 package validator
 
 import cats.effect.IO
-import edu.gemini.grackle._
+import edu.gemini.grackle.syntax._
 import edu.gemini.grackle.skunk.SkunkMapping
 import edu.gemini.grackle.skunk.SkunkMonitor
 import org.scalatest.funsuite.AnyFunSuite
@@ -15,7 +15,7 @@ final class SqlMappingValidatorSpec extends AnyFunSuite {
   abstract class BaseTestMapping extends SkunkMapping[IO](null, SkunkMonitor.noopMonitor)
 
   object M extends BaseTestMapping {
-    val schema = Schema("type Foo { bar: Baz }, scalar Baz").right.get
+    val schema = schema"type Foo { bar: Baz }, scalar Baz"
     val typeMappings: List[TypeMapping] =
     List(
       ObjectMapping(

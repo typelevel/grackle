@@ -14,10 +14,10 @@ import fs2.Stream
 import edu.gemini.grackle.Query
 import scala.concurrent.ExecutionContext
 import io.circe.Json
-import io.circe.literal._
 import edu.gemini.grackle.QueryCompiler
 import edu.gemini.grackle.Value
 import edu.gemini.grackle.Cursor
+import edu.gemini.grackle.syntax._
 import scala.concurrent.duration._
 
 final class SubscriptionSpec extends CatsSuite {
@@ -29,7 +29,7 @@ final class SubscriptionSpec extends CatsSuite {
     new ValueMapping[IO] {
 
       val schema: Schema =
-        Schema("""
+        schema"""
           type Query {
             get: Int!
           }
@@ -39,7 +39,7 @@ final class SubscriptionSpec extends CatsSuite {
           type Subscription {
             watch: Int!
           }
-        """).right.get
+        """
 
       val QueryType        = schema.ref("Query")
       val MutationType     = schema.ref("Mutation")

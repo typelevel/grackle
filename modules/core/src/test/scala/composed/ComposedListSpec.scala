@@ -6,9 +6,9 @@ package composed
 import cats.Id
 import cats.implicits._
 import cats.tests.CatsSuite
-import io.circe.literal.JsonStringContext
 
 import edu.gemini.grackle._
+import edu.gemini.grackle.syntax._
 import Query._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.mkErrorResult
@@ -26,19 +26,17 @@ object CollectionMapping extends ValueMapping[Id] {
   import CollectionData._
 
   val schema =
-    Schema(
-      """
-        type Query {
-          collection: Collection!
-          collections: [Collection!]!
-          collectionByName(name: String!): Collection
-        }
-        type Collection {
-          name: String!
-          itemIds: [String!]!
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        collection: Collection!
+        collections: [Collection!]!
+        collectionByName(name: String!): Collection
+      }
+      type Collection {
+        name: String!
+        itemIds: [String!]!
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val CollectionType = schema.ref("Collection")
@@ -81,17 +79,15 @@ object ItemMapping extends ValueMapping[Id] {
   import ItemData._
 
   val schema =
-    Schema(
-      """
-        type Query {
-          itemById(id: ID!): Item
-        }
-        type Item {
-          id: String!
-          name: String!
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        itemById(id: ID!): Item
+      }
+      type Item {
+        id: String!
+        name: String!
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val ItemType = schema.ref("Item")
@@ -125,25 +121,23 @@ object ItemMapping extends ValueMapping[Id] {
 
 object ComposedListMapping extends Mapping[Id] {
   val schema =
-    Schema(
-      """
-        type Query {
-          collection: Collection!
-          collections: [Collection!]!
-          collectionByName(name: String!): Collection
-          itemById(id: ID!): Item
-        }
-        type Collection {
-          name: String!
-          itemIds: [String!]!
-          items: [Item!]!
-        }
-        type Item {
-          id: String!
-          name: String!
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        collection: Collection!
+        collections: [Collection!]!
+        collectionByName(name: String!): Collection
+        itemById(id: ID!): Item
+      }
+      type Collection {
+        name: String!
+        itemIds: [String!]!
+        items: [Item!]!
+      }
+      type Item {
+        id: String!
+        name: String!
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val CollectionType = schema.ref("Collection")

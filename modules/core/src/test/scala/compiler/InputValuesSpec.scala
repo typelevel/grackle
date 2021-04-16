@@ -8,6 +8,7 @@ import cats.data.{Chain, Ior}
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle._
+import edu.gemini.grackle.syntax._
 import Query._, Value._
 import QueryCompiler._
 
@@ -113,25 +114,23 @@ final class InputValuesSuite extends CatsSuite {
 
 object InputValuesMapping extends Mapping[Id] {
   val schema =
-    Schema(
-      """
-        type Query {
-          field(arg: Int): Result!
-          listField(arg: [String!]!): Result!
-          objectField(arg: InObj!): Result!
-        }
-        type Result {
-          subfield: String!
-        }
-        input InObj {
-          foo: Int!
-          bar: Boolean!
-          baz: String!
-          defaulted: String! = "quux"
-          nullable: String
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        field(arg: Int): Result!
+        listField(arg: [String!]!): Result!
+        objectField(arg: InObj!): Result!
+      }
+      type Result {
+        subfield: String!
+      }
+      input InObj {
+        foo: Int!
+        bar: Boolean!
+        baz: String!
+        defaulted: String! = "quux"
+        nullable: String
+      }
+    """
 
   val QueryType = schema.ref("Query")
 

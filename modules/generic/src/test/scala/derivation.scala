@@ -11,7 +11,7 @@ import cats.data.Ior
 import cats.implicits._
 import cats.tests.CatsSuite
 import io.circe.Json
-import io.circe.literal.JsonStringContext
+import edu.gemini.grackle.syntax._
 
 import Query._, Predicate._, Value._
 import QueryCompiler._
@@ -141,41 +141,39 @@ object StarWarsMapping extends GenericMapping[Id] {
   import StarWarsData.{characters, hero, Droid, Human, Episode}
 
   val schema =
-    Schema(
-      """
-        type Query {
-           hero(episode: Episode!): Character!
-           character(id: ID!): Character
-           human(id: ID!): Human
-           droid(id: ID!): Droid
-         }
-         enum Episode {
-           NEWHOPE
-           EMPIRE
-           JEDI
-         }
-         interface Character {
-           id: String!
-           name: String
-           friends: [Character!]
-           appearsIn: [Episode!]
-         }
-         type Human implements Character {
-           id: String!
-           name: String
-           friends: [Character!]
-           appearsIn: [Episode!]
-           homePlanet: String
-         }
-         type Droid implements Character {
-           id: String!
-           name: String
-           friends: [Character!]
-           appearsIn: [Episode!]
-           primaryFunction: String
-         }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        hero(episode: Episode!): Character!
+        character(id: ID!): Character
+        human(id: ID!): Human
+        droid(id: ID!): Droid
+      }
+      enum Episode {
+        NEWHOPE
+        EMPIRE
+        JEDI
+      }
+      interface Character {
+        id: String!
+        name: String
+        friends: [Character!]
+        appearsIn: [Episode!]
+      }
+      type Human implements Character {
+        id: String!
+        name: String
+        friends: [Character!]
+        appearsIn: [Episode!]
+        homePlanet: String
+      }
+      type Droid implements Character {
+        id: String!
+        name: String
+        friends: [Character!]
+        appearsIn: [Episode!]
+        primaryFunction: String
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val EpisodeType = schema.ref("Episode")

@@ -3,7 +3,7 @@
 
 package scalars
 
-import io.circe.literal.JsonStringContext
+import edu.gemini.grackle.syntax._
 import utils.DatabaseSuite
 import grackle.test.SqlMovieSpec
 

@@ -11,7 +11,28 @@ final case class Problem(
   message: String,
   locations: List[(Int, Int)] = Nil,
   path: List[String] = Nil
-)
+) {
+
+  override def toString = {
+
+    lazy val pathText: String =
+      path.mkString("/")
+
+    lazy val locationsText: String =
+      locations.map { case (a, b) =>
+        if (a == b) a.toString else s"$a..$b"
+      } .mkString(", ")
+
+    (path.nonEmpty, locations.nonEmpty) match {
+      case (true, true)   => s"$message (at $pathText: $locationsText)"
+      case (true, false)  => s"$message (at $pathText)"
+      case (false, true)  => s"$message (at $locationsText)"
+      case (false, false) => message
+    }
+
+  }
+
+}
 
 object Problem {
 

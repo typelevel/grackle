@@ -8,23 +8,22 @@ import _root_.doobie.util.transactor.Transactor
 import cats.effect.Sync
 import edu.gemini.grackle._
 import edu.gemini.grackle.doobie._
+import edu.gemini.grackle.syntax._
 
 trait UnionsMapping[F[_]] extends DoobieMapping[F] {
   val schema =
-    Schema(
-      """
-        type Query {
-          collection: [Item!]!
-        }
-        type ItemA {
-          itema: String!
-        }
-        type ItemB {
-          itemb: String!
-        }
-        union Item = ItemA | ItemB
-      """
-    ).right.get
+    schema"""
+      type Query {
+        collection: [Item!]!
+      }
+      type ItemA {
+        itema: String!
+      }
+      type ItemB {
+        itemb: String!
+      }
+      union Item = ItemA | ItemB
+    """
 
   val QueryType = schema.ref("Query")
   val ItemAType = schema.ref("ItemA")

@@ -4,7 +4,7 @@
 package starwars
 
 import cats.tests.CatsSuite
-import io.circe.literal.JsonStringContext
+import edu.gemini.grackle.syntax._
 
 final class StarWarsSpec extends CatsSuite {
 

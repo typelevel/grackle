@@ -6,9 +6,9 @@ package compiler
 import cats.Id
 import cats.data.Ior
 import cats.tests.CatsSuite
-import io.circe.literal.JsonStringContext
 
 import edu.gemini.grackle._
+import edu.gemini.grackle.syntax._
 import Query._
 
 final class SkipIncludeSuite extends CatsSuite {
@@ -247,17 +247,15 @@ final class SkipIncludeSuite extends CatsSuite {
 
 object SkipIncludeMapping extends Mapping[Id] {
   val schema =
-    Schema(
-      """
-        type Query {
-          field: Value!
-        }
-        type Value {
-          subfieldA: String
-          subfieldB: String
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        field: Value!
+      }
+      type Value {
+        subfieldA: String
+        subfieldB: String
+      }
+    """
 
   val typeMappings = Nil
 }

@@ -6,7 +6,7 @@ package projection
 import cats.effect.Sync
 import cats.implicits._
 
-import edu.gemini.grackle._, skunk._
+import edu.gemini.grackle._, skunk._, syntax._
 import edu.gemini.grackle.Predicate.{Const, Eql, FieldPath, Project}
 import edu.gemini.grackle.Query.{Binding, Filter, Select}
 import edu.gemini.grackle.QueryCompiler.SelectElaborator
@@ -18,30 +18,28 @@ import _root_.skunk.codec.all._
 trait ProjectionMapping[F[_]] extends SkunkMapping[F] {
 
   val schema =
-    Schema(
-      """
-        type Query {
-          level0(filter: Filter): [Level0!]!
-          level1(filter: Filter): [Level1!]!
-          level2(filter: Filter): [Level2!]!
-        }
-        type Level0 {
-          id: String!
-          level1(filter: Filter): [Level1!]!
-        }
-        type Level1 {
-          id: String!
-          level2(filter: Filter): [Level2!]!
-        }
-        type Level2 {
-          id: String!
-          attr: Boolean
-        }
-        input Filter {
-          attr: Boolean
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        level0(filter: Filter): [Level0!]!
+        level1(filter: Filter): [Level1!]!
+        level2(filter: Filter): [Level2!]!
+      }
+      type Level0 {
+        id: String!
+        level1(filter: Filter): [Level1!]!
+      }
+      type Level1 {
+        id: String!
+        level2(filter: Filter): [Level2!]!
+      }
+      type Level2 {
+        id: String!
+        attr: Boolean
+      }
+      input Filter {
+        attr: Boolean
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val Level0Type = schema.ref("Level0")

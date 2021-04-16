@@ -4,7 +4,7 @@
 package composed
 
 import cats.tests.CatsSuite
-import io.circe.literal.JsonStringContext
+import edu.gemini.grackle.syntax._
 
 final class ComposedSpec extends CatsSuite {
   test("simple currency query") {

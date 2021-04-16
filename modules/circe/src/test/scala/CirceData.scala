@@ -5,46 +5,44 @@ package edu.gemini.grackle
 package circetests
 
 import cats.Id
-import io.circe.literal.JsonStringContext
 
 import edu.gemini.grackle.circe.CirceMapping
+import edu.gemini.grackle.syntax._
 
 object TestCirceMapping extends CirceMapping[Id] {
   val schema =
-    Schema(
-      """
-        type Query {
-          root: Root
-        }
-        type Root {
-          bool: Boolean
-          int: Int
-          float: Float
-          string: String
-          id: ID
-          choice: Choice
-          arrary: [Int!]
-          object: A
-          children: [Child!]!
-        }
-        enum Choice {
-          ONE
-          TWO
-          THREE
-        }
-        interface Child {
-          id: ID
-        }
-        type A implements Child {
-          id: ID
-          aField: Int
-        }
-        type B implements Child {
-          id: ID
-          bField: String
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        root: Root
+      }
+      type Root {
+        bool: Boolean
+        int: Int
+        float: Float
+        string: String
+        id: ID
+        choice: Choice
+        arrary: [Int!]
+        object: A
+        children: [Child!]!
+      }
+      enum Choice {
+        ONE
+        TWO
+        THREE
+      }
+      interface Child {
+        id: ID
+      }
+      type A implements Child {
+        id: ID
+        aField: Int
+      }
+      type B implements Child {
+        id: ID
+        bField: String
+      }
+    """
 
   val QueryType = schema.ref("Query")
 

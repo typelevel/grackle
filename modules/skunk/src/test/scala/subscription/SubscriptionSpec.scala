@@ -4,7 +4,7 @@
 package subscription
 
 import utils.DatabaseSuite
-import io.circe.literal._
+import edu.gemini.grackle.syntax._
 import io.circe.Json
 import cats.effect.IO
 import skunk.implicits._
