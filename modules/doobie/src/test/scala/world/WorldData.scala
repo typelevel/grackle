@@ -8,6 +8,7 @@ import cats.implicits._
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.sql.Like
+import edu.gemini.grackle.syntax._
 import Query._, Predicate._, Value._
 import QueryCompiler._
 import edu.gemini.grackle.doobie.DoobieMapping
@@ -61,47 +62,45 @@ trait WorldPostgresSchema[F[_]] extends DoobieMapping[F] {
 trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
 
   val schema =
-    Schema(
-      """
-        type Query {
-          cities(namePattern: String = "%"): [City!]
-          country(code: String): Country
-          countries(limit: Int = -1, minPopulation: Int = 0, byPopulation: Boolean = false): [Country!]
-          language(language: String): Language
-          search(minPopulation: Int!, indepSince: Int!): [Country!]!
-        }
-        type City {
-          name: String!
-          country: Country!
-          district: String!
-          population: Int!
-        }
-        type Language {
-          language: String!
-          isOfficial: Boolean!
-          percentage: Float!
-          countries: [Country!]!
-        }
-        type Country {
-          name: String!
-          continent: String!
-          region: String!
-          surfacearea: Float!
-          indepyear: Int
-          population: Int!
-          lifeexpectancy: Float
-          gnp: String
-          gnpold: String
-          localname: String!
-          governmentform: String!
-          headofstate: String
-          capitalId: Int
-          code2: String!
-          cities: [City!]!
-          languages: [Language!]!
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        cities(namePattern: String = "%"): [City!]
+        country(code: String): Country
+        countries(limit: Int = -1, minPopulation: Int = 0, byPopulation: Boolean = false): [Country!]
+        language(language: String): Language
+        search(minPopulation: Int!, indepSince: Int!): [Country!]!
+      }
+      type City {
+        name: String!
+        country: Country!
+        district: String!
+        population: Int!
+      }
+      type Language {
+        language: String!
+        isOfficial: Boolean!
+        percentage: Float!
+        countries: [Country!]!
+      }
+      type Country {
+        name: String!
+        continent: String!
+        region: String!
+        surfacearea: Float!
+        indepyear: Int
+        population: Int!
+        lifeexpectancy: Float
+        gnp: String
+        gnpold: String
+        localname: String!
+        governmentform: String!
+        headofstate: String
+        capitalId: Int
+        code2: String!
+        cities: [City!]!
+        languages: [Language!]!
+      }
+    """
 
   val QueryType    = schema.ref("Query")
   val CountryType  = schema.ref("Country")

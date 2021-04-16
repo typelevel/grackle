@@ -8,30 +8,29 @@ import _root_.doobie.util.transactor.Transactor
 import cats.effect.Sync
 import edu.gemini.grackle._
 import edu.gemini.grackle.doobie._
+import edu.gemini.grackle.syntax._
 
 trait CoalesceMapping[F[_]] extends DoobieMapping[F] {
 
   val schema =
-    Schema(
-      """
-        type Query {
-          r: [R!]!
-        }
-        type R {
-          id: String!
-          ca: [CA!]!
-          cb: [CB!]!
-        }
-        type CA {
-          id: String!
-          a: Int!
-        }
-        type CB {
-          id: String!
-          b: Boolean!
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        r: [R!]!
+      }
+      type R {
+        id: String!
+        ca: [CA!]!
+        cb: [CB!]!
+      }
+      type CA {
+        id: String!
+        a: Int!
+      }
+      type CB {
+        id: String!
+        b: Boolean!
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val RType = schema.ref("R")

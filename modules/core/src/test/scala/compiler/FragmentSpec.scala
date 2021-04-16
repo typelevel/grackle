@@ -7,9 +7,9 @@ import cats.Id
 import cats.data.Ior
 import cats.implicits._
 import cats.tests.CatsSuite
-import io.circe.literal.JsonStringContext
 
 import edu.gemini.grackle._
+import edu.gemini.grackle.syntax._
 import Query._, Predicate._, Value._
 import QueryCompiler._
 
@@ -461,31 +461,29 @@ object FragmentMapping extends ValueMapping[Id] {
   import FragmentData._
 
   val schema =
-    Schema(
-      """
-        type Query {
-          user(id: ID!): User!
-          profiles: [Profile!]!
-        }
-        type User implements Profile {
-          id: String!
-          name: String!
-          profilePic: String!
-          friends: [User!]!
-          mutualFriends: [User!]!
-          favourite: UserOrPage
-        }
-        type Page implements Profile {
-          id: String!
-          title: String!
-          likers: [User!]!
-        }
-        union UserOrPage = User | Page
-        interface Profile {
-          id: String!
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        user(id: ID!): User!
+        profiles: [Profile!]!
+      }
+      type User implements Profile {
+        id: String!
+        name: String!
+        profilePic: String!
+        friends: [User!]!
+        mutualFriends: [User!]!
+        favourite: UserOrPage
+      }
+      type Page implements Profile {
+        id: String!
+        title: String!
+        likers: [User!]!
+      }
+      union UserOrPage = User | Page
+      interface Profile {
+        id: String!
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val ProfileType = schema.ref("Profile")

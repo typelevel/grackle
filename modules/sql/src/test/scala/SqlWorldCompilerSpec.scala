@@ -3,7 +3,7 @@
 
 package grackle.test
 
-import io.circe.literal.JsonStringContext
+import edu.gemini.grackle.syntax._
 import org.scalatest.funsuite.AnyFunSuite
 import edu.gemini.grackle.QueryExecutor
 import cats.effect.IO

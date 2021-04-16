@@ -6,10 +6,10 @@ package introspection
 import cats.Id
 import cats.tests.CatsSuite
 import io.circe.Json
-import io.circe.literal.JsonStringContext
 import io.circe.optics.JsonPath.root
 
 import edu.gemini.grackle._
+import edu.gemini.grackle.syntax._
 import QueryCompiler.IntrospectionLevel
 import IntrospectionLevel._
 
@@ -1295,67 +1295,65 @@ final class IntrospectionSuite extends CatsSuite {
 
 object TestMapping extends Mapping[Id] {
   val schema =
-    Schema(
-      """
-        type Query {
-          users: [User!]!
-        }
+    schema"""
+      type Query {
+        users: [User!]!
+      }
 
-        "User object type"
-        type User implements Profile {
-          id: String
-          name: String
-          age: Int @deprecated(reason: "Use birthday instead")
-          birthday: Date
-        }
+      "User object type"
+      type User implements Profile {
+        id: String
+        name: String
+        age: Int @deprecated(reason: "Use birthday instead")
+        birthday: Date
+      }
 
-        "Profile interface type"
-        interface Profile {
-          id: String
-        }
+      "Profile interface type"
+      interface Profile {
+        id: String
+      }
 
-        "Date object type"
-        type Date {
-          day: Int
-          month: Int
-          year: Int
-        }
+      "Date object type"
+      type Date {
+        day: Int
+        month: Int
+        year: Int
+      }
 
-        "Choice union type"
-        union Choice = User | Date
+      "Choice union type"
+      union Choice = User | Date
 
-        "Flags enum type"
-        enum Flags {
-          A
-          B @deprecated(reason: "Deprecation test")
-          C
-        }
+      "Flags enum type"
+      enum Flags {
+        A
+        B @deprecated(reason: "Deprecation test")
+        C
+      }
 
-        type KindTest {
-          "Scalar field"
-          scalar: Int
-          "Object field"
-          object: User
-          "Interface field"
-          interface: Profile
-          "Union field"
-          union: Choice
-          "Enum field"
-          enum: Flags
-          "List field"
-          list: [Int]
-          "Nonnull field"
-          nonnull: Int!
-          "Nonnull list of nonnull field"
-          nonnulllistnonnull: [Int!]!
-        }
+      type KindTest {
+        "Scalar field"
+        scalar: Int
+        "Object field"
+        object: User
+        "Interface field"
+        interface: Profile
+        "Union field"
+        union: Choice
+        "Enum field"
+        enum: Flags
+        "List field"
+        list: [Int]
+        "Nonnull field"
+        nonnull: Int!
+        "Nonnull list of nonnull field"
+        nonnulllistnonnull: [Int!]!
+      }
 
-        type DeprecationTest {
-          user: User
-          flags: Flags
-        }
-      """
-    ).right.get
+      type DeprecationTest {
+        user: User
+        flags: Flags
+      }
+    """
 
   val typeMappings = Nil
 }
@@ -1374,24 +1372,22 @@ object SmallMapping extends ValueMapping[Id] {
   import SmallData._
 
   val schema =
-    Schema(
-      """
-        type Query {
-          users: [User!]!
-          profiles: [Profile!]!
-        }
-        "Profile interface type"
-        interface Profile {
-          id: String
-        }
-        "User object type"
-        type User implements Profile {
-          id: String
-          name: String
-          age: Int
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        users: [User!]!
+        profiles: [Profile!]!
+      }
+      "Profile interface type"
+      interface Profile {
+        id: String
+      }
+      "User object type"
+      type User implements Profile {
+        id: String
+        name: String
+        age: Int
+      }
+    """
 
   val QueryType = schema.queryType
   val UserType = schema.ref("User")

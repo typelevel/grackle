@@ -8,53 +8,51 @@ import cats.kernel.Eq
 import cats.syntax.all._
 import io.circe.Encoder
 import _root_.skunk.codec.all._
-import edu.gemini.grackle._, skunk._
+import edu.gemini.grackle._, skunk._, syntax._
 import _root_.skunk.Codec
 import cats.effect.Resource
 import _root_.skunk.Session
 
 trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
   val schema =
-    Schema(
-      """
-        type Query {
-          entities: [Entity!]!
-        }
-        interface Entity {
-          id: ID!
-          entityType: EntityType!
-          title: String
-          synopses: Synopses
-        }
-        type Film implements Entity {
-          id: ID!
-          entityType: EntityType!
-          title: String
-          synopses: Synopses
-          rating: String
-        }
-        type Series implements Entity {
-          id: ID!
-          entityType: EntityType!
-          title: String
-          numberOfEpisodes: Int
-          episodes: [Episode!]!
-        }
-        type Episode {
-          id: ID!
-          title: String
-          synopses: Synopses
-        }
-        type Synopses {
-          short: String
-          long: String
-        }
-        enum EntityType {
-          FILM
-          SERIES
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        entities: [Entity!]!
+      }
+      interface Entity {
+        id: ID!
+        entityType: EntityType!
+        title: String
+        synopses: Synopses
+      }
+      type Film implements Entity {
+        id: ID!
+        entityType: EntityType!
+        title: String
+        synopses: Synopses
+        rating: String
+      }
+      type Series implements Entity {
+        id: ID!
+        entityType: EntityType!
+        title: String
+        numberOfEpisodes: Int
+        episodes: [Episode!]!
+      }
+      type Episode {
+        id: ID!
+        title: String
+        synopses: Synopses
+      }
+      type Synopses {
+        short: String
+        long: String
+      }
+      enum EntityType {
+        FILM
+        SERIES
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val EType = schema.ref("Entity")

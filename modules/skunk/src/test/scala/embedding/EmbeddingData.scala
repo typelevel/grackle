@@ -5,38 +5,36 @@ package embedding
 
 import cats.effect.Sync
 import  _root_.skunk.codec.all._
-import edu.gemini.grackle._, skunk._
+import edu.gemini.grackle._, skunk._, syntax._
 import cats.effect.Resource
 import _root_.skunk.Session
 
 trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
   val schema =
-    Schema(
-      """
-        type Query {
-          films: [Film!]!
-          series: [Series!]!
-          episodes: [Episode!]!
-        }
-        type Film {
-          title: String!
-          synopses: Synopses!
-        }
-        type Series {
-          title: String!
-          synopses: Synopses!
-          episodes: [Episode!]!
-        }
-        type Episode {
-          title: String!
-          synopses: Synopses!
-        }
-        type Synopses {
-          short: String
-          long: String
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        films: [Film!]!
+        series: [Series!]!
+        episodes: [Episode!]!
+      }
+      type Film {
+        title: String!
+        synopses: Synopses!
+      }
+      type Series {
+        title: String!
+        synopses: Synopses!
+        episodes: [Episode!]!
+      }
+      type Episode {
+        title: String!
+        synopses: Synopses!
+      }
+      type Synopses {
+        short: String
+        long: String
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val FilmType = schema.ref("Film")

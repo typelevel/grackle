@@ -5,26 +5,24 @@ package unions
 
 import cats.effect.Sync
 import _root_.skunk.codec.all._
-import edu.gemini.grackle._, skunk._
+import edu.gemini.grackle._, skunk._, syntax._
 import cats.effect.Resource
 import _root_.skunk.Session
 
 trait UnionsMapping[F[_]] extends SkunkMapping[F] {
   val schema =
-    Schema(
-      """
-        type Query {
-          collection: [Item!]!
-        }
-        type ItemA {
-          itema: String!
-        }
-        type ItemB {
-          itemb: String!
-        }
-        union Item = ItemA | ItemB
-      """
-    ).right.get
+    schema"""
+      type Query {
+        collection: [Item!]!
+      }
+      type ItemA {
+        itema: String!
+      }
+      type ItemB {
+        itemb: String!
+      }
+      union Item = ItemA | ItemB
+    """
 
   val QueryType = schema.ref("Query")
   val ItemAType = schema.ref("ItemA")

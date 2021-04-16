@@ -9,6 +9,7 @@ import ScalarType._
 
 object Introspection {
   val schema =
+    // N.B. can't use schema"..." here because it's a macro defined in the same module
     Schema(
       """
         type Query {

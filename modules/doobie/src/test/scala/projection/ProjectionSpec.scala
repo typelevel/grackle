@@ -3,7 +3,7 @@
 
 package projection
 
-import io.circe.literal._
+import edu.gemini.grackle.syntax._
 
 import utils.DatabaseSuite
 import grackle.test.SqlProjectionSpec

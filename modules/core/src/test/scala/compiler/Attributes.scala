@@ -4,7 +4,7 @@
 package compiler
 
 import cats.tests.CatsSuite
-import io.circe.literal.JsonStringContext
+import edu.gemini.grackle.syntax._
 
 final class AttributesSpec extends CatsSuite {
   test("fields only") {

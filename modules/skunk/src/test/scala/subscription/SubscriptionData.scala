@@ -9,6 +9,7 @@ import _root_.skunk.Session
 import cats.effect.{ Bracket, Resource, Sync }
 import cats.syntax.all._
 import edu.gemini.grackle._
+import edu.gemini.grackle.syntax._
 import edu.gemini.grackle.Predicate._
 import edu.gemini.grackle.Query._
 import edu.gemini.grackle.QueryCompiler._
@@ -18,25 +19,23 @@ import edu.gemini.grackle.Value._
 trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
 
   val schema =
-    Schema(
-      """
-        type Query {
-          city(id: Int!): City
-        }
-        type Subscription {
-          channel: City!
-        }
-        type City {
-          name: String!
-          country: Country!
-          population: Int!
-        }
-        type Country {
-          name: String!
-          cities: [City!]!
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        city(id: Int!): City
+      }
+      type Subscription {
+        channel: City!
+      }
+      type City {
+        name: String!
+        country: Country!
+        population: Int!
+      }
+      type Country {
+        name: String!
+        cities: [City!]!
+      }
+    """
 
   class TableDef(name: String) {
     def col(colName: String, codec: Codec[_]): ColumnRef =

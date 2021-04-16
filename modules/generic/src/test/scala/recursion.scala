@@ -7,12 +7,12 @@ package generic
 import cats.Id
 import cats.implicits._
 import cats.tests.CatsSuite
-import io.circe.literal.JsonStringContext
 
 import Query._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.mkOneError
 import semiauto._
+import edu.gemini.grackle.syntax._
 
 object MutualRecursionData {
   import MutualRecursionMapping._
@@ -51,22 +51,20 @@ object MutualRecursionMapping extends GenericMapping[Id] {
   import MutualRecursionData._
 
   val schema =
-    Schema(
-      """
-        type Query {
-           programmeById(id: ID!): Programme
-           productionById(id: ID!): Production
-         }
-         type Programme {
-           id: String!
-           productions: [Production!]
-         }
-         type Production {
-           id: String!
-           programme: Programme!
-         }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        programmeById(id: ID!): Programme
+        productionById(id: ID!): Production
+      }
+      type Programme {
+        id: String!
+        productions: [Production!]
+      }
+      type Production {
+        id: String!
+        programme: Programme!
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val ProgrammeType = schema.ref("Programme")

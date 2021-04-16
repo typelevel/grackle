@@ -7,6 +7,7 @@ import cats.Id
 import cats.implicits._
 
 import edu.gemini.grackle._
+import edu.gemini.grackle.syntax._
 
 import Query._, Predicate._, Value._
 import QueryCompiler._
@@ -145,41 +146,39 @@ object StarWarsMapping extends GenericMapping[Id] {
 
   // #schema
   val schema =
-    Schema(
-      """
-        type Query {
-           hero(episode: Episode!): Character!
-           character(id: ID!): Character
-           human(id: ID!): Human
-           droid(id: ID!): Droid
-         }
-         enum Episode {
-           NEWHOPE
-           EMPIRE
-           JEDI
-         }
-         interface Character {
-           id: String!
-           name: String
-           friends: [Character!]
-           appearsIn: [Episode!]
-         }
-         type Human implements Character {
-           id: String!
-           name: String
-           friends: [Character!]
-           appearsIn: [Episode!]
-           homePlanet: String
-         }
-         type Droid implements Character {
-           id: String!
-           name: String
-           friends: [Character!]
-           appearsIn: [Episode!]
-           primaryFunction: String
-         }
-      """
-    ).right.get
+    schema"""
+      type Query {
+          hero(episode: Episode!): Character!
+          character(id: ID!): Character
+          human(id: ID!): Human
+          droid(id: ID!): Droid
+        }
+        enum Episode {
+          NEWHOPE
+          EMPIRE
+          JEDI
+        }
+        interface Character {
+          id: String!
+          name: String
+          friends: [Character!]
+          appearsIn: [Episode!]
+        }
+        type Human implements Character {
+          id: String!
+          name: String
+          friends: [Character!]
+          appearsIn: [Episode!]
+          homePlanet: String
+        }
+        type Droid implements Character {
+          id: String!
+          name: String
+          friends: [Character!]
+          appearsIn: [Episode!]
+          primaryFunction: String
+        }
+    """
   // #schema
 
   val QueryType = schema.ref("Query")

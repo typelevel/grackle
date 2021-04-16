@@ -10,9 +10,9 @@ import scala.util.Try
 import cats.{Eq, Id, Order}
 import cats.implicits._
 import cats.tests.CatsSuite
-import io.circe.literal.JsonStringContext
 
 import edu.gemini.grackle._
+import edu.gemini.grackle.syntax._
 import Query._, Predicate._, Value._
 import QueryCompiler._
 
@@ -86,37 +86,35 @@ object MovieMapping extends ValueMapping[Id] {
   import MovieData._
 
   val schema =
-    Schema(
-      """
-        type Query {
-          movieById(id: UUID!): Movie
-          moviesByGenre(genre: Genre!): [Movie!]!
-          moviesReleasedBetween(from: Date!, to: Date!): [Movie!]!
-          moviesLongerThan(duration: Interval!): [Movie!]!
-          moviesShownLaterThan(time: Time!): [Movie!]!
-          moviesShownBetween(from: DateTime!, to: DateTime!): [Movie!]!
-        }
-        scalar UUID
-        scalar Time
-        scalar Date
-        scalar DateTime
-        scalar Interval
-        enum Genre {
-          DRAMA
-          ACTION
-          COMEDY
-        }
-        type Movie {
-          id: UUID!
-          title: String!
-          genre: Genre!
-          releaseDate: Date!
-          showTime: Time!
-          nextShowing: DateTime!
-          duration: Interval!
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        movieById(id: UUID!): Movie
+        moviesByGenre(genre: Genre!): [Movie!]!
+        moviesReleasedBetween(from: Date!, to: Date!): [Movie!]!
+        moviesLongerThan(duration: Interval!): [Movie!]!
+        moviesShownLaterThan(time: Time!): [Movie!]!
+        moviesShownBetween(from: DateTime!, to: DateTime!): [Movie!]!
+      }
+      scalar UUID
+      scalar Time
+      scalar Date
+      scalar DateTime
+      scalar Interval
+      enum Genre {
+        DRAMA
+        ACTION
+        COMEDY
+      }
+      type Movie {
+        id: UUID!
+        title: String!
+        genre: Genre!
+        releaseDate: Date!
+        showTime: Time!
+        nextShowing: DateTime!
+        duration: Interval!
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val MovieType = schema.ref("Movie")

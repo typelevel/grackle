@@ -7,6 +7,7 @@ import cats.data.{Ior, NonEmptyChain}
 import cats.data.Ior.Both
 import cats.tests.CatsSuite
 import edu.gemini.grackle.Schema
+import edu.gemini.grackle.syntax._
 
 final class SchemaSpec extends CatsSuite {
   test("schema validation: undefined types: typo in the use of a Query result type") {
@@ -312,7 +313,7 @@ final class SchemaSpec extends CatsSuite {
   test("explicit Schema type (complete)") {
 
     val schema =
-      Schema("""
+      schema"""
 
         schema {
           query: MyQuery
@@ -332,7 +333,7 @@ final class SchemaSpec extends CatsSuite {
           watchFoo: Int
         }
 
-      """).right.get
+      """
 
     assert(schema.queryType                 =:= schema.ref("MyQuery"))
     assert(schema.mutationType.exists(_     =:= schema.ref("MyMutation")))
@@ -343,7 +344,7 @@ final class SchemaSpec extends CatsSuite {
   test("explicit Schema type (partial)") {
 
     val schema =
-      Schema("""
+      schema"""
 
         schema {
           query: MyQuery
@@ -358,7 +359,7 @@ final class SchemaSpec extends CatsSuite {
           setFoo(n: Int): Int
         }
 
-      """).right.get
+      """
 
     assert(schema.queryType             =:= schema.ref("MyQuery"))
     assert(schema.mutationType.exists(_ =:= schema.ref("MyMutation")))
@@ -369,7 +370,7 @@ final class SchemaSpec extends CatsSuite {
   test("implicit Schema type") {
 
     val schema =
-      Schema("""
+      schema"""
 
         type Query {
           foo: Int
@@ -383,7 +384,7 @@ final class SchemaSpec extends CatsSuite {
           watchFoo: Int
         }
 
-      """).right.get
+      """
 
     assert(schema.queryType                 =:= schema.ref("Query"))
     assert(schema.mutationType.exists(_     =:= schema.ref("Mutation")))
@@ -392,7 +393,7 @@ final class SchemaSpec extends CatsSuite {
   }
 
   ignore("no query type (crashes)") {
-    Schema("scalar Foo").right.get.queryType
+    schema"scalar Foo".queryType
   }
 
 }

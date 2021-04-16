@@ -66,7 +66,6 @@ lazy val core = project
       "org.typelevel"     %% "cats-core"              % catsVersion,
       "org.typelevel"     %% "literally"              % literallyVersion,
       "io.circe"          %% "circe-core"             % circeVersion,
-      "io.circe"          %% "circe-literal"          % circeVersion,
       "io.circe"          %% "circe-optics"           % circeOpticsVersion,
       "io.circe"          %% "circe-parser"           % circeVersion,
       "org.tpolecat"      %% "typename"               % typenameVersion,
@@ -87,7 +86,6 @@ lazy val circe = project
       "org.tpolecat"      %% "atto-core"              % attoVersion,
       "org.typelevel"     %% "cats-core"              % catsVersion,
       "io.circe"          %% "circe-core"             % circeVersion,
-      "io.circe"          %% "circe-literal"          % circeVersion,
       "io.circe"          %% "circe-optics"           % circeOpticsVersion,
       "io.circe"          %% "circe-parser"           % circeVersion
     )
@@ -154,7 +152,6 @@ lazy val generic = project
       "org.tpolecat"      %% "atto-core"              % attoVersion,
       "org.typelevel"     %% "cats-core"              % catsVersion,
       "io.circe"          %% "circe-core"             % circeVersion,
-      "io.circe"          %% "circe-literal"          % circeVersion,
       "io.circe"          %% "circe-optics"           % circeOpticsVersion,
       "io.circe"          %% "circe-parser"           % circeVersion,
       "com.chuusai"       %% "shapeless"              % shapelessVersion

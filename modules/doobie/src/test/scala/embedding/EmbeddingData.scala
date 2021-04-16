@@ -6,37 +6,36 @@ package embedding
 import cats.effect.Sync
 import edu.gemini.grackle._
 import edu.gemini.grackle.doobie._
+import edu.gemini.grackle.syntax._
 import _root_.doobie.util.meta.Meta
 import _root_.doobie.util.transactor.Transactor
 
 trait EmbeddingMapping[F[_]] extends DoobieMapping[F] {
   val schema =
-    Schema(
-      """
-        type Query {
-          films: [Film!]!
-          series: [Series!]!
-          episodes: [Episode!]!
-        }
-        type Film {
-          title: String!
-          synopses: Synopses!
-        }
-        type Series {
-          title: String!
-          synopses: Synopses!
-          episodes: [Episode!]!
-        }
-        type Episode {
-          title: String!
-          synopses: Synopses!
-        }
-        type Synopses {
-          short: String
-          long: String
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        films: [Film!]!
+        series: [Series!]!
+        episodes: [Episode!]!
+      }
+      type Film {
+        title: String!
+        synopses: Synopses!
+      }
+      type Series {
+        title: String!
+        synopses: Synopses!
+        episodes: [Episode!]!
+      }
+      type Episode {
+        title: String!
+        synopses: Synopses!
+      }
+      type Synopses {
+        short: String
+        long: String
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val FilmType = schema.ref("Film")

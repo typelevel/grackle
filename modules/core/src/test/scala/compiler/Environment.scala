@@ -6,9 +6,9 @@ package compiler
 import cats.Id
 import cats.implicits._
 import cats.tests.CatsSuite
-import io.circe.literal.JsonStringContext
 
 import edu.gemini.grackle._
+import edu.gemini.grackle.syntax._
 import Cursor.Env
 import Query._, Value._
 import QueryCompiler._
@@ -16,23 +16,21 @@ import QueryInterpreter.mkOneError
 
 object EnvironmentMapping extends ValueMapping[Id] {
   val schema =
-    Schema(
-      """
-        type Query {
-          nested: Nested!
-          nestedSum(x: Int!, y: Int!): NestedSum!
-        }
-        type Nested {
-          sum(x: Int!, y: Int!): Int!
-          url: String!
-          nested: Nested!
-        }
-        type NestedSum {
-          sum: Int!
-          nestedSum(x: Int!, y: Int!): NestedSum!
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        nested: Nested!
+        nestedSum(x: Int!, y: Int!): NestedSum!
+      }
+      type Nested {
+        sum(x: Int!, y: Int!): Int!
+        url: String!
+        nested: Nested!
+      }
+      type NestedSum {
+        sum: Int!
+        nestedSum(x: Int!, y: Int!): NestedSum!
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val NestedType = schema.ref("Nested")

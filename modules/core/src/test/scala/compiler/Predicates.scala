@@ -6,9 +6,9 @@ package compiler
 import cats.Id
 import cats.implicits._
 import cats.tests.CatsSuite
-import io.circe.literal.JsonStringContext
 
 import edu.gemini.grackle._
+import edu.gemini.grackle.syntax._
 import Query._, Predicate._, Value._
 import QueryCompiler._
 
@@ -23,21 +23,19 @@ object ItemMapping extends ValueMapping[Id] {
   import ItemData._
 
   val schema =
-    Schema(
-      """
-        type Query {
-          itemByTag(tag: ID!): [Item!]!
-          itemByTagCount(count: Int!): [Item!]!
-          itemByTagCountVA(count: Int!): [Item!]!
-          itemByTagCountCA(count: Int!): [Item!]!
-        }
-        type Item {
-          label: String!
-          tags: [String!]!
-          tagCount: Int!
-        }
-      """
-    ).right.get
+    schema"""
+      type Query {
+        itemByTag(tag: ID!): [Item!]!
+        itemByTagCount(count: Int!): [Item!]!
+        itemByTagCountVA(count: Int!): [Item!]!
+        itemByTagCountCA(count: Int!): [Item!]!
+      }
+      type Item {
+        label: String!
+        tags: [String!]!
+        tagCount: Int!
+      }
+    """
 
   val QueryType = schema.ref("Query")
   val ItemType = schema.ref("Item")

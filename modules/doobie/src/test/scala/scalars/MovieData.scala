@@ -20,6 +20,7 @@ import doobie.Transactor
 import doobie.postgres.implicits._
 import doobie.util.meta.Meta
 import edu.gemini.grackle._
+import edu.gemini.grackle.syntax._
 import io.circe.Encoder
 
 import doobie._
@@ -105,8 +106,7 @@ trait MovieMapping[F[_]] extends DoobieMapping[F] {
   import MovieData._
 
   val schema =
-    Schema(
-      """
+    schema"""
         type Query {
           movieById(id: UUID!): Movie
           moviesByGenre(genre: Genre!): [Movie!]!
@@ -143,7 +143,6 @@ trait MovieMapping[F[_]] extends DoobieMapping[F] {
           features: [Feature!]!
         }
       """
-    ).right.get
 
   val QueryType = schema.ref("Query")
   val MovieType = schema.ref("Movie")

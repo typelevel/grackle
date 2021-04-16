@@ -4,10 +4,9 @@
 package compiler
 
 import cats.tests.CatsSuite
-import io.circe.literal.JsonStringContext
+import edu.gemini.grackle.syntax._
 import edu.gemini.grackle.Problem
 import io.circe.syntax._
-import io.circe.literal._
 
 final class ProblemSpec extends CatsSuite {
 
