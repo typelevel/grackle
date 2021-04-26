@@ -463,7 +463,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
       def paths(t: Term[_]): List[Path] =
         t match {
-          case Project(prefix, x) => paths(x).map(_.extend(prefix))
+          case Project(prefix, x) => paths(x).map(_.prepend(prefix))
           case p: Path => List(p)
           case And(x, y) => paths(x) ++ paths(y)
           case Or(x, y) => paths(x) ++ paths(y)

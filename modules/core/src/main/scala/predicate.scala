@@ -27,12 +27,19 @@ trait Term[T] extends Product with Serializable {
 
 sealed trait Path {
   def path: List[String]
-  def extend(prefix: List[String]): Path
+  def prepend(prefix: List[String]): Path
 }
 
 object Path {
   import Predicate.ScalarFocus
 
+  /**
+    * Reifies a traversal from a Cursor to a single, possibly nullable, value.
+    *
+    * Typically such a path would use used to identify a field of the object
+    * or interface at the focus of the cursor, to be tested via a predicate
+    * such as `Eql`.
+    */
   case class UniquePath[T](val path: List[String]) extends Term[T] with Path {
     def apply(c: Cursor): Result[T] =
       c.listPath(path) match {
@@ -40,15 +47,23 @@ object Path {
         case other => mkErrorResult(s"Expected exactly one element for path $path found $other")
       }
 
-    def extend(prefix: List[String]): Path =
+    def prepend(prefix: List[String]): Path =
       UniquePath(prefix ++ path)
   }
 
+  /**
+    * Reifies a traversal from a Cursor to multiple, possibly nullable, values.
+    *
+    * Typically such a path would use used to identify the list of values of
+    * an attribute of the object elements of a list field of the object or
+    * interface at the focus of the cursor, to be tested via a predicate such
+    * as `In`.
+    */
   case class ListPath[T](val path: List[String]) extends Term[List[T]] with Path {
     def apply(c: Cursor): Result[List[T]] =
       c.flatListPath(path).map(_.map { case ScalarFocus(f: T @unchecked) => f })
 
-    def extend(prefix: List[String]): Path =
+    def prepend(prefix: List[String]): Path =
       ListPath(prefix ++ path)
   }
 }
