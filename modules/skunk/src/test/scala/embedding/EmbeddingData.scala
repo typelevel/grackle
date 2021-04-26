@@ -10,6 +10,26 @@ import cats.effect.Resource
 import _root_.skunk.Session
 
 trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
+
+  object films extends TableDef("films") {
+    val title = col("title", text)
+    val synopsisShort = col("synopsis_short", text.opt)
+    val synopsisLong = col("synopsis_long", text.opt)
+  }
+
+  object series extends TableDef("series") {
+    val title = col("title", text)
+    val synopsisShort = col("synopsis_short", text.opt)
+    val synopsisLong = col("synopsis_long", text.opt)
+  }
+
+  object episodes extends TableDef("episodes2") {
+    val title = col("title", text)
+    val seriesTitle = col("series_title", text.opt)
+    val synopsisShort = col("synopsis_short", text.opt)
+    val synopsisLong = col("synopsis_long", text.opt)
+  }
+
   val schema =
     schema"""
       type Query {
@@ -56,7 +76,7 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
         tpe = FilmType,
         fieldMappings =
           List(
-            SqlField("title", ColumnRef("films", "title", text), key = true),
+            SqlField("title", films.title, key = true),
             SqlObject("synopses")
           )
       ),
@@ -64,18 +84,18 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
         tpe = SeriesType,
         fieldMappings =
           List(
-            SqlField("title", ColumnRef("series", "title", text), key = true),
+            SqlField("title", series.title, key = true),
             SqlObject("synopses"),
-            SqlObject("episodes", Join(ColumnRef("series", "title", text), ColumnRef("episodes2", "series_title", text))),
+            SqlObject("episodes", Join(series.title, episodes.seriesTitle)),
           )
       ),
       ObjectMapping(
         tpe = EpisodeType,
         fieldMappings =
           List(
-            SqlField("title", ColumnRef("episodes2", "title", text), key = true),
+            SqlField("title", episodes.title, key = true),
             SqlObject("synopses"),
-            SqlField("series_title", ColumnRef("episodes2", "series_title", text), hidden = true)
+            SqlField("series_title", episodes.seriesTitle, hidden = true)
           )
       ),
       PrefixedMapping(
@@ -87,8 +107,8 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    SqlField("short", ColumnRef("films", "synopsis_short", text.opt)),
-                    SqlField("long", ColumnRef("films", "synopsis_long", text.opt))
+                    SqlField("short", films.synopsisShort),
+                    SqlField("long", films.synopsisLong)
                   )
               ),
             List("series", "synopses") ->
@@ -96,8 +116,8 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    SqlField("short", ColumnRef("series", "synopsis_short", text.opt)),
-                    SqlField("long", ColumnRef("series", "synopsis_long", text.opt))
+                    SqlField("short", series.synopsisShort),
+                    SqlField("long", series.synopsisLong)
                   )
               ),
             List("episodes", "synopses") ->
@@ -105,8 +125,8 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    SqlField("short", ColumnRef("episodes2", "synopsis_short", text.opt)),
-                    SqlField("long", ColumnRef("episodes2", "synopsis_long", text.opt))
+                    SqlField("short", episodes.synopsisShort),
+                    SqlField("long", episodes.synopsisLong)
                   )
               )
           )

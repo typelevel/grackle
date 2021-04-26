@@ -104,6 +104,16 @@ object MovieData {
 trait MovieMapping[F[_]] extends SkunkMapping[F] {
   import MovieData._
 
+  object movies extends TableDef("movies") {
+    val id = col("id", uuid)
+    val title = col("title", text)
+    val genre = col("genre", Genre.codec)
+    val releaseDate = col("releasedate", date)
+    val showTime = col("showtime", time)
+    val nextShowing = col("nextshowing", timestamptz)
+    val duration = col("duration", int8.imap(Duration.ofMillis)(_.toMillis))
+  }
+
   val schema =
     schema"""
       type Query {
@@ -173,17 +183,14 @@ trait MovieMapping[F[_]] extends SkunkMapping[F] {
         tpe = MovieType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("movies", "id", uuid), key = true),
-            SqlField("title", ColumnRef("movies", "title", text)),
-            SqlField("genre", ColumnRef("movies", "genre", Genre.codec)),
-            SqlField("releaseDate", ColumnRef("movies", "releasedate", date)),
-            SqlField("showTime", ColumnRef("movies", "showtime", time)),
-            SqlField("nextShowing", ColumnRef("movies", "nextshowing", timestamptz)),
+            SqlField("id", movies.id, key = true),
+            SqlField("title", movies.title),
+            SqlField("genre", movies.genre),
+            SqlField("releaseDate", movies.releaseDate),
+            SqlField("showTime", movies.showTime),
+            SqlField("nextShowing", movies.nextShowing),
             CursorField("nextEnding", nextEnding, List("nextShowing", "duration")),
-            SqlField("duration", ColumnRef("movies", "duration", int8.imap(Duration.ofMillis)(_.toMillis))),
-            // SqlField("categories", ColumnRef("movies", "categories")),
-            // SqlField("features", ColumnRef("movies", "features")),
-            // SqlField("rating", ColumnRef("movies", "rating")),
+            SqlField("duration", movies.duration),
             CursorField("isLong", isLong, List("duration"))
           )
       ),

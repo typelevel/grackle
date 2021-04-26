@@ -15,6 +15,12 @@ import cats.effect.Resource
 import _root_.skunk.Session
 
 trait JsonbMapping[F[_]] extends SkunkMapping[F] {
+
+  object records extends TableDef("records") {
+    val id = col("id", int4)
+    val record = col("record", jsonb.opt)
+  }
+
   val schema =
     schema"""
       type Query {
@@ -73,8 +79,8 @@ trait JsonbMapping[F[_]] extends SkunkMapping[F] {
         tpe = RowType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("records", "id", int4), key = true),
-            SqlJson("record", ColumnRef("records", "record", jsonb.opt))
+            SqlField("id", records.id, key = true),
+            SqlJson("record", records.record)
           )
       ),
     )

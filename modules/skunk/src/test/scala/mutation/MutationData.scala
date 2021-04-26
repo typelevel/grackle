@@ -21,11 +21,6 @@ import fs2.Stream
 
 trait MutationSchema[F[_]] extends SkunkMapping[F] with SqlMutationSchema {
 
-  class TableDef(name: String) {
-    def col(colName: String, codec: Codec[_]): ColumnRef =
-      ColumnRef(name, colName, codec)
-  }
-
   object country extends TableDef("country") {
     val code = col("code", bpchar(3))
     val name = col("name", text)

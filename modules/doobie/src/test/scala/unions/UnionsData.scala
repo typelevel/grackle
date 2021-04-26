@@ -15,8 +15,8 @@ trait UnionsMapping[F[_]] extends DoobieMapping[F] {
   object collections extends TableDef("collections") {
     val id = col("id", Meta[String])
     val itemType = col("item_type", Meta[String])
-    val itemA = col("itema", Meta[String]) // Demoted to nullable due to being
-    val itemB = col("itemb", Meta[String]) // variant fields
+    val itemA = col("itema", Meta[String])
+    val itemB = col("itemb", Meta[String])
   }
 
   val schema =

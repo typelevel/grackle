@@ -18,11 +18,6 @@ trait WorldPostgresSchema[F[_]] extends SkunkMapping[F] {
   // ok nobody knows about codecs but us
   import _root_.skunk.codec.all._
 
-  class TableDef(name: String) {
-    def col(colName: String, codec: Codec[_]): ColumnRef =
-      ColumnRef(name, colName, codec)
-  }
-
   object country extends TableDef("country") {
     val code           = col("code", bpchar(3))
     val name           = col("name", text)

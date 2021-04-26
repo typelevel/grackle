@@ -12,6 +12,22 @@ import _root_.skunk.Session
 
 trait CoalesceMapping[F[_]] extends SkunkMapping[F] {
 
+  object r extends TableDef("r") {
+    val id = col("id", text)
+  }
+
+  object ca extends TableDef("ca") {
+    val id = col("id", text)
+    val rid = col("rid", text)
+    val a = col("a", int4)
+  }
+
+  object cb extends TableDef("cb") {
+    val id = col("id", text)
+    val rid = col("rid", text)
+    val b = col("b", bool)
+  }
+
   val schema =
     schema"""
       type Query {
@@ -50,27 +66,27 @@ trait CoalesceMapping[F[_]] extends SkunkMapping[F] {
         tpe = RType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("r", "id", text), key = true),
-            SqlObject("ca", Join(ColumnRef("r", "id", text), ColumnRef("ca", "rid", text))),
-            SqlObject("cb", Join(ColumnRef("r", "id", text), ColumnRef("cb", "rid", text))),
+            SqlField("id", r.id, key = true),
+            SqlObject("ca", Join(r.id, ca.rid)),
+            SqlObject("cb", Join(r.id, cb.rid)),
           )
       ),
       ObjectMapping(
         tpe = CAType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("ca", "id", text), key = true),
-            SqlField("rid", ColumnRef("ca", "rid", text), hidden = true),
-            SqlField("a", ColumnRef("ca", "a", int4))
+            SqlField("id", ca.id, key = true),
+            SqlField("rid", ca.rid, hidden = true),
+            SqlField("a", ca.a)
           )
       ),
       ObjectMapping(
         tpe = CBType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("cb", "id", text), key = true),
-            SqlField("rid", ColumnRef("cb", "rid", text), hidden = true),
-            SqlField("b", ColumnRef("cb", "b", bool))
+            SqlField("id", cb.id, key = true),
+            SqlField("rid", cb.rid, hidden = true),
+            SqlField("b", cb.b)
           )
       )
     )

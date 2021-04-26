@@ -31,6 +31,11 @@ abstract class SkunkMapping[F[_]: Sync](
   def doubleEncoder  = float8
   def intEncoder     = int4
 
+  class TableDef(name: String) {
+    def col(colName: String, codec: Codec[_]): ColumnRef =
+      ColumnRef(name, colName, codec)
+  }
+
   // We need to demonstrate that our `Fragment` type has certain compositional properties.
   implicit def Fragments: SqlFragment[AppliedFragment] =
     new SqlFragment[AppliedFragment] {

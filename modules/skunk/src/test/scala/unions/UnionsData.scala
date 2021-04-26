@@ -10,6 +10,14 @@ import cats.effect.Resource
 import _root_.skunk.Session
 
 trait UnionsMapping[F[_]] extends SkunkMapping[F] {
+
+  object collections extends TableDef("collections") {
+    val id = col("id", text)
+    val itemType = col("item_type", text)
+    val itemA = col("itema", text)
+    val itemB = col("itemb", text)
+  }
+
   val schema =
     schema"""
       type Query {
@@ -43,24 +51,24 @@ trait UnionsMapping[F[_]] extends SkunkMapping[F] {
         discriminator = itemTypeDiscriminator,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("collections", "id", text), key = true, hidden = true),
-            SqlField("itemType", ColumnRef("collections", "item_type", text), discriminator = true, hidden = true)
+            SqlField("id", collections.id, key = true, hidden = true),
+            SqlField("itemType", collections.itemType, discriminator = true, hidden = true)
           )
       ),
       ObjectMapping(
         tpe = ItemAType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("collections", "id", text), key = true, hidden = true),
-            SqlField("itema", ColumnRef("collections", "itema", text))
+            SqlField("id", collections.id, key = true, hidden = true),
+            SqlField("itema", collections.itemA)
           )
       ),
       ObjectMapping(
         tpe = ItemBType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("collections", "id", text), key = true, hidden = true),
-            SqlField("itemb", ColumnRef("collections", "itemb", text))
+            SqlField("id", collections.id, key = true, hidden = true),
+            SqlField("itemb", collections.itemB)
           )
       )
     )
