@@ -43,15 +43,15 @@ trait UnionsMapping[F[_]] extends SkunkMapping[F] {
         discriminator = itemTypeDiscriminator,
         fieldMappings =
           List(
-            SqlAttribute("id", ColumnRef("collections", "id", text), key = true),
-            SqlAttribute("itemType", ColumnRef("collections", "item_type", text), discriminator = true)
+            SqlField("id", ColumnRef("collections", "id", text), key = true, hidden = true),
+            SqlField("itemType", ColumnRef("collections", "item_type", text), discriminator = true, hidden = true)
           )
       ),
       ObjectMapping(
         tpe = ItemAType,
         fieldMappings =
           List(
-            SqlAttribute("id", ColumnRef("collections", "id", text), key = true),
+            SqlField("id", ColumnRef("collections", "id", text), key = true, hidden = true),
             SqlField("itema", ColumnRef("collections", "itema", text))
           )
       ),
@@ -59,7 +59,7 @@ trait UnionsMapping[F[_]] extends SkunkMapping[F] {
         tpe = ItemBType,
         fieldMappings =
           List(
-            SqlAttribute("id", ColumnRef("collections", "id", text), key = true),
+            SqlField("id", ColumnRef("collections", "id", text), key = true, hidden = true),
             SqlField("itemb", ColumnRef("collections", "itemb", text))
           )
       )
@@ -67,7 +67,7 @@ trait UnionsMapping[F[_]] extends SkunkMapping[F] {
 
   def itemTypeDiscriminator(c: Cursor): Result[Type] =
     for {
-      it <- c.attributeAs[String]("itemType")
+      it <- c.fieldAs[String]("itemType")
     } yield it match {
       case "ItemA" => ItemAType
       case "ItemB" => ItemBType

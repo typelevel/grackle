@@ -103,7 +103,7 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
           List(
             SqlField("id", ColumnRef("episodes", "id", text), key = true),
             SqlField("title", ColumnRef("episodes", "title", text.opt)),
-            SqlAttribute("episodeId", ColumnRef("episodes", "series_id", text)),
+            SqlField("episodeId", ColumnRef("episodes", "series_id", text), hidden = true),
             SqlObject("synopses"),
           )
       ),

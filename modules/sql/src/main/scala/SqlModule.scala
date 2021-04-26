@@ -23,7 +23,7 @@ trait SqlModule[F[_]] {
   /** Typeclass for SQL fragments. */
   trait SqlFragment[T] extends Monoid[T] {
 
-    def bind[A](encoder: Encoder[A], nullable: Boolean, value: A): T
+    def bind[A](encoder: Encoder[A], value: A): T
 
     def const(s: String): T
 
@@ -50,6 +50,6 @@ trait SqlModule[F[_]] {
   def booleanEncoder: Encoder[Boolean]
   def doubleEncoder:  Encoder[Double]
 
-  def fetch(fragment: Fragment, metas: List[(Boolean, (Codec[_], NullabilityKnown))]): F[Table]
+  def fetch(fragment: Fragment, metas: List[(Boolean, Codec[_])]): F[Table]
 
 }

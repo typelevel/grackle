@@ -3,16 +3,36 @@
 
 package interfaces
 
-import _root_.doobie.util.meta.Meta
-import _root_.doobie.util.transactor.Transactor
 import cats.effect.Sync
 import cats.kernel.Eq
+import _root_.doobie.util.meta.Meta
+import _root_.doobie.util.transactor.Transactor
+import io.circe.Encoder
+
 import edu.gemini.grackle._
 import edu.gemini.grackle.doobie._
 import edu.gemini.grackle.syntax._
-import io.circe.Encoder
 
 trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
+
+  object entities extends TableDef("entities") {
+    val id                     = col("id", Meta[String])
+    val entityType             = col("entity_type", Meta[EntityType])
+    val title                  = col("title", Meta[String], true)
+    val filmRating             = col("film_rating", Meta[String], true)
+    val seriesNumberOfEpisodes = col("series_number_of_episodes", Meta[Int], true)
+    val synopsisShort          = col("synopsis_short", Meta[String], true)
+    val synopsisLong           = col("synopsis_long", Meta[String], true)
+  }
+
+  object episodes extends TableDef("episodes") {
+    val id                     = col("id", Meta[String])
+    val title                  = col("title", Meta[String], true)
+    val seriesId               = col("series_id", Meta[String])
+    val synopsisShort          = col("synopsis_short", Meta[String], true)
+    val synopsisLong           = col("synopsis_long", Meta[String], true)
+  }
+
   val schema =
     schema"""
       type Query {
@@ -75,16 +95,16 @@ trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
         discriminator = entityTypeDiscriminator,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("entities", "id", Meta[String]), key = true),
-            SqlField("entityType", ColumnRef("entities", "entity_type", Meta[EntityType]), discriminator = true),
-            SqlField("title", ColumnRef("entities", "title", Meta[String]))
+            SqlField("id", entities.id, key = true),
+            SqlField("entityType", entities.entityType, discriminator = true),
+            SqlField("title", entities.title)
           )
       ),
       ObjectMapping(
         tpe = FilmType,
         fieldMappings =
           List(
-            SqlField("rating", ColumnRef("entities", "film_rating", Meta[String])),
+            SqlField("rating", entities.filmRating),
             SqlObject("synopses")
           )
       ),
@@ -92,17 +112,17 @@ trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
         tpe = SeriesType,
         fieldMappings =
           List(
-            SqlField("numberOfEpisodes", ColumnRef("entities", "series_number_of_episodes", Meta[Int])),
-            SqlObject("episodes", Join(ColumnRef("entities", "id", Meta[String]), ColumnRef("episodes", "series_id", Meta[String]))),
+            SqlField("numberOfEpisodes", entities.seriesNumberOfEpisodes),
+            SqlObject("episodes", Join(entities.id, episodes.seriesId)),
           )
       ),
       ObjectMapping(
         tpe = EpisodeType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("episodes", "id", Meta[String]), key = true),
-            SqlField("title", ColumnRef("episodes", "title", Meta[String])),
-            SqlAttribute("episodeId", ColumnRef("episodes", "series_id", Meta[String])),
+            SqlField("id", episodes.id, key = true),
+            SqlField("title", episodes.title),
+            SqlField("episodeId", episodes.seriesId, hidden = true),
             SqlObject("synopses"),
           )
       ),
@@ -115,8 +135,8 @@ trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    SqlField("short", ColumnRef("entities", "synopsis_short", Meta[String])),
-                    SqlField("long", ColumnRef("entities", "synopsis_long", Meta[String]))
+                    SqlField("short", entities.synopsisShort),
+                    SqlField("long", entities.synopsisLong)
                   )
               ),
             List("entities", "episodes", "synopses") ->
@@ -124,8 +144,8 @@ trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    SqlField("short", ColumnRef("episodes", "synopsis_short", Meta[String])),
-                    SqlField("long", ColumnRef("episoes", "synopsis_long", Meta[String]))
+                    SqlField("short", episodes.synopsisShort),
+                    SqlField("long", episodes.synopsisLong)
                   )
               )
           )

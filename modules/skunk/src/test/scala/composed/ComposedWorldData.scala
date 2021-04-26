@@ -10,7 +10,7 @@ import cats.implicits._
 
 import edu.gemini.grackle._, skunk._, syntax._
 import edu.gemini.grackle.sql.Like
-import Query._, Predicate._, Value._
+import Query._, Path._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.mkErrorResult
 import _root_.skunk.codec.all._
@@ -140,7 +140,7 @@ trait WorldMapping[F[_]] extends SkunkMapping[F] {
         tpe = CountryType,
         fieldMappings =
           List(
-            SqlAttribute("code", ColumnRef("country", "code", bpchar(3)), key = true),
+            SqlField("code", ColumnRef("country", "code", bpchar(3)), key = true, hidden = true),
             SqlField("name", ColumnRef("country", "name", text)),
             SqlField("continent", ColumnRef("country", "continent", text)),
             SqlField("region", ColumnRef("country", "region", text)),
@@ -163,8 +163,8 @@ trait WorldMapping[F[_]] extends SkunkMapping[F] {
         tpe = CityType,
         fieldMappings =
           List(
-            SqlAttribute("id", ColumnRef("city", "id", int4), key = true),
-            SqlAttribute("countrycode", ColumnRef("city", "countrycode", bpchar(3))),
+            SqlField("id", ColumnRef("city", "id", int4), key = true, hidden = true),
+            SqlField("countrycode", ColumnRef("city", "countrycode", bpchar(3)), hidden = true),
             SqlField("name", ColumnRef("city", "name", text)),
             SqlObject("country", Join(ColumnRef("city", "countrycode", bpchar(3)), ColumnRef("country", "code", bpchar(3)))),
             SqlField("district", ColumnRef("city", "district", text)),
@@ -178,7 +178,7 @@ trait WorldMapping[F[_]] extends SkunkMapping[F] {
             SqlField("language", ColumnRef("countryLanguage", "language", text), key = true),
             SqlField("isOfficial", ColumnRef("countryLanguage", "isOfficial", bool)),
             SqlField("percentage", ColumnRef("countryLanguage", "percentage", float4)),
-            SqlAttribute("countrycode", ColumnRef("countryLanguage", "countrycode", bpchar(3))),
+            SqlField("countrycode", ColumnRef("countryLanguage", "countrycode", bpchar(3)), hidden = true),
             SqlObject("countries", Join(ColumnRef("countryLanguage", "countrycode", bpchar(3)), ColumnRef("country", "code", bpchar(3))))
           )
       )
@@ -266,20 +266,20 @@ class ComposedMapping[F[_] : Monad]
     )
 
   def countryCurrencyJoin(c: Cursor, q: Query): Result[Query] =
-    (c.attribute("code"), q) match {
+    (c.fieldAs[String]("code"), q) match {
       case (Ior.Right(countryCode: String), Select("currencies", _, child)) =>
-        Select("allCurrencies", Nil, Filter(Eql(FieldPath(List("countryCode")), Const(countryCode)), child)).rightIor
+        Select("allCurrencies", Nil, Filter(Eql(UniquePath(List("countryCode")), Const(countryCode)), child)).rightIor
       case _ => mkErrorResult(s"Expected 'code' attribute at ${c.tpe}")
     }
 
   override val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {
       case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Eql(AttrPath(List("code")), Const(code)), child)).rightIor
+        Select("country", Nil, Unique(Eql(UniquePath(List("code")), Const(code)), child)).rightIor
       case Select("countries", _, child) =>
         Select("countries", Nil, child).rightIor
       case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
-        Select("cities", Nil, Filter(Like(FieldPath(List("name")), namePattern, true), child)).rightIor
+        Select("cities", Nil, Filter(Like(UniquePath(List("name")), namePattern, true), child)).rightIor
     }
   ))
 }

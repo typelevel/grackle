@@ -9,7 +9,7 @@ import cats.implicits._
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
 
-import Query._, Predicate._, Value._
+import Query._, Path._, Predicate._, Value._
 import QueryCompiler._
 
 object StarWarsData {
@@ -196,9 +196,9 @@ object StarWarsMapping extends ValueMapping[Id] {
     QueryType -> {
       case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
         val episode = Episode.values.find(_.toString == e.name).get
-        Select("hero", Nil, Unique(Eql(FieldPath(List("id")), Const(hero(episode).id)), child)).rightIor
+        Select("hero", Nil, Unique(Eql(UniquePath(List("id")), Const(hero(episode).id)), child)).rightIor
       case Select(f@("character" | "human" | "droid"), List(Binding("id", IDValue(id))), child) =>
-        Select(f, Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
+        Select(f, Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
     }
   ))
 

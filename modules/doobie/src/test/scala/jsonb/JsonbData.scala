@@ -10,17 +10,25 @@ import _root_.doobie.postgres.circe.jsonb.implicits._
 import _root_.doobie.util.transactor.Transactor
 import cats.effect.Sync
 import cats.implicits._
+import io.circe.Json
+
 import edu.gemini.grackle._
 import edu.gemini.grackle.doobie._
 import edu.gemini.grackle.syntax._
-import io.circe.Json
 
 import Query._
+import Path._
 import Predicate._
 import Value._
 import QueryCompiler._
 
 trait JsonbMapping[F[_]] extends DoobieMapping[F] {
+
+  object records extends TableDef("records") {
+    val id = col("id", Meta[Int])
+    val record = col("record", new Meta(Get[Json], Put[Json]), true)
+  }
+
   val schema =
     schema"""
       type Query {
@@ -79,8 +87,8 @@ trait JsonbMapping[F[_]] extends DoobieMapping[F] {
         tpe = RowType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("records", "id", Meta[Int]), key = true),
-            SqlJson("record", ColumnRef("records", "record", new Meta(Get[Json], Put[Json])))
+            SqlField("id", records.id, key = true),
+            SqlJson("record", records.record)
           )
       ),
     )
@@ -88,7 +96,7 @@ trait JsonbMapping[F[_]] extends DoobieMapping[F] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("record", List(Binding("id", IntValue(id))), child) =>
-        Select("record", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
+        Select("record", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
     }
   ))
 }

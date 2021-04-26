@@ -336,11 +336,6 @@ abstract class AbstractCursor[T] extends Cursor {
 
   def field(fieldName: String): Result[Cursor] =
     mkErrorResult(s"No field '$fieldName' for type $tpe")
-
-  def hasAttribute(attributeName: String): Boolean = false
-
-  def attribute(attributeName: String): Result[Any] =
-    mkErrorResult(s"No attribute '$attributeName' for type $tpe")
 }
 
 abstract class PrimitiveCursor[T] extends AbstractCursor[T] {

@@ -7,23 +7,20 @@ import _root_.doobie.{ Meta, Transactor }
 import _root_.doobie.implicits._
 import cats.effect.{ Bracket, Sync }
 import cats.syntax.all._
+import fs2.Stream
+
 import edu.gemini.grackle._
 import edu.gemini.grackle.doobie.DoobieMapping
 import edu.gemini.grackle.doobie.DoobieMappingCompanion
 import edu.gemini.grackle.doobie.DoobieMonitor
+import edu.gemini.grackle.Path._
 import edu.gemini.grackle.Predicate._
 import edu.gemini.grackle.Query._
 import edu.gemini.grackle.QueryCompiler._
 import edu.gemini.grackle.Value._
 import grackle.test.SqlMutationSchema
-import fs2.Stream
 
 trait MutationSchema[F[_]] extends DoobieMapping[F] with SqlMutationSchema {
-
-  class TableDef(name: String) {
-    def col(colName: String, codec: Codec[_]): ColumnRef =
-      ColumnRef(name, colName, codec)
-  }
 
   object country extends TableDef("country") {
     val code = col("code", Meta[String])
@@ -86,7 +83,7 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
                     """.query[Int]
                       .unique
                       .transact(transactor)
-                      .map { id => (Unique(Eql(AttrPath(List("id")), Const(id)), child), e).rightIor }
+                      .map { id => (Unique(Eql(UniquePath(List("id")), Const(id)), child), e).rightIor }
                 }
             }
           }),
@@ -95,7 +92,7 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
        ObjectMapping(
         tpe = CountryType,
         fieldMappings = List(
-          SqlAttribute("code", country.code, key = true),
+          SqlField("code", country.code, key = true, hidden = true),
           SqlField("name",     country.name),
           SqlObject("cities",  Join(country.code, city.countrycode)),
         ),
@@ -103,8 +100,8 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
       ObjectMapping(
         tpe = CityType,
         fieldMappings = List(
-          SqlAttribute("id", city.id, key = true),
-          SqlAttribute("countrycode", city.countrycode),
+          SqlField("id", city.id, key = true, hidden = true),
+          SqlField("countrycode", city.countrycode, hidden = true),
           SqlField("name", city.name),
           SqlField("population", city.population),
           SqlObject("country", Join(city.countrycode, country.code)),
@@ -115,7 +112,7 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("city", List(Binding("id", IntValue(id))), child) =>
-        Select("city", Nil, Unique(Eql(AttrPath(List("id")), Const(id)), child)).rightIor
+        Select("city", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
     },
     MutationType -> {
 
@@ -125,7 +122,7 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
           Select("updatePopulation", Nil,
             // We could also do this in the SqlRoot's mutation, and in fact would need to do so if
             // the mutation generated a new id. But for now it seems easiest to do it here.
-            Unique(Eql(AttrPath(List("id")), Const(id)), child)
+            Unique(Eql(UniquePath(List("id")), Const(id)), child)
           )
         ).rightIor
 

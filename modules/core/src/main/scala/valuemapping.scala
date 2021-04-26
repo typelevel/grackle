@@ -58,17 +58,12 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
     implicit def wrap[T](fm: FieldMapping): ValueField0[T] = Wrap(fm)
     case class Wrap[T](fm: FieldMapping)(implicit val pos: SourcePos) extends ValueField0[T] {
       def fieldName = fm.fieldName
-      def isPublic = fm.isPublic
+      def hidden = fm.hidden
       def withParent(tpe: Type): FieldMapping = fm.withParent(tpe)
     }
   }
-  case class ValueField[T](fieldName: String, f: T => Any)(implicit val pos: SourcePos) extends ValueField0[T] {
-    def isPublic = true
+  case class ValueField[T](fieldName: String, f: T => Any, hidden: Boolean = false)(implicit val pos: SourcePos) extends ValueField0[T] {
     def withParent(tpe: Type): ValueField[T] = this
-  }
-  case class ValueAttribute[T](fieldName: String, f: T => Any)(implicit val pos: SourcePos) extends ValueField0[T] {
-    def isPublic = false
-    def withParent(tpe: Type): ValueAttribute[T] = this
   }
 
   case class ValueObjectMapping[T](
@@ -156,33 +151,18 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
         mkErrorResult(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
 
     def hasField(fieldName: String): Boolean =
-      tpe.hasField(fieldName) && fieldMapping(path, tpe, fieldName).isDefined
+      fieldMapping(path, tpe, fieldName).isDefined
 
-    def field(fieldName: String): Result[Cursor] =
-      (for {
-        fieldTpe <- tpe.field(fieldName)
-      } yield {
-        fieldMapping(path, tpe, fieldName) match {
-          case Some(ValueField(_, f)) =>
-            mkChild(tpe = fieldTpe, focus = f.asInstanceOf[Any => Any](focus), path = fieldName :: path).rightIor
-          case Some(CursorField(_, f, _, _)) =>
-            f(this).map(res => mkChild(tpe = fieldTpe, focus = res))
-          case _ =>
-            mkErrorResult(s"No field '$fieldName' for type $tpe")
-        }
-      }).getOrElse(mkErrorResult(s"No field '$fieldName' for type $tpe"))
-
-    def hasAttribute(attrName: String): Boolean =
-      !tpe.hasField(attrName) && fieldMapping(path, tpe, attrName).isDefined
-
-    def attribute(attrName: String): Result[Any] =
-      fieldMapping(path, tpe, attrName) match {
-        case Some(ValueAttribute(_, f)) =>
-          f.asInstanceOf[Any => Any](focus).rightIor
-        case Some(CursorAttribute(_, f, _)) =>
-          f(this)
+    def field(fieldName: String): Result[Cursor] = {
+      val fieldTpe = tpe.field(fieldName).getOrElse(AttributeType)
+      fieldMapping(path, tpe, fieldName) match {
+        case Some(ValueField(_, f, _)) =>
+          mkChild(tpe = fieldTpe, focus = f.asInstanceOf[Any => Any](focus), path = fieldName :: path).rightIor
+        case Some(CursorField(_, f, _, _, _)) =>
+          f(this).map(res => mkChild(tpe = fieldTpe, focus = res))
         case _ =>
-          mkErrorResult(s"No attribute '$attrName' for type $tpe")
+          mkErrorResult(s"No field '$fieldName' for type $tpe")
       }
+    }
   }
 }

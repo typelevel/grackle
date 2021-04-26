@@ -255,14 +255,3 @@ object Query {
     case _                        => None
   }
 }
-
-/**
- * A reified function over a `Cursor`.
- *
- * Query interpreters will typically need to introspect predicates (eg. in the doobie module
- * we need to be able to construct where clauses from predicates over fields/attributes), so
- * these cannot be arbitrary functions `Cursor => Boolean`.
- */
-trait Term[T] extends Product with Serializable {
-  def apply(c: Cursor): Result[T]
-}

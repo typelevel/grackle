@@ -499,6 +499,11 @@ object ScalarType {
         """.stripMargin.trim
       )
   )
+
+  val AttributeType = ScalarType(
+    name = "InternalAttribute",
+    description = None
+  )
 }
 
 /**

@@ -210,7 +210,7 @@ trait MappingValidator {
       }
     }
     val unknown = fms.foldMap { fm =>
-      tpe.fields.find(_.name == fm.fieldName || !fm.isPublic) match {
+      tpe.fields.find(_.name == fm.fieldName || fm.hidden) match {
         case Some(_) => Chain.empty
         case None => Chain(ReferencedFieldDoesNotExist(m, fm))
       }

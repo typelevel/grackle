@@ -14,16 +14,55 @@ import cats.implicits._
 import Query._
 import QueryInterpreter.mkErrorResult
 
+/**
+ * A reified function over a `Cursor`.
+ *
+ * Query interpreters will typically need to introspect predicates (eg. in the doobie module
+ * we need to be able to construct where clauses from predicates over fields/attributes), so
+ * these cannot be arbitrary functions `Cursor => Boolean`.
+ */
+trait Term[T] extends Product with Serializable {
+  def apply(c: Cursor): Result[T]
+}
+
+sealed trait Path {
+  def path: List[String]
+  def extend(prefix: List[String]): Path
+}
+
+object Path {
+  import Predicate.ScalarFocus
+
+  case class UniquePath[T](val path: List[String]) extends Term[T] with Path {
+    def apply(c: Cursor): Result[T] =
+      c.listPath(path) match {
+        case Ior.Right(List(ScalarFocus(a: T @unchecked))) => a.rightIor
+        case other => mkErrorResult(s"Expected exactly one element for path $path found $other")
+      }
+
+    def extend(prefix: List[String]): Path =
+      UniquePath(prefix ++ path)
+  }
+
+  case class ListPath[T](val path: List[String]) extends Term[List[T]] with Path {
+    def apply(c: Cursor): Result[List[T]] =
+      c.flatListPath(path).map(_.map { case ScalarFocus(f: T @unchecked) => f })
+
+    def extend(prefix: List[String]): Path =
+      ListPath(prefix ++ path)
+  }
+}
+
 trait Predicate extends Term[Boolean]
 
 object Predicate {
   object ScalarFocus {
     def unapply(c: Cursor): Option[Any] =
       if (c.isLeaf) Some(c.focus)
-      else if (c.isNullable)
+      else if (c.isNullable && c.tpe.nonNull.isLeaf)
         c.asNullable match {
-          case Ior.Right(Some(c)) => unapply(c)
-          case _ => None
+          case Ior.Right(Some(c)) => unapply(c).map(Some(_))
+          case _ => Some(None)
         }
       else None
   }
@@ -70,49 +109,6 @@ object Predicate {
     def apply(c: Cursor): Result[Boolean] = {
       c.listPath(path).flatMap(cs => Cursor.flatten(cs).flatMap(_.traverse(pred(_)).map(bs => bs.exists(identity))))
     }
-  }
-
-  sealed trait Path {
-    def path: List[String]
-    def extend(prefix: List[String]): Path
-  }
-
-  case class FieldPath[T](val path: List[String]) extends Term[T] with Path {
-    def apply(c: Cursor): Result[T] =
-      c.listPath(path) match {
-        case Ior.Right(List(ScalarFocus(a: T @unchecked))) => a.rightIor
-        case other => mkErrorResult(s"Expected exactly one element for path $path found $other")
-      }
-
-    def extend(prefix: List[String]): Path =
-      FieldPath(prefix ++ path)
-  }
-
-  case class AttrPath[T](val path: List[String]) extends Term[T] with Path {
-    def apply(c: Cursor): Result[T] =
-      c.attrListPath(path) match {
-        case Ior.Right(List(a: T @unchecked)) => a.rightIor
-        case other => mkErrorResult(s"Expected exactly one element for path $path found $other")
-      }
-
-    def extend(prefix: List[String]): Path =
-      AttrPath(prefix ++ path)
-  }
-
-  case class CollectFieldPath[T](val path: List[String]) extends Term[List[T]] with Path {
-    def apply(c: Cursor): Result[List[T]] =
-      c.flatListPath(path).map(_.map { case ScalarFocus(f: T @unchecked) => f })
-
-    def extend(prefix: List[String]): Path =
-      CollectFieldPath(prefix ++ path)
-  }
-
-  case class CollectAttrPath[T](val path: List[String]) extends Term[List[T]] with Path {
-    def apply(c: Cursor): Result[List[T]] =
-      c.attrListPath(path).map(_.asInstanceOf[List[T]])
-
-    def extend(prefix: List[String]): Path =
-      CollectAttrPath(prefix ++ path)
   }
 
   case class And(x: Predicate, y: Predicate) extends Predicate {

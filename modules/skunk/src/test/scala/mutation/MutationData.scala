@@ -10,6 +10,7 @@ import cats.data.IorT
 import cats.effect.{ Bracket, Resource, Sync }
 import cats.syntax.all._
 import edu.gemini.grackle._
+import edu.gemini.grackle.Path._
 import edu.gemini.grackle.Predicate._
 import edu.gemini.grackle.Query._
 import edu.gemini.grackle.QueryCompiler._
@@ -87,7 +88,7 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
                       """.query(int4)
                     s.prepare(q).use { ps =>
                       ps.unique(name ~ cc ~ pop).map { id =>
-                        (Unique(Eql(AttrPath(List("id")), Const(id)), child), e).rightIor
+                        (Unique(Eql(UniquePath(List("id")), Const(id)), child), e).rightIor
                       }
                     }
                   }
@@ -99,7 +100,7 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
        ObjectMapping(
         tpe = CountryType,
         fieldMappings = List(
-          SqlAttribute("code", country.code, key = true),
+          SqlField("code", country.code, key = true, hidden = true),
           SqlField("name",     country.name),
           SqlObject("cities",  Join(country.code, city.countrycode)),
         ),
@@ -107,8 +108,8 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
       ObjectMapping(
         tpe = CityType,
         fieldMappings = List(
-          SqlAttribute("id", city.id, key = true),
-          SqlAttribute("countrycode", city.countrycode),
+          SqlField("id", city.id, key = true, hidden = true),
+          SqlField("countrycode", city.countrycode, hidden = true),
           SqlField("name", city.name),
           SqlField("population", city.population),
           SqlObject("country", Join(city.countrycode, country.code)),
@@ -119,7 +120,7 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("city", List(Binding("id", IntValue(id))), child) =>
-        Select("city", Nil, Unique(Eql(AttrPath(List("id")), Const(id)), child)).rightIor
+        Select("city", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
     },
     MutationType -> {
 
@@ -128,7 +129,7 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
           Cursor.Env("id" -> id, "population" -> pop),
           Select("updatePopulation", Nil,
             // We already know the final form of the query so we can rewrite it here.
-            Unique(Eql(AttrPath(List("id")), Const(id)), child)
+            Unique(Eql(UniquePath(List("id")), Const(id)), child)
           )
         ).rightIor
 

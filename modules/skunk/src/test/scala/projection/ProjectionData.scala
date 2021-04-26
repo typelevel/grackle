@@ -7,7 +7,8 @@ import cats.effect.Sync
 import cats.implicits._
 
 import edu.gemini.grackle._, skunk._, syntax._
-import edu.gemini.grackle.Predicate.{Const, Eql, FieldPath, Project}
+import edu.gemini.grackle.Path._
+import edu.gemini.grackle.Predicate.{Const, Eql, Project}
 import edu.gemini.grackle.Query.{Binding, Filter, Select}
 import edu.gemini.grackle.QueryCompiler.SelectElaborator
 import edu.gemini.grackle.Value.{BooleanValue, ObjectValue}
@@ -72,7 +73,7 @@ trait ProjectionMapping[F[_]] extends SkunkMapping[F] {
         fieldMappings =
           List(
             SqlField("id", ColumnRef("level1", "id", varchar), key = true),
-            SqlAttribute("level0_id", ColumnRef("level1", "level0_id", varchar)),
+            SqlField("level0_id", ColumnRef("level1", "level0_id", varchar), hidden = true),
             SqlObject("level2",
               Join(ColumnRef("level1", "id", varchar), ColumnRef("level2", "level1_id", varchar))
             )
@@ -84,7 +85,7 @@ trait ProjectionMapping[F[_]] extends SkunkMapping[F] {
           List(
             SqlField("id", ColumnRef("level2", "id", varchar), key = true),
             SqlField("attr", ColumnRef("level2", "attr", bool)),
-            SqlAttribute("level1_id", ColumnRef("level2", "level1_id", varchar))
+            SqlField("level1_id", ColumnRef("level2", "level1_id", varchar), hidden = true)
           )
       )
     )
@@ -93,7 +94,7 @@ trait ProjectionMapping[F[_]] extends SkunkMapping[F] {
     def unapply(input: ObjectValue): Option[Predicate] = {
       input.fields match {
         case List(("attr", BooleanValue(attr))) =>
-          Some(Project(List("level1", "level2"), Eql(FieldPath(List("attr")), Const(attr))))
+          Some(Project(List("level1", "level2"), Eql(UniquePath(List("attr")), Const(attr))))
         case _ => None
       }
     }
@@ -103,7 +104,7 @@ trait ProjectionMapping[F[_]] extends SkunkMapping[F] {
     def unapply(input: ObjectValue): Option[Predicate] = {
       input.fields match {
         case List(("attr", BooleanValue(attr))) =>
-          Some(Project(List("level2"), Eql(FieldPath(List("attr")), Const(attr))))
+          Some(Project(List("level2"), Eql(UniquePath(List("attr")), Const(attr))))
         case _ => None
       }
     }
@@ -113,7 +114,7 @@ trait ProjectionMapping[F[_]] extends SkunkMapping[F] {
     def unapply(input: ObjectValue): Option[Predicate] = {
       input.fields match {
         case List(("attr", BooleanValue(attr))) =>
-          Some(Eql(FieldPath(List("attr")), Const(attr)))
+          Some(Eql(UniquePath(List("attr")), Const(attr)))
         case _ => None
       }
     }

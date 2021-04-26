@@ -75,7 +75,7 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
           List(
             SqlField("title", ColumnRef("episodes2", "title", text), key = true),
             SqlObject("synopses"),
-            SqlAttribute("series_title", ColumnRef("episodes2", "series_title", text))
+            SqlField("series_title", ColumnRef("episodes2", "series_title", text), hidden = true)
           )
       ),
       PrefixedMapping(

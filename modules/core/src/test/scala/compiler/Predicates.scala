@@ -9,7 +9,7 @@ import cats.tests.CatsSuite
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
-import Query._, Predicate._, Value._
+import Query._, Path._, Predicate._, Value._
 import QueryCompiler._
 
 object ItemData {
@@ -59,8 +59,8 @@ object ItemMapping extends ValueMapping[Id] {
             ValueField("label", _.label),
             ValueField("tags", _.tags),
             CursorField("tagCount", tagCount),
-            ValueAttribute("tagCountVA", _.tags.size),
-            CursorAttribute("tagCountCA", tagCount)
+            ValueField("tagCountVA", _.tags.size, hidden = true),
+            CursorField("tagCountCA", tagCount, hidden = true)
           )
       )
     )
@@ -71,13 +71,13 @@ object ItemMapping extends ValueMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("itemByTag", List(Binding("tag", IDValue(tag))), child) =>
-        Select("itemByTag", Nil, Filter(Contains(CollectFieldPath(List("tags")), Const(tag)), child)).rightIor
+        Select("itemByTag", Nil, Filter(Contains(ListPath(List("tags")), Const(tag)), child)).rightIor
       case Select("itemByTagCount", List(Binding("count", IntValue(count))), child) =>
-        Select("itemByTagCount", Nil, Filter(Eql(FieldPath(List("tagCount")), Const(count)), child)).rightIor
+        Select("itemByTagCount", Nil, Filter(Eql(UniquePath(List("tagCount")), Const(count)), child)).rightIor
       case Select("itemByTagCountVA", List(Binding("count", IntValue(count))), child) =>
-        Select("itemByTagCountVA", Nil, Filter(Eql(AttrPath(List("tagCountVA")), Const(count)), child)).rightIor
+        Select("itemByTagCountVA", Nil, Filter(Eql(UniquePath(List("tagCountVA")), Const(count)), child)).rightIor
       case Select("itemByTagCountCA", List(Binding("count", IntValue(count))), child) =>
-        Select("itemByTagCountCA", Nil, Filter(Eql(AttrPath(List("tagCountCA")), Const(count)), child)).rightIor
+        Select("itemByTagCountCA", Nil, Filter(Eql(UniquePath(List("tagCountCA")), Const(count)), child)).rightIor
     }
   ))
 }

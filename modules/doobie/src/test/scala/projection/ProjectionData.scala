@@ -9,12 +9,28 @@ import doobie.Transactor
 import doobie.util.meta.Meta
 
 import edu.gemini.grackle._, doobie._, syntax._
-import edu.gemini.grackle.Predicate.{Const, Eql, FieldPath, Project}
+import edu.gemini.grackle.Path._
+import edu.gemini.grackle.Predicate.{Const, Eql, Project}
 import edu.gemini.grackle.Query.{Binding, Filter, Select}
 import edu.gemini.grackle.QueryCompiler.SelectElaborator
 import edu.gemini.grackle.Value.{BooleanValue, ObjectValue}
 
 trait ProjectionMapping[F[_]] extends DoobieMapping[F] {
+
+  object level0 extends TableDef("level0") {
+    val id = col("id", Meta[String])
+  }
+
+  object level1 extends TableDef("level1") {
+    val id = col("id", Meta[String])
+    val level0Id = col("level0_id", Meta[String], true)
+  }
+
+  object level2 extends TableDef("level2") {
+    val id = col("id", Meta[String])
+    val level1Id = col("level1_id", Meta[String], true)
+    val attr = col("attr", Meta[Boolean], true)
+  }
 
   val schema =
     schema"""
@@ -60,30 +76,26 @@ trait ProjectionMapping[F[_]] extends DoobieMapping[F] {
         tpe = Level0Type,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("level0", "id", Meta[String]), key = true),
-            SqlObject("level1",
-              Join(ColumnRef("level0", "id", Meta[String]), ColumnRef("level1", "level0_id", Meta[String]))
-            )
+            SqlField("id", level0.id, key = true),
+            SqlObject("level1", Join(level0.id, level1.level0Id))
           )
       ),
       ObjectMapping(
         tpe = Level1Type,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("level1", "id", Meta[String]), key = true),
-            SqlAttribute("level0_id", ColumnRef("level1", "level0_id", Meta[String])),
-            SqlObject("level2",
-              Join(ColumnRef("level1", "id", Meta[String]), ColumnRef("level2", "level1_id", Meta[String]))
-            )
+            SqlField("id", level1.id, key = true),
+            SqlField("level0_id", level1.level0Id, hidden = true),
+            SqlObject("level2", Join(level1.id, level2.level1Id))
           )
       ),
       ObjectMapping(
         tpe = Level2Type,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("level2", "id", Meta[String]), key = true),
-            SqlField("attr", ColumnRef("level2", "attr", Meta[Boolean])),
-            SqlAttribute("level1_id", ColumnRef("level2", "level1_id", Meta[String]))
+            SqlField("id", level2.id, key = true),
+            SqlField("attr", level2.attr),
+            SqlField("level1_id", level2.level1Id, hidden = true)
           )
       )
     )
@@ -92,7 +104,7 @@ trait ProjectionMapping[F[_]] extends DoobieMapping[F] {
     def unapply(input: ObjectValue): Option[Predicate] = {
       input.fields match {
         case List(("attr", BooleanValue(attr))) =>
-          Some(Project(List("level1", "level2"), Eql(FieldPath(List("attr")), Const(attr))))
+          Some(Project(List("level1", "level2"), Eql(UniquePath(List("attr")), Const(Option(attr)))))
         case _ => None
       }
     }
@@ -102,7 +114,7 @@ trait ProjectionMapping[F[_]] extends DoobieMapping[F] {
     def unapply(input: ObjectValue): Option[Predicate] = {
       input.fields match {
         case List(("attr", BooleanValue(attr))) =>
-          Some(Project(List("level2"), Eql(FieldPath(List("attr")), Const(attr))))
+          Some(Project(List("level2"), Eql(UniquePath(List("attr")), Const(Option(attr)))))
         case _ => None
       }
     }
@@ -112,7 +124,7 @@ trait ProjectionMapping[F[_]] extends DoobieMapping[F] {
     def unapply(input: ObjectValue): Option[Predicate] = {
       input.fields match {
         case List(("attr", BooleanValue(attr))) =>
-          Some(Eql(FieldPath(List("attr")), Const(attr)))
+          Some(Eql(UniquePath(List("attr")), Const(Option(attr))))
         case _ => None
       }
     }
