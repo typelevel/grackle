@@ -124,10 +124,5 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
           mkErrorResult(s"No field '$fieldName' for type $tpe")
       }
     }
-
-    def hasAttribute(attrName: String): Boolean = false
-
-    def attribute(attrName: String): Result[Any] =
-      mkErrorResult(s"No attribute '$attrName' for type $tpe")
   }
 }

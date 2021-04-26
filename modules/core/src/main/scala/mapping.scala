@@ -139,7 +139,7 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
 
   trait FieldMapping extends Product with Serializable {
     def fieldName: String
-    def isPublic: Boolean
+    def hidden: Boolean
     def withParent(tpe: Type): FieldMapping
     def pos: SourcePos
   }
@@ -175,7 +175,7 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
         IorT(cursor(q, e)).tupleLeft(q)
       } .value
 
-    def isPublic = true
+    def hidden = false
     def cursor(query: Query, env: Env): Stream[F, Result[Cursor]]
     def withParent(tpe: Type): RootMapping
   }
@@ -199,22 +199,14 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
       Some((lm.tpe, lm.encoder))
   }
 
-  case class CursorField[T](fieldName: String, f: Cursor => Result[T], encoder: Encoder[T], required: List[String])(
+  case class CursorField[T](fieldName: String, f: Cursor => Result[T], encoder: Encoder[T], required: List[String], hidden: Boolean)(
     implicit val pos: SourcePos
   ) extends FieldMapping {
-    def isPublic = true
     def withParent(tpe: Type): CursorField[T] = this
   }
   object CursorField {
-    def apply[T](fieldName: String, f: Cursor => Result[T], required: List[String] = Nil)(implicit encoder: Encoder[T], di: DummyImplicit): CursorField[T] =
-      new CursorField(fieldName, f, encoder, required)
-  }
-
-  case class CursorAttribute[T](fieldName: String, f: Cursor => Result[T], required: List[String] = Nil)(
-    implicit val pos: SourcePos
-  ) extends FieldMapping {
-    def isPublic = false
-    def withParent(tpe: Type): CursorAttribute[T] = this
+    def apply[T](fieldName: String, f: Cursor => Result[T], required: List[String] = Nil, hidden: Boolean = false)(implicit encoder: Encoder[T], di: DummyImplicit): CursorField[T] =
+      new CursorField(fieldName, f, encoder, required, hidden)
   }
 
   case class Delegate(
@@ -222,7 +214,7 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
     interpreter: Mapping[F],
     join: (Cursor, Query) => Result[Query] = ComponentElaborator.TrivialJoin
   )(implicit val pos: SourcePos) extends FieldMapping {
-    def isPublic = true
+    def hidden = false
     def withParent(tpe: Type): Delegate = this
   }
 

@@ -9,7 +9,7 @@ import cats.implicits._
 import cats.tests.CatsSuite
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
-import Query._, Predicate._, Value._, UntypedOperation._
+import Query._, Path._, Predicate._, Value._, UntypedOperation._
 import QueryCompiler._, ComponentElaborator.TrivialJoin
 
 final class CompilerSuite extends CatsSuite {
@@ -198,7 +198,7 @@ final class CompilerSuite extends CatsSuite {
     val expected =
       Select(
         "character", Nil,
-        Unique(Eql(FieldPath(List("id")), Const("1000")),
+        Unique(Eql(UniquePath(List("id")), Const("1000")),
           Select("name", Nil) ~
             Select(
               "friends", Nil,
@@ -366,7 +366,7 @@ object AtomicMapping extends Mapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("character", List(Binding("id", StringValue(id))), child) =>
-        Select("character", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
+        Select("character", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
     }
   ))
 }

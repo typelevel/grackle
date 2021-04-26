@@ -14,6 +14,25 @@ import cats.effect.Resource
 import _root_.skunk.Session
 
 trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
+
+  object entities extends TableDef("entities") {
+    val id                     = col("id", text)
+    val entityType             = col("entity_type", EntityType.codec)
+    val title                  = col("title", text.opt)
+    val filmRating             = col("film_rating", text.opt)
+    val seriesNumberOfEpisodes = col("series_number_of_episodes", int4.opt)
+    val synopsisShort          = col("synopsis_short", text.opt)
+    val synopsisLong           = col("synopsis_long", text.opt)
+  }
+
+  object episodes extends TableDef("episodes") {
+    val id                     = col("id", text)
+    val title                  = col("title", text.opt)
+    val seriesId               = col("series_id", text)
+    val synopsisShort          = col("synopsis_short", text.opt)
+    val synopsisLong           = col("synopsis_long", text.opt)
+  }
+
   val schema =
     schema"""
       type Query {
@@ -76,16 +95,16 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
         discriminator = entityTypeDiscriminator,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("entities", "id", text), key = true),
-            SqlField("entityType", ColumnRef("entities", "entity_type", EntityType.codec), discriminator = true),
-            SqlField("title", ColumnRef("entities", "title", text.opt))
+            SqlField("id", entities.id, key = true),
+            SqlField("entityType", entities.entityType, discriminator = true),
+            SqlField("title", entities.title)
           )
       ),
       ObjectMapping(
         tpe = FilmType,
         fieldMappings =
           List(
-            SqlField("rating", ColumnRef("entities", "film_rating", text.opt)),
+            SqlField("rating", entities.filmRating),
             SqlObject("synopses")
           )
       ),
@@ -93,17 +112,17 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
         tpe = SeriesType,
         fieldMappings =
           List(
-            SqlField("numberOfEpisodes", ColumnRef("entities", "series_number_of_episodes", int4.opt)),
-            SqlObject("episodes", Join(ColumnRef("entities", "id", text), ColumnRef("episodes", "series_id", text))),
+            SqlField("numberOfEpisodes", entities.seriesNumberOfEpisodes),
+            SqlObject("episodes", Join(entities.id, episodes.seriesId)),
           )
       ),
       ObjectMapping(
         tpe = EpisodeType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("episodes", "id", text), key = true),
-            SqlField("title", ColumnRef("episodes", "title", text.opt)),
-            SqlAttribute("episodeId", ColumnRef("episodes", "series_id", text)),
+            SqlField("id", episodes.id, key = true),
+            SqlField("title", episodes.title),
+            SqlField("episodeId", episodes.seriesId, hidden = true),
             SqlObject("synopses"),
           )
       ),
@@ -116,8 +135,8 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    SqlField("short", ColumnRef("entities", "synopsis_short", text.opt)),
-                    SqlField("long", ColumnRef("entities", "synopsis_long", text.opt))
+                    SqlField("short", entities.synopsisShort),
+                    SqlField("long", entities.synopsisLong)
                   )
               ),
             List("entities", "episodes", "synopses") ->
@@ -125,8 +144,8 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
-                    SqlField("short", ColumnRef("episodes", "synopsis_short", text.opt)),
-                    SqlField("long", ColumnRef("episoes", "synopsis_long", text.opt))
+                    SqlField("short", episodes.synopsisShort),
+                    SqlField("long", episodes.synopsisLong)
                   )
               )
           )

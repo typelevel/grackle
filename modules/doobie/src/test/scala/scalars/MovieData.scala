@@ -10,6 +10,7 @@ import java.time.LocalTime
 import java.time.ZonedDateTime
 import java.util.UUID
 
+import scala.reflect.ClassTag
 import scala.util.Try
 
 import cats.Eq
@@ -25,10 +26,10 @@ import io.circe.Encoder
 
 import doobie._
 import Query._
+import Path._
 import Predicate._
 import Value._
 import QueryCompiler._
-import scala.reflect.ClassTag
 
 object MovieData {
   sealed trait Genre extends Product with Serializable
@@ -105,6 +106,18 @@ object MovieData {
 trait MovieMapping[F[_]] extends DoobieMapping[F] {
   import MovieData._
 
+  object movies extends TableDef("movies") {
+    val id = col("id", Meta[UUID])
+    val title = col("title", Meta[String])
+    val genre = col("genre", Meta[Genre])
+    val releaseDate = col("releasedate", Meta[LocalDate])
+    val showTime = col("showtime", Meta[LocalTime])
+    val nextShowing = col("nextshowing", Meta[ZonedDateTime])
+    val duration = col("duration", Meta[Duration])
+    val categories = col("categories", Meta[List[String]])
+    val features = col("features", Meta[List[Feature]])
+  }
+
   val schema =
     schema"""
         type Query {
@@ -174,18 +187,17 @@ trait MovieMapping[F[_]] extends DoobieMapping[F] {
         tpe = MovieType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("movies", "id", Meta[UUID]), key = true),
-            SqlField("title", ColumnRef("movies", "title", Meta[String])),
-            SqlField("genre", ColumnRef("movies", "genre", Meta[Genre])),
-            SqlField("releaseDate", ColumnRef("movies", "releasedate", Meta[LocalDate])),
-            SqlField("showTime", ColumnRef("movies", "showtime", Meta[LocalTime])),
-            SqlField("nextShowing", ColumnRef("movies", "nextshowing", Meta[ZonedDateTime])),
+            SqlField("id", movies.id, key = true),
+            SqlField("title", movies.title),
+            SqlField("genre", movies.genre),
+            SqlField("releaseDate", movies.releaseDate),
+            SqlField("showTime", movies.showTime),
+            SqlField("nextShowing", movies.nextShowing),
             CursorField("nextEnding", nextEnding, List("nextShowing", "duration")),
-            SqlField("duration", ColumnRef("movies", "duration", Meta[Duration])),
-            SqlField("categories", ColumnRef("movies", "categories", Meta[List[String]])),
-            SqlField("features", ColumnRef("movies", "features", Meta[List[Feature]])),
-            // SqlField("rating", ColumnRef("movies", "rating")),
-            CursorAttribute("isLong", isLong, List("duration"))
+            SqlField("duration", movies.duration),
+            SqlField("categories", movies.categories),
+            SqlField("features", movies.features),
+            CursorField("isLong", isLong, List("duration"), hidden = true)
           )
       ),
       LeafMapping[UUID](UUIDType),
@@ -242,15 +254,15 @@ trait MovieMapping[F[_]] extends DoobieMapping[F] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("movieById", List(Binding("id", UUIDValue(id))), child) =>
-        Select("movieById", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
+        Select("movieById", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
       case Select("moviesByGenre", List(Binding("genre", GenreValue(genre))), child) =>
-        Select("moviesByGenre", Nil, Filter(Eql(FieldPath(List("genre")), Const(genre)), child)).rightIor
+        Select("moviesByGenre", Nil, Filter(Eql(UniquePath(List("genre")), Const(genre)), child)).rightIor
       case Select("moviesReleasedBetween", List(Binding("from", DateValue(from)), Binding("to", DateValue(to))), child) =>
         Select("moviesReleasedBetween", Nil,
           Filter(
             And(
-              Not(Lt(FieldPath(List("releaseDate")), Const(from))),
-              Lt(FieldPath(List("releaseDate")), Const(to))
+              Not(Lt(UniquePath(List("releaseDate")), Const(from))),
+              Lt(UniquePath(List("releaseDate")), Const(to))
             ),
             child
           )
@@ -258,14 +270,14 @@ trait MovieMapping[F[_]] extends DoobieMapping[F] {
       case Select("moviesLongerThan", List(Binding("duration", IntervalValue(duration))), child) =>
         Select("moviesLongerThan", Nil,
           Filter(
-            Not(Lt(FieldPath(List("duration")), Const(duration))),
+            Not(Lt(UniquePath(List("duration")), Const(duration))),
             child
           )
         ).rightIor
       case Select("moviesShownLaterThan", List(Binding("time", TimeValue(time))), child) =>
         Select("moviesShownLaterThan", Nil,
           Filter(
-            Not(Lt(FieldPath(List("showTime")), Const(time))),
+            Not(Lt(UniquePath(List("showTime")), Const(time))),
             child
           )
         ).rightIor
@@ -273,14 +285,14 @@ trait MovieMapping[F[_]] extends DoobieMapping[F] {
         Select("moviesShownBetween", Nil,
           Filter(
             And(
-              Not(Lt(FieldPath(List("nextShowing")), Const(from))),
-              Lt(FieldPath(List("nextShowing")), Const(to))
+              Not(Lt(UniquePath(List("nextShowing")), Const(from))),
+              Lt(UniquePath(List("nextShowing")), Const(to))
             ),
             child
           )
         ).rightIor
       case Select("longMovies", Nil, child) =>
-        Select("longMovies", Nil, Filter(Eql(AttrPath(List("isLong")), Const(true)), child)).rightIor
+        Select("longMovies", Nil, Filter(Eql(UniquePath(List("isLong")), Const(true)), child)).rightIor
     }
   ))
 }
@@ -291,4 +303,3 @@ object MovieMapping extends DoobieMappingCompanion {
     new DoobieMapping[F](transactor, monitor) with MovieMapping[F]
 
 }
-

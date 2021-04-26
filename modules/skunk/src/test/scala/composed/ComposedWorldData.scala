@@ -10,10 +10,9 @@ import cats.implicits._
 
 import edu.gemini.grackle._, skunk._, syntax._
 import edu.gemini.grackle.sql.Like
-import Query._, Predicate._, Value._
+import Query._, Path._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.mkErrorResult
-import _root_.skunk.codec.all._
 import cats.effect.Resource
 import _root_.skunk.Session
 
@@ -81,6 +80,42 @@ object CurrencyMapping {
 
 trait WorldMapping[F[_]] extends SkunkMapping[F] {
 
+  // ok nobody knows about codecs but us
+  import _root_.skunk.codec.all._
+
+  object country extends TableDef("country") {
+    val code           = col("code", bpchar(3))
+    val name           = col("name", text)
+    val continent      = col("continent", varchar)
+    val region         = col("region", varchar)
+    val surfacearea    = col("surfacearea", varchar)
+    val indepyear      = col("indepyear", int2.imap(_.toInt)(_.toShort).opt)
+    val population     = col("population", int4)
+    val lifeexpectancy = col("lifeexpectancy", varchar.opt)
+    val gnp            = col("gnp", varchar.opt)
+    val gnpold         = col("gnpold", varchar.opt)
+    val localname      = col("localname", varchar)
+    val governmentform = col("governmentform", varchar)
+    val headofstate    = col("headofstate", varchar.opt)
+    val capitalId      = col("capitalId", varchar.opt)
+    val code2          = col("code2", varchar)
+  }
+
+  object city extends TableDef("city") {
+    val id          = col("id", int4)
+    val countrycode = col("countrycode", bpchar(3))
+    val name        = col("name", text)
+    val district    = col("district", varchar)
+    val population  = col("population", int4)
+  }
+
+  object countryLanguage extends TableDef("countrylanguage") {
+    val countrycode = col("countrycode", bpchar(3))
+    val language = col("language", text)
+    val isOfficial = col("isOfficial", varchar)
+    val percentage = col("percentage", varchar)
+  }
+
   val schema =
     schema"""
       type Query {
@@ -140,46 +175,46 @@ trait WorldMapping[F[_]] extends SkunkMapping[F] {
         tpe = CountryType,
         fieldMappings =
           List(
-            SqlAttribute("code", ColumnRef("country", "code", bpchar(3)), key = true),
-            SqlField("name", ColumnRef("country", "name", text)),
-            SqlField("continent", ColumnRef("country", "continent", text)),
-            SqlField("region", ColumnRef("country", "region", text)),
-            SqlField("surfacearea", ColumnRef("country", "surfacearea", float4)),
-            SqlField("indepyear", ColumnRef("country", "indepyear", int2.opt)),
-            SqlField("population", ColumnRef("country", "population", int4)),
-            SqlField("lifeexpectancy", ColumnRef("country", "lifeexpectancy", float4.opt)),
-            SqlField("gnp", ColumnRef("country", "gnp", numeric(10,2))),
-            SqlField("gnpold", ColumnRef("country", "gnpold", numeric(10,2))),
-            SqlField("localname", ColumnRef("country", "localname", text)),
-            SqlField("governmentform", ColumnRef("country", "governmentform", text)),
-            SqlField("headofstate", ColumnRef("country", "headofstate", text.opt)),
-            SqlField("capitalId", ColumnRef("country", "capitalId", int4.opt)),
-            SqlField("code2", ColumnRef("country", "code2", bpchar(2))),
-            SqlObject("cities", Join(ColumnRef("country", "code", bpchar(3)), ColumnRef("city", "countrycode", bpchar(3)))),
-            SqlObject("languages", Join(ColumnRef("country", "code", bpchar(3)), ColumnRef("countryLanguage", "countrycode", bpchar(3))))
+            SqlField("code", country.code, key = true, hidden = true),
+            SqlField("name", country.name),
+            SqlField("continent", country.continent),
+            SqlField("region", country.region),
+            SqlField("surfacearea", country.surfacearea),
+            SqlField("indepyear", country.indepyear),
+            SqlField("population", country.population),
+            SqlField("lifeexpectancy", country.lifeexpectancy),
+            SqlField("gnp", country.gnp),
+            SqlField("gnpold", country.gnpold),
+            SqlField("localname", country.localname),
+            SqlField("governmentform", country.governmentform),
+            SqlField("headofstate", country.headofstate),
+            SqlField("capitalId", country.capitalId),
+            SqlField("code2", country.code2),
+            SqlObject("cities", Join(country.code, city.countrycode)),
+            SqlObject("languages", Join(country.code, countryLanguage.countrycode))
           )
       ),
       ObjectMapping(
         tpe = CityType,
         fieldMappings =
           List(
-            SqlAttribute("id", ColumnRef("city", "id", int4), key = true),
-            SqlAttribute("countrycode", ColumnRef("city", "countrycode", bpchar(3))),
-            SqlField("name", ColumnRef("city", "name", text)),
-            SqlObject("country", Join(ColumnRef("city", "countrycode", bpchar(3)), ColumnRef("country", "code", bpchar(3)))),
-            SqlField("district", ColumnRef("city", "district", text)),
-            SqlField("population", ColumnRef("city", "population", int4))
+            SqlField("id", city.id, key = true, hidden = true),
+            SqlField("countrycode", city.countrycode, hidden = true),
+            SqlField("name", city.name),
+            SqlObject("country", Join(city.countrycode, country.code)),
+            SqlField("district", city.district),
+            SqlField("population", city.population)
           )
       ),
       ObjectMapping(
         tpe = LanguageType,
         fieldMappings =
           List(
-            SqlField("language", ColumnRef("countryLanguage", "language", text), key = true),
-            SqlField("isOfficial", ColumnRef("countryLanguage", "isOfficial", bool)),
-            SqlField("percentage", ColumnRef("countryLanguage", "percentage", float4)),
-            SqlAttribute("countrycode", ColumnRef("countryLanguage", "countrycode", bpchar(3))),
-            SqlObject("countries", Join(ColumnRef("countryLanguage", "countrycode", bpchar(3)), ColumnRef("country", "code", bpchar(3))))
+            SqlField("language", countryLanguage.language, key = true),
+            SqlField("isOfficial", countryLanguage.isOfficial),
+            SqlField("percentage", countryLanguage.percentage),
+            SqlField("countrycode", countryLanguage.countrycode, hidden = true),
+            SqlObject("countries", Join(countryLanguage.countrycode, country.code))
           )
       )
     )
@@ -266,20 +301,20 @@ class ComposedMapping[F[_] : Monad]
     )
 
   def countryCurrencyJoin(c: Cursor, q: Query): Result[Query] =
-    (c.attribute("code"), q) match {
+    (c.fieldAs[String]("code"), q) match {
       case (Ior.Right(countryCode: String), Select("currencies", _, child)) =>
-        Select("allCurrencies", Nil, Filter(Eql(FieldPath(List("countryCode")), Const(countryCode)), child)).rightIor
+        Select("allCurrencies", Nil, Filter(Eql(UniquePath(List("countryCode")), Const(countryCode)), child)).rightIor
       case _ => mkErrorResult(s"Expected 'code' attribute at ${c.tpe}")
     }
 
   override val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {
       case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Eql(AttrPath(List("code")), Const(code)), child)).rightIor
+        Select("country", Nil, Unique(Eql(UniquePath(List("code")), Const(code)), child)).rightIor
       case Select("countries", _, child) =>
         Select("countries", Nil, child).rightIor
       case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
-        Select("cities", Nil, Filter(Like(FieldPath(List("name")), namePattern, true), child)).rightIor
+        Select("cities", Nil, Filter(Like(UniquePath(List("name")), namePattern, true), child)).rightIor
     }
   ))
 }

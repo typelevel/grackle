@@ -11,6 +11,7 @@ import io.circe.Json
 import edu.gemini.grackle.sql.SqlStatsMonitor
 import edu.gemini.grackle.sql.SqlMonitor
 import edu.gemini.grackle.Query
+import edu.gemini.grackle.Path._
 import edu.gemini.grackle.Predicate._
 
 /** Tests that confirm the compiler is writing the queries we want. */
@@ -60,7 +61,7 @@ trait SqlWorldCompilerSpec extends AnyFunSuite {
     assert(
       stats == List(
         SqlStatsMonitor.SqlStats(
-          Query.Unique(Eql(AttrPath(List("code")),Const("GBR")),Query.Select("name",List(),Query.Empty)),
+          Query.Unique(Eql(UniquePath(List("code")),Const("GBR")),Query.Select("name",List(),Query.Empty)),
           simpleRestrictedQuerySql,
           List("GBR"),
           1,

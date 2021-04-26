@@ -16,7 +16,7 @@ import io.circe.Encoder
 
 import edu.gemini.grackle._, skunk._
 import edu.gemini.grackle.syntax._
-import Query._, Predicate._, Value._
+import Query._, Path._, Predicate._, Value._
 import QueryCompiler._
 import _root_.skunk.Codec
 import _root_.skunk.codec.all._
@@ -104,6 +104,16 @@ object MovieData {
 trait MovieMapping[F[_]] extends SkunkMapping[F] {
   import MovieData._
 
+  object movies extends TableDef("movies") {
+    val id = col("id", uuid)
+    val title = col("title", text)
+    val genre = col("genre", Genre.codec)
+    val releaseDate = col("releasedate", date)
+    val showTime = col("showtime", time)
+    val nextShowing = col("nextshowing", timestamptz)
+    val duration = col("duration", int8.imap(Duration.ofMillis)(_.toMillis))
+  }
+
   val schema =
     schema"""
       type Query {
@@ -173,18 +183,15 @@ trait MovieMapping[F[_]] extends SkunkMapping[F] {
         tpe = MovieType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("movies", "id", uuid), key = true),
-            SqlField("title", ColumnRef("movies", "title", text)),
-            SqlField("genre", ColumnRef("movies", "genre", Genre.codec)),
-            SqlField("releaseDate", ColumnRef("movies", "releasedate", date)),
-            SqlField("showTime", ColumnRef("movies", "showtime", time)),
-            SqlField("nextShowing", ColumnRef("movies", "nextshowing", timestamptz)),
+            SqlField("id", movies.id, key = true),
+            SqlField("title", movies.title),
+            SqlField("genre", movies.genre),
+            SqlField("releaseDate", movies.releaseDate),
+            SqlField("showTime", movies.showTime),
+            SqlField("nextShowing", movies.nextShowing),
             CursorField("nextEnding", nextEnding, List("nextShowing", "duration")),
-            SqlField("duration", ColumnRef("movies", "duration", int8.imap(Duration.ofMillis)(_.toMillis))),
-            // SqlField("categories", ColumnRef("movies", "categories")),
-            // SqlField("features", ColumnRef("movies", "features")),
-            // SqlField("rating", ColumnRef("movies", "rating")),
-            CursorAttribute("isLong", isLong, List("duration"))
+            SqlField("duration", movies.duration),
+            CursorField("isLong", isLong, List("duration"))
           )
       ),
       LeafMapping[UUID](UUIDType),
@@ -241,15 +248,15 @@ trait MovieMapping[F[_]] extends SkunkMapping[F] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("movieById", List(Binding("id", UUIDValue(id))), child) =>
-        Select("movieById", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
+        Select("movieById", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
       case Select("moviesByGenre", List(Binding("genre", GenreValue(genre))), child) =>
-        Select("moviesByGenre", Nil, Filter(Eql(FieldPath(List("genre")), Const(genre)), child)).rightIor
+        Select("moviesByGenre", Nil, Filter(Eql(UniquePath(List("genre")), Const(genre)), child)).rightIor
       case Select("moviesReleasedBetween", List(Binding("from", DateValue(from)), Binding("to", DateValue(to))), child) =>
         Select("moviesReleasedBetween", Nil,
           Filter(
             And(
-              Not(Lt(FieldPath(List("releaseDate")), Const(from))),
-              Lt(FieldPath(List("releaseDate")), Const(to))
+              Not(Lt(UniquePath(List("releaseDate")), Const(from))),
+              Lt(UniquePath(List("releaseDate")), Const(to))
             ),
             child
           )
@@ -257,14 +264,14 @@ trait MovieMapping[F[_]] extends SkunkMapping[F] {
       case Select("moviesLongerThan", List(Binding("duration", IntervalValue(duration))), child) =>
         Select("moviesLongerThan", Nil,
           Filter(
-            Not(Lt(FieldPath(List("duration")), Const(duration))),
+            Not(Lt(UniquePath(List("duration")), Const(duration))),
             child
           )
         ).rightIor
       case Select("moviesShownLaterThan", List(Binding("time", TimeValue(time))), child) =>
         Select("moviesShownLaterThan", Nil,
           Filter(
-            Not(Lt(FieldPath(List("showTime")), Const(time))),
+            Not(Lt(UniquePath(List("showTime")), Const(time))),
             child
           )
         ).rightIor
@@ -272,14 +279,14 @@ trait MovieMapping[F[_]] extends SkunkMapping[F] {
         Select("moviesShownBetween", Nil,
           Filter(
             And(
-              Not(Lt(FieldPath(List("nextShowing")), Const(from))),
-              Lt(FieldPath(List("nextShowing")), Const(to))
+              Not(Lt(UniquePath(List("nextShowing")), Const(from))),
+              Lt(UniquePath(List("nextShowing")), Const(to))
             ),
             child
           )
         ).rightIor
       case Select("longMovies", Nil, child) =>
-        Select("longMovies", Nil, Filter(Eql(AttrPath(List("isLong")), Const(true)), child)).rightIor
+        Select("longMovies", Nil, Filter(Eql(UniquePath(List("isLong")), Const(true)), child)).rightIor
     }
   ))
 }

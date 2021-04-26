@@ -192,7 +192,7 @@ final class ValidatorSpec extends AnyFunSuite {
           schema.ref("Foo"),
           List(
             CursorField[String]("bar", _ => ???, Nil),
-            CursorAttribute[String]("baz", _ => ???, Nil),
+            CursorField[String]("baz", _ => ???, Nil, hidden = true),
           ),
         )
       )

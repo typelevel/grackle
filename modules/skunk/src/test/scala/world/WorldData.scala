@@ -8,7 +8,7 @@ import cats.implicits._
 
 import edu.gemini.grackle._, skunk._, syntax._
 import edu.gemini.grackle.sql.Like
-import Query._, Predicate._, Value._
+import Query._, Path._, Predicate._, Value._
 import QueryCompiler._
 import cats.effect.Resource
 import _root_.skunk.Session
@@ -18,11 +18,6 @@ trait WorldPostgresSchema[F[_]] extends SkunkMapping[F] {
   // ok nobody knows about codecs but us
   import _root_.skunk.codec.all._
 
-  class TableDef(name: String) {
-    def col(colName: String, codec: Codec[_]): ColumnRef =
-      ColumnRef(name, colName, codec)
-  }
-
   object country extends TableDef("country") {
     val code           = col("code", bpchar(3))
     val name           = col("name", text)
@@ -31,13 +26,13 @@ trait WorldPostgresSchema[F[_]] extends SkunkMapping[F] {
     val surfacearea    = col("surfacearea", varchar)
     val indepyear      = col("indepyear", int2.imap(_.toInt)(_.toShort).opt)
     val population     = col("population", int4)
-    val lifeexpectancy = col("lifeexpectancy", varchar)
-    val gnp            = col("gnp", varchar)
-    val gnpold         = col("gnpold", varchar)
+    val lifeexpectancy = col("lifeexpectancy", varchar.opt)
+    val gnp            = col("gnp", varchar.opt)
+    val gnpold         = col("gnpold", varchar.opt)
     val localname      = col("localname", varchar)
     val governmentform = col("governmentform", varchar)
-    val headofstate    = col("headofstate", varchar)
-    val capitalId      = col("capitalId", varchar)
+    val headofstate    = col("headofstate", varchar.opt)
+    val capitalId      = col("capitalId", varchar.opt)
     val code2          = col("code2", varchar)
   }
 
@@ -121,7 +116,7 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
       ObjectMapping(
         tpe = CountryType,
         fieldMappings = List(
-          SqlAttribute("code",       country.code, key = true),
+          SqlField("code",           country.code, key = true, hidden = true),
           SqlField("name",           country.name),
           SqlField("continent",      country.continent),
           SqlField("region",         country.region),
@@ -143,8 +138,8 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
       ObjectMapping(
         tpe = CityType,
         fieldMappings = List(
-          SqlAttribute("id", city.id, key = true),
-          SqlAttribute("countrycode", city.countrycode),
+          SqlField("id", city.id, key = true, hidden = true),
+          SqlField("countrycode", city.countrycode, hidden = true),
           SqlField("name", city.name),
           SqlField("district", city.district),
           SqlField("population", city.population),
@@ -157,7 +152,7 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
           SqlField("language", countrylanguage.language, key = true),
           SqlField("isOfficial", countrylanguage.isOfficial),
           SqlField("percentage", countrylanguage.percentage),
-          SqlAttribute("countrycode", countrylanguage.countrycode),
+          SqlField("countrycode", countrylanguage.countrycode, hidden = true),
           SqlObject("countries", Join(countrylanguage.countrycode, country.code))
         )
       )
@@ -168,7 +163,7 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
     QueryType -> {
 
       case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Eql(AttrPath(List("code")), Const(code)), child)).rightIor
+        Select("country", Nil, Unique(Eql(UniquePath(List("code")), Const(code)), child)).rightIor
 
       case Select("countries", List(Binding("limit", IntValue(num)), Binding("minPopulation", IntValue(min)), Binding("byPopulation", BooleanValue(byPop))), child) =>
         def limit(query: Query): Query =
@@ -176,27 +171,27 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
           else Limit(num, query)
 
         def order(query: Query): Query =
-          if (byPop) OrderBy(OrderSelections(List(OrderSelection(FieldPath[Int](List("population"))))), query)
+          if (byPop) OrderBy(OrderSelections(List(OrderSelection(UniquePath[Int](List("population"))))), query)
           else query
 
         def filter(query: Query): Query =
           if (min == 0) query
-          else Filter(GtEql(FieldPath(List("population")), Const(min)), query)
+          else Filter(GtEql(UniquePath(List("population")), Const(min)), query)
 
         Select("countries", Nil, limit(order(filter(child)))).rightIor
 
       case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
-        Select("cities", Nil, Filter(Like(FieldPath(List("name")), namePattern, true), child)).rightIor
+        Select("cities", Nil, Filter(Like(UniquePath(List("name")), namePattern, true), child)).rightIor
 
       case Select("language", List(Binding("language", StringValue(language))), child) =>
-        Select("language", Nil, Unique(Eql(FieldPath(List("language")), Const(language)), child)).rightIor
+        Select("language", Nil, Unique(Eql(UniquePath(List("language")), Const(language)), child)).rightIor
 
       case Select("search", List(Binding("minPopulation", IntValue(min)), Binding("indepSince", IntValue(year))), child) =>
         Select("search", Nil,
           Filter(
             And(
-              Not(Lt(FieldPath(List("population")), Const(min))),
-              Not(Lt(FieldPath(List("indepyear")), Const(year)))
+              Not(Lt(UniquePath(List("population")), Const(min))),
+              Not(Lt(UniquePath(List("indepyear")), Const(Option(year))))
             ),
             child
           )

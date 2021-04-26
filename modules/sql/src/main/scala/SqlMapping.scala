@@ -15,6 +15,7 @@ import org.tpolecat.sourcepos.SourcePos
 import fs2.Stream
 
 import Cursor.Env
+import Path._
 import Predicate._
 import Query._
 import QueryCompiler._
@@ -31,23 +32,15 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   private def discriminator(om: ObjectMapping): List[ColumnRef] =
     om.fieldMappings.collect {
       case cm: SqlField if cm.discriminator => cm.columnRef
-      case am: SqlAttribute if am.discriminator => am.col
     }
 
   private def key(om: ObjectMapping): List[ColumnRef] =
     om.fieldMappings.collect {
       case cm: SqlField if cm.key => cm.columnRef
-      case am: SqlAttribute if am.key => am.col
-    }
-
-  private def isField(p: Path): Boolean =
-    p match {
-      case FieldPath(_) | CollectFieldPath(_) => true
-      case _ => false
     }
 
   /**
-   * Name of a SQL schema column and its associated codec. Note that `ColumnRef`s are consider equal
+   * Name of a SQL schema column and its associated codec. Note that `ColumnRef`s are considered equal
    * if their table and column names are equal.
    */
   case class ColumnRef(table: String, column: String, codec: Codec[_], scalaTypeName: String)(
@@ -66,48 +59,6 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
     override def hashCode(): Int =
       table.hashCode() + column.hashCode()
-
-    def codecAndNullability: (Codec[_], NullabilityKnown) = (codec, if(nullable) Nullable else NoNulls)
-
-    lazy val nullable: Boolean = {
-      // This should simplify once fields and attributes are unified
-      def loop(tms: List[TypeMapping]): Option[Boolean] =
-        tms match {
-          case Nil => None
-          case tm :: tl =>
-            tm match {
-              case om: ObjectMapping =>
-                om.fieldMappings.collectFirstSome {
-                  case SqlField(fieldName, `outer`, _, _) =>
-                    for {
-                      obj      <- om.tpe.underlyingObject
-                      fieldTpe <- obj.field(fieldName)
-                    } yield fieldTpe.isNullable || obj.variantField(fieldName)
-
-                  case SqlJson(fieldName, `outer`) =>
-                    for {
-                      obj      <- om.tpe.underlyingObject
-                      fieldTpe <- obj.field(fieldName)
-                    } yield fieldTpe.isNullable || obj.variantField(fieldName)
-
-                  case SqlAttribute(_, `outer`, _, nullable, _) =>
-                    Some(nullable)
-
-                  case _ => None
-
-                } orElse loop(tl)
-
-              case pm: PrefixedMapping =>
-                loop(pm.mappings.map(_._2)).orElse(loop(tl))
-
-              case _ =>
-                loop(tl)
-
-            }
-        }
-
-      loop(typeMappings).getOrElse(true)
-    }
   }
 
   object ColumnRef {
@@ -168,38 +119,31 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   }
 
   sealed trait SqlFieldMapping extends FieldMapping {
-    final def isPublic = true
     final def withParent(tpe: Type): FieldMapping = this
-  }
-
-  case class SqlAttribute(
-    fieldName: String,
-    col: ColumnRef,
-    key: Boolean = false,
-    nullable: Boolean = false,
-    discriminator: Boolean = false,
-  )(implicit val pos: SourcePos) extends FieldMapping {
-    def isPublic = false
-    def withParent(tpe: Type): FieldMapping = this
   }
 
   case class SqlField(
     fieldName: String,
     columnRef: ColumnRef,
     key: Boolean = false,
-    discriminator: Boolean = false
+    discriminator: Boolean = false,
+    hidden: Boolean = false
   )(implicit val pos: SourcePos) extends SqlFieldMapping
 
   case class SqlObject(fieldName: String, joins: List[Join])(
     implicit val pos: SourcePos
-  ) extends SqlFieldMapping
+  ) extends SqlFieldMapping {
+    final def hidden = false
+  }
   object SqlObject {
     def apply(fieldName: String, joins: Join*): SqlObject = apply(fieldName, joins.toList)
   }
 
   case class SqlJson(fieldName: String, columnRef: ColumnRef)(
     implicit val pos: SourcePos
-  ) extends SqlFieldMapping
+  ) extends SqlFieldMapping {
+    def hidden: Boolean = false
+  }
 
   sealed trait SqlInterfaceMapping extends ObjectMapping {
     def discriminate(cursor: Cursor): Result[Type]
@@ -246,7 +190,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   final class MappedQuery(
     table: String,
     columns: List[ColumnRef],
-    metas: List[(Boolean, (Codec[_], NullabilityKnown))],
+    metas: List[(Boolean, Codec[_])],
     predicates: List[(List[String], Type, Predicate)],
     joins: List[Join],
     conditions: List[Fragment]
@@ -258,8 +202,11 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       columns.toString
     }
 
-    def index(col: ColumnRef): Int =
-      columns.indexOf(col)
+    def index(col: ColumnRef): Int = {
+      val i = columns.indexOf(col)
+      if (i < 0) throw new RuntimeException(s"Unmapped column ${col.column} of table ${col.table}")
+      i
+    }
 
     private def project(row: Row, cols: List[ColumnRef]): Row =
       Row(cols.map(cr => row(index(cr))))
@@ -270,25 +217,9 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def selectField(row: Row, path: List[String], tpe: Type, fieldName: String): Result[Any] = {
       val obj = tpe.dealias
       fieldMapping(path, obj, fieldName) match {
-        case Some(SqlField(_, col, _, _)) => select(row, col).rightIor
+        case Some(SqlField(_, col, _, _, _)) => select(row, col).rightIor
         case Some(SqlJson(_, col)) => select(row, col).rightIor
         case other => mkErrorResult(s"Expected mapping for field $fieldName of type $obj, found $other")
-      }
-    }
-
-    def hasAttribute(path: List[String], tpe: Type, attrName: String): Boolean = {
-      val obj = tpe.dealias
-      fieldMapping(path, obj, attrName) match {
-        case Some(_: SqlAttribute) => true
-        case _ => false
-      }
-    }
-
-    def selectAttribute(row: Row, path: List[String], tpe: Type, attrName: String): Result[Any] = {
-      val obj = tpe.dealias
-      fieldMapping(path, obj, attrName) match {
-        case Some(SqlAttribute(_, col, _, _, _)) => select(row, col).rightIor
-        case other => mkErrorResult(s"Expected mapping for attribute $attrName of type $obj, found $other")
       }
     }
 
@@ -319,19 +250,10 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
 
     private def fragmentForPred(path: List[String], tpe: Type, pred: Predicate): Option[Fragment] = {
-
-      def termColumnForAttribute(path: List[String], tpe: Type, attrName: String): Option[ColumnRef] =
-        tpe.underlyingObject.flatMap { obj =>
-          fieldMapping(path, obj, attrName) match {
-            case Some(SqlAttribute(_, cr, _, _, _)) => Some(cr)
-            case _ => None
-          }
-        }
-
       def termColumnForField(path: List[String], tpe: Type, fieldName: String): Option[ColumnRef] =
         tpe.underlyingObject.flatMap { obj =>
           fieldMapping(path, obj, fieldName) match {
-            case Some(SqlField(_, cr, _, _)) => Some(cr)
+            case Some(SqlField(_, cr, _, _, _)) => Some(cr)
             case Some(SqlJson(_, cr)) => Some(cr)
             case _ => None
           }
@@ -345,38 +267,35 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
               val prefix = termPath.path.init
               obj.path(prefix).flatMap { parent =>
                 val name = termPath.path.last
-                if (isField(termPath))
-                  termColumnForField(path.reverse_:::(termPath.path), parent, name)
-                else
-                  termColumnForAttribute(path, parent, name)
+                termColumnForField(path.reverse_:::(termPath.path), parent, name)
               }
             }
         }
 
-      def term[T](x: Term[T], put: Encoder[T], nullable: Boolean): Option[Fragment] =
+      def term[T](x: Term[T], put: Encoder[T]): Option[Fragment] =
         x match {
-          case Const(value) => Some(Fragments.bind(put, nullable, value))
+          case Const(value) => Some(Fragments.bind(put, value))
           case other =>
             primaryColumnForTerm(path, tpe, other).map(col => Fragments.const(col.toSql))
         }
 
-      def putForTerm(x: Term[_]): Option[(Encoder[_], Boolean)] =
+      def putForTerm(x: Term[_]): Option[Encoder[_]] =
         x match {
           case path: Path =>
             for {
               cr <- primaryColumnForTerm(path.path, tpe, path)
-            } yield (toEncoder(cr.codec.asInstanceOf[Codec[Any]]), cr.nullable)
+            } yield toEncoder(cr.codec.asInstanceOf[Codec[Any]])
 
-          case (_: And)|(_: Or)|(_: Not)|(_: Eql[_])|(_: NEql[_])|(_: Lt[_])|(_: LtEql[_])|(_: Gt[_])|(_: GtEql[_])  => Some((booleanEncoder, false))
-          case (_: AndB)|(_: OrB)|(_: XorB)|(_: NotB) => Some((intEncoder, false))
-          case (_: ToUpperCase)|(_: ToLowerCase) => Some((stringEncoder, false))
+          case (_: And)|(_: Or)|(_: Not)|(_: Eql[_])|(_: NEql[_])|(_: Lt[_])|(_: LtEql[_])|(_: Gt[_])|(_: GtEql[_])  => Some(booleanEncoder)
+          case (_: AndB)|(_: OrB)|(_: XorB)|(_: NotB) => Some(intEncoder)
+          case (_: ToUpperCase)|(_: ToLowerCase) => Some(stringEncoder)
           case _ => None
         }
 
-      def loop[T](exp: Term[T], put: Option[(Encoder[T], Boolean)]): Option[Fragment] = {
+      def loop[T](exp: Term[T], put: Option[Encoder[T]]): Option[Fragment] = {
 
-        def unify(x: Term[_], y: Term[_]): Option[(Encoder[Any], Boolean)] =
-          putForTerm(x).orElse(putForTerm(y)).orElse(put).asInstanceOf[Option[(Encoder[Any], Boolean)]]
+        def unify(x: Term[_], y: Term[_]): Option[Encoder[Any]] =
+          putForTerm(x).orElse(putForTerm(y)).orElse(put).asInstanceOf[Option[Encoder[Any]]]
 
         def nonEmpty(frag: Fragment): Option[Fragment] =
           if (frag == Fragments.empty) None
@@ -384,7 +303,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
         exp match {
           case Const(value) =>
-            put.map { case (pa, nullable) => Fragments.bind(pa, nullable, value) }
+            put.map(pa => Fragments.bind(pa, value))
 
           case Project(prefix, pred) =>
             tpe.path(prefix).flatMap {
@@ -401,7 +320,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             nonEmpty(Fragments.orOpt(loop(x, None), loop(y, None)))
 
           case Not(x) =>
-            loop(x, Some((booleanEncoder, false))).map(x => Fragments.const("NOT ") |+| x)
+            loop(x, Some(booleanEncoder)).map(x => Fragments.const("NOT ") |+| x)
 
           case Eql(x, y) =>
             val p = unify(x, y)
@@ -454,44 +373,44 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           case In(x, y) =>
             for {
               p0 <- putForTerm(x)
-              (p, n) = p0.asInstanceOf[(Encoder[Any], Boolean)]
-              x <- term(x, p, n)
+              p  = p0.asInstanceOf[Encoder[Any]]
+              x <- term(x, p)
               l <- NonEmptyList.fromList(y)
             } yield Fragments.in(x, l, p)
 
           case AndB(x, y) =>
             for {
-              x <- term(x, intEncoder, false)
-              y <- term(y, intEncoder, false)
+              x <- term(x, intEncoder)
+              y <- term(y, intEncoder)
             } yield x |+| Fragments.const(" & ")|+| y
           case OrB(x, y) =>
             for {
-              x <- term(x, intEncoder, false)
-              y <- term(y, intEncoder, false)
+              x <- term(x, intEncoder)
+              y <- term(y, intEncoder)
             } yield x |+| Fragments.const(" | ")|+| y
           case XorB(x, y) =>
             for {
-              x <- term(x, intEncoder, false)
-              y <- term(y, intEncoder, false)
+              x <- term(x, intEncoder)
+              y <- term(y, intEncoder)
             } yield x |+| Fragments.const(" # ")|+| y
 
           case NotB(x) =>
-            loop(x, Some((intEncoder, false))).map(x => Fragments.const("~") |+| x)
+            loop(x, Some(intEncoder)).map(x => Fragments.const("~") |+| x)
 
           case StartsWith(x, prefix) =>
             for {
-              x <- term(x, stringEncoder, false)
-            } yield x |+| Fragments.const(" LIKE ") |+| Fragments.bind(stringEncoder, false, prefix + "%")
+              x <- term(x, stringEncoder)
+            } yield x |+| Fragments.const(" LIKE ") |+| Fragments.bind(stringEncoder, prefix + "%")
 
           case ToUpperCase(x) =>
-            loop(x, Some((stringEncoder, false))).map(x => Fragments.const("upper(") |+| x |+| Fragments.const(")"))
+            loop(x, Some(stringEncoder)).map(x => Fragments.const("upper(") |+| x |+| Fragments.const(")"))
 
           case ToLowerCase(x) =>
-            loop(x, Some((stringEncoder, false))).map(x => Fragments.const("lower(") |+| x |+| Fragments.const(")"))
+            loop(x, Some(stringEncoder)).map(x => Fragments.const("lower(") |+| x |+| Fragments.const(")"))
 
           case Like(x, pattern, caseInsensitive) =>
             val op = if(caseInsensitive) "ILIKE" else "LIKE"
-            term(x, stringEncoder, false).map(x => x |+| Fragments.const(s" $op ") |+| Fragments.bind(stringEncoder, false, pattern))
+            term(x, stringEncoder).map(x => x |+| Fragments.const(s" $op ") |+| Fragments.bind(stringEncoder, pattern))
 
           case _ =>
             None
@@ -544,7 +463,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
       def paths(t: Term[_]): List[Path] =
         t match {
-          case Project(prefix, x) => paths(x).map(_.extend(prefix))
+          case Project(prefix, x) => paths(x).map(_.prepend(prefix))
           case p: Path => List(p)
           case And(x, y) => paths(x) ++ paths(y)
           case Or(x, y) => paths(x) ++ paths(y)
@@ -573,13 +492,10 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       def columnsForFieldOrAttribute(path: List[String], tpe: Type, name: String): List[ColumnRef] =
         tpe.underlyingObject.map(obj =>
           fieldMapping(path, obj, name) match {
-            case Some(SqlField(_, cr, _, _)) => List(cr)
+            case Some(SqlField(_, cr, _, _, _)) => List(cr)
             case Some(SqlJson(_, cr)) => List(cr)
             case Some(SqlObject(_, joins)) => joins.map(_.parent) ++ joins.map(_.child)
-            case Some(SqlAttribute(_, cr, _, _, _)) => List(cr)
-            case Some(CursorField(_, _, _, required)) =>
-              required.flatMap(r => columnsForFieldOrAttribute(path, tpe, r))
-            case Some(CursorAttribute(_, _, required)) =>
+            case Some(CursorField(_, _, _, required, _)) =>
               required.flatMap(r => columnsForFieldOrAttribute(path, tpe, r))
             case _ => Nil
           }
@@ -613,20 +529,16 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
               def mkSelects(path: List[String]): Query =
                 path.foldRight(Empty: Query) { (fieldName, child) => Select(fieldName, Nil, child) }
 
-              if (isField(term)) {
-                loop(mkSelects(term.path), path, obj, acc)
-              } else {
-                val prefix = term.path.init
-                val name = term.path.last
-                obj.path(prefix) match {
-                  case None => acc
-                  case Some(parent) =>
-                    columnsForFieldOrAttribute(path, parent, name) match {
-                      case Nil => loop(mkSelects(prefix), path, obj, acc)
-                      case pcols =>
-                        (pcols ++ requiredCols, List.empty[Join], List.empty[(List[String], Type, Predicate)]) |+| loop(mkSelects(prefix), path, obj, acc)
-                    }
-                }
+              val prefix = term.path.init
+              val name = term.path.last
+              obj.path(prefix) match {
+                case None => acc
+                case Some(parent) =>
+                  columnsForFieldOrAttribute(path, parent, name) match {
+                    case Nil => loop(mkSelects(term.path), path, obj, acc)
+                    case pcols =>
+                      (pcols ++ requiredCols, List.empty[Join], List.empty[(List[String], Type, Predicate)]) |+| loop(mkSelects(term.path), path, obj, acc)
+                  }
               }
             }
 
@@ -747,12 +659,12 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       val (orderedJoins, conditions) = extractDuplicates(orderedJoins0)
 
       val metas = {
-        def metaForColumn(col: ColumnRef): (Boolean, (Codec[_], NullabilityKnown)) = {
+        def metaForColumn(col: ColumnRef): (Boolean, Codec[_]) = {
           // A column is the product of an outer join (and may therefore be null even if it's non-nullable
           // in the schema) if its table introduced on the child side of a `Join`.
           def isJoin(cr: ColumnRef): Boolean = childTables(cr.table)
 
-          (isJoin(col), (col.codec, if (col.nullable) Nullable else NoNulls))
+          (isJoin(col), col.codec)
         }
 
         columns.map(metaForColumn)
@@ -779,12 +691,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
                     case cm: SqlField if cm.key =>
                       val fv0 = c.field(cm.fieldName)
                       val Ior.Right(fv) = fv0
-                      Eql(FieldPath(List(cm.fieldName)), Const(fv.focus))(Eq.fromUniversalEquals)
-
-                    case am: SqlAttribute if am.key =>
-                      val av0 = c.attribute(am.fieldName)
-                      val Ior.Right(av) = av0
-                      Eql(AttrPath(List(am.fieldName)), Const(av))(Eq.fromUniversalEquals)
+                      Eql(UniquePath(List(cm.fieldName)), Const(fv.focus))(Eq.fromUniversalEquals)
                   }
                 )
               Context(c.path, Select("__staged", Nil, Filter(pred, q))).rightIor
@@ -1018,10 +925,6 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def hasField(fieldName: String): Boolean = false
     def field(fieldName: String): Result[Cursor] =
       mkErrorResult(s"Cannot select field '$fieldName' from leaf type $tpe")
-
-    def hasAttribute(attributeName: String): Boolean = false
-    def attribute(attributeName: String): Result[Any] =
-      mkErrorResult(s"Cannot read attribute '$attributeName' from leaf type $tpe")
   }
 
   case class SqlCursor(path: List[String], tpe: Type, focus: Any, mapped: MappedQuery, parent: Option[Cursor], env: Env) extends Cursor {
@@ -1113,10 +1016,11 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def field(fieldName: String): Result[Cursor] = {
       (for {
         obj      <- tpe.underlyingObject
-        fieldTpe <- tpe.field(fieldName)
       } yield {
+        val fieldTpe = tpe.field(fieldName).getOrElse(ScalarType.AttributeType)
+
         fieldMapping(path, obj, fieldName) match {
-          case Some(CursorField(_, f, _, _)) =>
+          case Some(CursorField(_, f, _, _, _)) =>
             f(this).map(res => LeafCursor(fieldName :: path, fieldTpe, res, Some(this), Env.empty))
 
           case Some(SqlJson(_, _)) =>
@@ -1148,19 +1052,6 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         }
       }).getOrElse(mkErrorResult(s"Type $tpe has no field '$fieldName'"))
     }
-
-    def hasAttribute(attributeName: String): Boolean =
-      fieldMapping(path, tpe, attributeName) match {
-        case Some(CursorAttribute(_, _, _)) => true
-        case _ => mapped.hasAttribute(path, tpe, attributeName)
-      }
-
-    def attribute(attributeName: String): Result[Any] =
-      fieldMapping(path, tpe, attributeName) match {
-        case Some(CursorAttribute(_, f, _)) => f(this)
-        case _ =>
-          asTable.flatMap(table => mapped.selectAttribute(table.head, path, tpe, attributeName))
-      }
   }
 
   // overrides

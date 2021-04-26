@@ -31,13 +31,17 @@ abstract class SkunkMapping[F[_]: Sync](
   def doubleEncoder  = float8
   def intEncoder     = int4
 
+  class TableDef(name: String) {
+    def col(colName: String, codec: Codec[_]): ColumnRef =
+      ColumnRef(name, colName, codec)
+  }
+
   // We need to demonstrate that our `Fragment` type has certain compositional properties.
   implicit def Fragments: SqlFragment[AppliedFragment] =
     new SqlFragment[AppliedFragment] {
       def combine(x: AppliedFragment, y: AppliedFragment) = x |+| y
       def empty = AppliedFragment.empty
-      def bind[A](encoder: Encoder[A], nullable: Boolean, value: A) =
-        sql"$encoder".apply(if(!nullable) value else Some(value).asInstanceOf[A])
+      def bind[A](encoder: Encoder[A], value: A) = sql"$encoder".apply(value)
       def const(s: String) = sql"#$s".apply(_root_.skunk.Void)
       def in[G[_]: Reducible, A](f: AppliedFragment, fs: G[A], enc: Encoder[A]): AppliedFragment = fs.toList.map(sql"$enc".apply).foldSmash(f |+| void" IN (", void", ", void")")
       def and(fs: AppliedFragment*): AppliedFragment = fs.toList.map(parentheses).intercalate(void" AND ")
@@ -50,17 +54,17 @@ abstract class SkunkMapping[F[_]: Sync](
     }
 
   // And we need to be able to fetch `Rows` given a `Fragment` and a list of decoders.
-  def fetch(fragment: Fragment, metas: List[(Boolean, (Codec[_], NullabilityKnown))]): F[Table] = {
+  def fetch(fragment: Fragment, metas: List[(Boolean, Codec[_])]): F[Table] = {
 
     lazy val rowDecoder: Decoder[Row] =
       new Decoder[Row] {
 
-        lazy val types = metas.flatMap { case (_, (d, _)) => d.types }
+        lazy val types = metas.flatMap { case (_, d) => d.types }
 
-        lazy val decodersWithOffsets: List[(Boolean, Decoder[_], NullabilityKnown, Int)] =
-          metas.foldLeft((0, List.empty[(Boolean, Decoder[_], NullabilityKnown, Int)])) {
-            case ((offset, accum), (isJoin, (decoder, nullity))) =>
-              (offset + decoder.length, (isJoin, decoder, nullity, offset) :: accum)
+        lazy val decodersWithOffsets: List[(Boolean, Decoder[_], Int)] =
+          metas.foldLeft((0, List.empty[(Boolean, Decoder[_], Int)])) {
+            case ((offset, accum), (isJoin, decoder)) =>
+              (offset + decoder.length, (isJoin, decoder, offset) :: accum)
           } ._2.reverse
 
         def decode(start: Int, ssx: List[Option[String]]): Either[Decoder.Error, Row] = {
@@ -70,8 +74,8 @@ abstract class SkunkMapping[F[_]: Sync](
             // If the column is the outer part of a join and it's a non-nullable in the schema then
             // we read it as an option and collapse it, using FailedJoin in the None case. Otherwise
             // read as normal.
-            case (true, decoder, NoNulls, offset) => decoder.opt.decode(0, ss.drop(offset).take(decoder.length)).map(_.getOrElse(FailedJoin))
-            case (_,    decoder, _,       offset) => decoder    .decode(0, ss.drop(offset).take(decoder.length))
+            case (true,  decoder, offset) => decoder.opt.decode(0, ss.drop(offset).take(decoder.length)).map(_.getOrElse(FailedJoin))
+            case (false, decoder, offset) => decoder    .decode(0, ss.drop(offset).take(decoder.length))
 
           } .map(Row(_))
         }

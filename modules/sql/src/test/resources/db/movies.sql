@@ -4,7 +4,7 @@ CREATE TABLE movies (
     genre INTEGER NOT NULL,
     releasedate DATE NOT NULL,
     showtime TIME NOT NULL,
-    nextshowing TIMESTAMP WITH TIME ZONE,
+    nextshowing TIMESTAMP WITH TIME ZONE NOT NULL,
     duration BIGINT NOT NULL,
     categories VARCHAR[] NOT NULL,
     features VARCHAR[] NOT NULL

@@ -12,6 +12,22 @@ import edu.gemini.grackle.syntax._
 
 trait CoalesceMapping[F[_]] extends DoobieMapping[F] {
 
+  object r extends TableDef("r") {
+    val id = col("id", Meta[String])
+  }
+
+  object ca extends TableDef("ca") {
+    val id = col("id", Meta[String])
+    val rid = col("rid", Meta[String])
+    val a = col("a", Meta[Int])
+  }
+
+  object cb extends TableDef("cb") {
+    val id = col("id", Meta[String])
+    val rid = col("rid", Meta[String])
+    val b = col("b", Meta[Boolean])
+  }
+
   val schema =
     schema"""
       type Query {
@@ -50,27 +66,27 @@ trait CoalesceMapping[F[_]] extends DoobieMapping[F] {
         tpe = RType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("r", "id", Meta[String]), key = true),
-            SqlObject("ca", Join(ColumnRef("r", "id", Meta[String]), ColumnRef("ca", "rid", Meta[String]))),
-            SqlObject("cb", Join(ColumnRef("r", "id", Meta[String]), ColumnRef("cb", "rid", Meta[String]))),
+            SqlField("id", r.id, key = true),
+            SqlObject("ca", Join(r.id, ca.rid)),
+            SqlObject("cb", Join(r.id, cb.rid)),
           )
       ),
       ObjectMapping(
         tpe = CAType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("ca", "id", Meta[String]), key = true),
-            SqlAttribute("rid", ColumnRef("ca", "rid", Meta[String])),
-            SqlField("a", ColumnRef("ca", "a", Meta[Int]))
+            SqlField("id", ca.id, key = true),
+            SqlField("rid", ca.rid, hidden = true),
+            SqlField("a", ca.a)
           )
       ),
       ObjectMapping(
         tpe = CBType,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("cb", "id", Meta[String]), key = true),
-            SqlAttribute("rid", ColumnRef("cb", "rid", Meta[String])),
-            SqlField("b", ColumnRef("cb", "b", Meta[Boolean]))
+            SqlField("id", cb.id, key = true),
+            SqlField("rid", cb.rid, hidden = true),
+            SqlField("b", cb.b)
           )
       )
     )

@@ -11,6 +11,14 @@ import edu.gemini.grackle.doobie._
 import edu.gemini.grackle.syntax._
 
 trait UnionsMapping[F[_]] extends DoobieMapping[F] {
+
+  object collections extends TableDef("collections") {
+    val id = col("id", Meta[String])
+    val itemType = col("item_type", Meta[String])
+    val itemA = col("itema", Meta[String])
+    val itemB = col("itemb", Meta[String])
+  }
+
   val schema =
     schema"""
       type Query {
@@ -44,31 +52,31 @@ trait UnionsMapping[F[_]] extends DoobieMapping[F] {
         discriminator = itemTypeDiscriminator,
         fieldMappings =
           List(
-            SqlAttribute("id", ColumnRef("collections", "id", Meta[String]), key = true),
-            SqlAttribute("itemType", ColumnRef("collections", "item_type", Meta[String]), discriminator = true)
+            SqlField("id", collections.id, key = true, hidden = true),
+            SqlField("itemType", collections.itemType, discriminator = true, hidden = true)
           )
       ),
       ObjectMapping(
         tpe = ItemAType,
         fieldMappings =
           List(
-            SqlAttribute("id", ColumnRef("collections", "id", Meta[String]), key = true),
-            SqlField("itema", ColumnRef("collections", "itema", Meta[String]))
+            SqlField("id", collections.id, key = true, hidden = true),
+            SqlField("itema", collections.itemA)
           )
       ),
       ObjectMapping(
         tpe = ItemBType,
         fieldMappings =
           List(
-            SqlAttribute("id", ColumnRef("collections", "id", Meta[String]), key = true),
-            SqlField("itemb", ColumnRef("collections", "itemb", Meta[String]))
+            SqlField("id", collections.id, key = true, hidden = true),
+            SqlField("itemb", collections.itemB)
           )
       )
     )
 
   def itemTypeDiscriminator(c: Cursor): Result[Type] =
     for {
-      it <- c.attributeAs[String]("itemType")
+      it <- c.fieldAs[String]("itemType")
     } yield it match {
       case "ItemA" => ItemAType
       case "ItemB" => ItemBType

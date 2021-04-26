@@ -347,7 +347,7 @@ trait SqlMovieSpec extends AnyFunSuite {
     assert(res == expected)
   }
 
-  test("query with standaloe computed attribute") {
+  test("query with standalone computed attribute") {
     val query = """
       query {
         longMovies {

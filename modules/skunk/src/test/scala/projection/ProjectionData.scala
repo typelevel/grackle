@@ -7,7 +7,8 @@ import cats.effect.Sync
 import cats.implicits._
 
 import edu.gemini.grackle._, skunk._, syntax._
-import edu.gemini.grackle.Predicate.{Const, Eql, FieldPath, Project}
+import edu.gemini.grackle.Path._
+import edu.gemini.grackle.Predicate.{Const, Eql, Project}
 import edu.gemini.grackle.Query.{Binding, Filter, Select}
 import edu.gemini.grackle.QueryCompiler.SelectElaborator
 import edu.gemini.grackle.Value.{BooleanValue, ObjectValue}
@@ -16,6 +17,21 @@ import _root_.skunk.Session
 import _root_.skunk.codec.all._
 
 trait ProjectionMapping[F[_]] extends SkunkMapping[F] {
+
+  object level0 extends TableDef("level0") {
+    val id = col("id", varchar)
+  }
+
+  object level1 extends TableDef("level1") {
+    val id = col("id", varchar)
+    val level0Id = col("level0_id", varchar.opt)
+  }
+
+  object level2 extends TableDef("level2") {
+    val id = col("id", varchar)
+    val level1Id = col("level1_id", varchar.opt)
+    val attr = col("attr", bool.opt)
+  }
 
   val schema =
     schema"""
@@ -61,30 +77,26 @@ trait ProjectionMapping[F[_]] extends SkunkMapping[F] {
         tpe = Level0Type,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("level0", "id", varchar), key = true),
-            SqlObject("level1",
-              Join(ColumnRef("level0", "id", varchar), ColumnRef("level1", "level0_id", varchar))
-            )
+            SqlField("id", level0.id, key = true),
+            SqlObject("level1", Join(level0.id, level1.level0Id))
           )
       ),
       ObjectMapping(
         tpe = Level1Type,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("level1", "id", varchar), key = true),
-            SqlAttribute("level0_id", ColumnRef("level1", "level0_id", varchar)),
-            SqlObject("level2",
-              Join(ColumnRef("level1", "id", varchar), ColumnRef("level2", "level1_id", varchar))
-            )
+            SqlField("id", level1.id, key = true),
+            SqlField("level0_id", level1.level0Id, hidden = true),
+            SqlObject("level2", Join(level1.id, level2.level1Id))
           )
       ),
       ObjectMapping(
         tpe = Level2Type,
         fieldMappings =
           List(
-            SqlField("id", ColumnRef("level2", "id", varchar), key = true),
-            SqlField("attr", ColumnRef("level2", "attr", bool)),
-            SqlAttribute("level1_id", ColumnRef("level2", "level1_id", varchar))
+            SqlField("id", level2.id, key = true),
+            SqlField("attr", level2.attr),
+            SqlField("level1_id", level2.level1Id, hidden = true)
           )
       )
     )
@@ -93,7 +105,7 @@ trait ProjectionMapping[F[_]] extends SkunkMapping[F] {
     def unapply(input: ObjectValue): Option[Predicate] = {
       input.fields match {
         case List(("attr", BooleanValue(attr))) =>
-          Some(Project(List("level1", "level2"), Eql(FieldPath(List("attr")), Const(attr))))
+          Some(Project(List("level1", "level2"), Eql(UniquePath(List("attr")), Const(attr))))
         case _ => None
       }
     }
@@ -103,7 +115,7 @@ trait ProjectionMapping[F[_]] extends SkunkMapping[F] {
     def unapply(input: ObjectValue): Option[Predicate] = {
       input.fields match {
         case List(("attr", BooleanValue(attr))) =>
-          Some(Project(List("level2"), Eql(FieldPath(List("attr")), Const(attr))))
+          Some(Project(List("level2"), Eql(UniquePath(List("attr")), Const(attr))))
         case _ => None
       }
     }
@@ -113,7 +125,7 @@ trait ProjectionMapping[F[_]] extends SkunkMapping[F] {
     def unapply(input: ObjectValue): Option[Predicate] = {
       input.fields match {
         case List(("attr", BooleanValue(attr))) =>
-          Some(Eql(FieldPath(List("attr")), Const(attr)))
+          Some(Eql(UniquePath(List("attr")), Const(attr)))
         case _ => None
       }
     }
