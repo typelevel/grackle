@@ -39,8 +39,8 @@ final class IntrospectionSuite extends CatsSuite {
       .downField("__schema")
       .downField("types")
       .filterArray(_.hcursor.downField("name").as[String].exists(!standardTypeName(_)))
-      .root
-      .value
+      .top // .root doesn't work in 0.13
+      .getOrElse(sys.error("stripStandardTypes failed"))
 
   test("simple type query") {
     val query = """

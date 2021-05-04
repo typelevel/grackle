@@ -20,7 +20,7 @@ val Scala3 = "3.0.0-RC3"
 
 inThisBuild(Seq(
   homepage := Some(url("https://github.com/gemini-hlsw/gsp-graphql")),
-  scalaVersion := Scala3,
+  scalaVersion := Scala2,
   crossScalaVersions := Seq(Scala2, Scala3),
 ))
 
@@ -46,7 +46,7 @@ lazy val noPublishSettings = Seq(
 
 lazy val modules: List[ProjectReference] = List(
   core,
-  // circe,
+  circe,
   // sql,
   // doobie,
   // skunk,
@@ -73,8 +73,7 @@ lazy val core = project
     libraryDependencies ++= {
       val circeVersion = scalaVersion.value match {
         case Scala3 => "0.14.0-M6"
-        // case `scala-3-prev` => "0.14.0-M5"
-        case Scala2      => "0.13.0"
+        case Scala2 => "0.13.0"
       }
       Seq(
         "org.tpolecat"      %% "atto-core"              % attoVersion,
@@ -89,15 +88,15 @@ lazy val core = project
     }
   )
 
-// lazy val circe = project
-//   .in(file("modules/circe"))
-//   .enablePlugins(AutomateHeaderPlugin)
-//   .disablePlugins(RevolverPlugin)
-//   .dependsOn(core)
-//   .settings(commonSettings)
-//   .settings(
-//     name := "gsp-graphql-circe",
-//   )
+lazy val circe = project
+  .in(file("modules/circe"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(core)
+  .settings(commonSettings)
+  .settings(
+    name := "gsp-graphql-circe",
+  )
 
 // lazy val sql = project
 //   .in(file("modules/sql"))
