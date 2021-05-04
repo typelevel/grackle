@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
+// Copyright (c) 2016-2021 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
 package edu.gemini.grackle
@@ -630,7 +630,7 @@ case class NullableType(
  *
  * @see https://facebook.github.io/graphql/draft/#sec-The-__Field-Type
  */
-case class Field private(
+case class Field(
   name: String,
   description: Option[String],
   args: List[InputValue],
@@ -643,7 +643,7 @@ case class Field private(
  * @param defaultValue a String encoding (using the GraphQL language) of the default value used by
  *                     this input value in the condition a value is not provided at runtime.
  */
-case class InputValue private(
+case class InputValue(
   name: String,
   description: Option[String],
   tpe: Type,
@@ -711,21 +711,21 @@ object Value {
       case (ListType(tpe), Some(ListValue(arr))) =>
         arr.traverse { elem =>
           checkValue(iv.copy(tpe = tpe, defaultValue = None), Some(elem))
-        }.map(ListValue)
+        }.map(ListValue.apply)
       case (InputObjectType(nme, _, ivs), Some(ObjectValue(fs))) =>
         val obj = fs.toMap
         val unknownFields = fs.map(_._1).filterNot(f => ivs.exists(_.name == f))
         if (unknownFields.nonEmpty)
           mkErrorResult(s"Unknown field(s) ${unknownFields.map(s => s"'$s'").mkString("", ", ", "")} in input object value of type ${nme}")
         else
-          ivs.traverse(iv => checkValue(iv, obj.get(iv.name)).map(v => (iv.name, v))).map(ObjectValue)
+          ivs.traverse(iv => checkValue(iv, obj.get(iv.name)).map(v => (iv.name, v))).map(ObjectValue.apply)
       case (_: ScalarType, Some(value)) => value.rightIor
       case (tpe, Some(value)) => mkErrorResult(s"Expected $tpe found '$value' for '${iv.name}'")
       case (tpe, None) => mkErrorResult(s"Value of type $tpe required for '${iv.name}'")
     }
 
   def checkVarValue(iv: InputValue, value: Option[Json]): Result[Value] = {
-    import io.circe.optics.all._
+    import JsonExtractor._
 
     (iv.tpe.dealias, value) match {
       case (_, None) if iv.defaultValue.isDefined =>
@@ -759,7 +759,7 @@ object Value {
         if (unknownFields.nonEmpty)
           mkErrorResult(s"Unknown field(s) ${unknownFields.map(s => s"'$s'").mkString("", ", ", "")} in input object value of type ${nme}")
         else
-          ivs.traverse(iv => checkVarValue(iv, obj(iv.name)).map(v => (iv.name, v))).map(ObjectValue)
+          ivs.traverse(iv => checkVarValue(iv, obj(iv.name)).map(v => (iv.name, v))).map(ObjectValue.apply)
       case (_: ScalarType, Some(jsonString(value))) => StringValue(value).rightIor
       case (tpe, Some(value)) => mkErrorResult(s"Expected $tpe found '$value' for '${iv.name}'")
       case (tpe, None) => mkErrorResult(s"Value of type $tpe required for '${iv.name}'")
@@ -955,11 +955,11 @@ object SchemaParser {
         case Ast.Value.EnumValue(e) => UntypedEnumValue(e.value).rightIor
         case Ast.Value.Variable(v) => UntypedVariableValue(v.value).rightIor
         case Ast.Value.NullValue => NullValue.rightIor
-        case Ast.Value.ListValue(vs) => vs.traverse(parseValue).map(ListValue)
+        case Ast.Value.ListValue(vs) => vs.traverse(parseValue).map(ListValue.apply)
         case Ast.Value.ObjectValue(fs) =>
           fs.traverse { case (name, value) =>
             parseValue(value).map(v => (name.value, v))
-          }.map(ObjectValue)
+          }.map(ObjectValue.apply)
       }
     }
 
@@ -1049,9 +1049,9 @@ object SchemaValidator {
       case a: EnumTypeDefinition => a
     }
 
-    enums.flatMap { enum =>
-      val duplicateValues = enum.values.groupBy(identity).collect { case (x, xs) if xs.length > 1 => x }.toList
-      duplicateValues.map(dupe => mkError(s"Duplicate EnumValueDefinition of ${dupe.name.value} for EnumTypeDefinition ${enum.name.value}"))
+    enums.flatMap { `enum` =>
+      val duplicateValues = `enum`.values.groupBy(identity).collect { case (x, xs) if xs.length > 1 => x }.toList
+      duplicateValues.map(dupe => mkError(s"Duplicate EnumValueDefinition of ${dupe.name.value} for EnumTypeDefinition ${`enum`.name.value}"))
     }
   }
 

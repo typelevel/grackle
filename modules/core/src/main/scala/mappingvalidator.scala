@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
+// Copyright (c) 2016-2021 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
 package edu.gemini.grackle
@@ -219,14 +219,10 @@ trait MappingValidator {
   }
 
   protected def validateObjectMapping(m: ObjectMapping): Chain[Failure] =
-    m match {
-      case om : ObjectMapping =>
-        om.tpe.dealias match {
-          case ot: ObjectType   => validateObjectFieldMappings(om, ot)
-          case _: InterfaceType => Chain(CannotValidateTypeMapping(m))
-          case _                => Chain(InapplicableGraphQLType(m, "ObjectType"))
-        }
-      case other =>  Chain(CannotValidateTypeMapping(other))
+    m.tpe.dealias match {
+      case ot: ObjectType   => validateObjectFieldMappings(m, ot)
+      case _: InterfaceType => Chain(CannotValidateTypeMapping(m))
+      case _                => Chain(InapplicableGraphQLType(m, "ObjectType"))
     }
 
 }

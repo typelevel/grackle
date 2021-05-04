@@ -1,12 +1,12 @@
-// Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
+// Copyright (c) 2016-2021 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
 package introspection
 
 import cats.Id
 import cats.tests.CatsSuite
-import io.circe.Json
-import io.circe.optics.JsonPath.root
+import io.circe.{ ACursor, Json }
+import cats.catsInstancesForId
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
@@ -19,13 +19,28 @@ final class IntrospectionSuite extends CatsSuite {
     case _ => name.startsWith("__")
   }
 
-  def stripStandardTypes(result: Json): Json = {
-    val types = root.data.__schema.types.each.filter(
-      root.name.string.exist(!standardTypeName(_))
-    ).obj.getAll(result).map(Json.fromJsonObject).toVector
-
-    root.data.__schema.types.arr.set(types)(result)
+  implicit class ACursorOps(self: ACursor) {
+    def filterArray(f: Json => Boolean): ACursor = {
+      def go(ac: ACursor, i: Int = 0): ACursor = {
+        val acʹ = ac.downN(i)
+        acʹ.focus match {
+          case None    => ac
+          case Some(j) => if (f(j)) go(ac, i + 1) else go(acʹ.delete, i)
+        }
+      }
+      go(self)
+    }
   }
+
+  def stripStandardTypes(result: Json): Json =
+    result
+      .hcursor
+      .downField("data")
+      .downField("__schema")
+      .downField("types")
+      .filterArray(_.hcursor.downField("name").as[String].exists(!standardTypeName(_)))
+      .root
+      .value
 
   test("simple type query") {
     val query = """

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
+// Copyright (c) 2016-2021 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
 package edu.gemini.grackle
@@ -61,7 +61,10 @@ object Path {
     */
   case class ListPath[T](val path: List[String]) extends Term[List[T]] with Path {
     def apply(c: Cursor): Result[List[T]] =
-      c.flatListPath(path).map(_.map { case ScalarFocus(f: T @unchecked) => f })
+      c.flatListPath(path).map(_.map {
+        case ScalarFocus(f: T @unchecked) => f
+        case _ => sys.error("impossible")
+      })
 
     def prepend(prefix: List[String]): Path =
       ListPath(prefix ++ path)
