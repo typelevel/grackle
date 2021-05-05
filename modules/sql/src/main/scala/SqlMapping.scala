@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
+// Copyright (c) 2016-2021 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
 package edu.gemini.grackle
@@ -43,7 +43,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
    * Name of a SQL schema column and its associated codec. Note that `ColumnRef`s are considered equal
    * if their table and column names are equal.
    */
-  case class ColumnRef(table: String, column: String, codec: Codec[_], scalaTypeName: String)(
+  case class ColumnRef(table: String, column: String, codec: ExistentialCodec, scalaTypeName: String)(
     implicit val pos: SourcePos
   ) { outer =>
 
@@ -66,7 +66,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def apply[A: TypeName](table: String, column: String, codec: Codec[A])(
       implicit pos: SourcePos
     ): ColumnRef =
-      apply(table, column, codec, typeName)
+      apply(table, column, ExistentialCodec(codec), typeName)
   }
 
   /** A pair of `ColumnRef`s, representing a SQL join. `ColumnRef`s have a canonical form. */
@@ -151,9 +151,9 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
   object SqlInterfaceMapping {
 
-   sealed abstract case class DefaultInterfaceMapping(tpe: Type, fieldMappings: List[FieldMapping], path: List[String])(
-     implicit val pos: SourcePos
-   ) extends SqlInterfaceMapping
+    sealed abstract case class DefaultInterfaceMapping(tpe: Type, fieldMappings: List[FieldMapping], path: List[String])(
+      implicit val pos: SourcePos
+    ) extends SqlInterfaceMapping
 
     val defaultDiscriminator: Cursor => Result[Type] = (cursor: Cursor) => cursor.tpe.rightIor
 
@@ -190,7 +190,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   final class MappedQuery(
     table: String,
     columns: List[ColumnRef],
-    metas: List[(Boolean, Codec[_])],
+    metas: List[(Boolean, ExistentialCodec)],
     predicates: List[(List[String], Type, Predicate)],
     joins: List[Join],
     conditions: List[Fragment]
@@ -270,6 +270,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
                 termColumnForField(path.reverse_:::(termPath.path), parent, name)
               }
             }
+          case _ => sys.error("impossible")
         }
 
       def term[T](x: Term[T], put: Encoder[T]): Option[Fragment] =
@@ -279,12 +280,12 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             primaryColumnForTerm(path, tpe, other).map(col => Fragments.const(col.toSql))
         }
 
-      def putForTerm(x: Term[_]): Option[Encoder[_]] =
+      def putForTerm[A](x: Term[A]): Option[Encoder[A]] =
         x match {
           case path: Path =>
             for {
               cr <- primaryColumnForTerm(path.path, tpe, path)
-            } yield toEncoder(cr.codec.asInstanceOf[Codec[Any]])
+            } yield toEncoder(cr.codec.codec.asInstanceOf[Codec[Any]])
 
           case (_: And)|(_: Or)|(_: Not)|(_: Eql[_])|(_: NEql[_])|(_: Lt[_])|(_: LtEql[_])|(_: Gt[_])|(_: GtEql[_])  => Some(booleanEncoder)
           case (_: AndB)|(_: OrB)|(_: XorB)|(_: NotB) => Some(intEncoder)
@@ -322,7 +323,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           case Not(x) =>
             loop(x, Some(booleanEncoder)).map(x => Fragments.const("NOT ") |+| x)
 
-          case Eql(x, y) =>
+          case Eql(x: Term[a], y: Term[b]) =>
             val p = unify(x, y)
             for {
               x <- loop(x, p)
@@ -659,7 +660,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       val (orderedJoins, conditions) = extractDuplicates(orderedJoins0)
 
       val metas = {
-        def metaForColumn(col: ColumnRef): (Boolean, Codec[_]) = {
+        def metaForColumn(col: ColumnRef): (Boolean, ExistentialCodec) = {
           // A column is the product of an outer join (and may therefore be null even if it's non-nullable
           // in the schema) if its table introduced on the child side of a `Join`.
           def isJoin(cr: ColumnRef): Boolean = childTables(cr.table)
@@ -997,8 +998,11 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         objectMapping(path, tpe) match {
           case Some(im: SqlInterfaceMapping) =>
             im.discriminate(this).getOrElse(tpe)
-          case Some(um: SqlUnionMapping) =>
-            um.discriminate(this).getOrElse(tpe)
+
+          // scala 3 says this is unreachable if we say Some(um: SqlUnionMapping)
+          case Some(um) if um.isInstanceOf[SqlUnionMapping] =>
+            um.asInstanceOf[SqlUnionMapping].discriminate(this).getOrElse(tpe)
+
           case _ => tpe
         }
       if (ctpe =:= tpe)
@@ -1091,7 +1095,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
           def groupKey(q: (Query, Type, Env)): (List[String], String, Term[Any], Env, Query, Type) = {
             val (Context(cpath, Select(fieldName, Nil, Filter(Eql(path, Const(_)), child))), tpe, env) = q
-            (cpath, fieldName, path, env, child, tpe)
+            (cpath, fieldName, path.asInstanceOf[Term[Any]], env, child, tpe) // can't make Term covariant
           }
 
           def groupConst(q: Query): Eql[Any] = {

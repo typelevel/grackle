@@ -21,7 +21,7 @@ import QueryInterpreter.mkErrorResult
  * we need to be able to construct where clauses from predicates over fields/attributes), so
  * these cannot be arbitrary functions `Cursor => Boolean`.
  */
-trait Term[T] extends Product with Serializable {
+trait Term[T] extends Product with Serializable { // fun fact: making this covariant crashes Scala 3
   def apply(c: Cursor): Result[T]
 }
 

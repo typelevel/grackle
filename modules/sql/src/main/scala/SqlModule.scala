@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
+// Copyright (c) 2016-2021 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
 package edu.gemini.grackle
@@ -14,8 +14,24 @@ trait SqlModule[F[_]] {
   /** The type of a codec that reads and writes column values of type `A`. */
   type Codec[A]
 
+  /** A codec that has forgotten its type argument. */
+  trait ExistentialCodec {
+    type A
+    def codec: Codec[A]
+  }
+  object ExistentialCodec {
+    def apply[T](c: Codec[T]): ExistentialCodec =
+      new ExistentialCodec {
+        type A = T
+        val codec = c
+      }
+  }
+
+  implicit def unliftCodec(c: ExistentialCodec): Codec[c.A] =
+    c.codec
+
   /** The type of an encoder that writes column values of type `A`. */
-  type Encoder[A]
+  type Encoder[-A]
 
   /** Extract an encoder from a codec. */
   def toEncoder[A](c: Codec[A]): Encoder[A]
@@ -50,6 +66,6 @@ trait SqlModule[F[_]] {
   def booleanEncoder: Encoder[Boolean]
   def doubleEncoder:  Encoder[Double]
 
-  def fetch(fragment: Fragment, metas: List[(Boolean, Codec[_])]): F[Table]
+  def fetch(fragment: Fragment, metas: List[(Boolean, ExistentialCodec)]): F[Table]
 
 }

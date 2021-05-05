@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
+// Copyright (c) 2016-2021 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
 package edu.gemini.grackle
@@ -12,6 +12,7 @@ import _root_.doobie.enumerated.Nullability.{Nullable, NoNulls}
 import _root_.doobie.implicits._
 import _root_.doobie.util.fragments
 import java.sql.ResultSet
+import scala.annotation.unchecked.uncheckedVariance
 
 abstract class DoobieMapping[F[_]: Sync](
   val transactor: Transactor[F],
@@ -19,7 +20,7 @@ abstract class DoobieMapping[F[_]: Sync](
 ) extends SqlMapping[F] {
 
   type Codec[A]   = (Meta[A], Boolean)
-  type Encoder[A] = (Put[A], Boolean)
+  type Encoder[-A] = (Put[A], Boolean) @uncheckedVariance
   type Fragment   = DoobieFragment
 
   def toEncoder[A](c: Codec[A]): Encoder[A] = (c._1.put, c._2)
@@ -40,7 +41,7 @@ abstract class DoobieMapping[F[_]: Sync](
       def empty: Fragment = DoobieFragment.empty
       def bind[A](encoder: Encoder[A], value: A): Fragment = {
         val (e0, nullable) = encoder
-        implicit val e = e0
+        implicit val e = e0.asInstanceOf[Put[A]]
         if (!nullable) sql"$value"
         else
           value.asInstanceOf[Option[A]] match {
@@ -54,23 +55,29 @@ abstract class DoobieMapping[F[_]: Sync](
       def whereAndOpt(fs: Option[Fragment]*): Fragment = fragments.whereAndOpt(fs: _*)
       def in[G[_]: Reducible, A](f: Fragment, fs: G[A], enc: Encoder[A]): Fragment = {
         val (put, _) = enc
-        fragments.in(f, fs)(implicitly, put)
+        fragments.in(f, fs)(implicitly, put.asInstanceOf[Put[A]])
       }
     }
 
-  def fetch(fragment: Fragment, metas: List[(Boolean, Codec[_])]): F[edu.gemini.grackle.sql.Table] = {
+  def fetch(fragment: Fragment, metas: List[(Boolean, ExistentialCodec)]): F[edu.gemini.grackle.sql.Table] = {
 
-    def mkRead(metas: List[(Boolean, Codec[_])]): Read[Row] = {
+    def mkRead(metas: List[(Boolean, ExistentialCodec)]): Read[Row] = {
+
       def unsafeGet(rs: ResultSet, n: Int): Row =
         Row {
-          metas.zipWithIndex.map {
-            case ((isJoin, (m, false)),  i) =>
-              if (isJoin) m.get.unsafeGetNullable(rs, n+i).getOrElse(FailedJoin)
-              else m.get.unsafeGetNonNullable(rs, n+i)
-            case ((_, (m, true)), i) => m.get.unsafeGetNullable(rs, n+i)
+          metas.zipWithIndex.map { case ((b, ec), i) =>
+            ((b, ec.codec), i) match {
+              case ((isJoin, (m, false)),  i) =>
+                if (isJoin) m.get.unsafeGetNullable(rs, n+i).getOrElse(FailedJoin)
+                else m.get.unsafeGetNonNullable(rs, n+i)
+              case ((_, (m, true)), i) => m.get.unsafeGetNullable(rs, n+i)
+            }
           }
         }
-      new Read(metas.map { case (_, (m, n)) => (m.get, if(n) Nullable else NoNulls) }, unsafeGet)
+      new Read(metas.map { case (_, ec) =>
+        val (m, n) = ec.codec
+        (m.get, if(n) Nullable else NoNulls)
+      }, unsafeGet)
     }
 
     fragment.query[Row](mkRead(metas)).to[List].transact(transactor)

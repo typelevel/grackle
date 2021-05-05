@@ -2,17 +2,17 @@ val attoVersion                 = "0.9.4"
 val catsVersion                 = "2.6.0"
 val catsEffectVersion           = "2.4.1"
 val catsTestkitScalaTestVersion = "2.1.4"
-val doobieVersion               = "0.12.1"
+val doobieVersion               = "0.13.1+8-aed89dcd+20210505-1-SNAPSHOT"
 val fs2Version                  = "2.5.5"
 val http4sVersion               = "0.21.22"
 val kindProjectorVersion        = "0.11.3"
 val literallyVersion            = "1.0.1"
 val logbackVersion              = "1.2.3"
-val log4catsVersion             = "1.1.1"
+val log4catsVersion             = "1.3.0"
 val skunkVersion                = "0.0.25"
 val shapelessVersion            = "2.3.4"
 val sourcePosVersion            = "0.1.3"
-val testContainersVersion       = "0.39.3"
+val testContainersVersion       = "0.39.4-SNAPSHOT"
 val typenameVersion             = "0.1.7"
 
 val Scala2 = "2.13.5"
@@ -47,8 +47,8 @@ lazy val noPublishSettings = Seq(
 lazy val modules: List[ProjectReference] = List(
   core,
   circe,
-  // sql,
-  // doobie,
+  sql,
+  doobie,
   // skunk,
   // generic,
   // demo
@@ -98,37 +98,37 @@ lazy val circe = project
     name := "gsp-graphql-circe",
   )
 
-// lazy val sql = project
-//   .in(file("modules/sql"))
-//   .enablePlugins(AutomateHeaderPlugin)
-//   .disablePlugins(RevolverPlugin)
-//   .dependsOn(circe)
-//   .settings(commonSettings)
-//   .settings(
-//     name := "gsp-graphql-sql",
-//     libraryDependencies ++= Seq(
-//       "io.chrisdavenport" %% "log4cats-slf4j"         % log4catsVersion,
-//       "ch.qos.logback"    %  "logback-classic"        % logbackVersion % "test",
-//       "com.dimafeng"      %% "testcontainers-scala-scalatest"  % testContainersVersion % "test",
-//       "com.dimafeng"      %% "testcontainers-scala-postgresql" % testContainersVersion % "test",
-//     )
-//   )
+lazy val sql = project
+  .in(file("modules/sql"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(circe)
+  .settings(commonSettings)
+  .settings(
+    name := "gsp-graphql-sql",
+    libraryDependencies ++= Seq(
+      "org.typelevel"     %% "log4cats-slf4j"         % log4catsVersion,
+      "ch.qos.logback"    %  "logback-classic"        % logbackVersion % "test",
+      "com.dimafeng"      %% "testcontainers-scala-scalatest"  % testContainersVersion % "test",
+      "com.dimafeng"      %% "testcontainers-scala-postgresql" % testContainersVersion % "test",
+    )
+  )
 
-// lazy val doobie = project
-//   .in(file("modules/doobie"))
-//   .enablePlugins(AutomateHeaderPlugin)
-//   .disablePlugins(RevolverPlugin)
-//   .dependsOn(sql % "test->test;compile->compile", circe)
-//   .settings(commonSettings)
-//   .settings(
-//     name := "gsp-graphql-doobie",
-//     Test / fork := true,
-//     Test / parallelExecution := false,
-//     libraryDependencies ++= Seq(
-//       "org.tpolecat"      %% "doobie-core"           % doobieVersion,
-//       "org.tpolecat"      %% "doobie-postgres-circe" % doobieVersion,
-//     )
-//   )
+lazy val doobie = project
+  .in(file("modules/doobie"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(sql % "test->test;compile->compile", circe)
+  .settings(commonSettings)
+  .settings(
+    name := "gsp-graphql-doobie",
+    Test / fork := true,
+    Test / parallelExecution := false,
+    libraryDependencies ++= Seq(
+      "org.tpolecat" %% "doobie-core"           % doobieVersion,
+      "org.tpolecat" %% "doobie-postgres-circe" % doobieVersion,
+    )
+  )
 
 // lazy val skunk = project
 //   .in(file("modules/skunk"))
