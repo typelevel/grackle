@@ -51,7 +51,7 @@ lazy val modules: List[ProjectReference] = List(
   doobie,
   skunk,
   // generic,
-  // demo
+  demo
 )
 
 lazy val `gsp-graphql` = project.in(file("."))
@@ -160,24 +160,26 @@ lazy val generic = project
     ).filterNot(_ => scalaVersion.value.startsWith("3."))
   )
 
-// lazy val demo = project
-//   .in(file("demo"))
-//   .enablePlugins(AutomateHeaderPlugin)
-//   .dependsOn(core, generic)
-//   .settings(commonSettings)
-//   .settings(
-//     name := "gsp-graphql-demo",
-//     libraryDependencies ++= Seq(
-//       "io.chrisdavenport" %% "log4cats-slf4j"         % log4catsVersion,
-//       "ch.qos.logback"    %  "logback-classic"        % logbackVersion,
-//       "org.tpolecat"      %% "doobie-core"            % doobieVersion,
-//       "org.tpolecat"      %% "doobie-postgres"        % doobieVersion,
-//       "org.http4s"        %% "http4s-blaze-server"    % http4sVersion,
-//       "org.http4s"        %% "http4s-blaze-client"    % http4sVersion,
-//       "org.http4s"        %% "http4s-circe"           % http4sVersion,
-//       "org.http4s"        %% "http4s-dsl"             % http4sVersion
-//     )
-//   )
+// TODO: re-enable when http4s is available for 3.0.0-RC3
+lazy val demo = project
+  .in(file("demo"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .dependsOn(core, generic)
+  .settings(commonSettings)
+  .settings(
+    publish / skip := true,
+    name := "gsp-graphql-demo",
+    libraryDependencies ++= Seq(
+      "org.typelevel"     %% "log4cats-slf4j"         % log4catsVersion,
+      "ch.qos.logback"    %  "logback-classic"        % logbackVersion,
+      "org.tpolecat"      %% "doobie-core"            % doobieVersion,
+      "org.tpolecat"      %% "doobie-postgres"        % doobieVersion,
+      "org.http4s"        %% "http4s-blaze-server"    % http4sVersion,
+      "org.http4s"        %% "http4s-blaze-client"    % http4sVersion,
+      "org.http4s"        %% "http4s-circe"           % http4sVersion,
+      "org.http4s"        %% "http4s-dsl"             % http4sVersion
+    ).filterNot(_ => scalaVersion.value.startsWith("3."))
+  )
 
 // lazy val docs = project
 //   .in(file("docs"))
