@@ -27,9 +27,6 @@ trait SqlModule[F[_]] {
       }
   }
 
-  implicit def unliftCodec(c: ExistentialCodec): Codec[c.A] =
-    c.codec
-
   /** The type of an encoder that writes column values of type `A`. */
   type Encoder[-A]
 

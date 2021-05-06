@@ -9,7 +9,7 @@ val kindProjectorVersion        = "0.11.3"
 val literallyVersion            = "1.0.1"
 val logbackVersion              = "1.2.3"
 val log4catsVersion             = "1.3.0"
-val skunkVersion                = "0.0.25"
+val skunkVersion                = "0.0.26"
 val shapelessVersion            = "2.3.4"
 val sourcePosVersion            = "0.1.3"
 val testContainersVersion       = "0.39.4-SNAPSHOT"
@@ -49,7 +49,7 @@ lazy val modules: List[ProjectReference] = List(
   circe,
   sql,
   doobie,
-  // skunk,
+  skunk,
   // generic,
   // demo
 )
@@ -130,21 +130,21 @@ lazy val doobie = project
     )
   )
 
-// lazy val skunk = project
-//   .in(file("modules/skunk"))
-//   .enablePlugins(AutomateHeaderPlugin)
-//   .disablePlugins(RevolverPlugin)
-//   .dependsOn(sql % "test->test;compile->compile", circe)
-//   .settings(commonSettings)
-//   .settings(
-//     name := "gsp-graphql-skunk",
-//     Test / fork := true,
-//     Test / parallelExecution := false,
-//     libraryDependencies ++= Seq(
-//       "org.tpolecat"      %% "skunk-core"  % skunkVersion,
-//       "org.tpolecat"      %% "skunk-circe" % skunkVersion,
-//     )
-//   )
+lazy val skunk = project
+  .in(file("modules/skunk"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(sql % "test->test;compile->compile", circe)
+  .settings(commonSettings)
+  .settings(
+    name := "gsp-graphql-skunk",
+    Test / fork := true,
+    Test / parallelExecution := false,
+    libraryDependencies ++= Seq(
+      "org.tpolecat"      %% "skunk-core"  % skunkVersion,
+      "org.tpolecat"      %% "skunk-circe" % skunkVersion,
+    )
+  )
 
 // lazy val generic = project
 //   .in(file("modules/generic"))
