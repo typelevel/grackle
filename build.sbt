@@ -146,18 +146,19 @@ lazy val skunk = project
     )
   )
 
-// lazy val generic = project
-//   .in(file("modules/generic"))
-//   .enablePlugins(AutomateHeaderPlugin)
-//   .disablePlugins(RevolverPlugin)
-//   .dependsOn(core)
-//   .settings(commonSettings)
-//   .settings(
-//     name := "gsp-graphql-generic",
-//     libraryDependencies ++= Seq(
-//       "com.chuusai"       %% "shapeless"              % shapelessVersion
-//     )
-//   )
+lazy val generic = project
+  .in(file("modules/generic"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(core)
+  .settings(commonSettings)
+  .settings(
+    publish / skip := scalaVersion.value.startsWith("3."),
+    name := "gsp-graphql-generic",
+    libraryDependencies ++= Seq(
+      "com.chuusai"       %% "shapeless"              % shapelessVersion
+    ).filterNot(_ => scalaVersion.value.startsWith("3."))
+  )
 
 // lazy val demo = project
 //   .in(file("demo"))
