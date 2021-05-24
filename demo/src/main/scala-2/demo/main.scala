@@ -3,14 +3,14 @@
 
 package demo
 
-import java.util.concurrent._
 import scala.concurrent.ExecutionContext.global
 
-import cats.effect.{ Blocker, ContextShift, ConcurrentEffect, ExitCode, IO, IOApp, Timer }
+import cats.effect.{ Async, ExitCode, IO, IOApp }
 import cats.implicits._
 import fs2.Stream
 import org.http4s.implicits._
-import org.http4s.server.blaze.BlazeServerBuilder
+
+import org.http4s.blaze.server.BlazeServerBuilder
 import org.http4s.server.middleware.Logger
 import org.http4s.server.staticcontent._
 
@@ -23,14 +23,13 @@ object Main extends IOApp {
 }
 
 object DemoServer {
-  def stream[F[_]: ConcurrentEffect : ContextShift](implicit T: Timer[F]): Stream[F, Nothing] = {
-    val blockingPool = Executors.newFixedThreadPool(4)
-    val blocker = Blocker.liftExecutorService(blockingPool)
+  def stream[F[_]: Async]: Stream[F, Nothing] = {
+
     val starWarsService = StarWarsService.service[F]
 
     val httpApp0 = (
       // Routes for static resources, ie. GraphQL Playground
-      resourceService[F](ResourceService.Config("/assets", blocker)) <+>
+      resourceServiceBuilder[F]("/assets").toRoutes <+>
       // Routes for the Star Wars GraphQL service
       StarWarsService.routes[F](starWarsService)
     ).orNotFound

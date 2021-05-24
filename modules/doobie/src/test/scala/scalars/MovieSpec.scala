@@ -6,6 +6,7 @@ package scalars
 import edu.gemini.grackle.syntax._
 import utils.DatabaseSuite
 import grackle.test.SqlMovieSpec
+import cats.effect.unsafe.implicits.global
 
 final class MovieSpec extends DatabaseSuite with SqlMovieSpec {
   lazy val mapping = MovieMapping.fromTransactor(xa)

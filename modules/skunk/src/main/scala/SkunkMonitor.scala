@@ -10,7 +10,7 @@ import cats.implicits._
 import edu.gemini.grackle.QueryInterpreter.ProtoJson
 import edu.gemini.grackle.sql._
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
+import cats.effect.Ref
 
 case class SkunkStats(
   query: Query,

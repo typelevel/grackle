@@ -11,6 +11,7 @@ import cats.syntax.all._
 import io.circe.Json
 import edu.gemini.grackle.sql.SqlStatsMonitor
 import edu.gemini.grackle.sql.SqlMonitor
+import cats.effect.unsafe.implicits.global
 
 trait SqlCoalesceSpec extends AnyFunSuite {
 

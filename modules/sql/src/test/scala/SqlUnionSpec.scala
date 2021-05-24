@@ -8,6 +8,7 @@ import edu.gemini.grackle.QueryExecutor
 import io.circe.Json
 import edu.gemini.grackle.syntax._
 import org.scalatest.funsuite.AnyFunSuite
+import cats.effect.unsafe.implicits.global
 
 trait SqlUnionSpec extends AnyFunSuite {
   def mapping: QueryExecutor[IO, Json]

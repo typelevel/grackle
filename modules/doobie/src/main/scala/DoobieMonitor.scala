@@ -11,7 +11,7 @@ import edu.gemini.grackle.QueryInterpreter.ProtoJson
 import edu.gemini.grackle.sql.Row
 import org.typelevel.log4cats.Logger
 import edu.gemini.grackle.sql.SqlStatsMonitor
-import cats.effect.concurrent.Ref
+import cats.effect.Ref
 import cats.effect.Sync
 
 case class DoobieStats(

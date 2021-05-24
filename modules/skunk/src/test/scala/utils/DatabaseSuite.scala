@@ -3,9 +3,6 @@
 
 package utils
 
-import scala.concurrent.ExecutionContext
-
-import cats.effect.ContextShift
 import cats.effect.IO
 import cats.effect.Resource
 import grackle.test.SqlDatabaseSuite
@@ -14,9 +11,6 @@ import org.testcontainers.containers.PostgreSQLContainer.POSTGRESQL_PORT
 import skunk.Session
 
 trait DatabaseSuite extends SqlDatabaseSuite {
-
-  implicit def contextShift: ContextShift[IO] =
-    IO.contextShift(ExecutionContext.global)
 
   // Slow because each usage will open a new socket, but ok for now.
   lazy val pool: Resource[IO, Session[IO]] =

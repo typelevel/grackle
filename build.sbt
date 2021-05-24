@@ -1,22 +1,22 @@
-val attoVersion                 = "0.9.4"
-val catsVersion                 = "2.6.0"
-val catsEffectVersion           = "2.4.1"
-val catsTestkitScalaTestVersion = "2.1.4"
-val doobieVersion               = "0.13.2"
-val fs2Version                  = "2.5.5"
-val http4sVersion               = "0.21.22"
+val attoVersion                 = "0.9.5"
+val catsVersion                 = "2.6.1"
+val catsTestkitScalaTestVersion = "2.1.5-SNAPSHOT"
+val circeVersion                = "0.14.0-M7"
+val doobieVersion               = "0.13.4+80-512f4d7a-SNAPSHOT"
+val fs2Version                  = "3.0.3"
+val http4sVersion               = "0.23.0-M1"
 val kindProjectorVersion        = "0.11.3"
-val literallyVersion            = "1.0.1"
+val literallyVersion            = "1.0.2"
 val logbackVersion              = "1.2.3"
-val log4catsVersion             = "1.3.0"
-val skunkVersion                = "0.0.26"
+val log4catsVersion             = "2.1.1"
+val skunkVersion                = "0.1.2"
 val shapelessVersion            = "2.3.4"
-val sourcePosVersion            = "0.1.3"
+val sourcePosVersion            = "1.0.0"
 val testContainersVersion       = "0.39.4-SNAPSHOT"
-val typenameVersion             = "0.1.7"
+val typenameVersion             = "1.0.0"
 
 val Scala2 = "2.13.5"
-val Scala3 = "3.0.0-RC3"
+val Scala3 = "3.0.0"
 
 inThisBuild(Seq(
   homepage := Some(url("https://github.com/gemini-hlsw/gsp-graphql")),
@@ -30,7 +30,7 @@ lazy val commonSettings = Seq(
     "org.typelevel"     %% "cats-testkit"           % catsVersion % "test",
     "org.typelevel"     %% "cats-testkit-scalatest" % catsTestkitScalaTestVersion % "test"
   ) ++ Seq(
-    compilerPlugin("org.typelevel" %% "kind-projector" % "0.11.3" cross CrossVersion.full),
+    compilerPlugin("org.typelevel" %% "kind-projector" % kindProjectorVersion cross CrossVersion.full),
   ).filterNot(_ => scalaVersion.value.startsWith("3.")),
   headerMappings := headerMappings.value + (HeaderFileType.scala -> HeaderCommentStyle.cppStyleLineComment),
   headerLicense  := Some(HeaderLicense.Custom(
@@ -70,22 +70,16 @@ lazy val core = project
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-core",
-    libraryDependencies ++= {
-      val circeVersion = scalaVersion.value match {
-        case Scala3 => "0.14.0-M6"
-        case Scala2 => "0.13.0"
-      }
-      Seq(
-        "org.tpolecat"      %% "atto-core"              % attoVersion,
-        "org.typelevel"     %% "cats-core"              % catsVersion,
-        "org.typelevel"     %% "literally"              % literallyVersion,
-        "io.circe"          %% "circe-core"             % circeVersion,
-        "io.circe"          %% "circe-parser"           % circeVersion,
-        "org.tpolecat"      %% "typename"               % typenameVersion,
-        "org.tpolecat"      %% "sourcepos"              % sourcePosVersion,
-        "co.fs2"            %% "fs2-core"               % fs2Version,
-      )
-    }
+    libraryDependencies ++= Seq(
+      "org.tpolecat"      %% "atto-core"              % attoVersion,
+      "org.typelevel"     %% "cats-core"              % catsVersion,
+      "org.typelevel"     %% "literally"              % literallyVersion,
+      "io.circe"          %% "circe-core"             % circeVersion,
+      "io.circe"          %% "circe-parser"           % circeVersion,
+      "org.tpolecat"      %% "typename"               % typenameVersion,
+      "org.tpolecat"      %% "sourcepos"              % sourcePosVersion,
+      "co.fs2"            %% "fs2-core"               % fs2Version,
+    )
   )
 
 lazy val circe = project

@@ -4,7 +4,7 @@
 package edu.gemini.grackle.sql
 
 import cats.Applicative
-import cats.effect.concurrent.Ref
+import cats.effect.Ref
 import cats.syntax.all._
 import edu.gemini.grackle.{ Query, Result, QueryInterpreter }
 

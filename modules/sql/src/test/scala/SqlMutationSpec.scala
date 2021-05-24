@@ -8,6 +8,7 @@ import edu.gemini.grackle.QueryExecutor
 import cats.effect.IO
 import io.circe.Json
 import edu.gemini.grackle.syntax._
+import cats.effect.unsafe.implicits.global
 
 trait SqlMutationSchema {
 

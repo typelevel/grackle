@@ -9,6 +9,7 @@ import org.scalatest.funsuite.AnyFunSuite
 import edu.gemini.grackle.QueryExecutor
 import cats.effect.IO
 import io.circe.Json
+import cats.effect.unsafe.implicits.global
 
 trait SqlMovieSpec extends AnyFunSuite {
 

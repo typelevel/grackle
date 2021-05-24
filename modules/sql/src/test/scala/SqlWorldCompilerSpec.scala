@@ -13,6 +13,7 @@ import edu.gemini.grackle.sql.SqlMonitor
 import edu.gemini.grackle.Query
 import edu.gemini.grackle.Path._
 import edu.gemini.grackle.Predicate._
+import cats.effect.unsafe.implicits.global
 
 /** Tests that confirm the compiler is writing the queries we want. */
 trait SqlWorldCompilerSpec extends AnyFunSuite {

@@ -7,6 +7,7 @@ import edu.gemini.grackle.syntax._
 
 import utils.DatabaseSuite
 import grackle.test.SqlProjectionSpec
+import cats.effect.unsafe.implicits.global
 
 final class ProjectionSpec extends DatabaseSuite with SqlProjectionSpec {
   lazy val mapping = ProjectionMapping.fromTransactor(xa)

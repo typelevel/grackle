@@ -7,7 +7,7 @@ import _root_.skunk.codec.all._
 import _root_.skunk.implicits._
 import _root_.skunk.Session
 import cats.data.IorT
-import cats.effect.{ Bracket, Resource, Sync }
+import cats.effect.{ MonadCancel, Resource, Sync }
 import cats.syntax.all._
 import edu.gemini.grackle._
 import edu.gemini.grackle.Path._
@@ -37,7 +37,7 @@ trait MutationSchema[F[_]] extends SkunkMapping[F] with SqlMutationSchema {
 
 trait MutationMapping[F[_]] extends MutationSchema[F] {
 
-  implicit def ev: Bracket[F, Throwable]
+  implicit def ev: MonadCancel[F, Throwable]
 
   val QueryType    = schema.ref("Query")
   val MutationType = schema.ref("Mutation")

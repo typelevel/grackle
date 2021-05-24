@@ -5,7 +5,7 @@ package mutation
 
 import _root_.doobie.{ Meta, Transactor }
 import _root_.doobie.implicits._
-import cats.effect.{ Bracket, Sync }
+import cats.effect.{ MonadCancel, Sync }
 import cats.syntax.all._
 import fs2.Stream
 
@@ -38,7 +38,7 @@ trait MutationSchema[F[_]] extends DoobieMapping[F] with SqlMutationSchema {
 
 trait MutationMapping[F[_]] extends MutationSchema[F] {
 
-  implicit def ev: Bracket[F, Throwable]
+  implicit def ev: MonadCancel[F, Throwable]
 
   val QueryType    = schema.ref("Query")
   val MutationType = schema.ref("Mutation")

@@ -4,6 +4,7 @@
 package subscription
 
 import cats.effect._
+import cats.effect.unsafe.implicits.global
 import cats.tests.CatsSuite
 import edu.gemini.grackle.Mapping
 import edu.gemini.grackle.Result
@@ -12,7 +13,6 @@ import edu.gemini.grackle.ValueMapping
 import fs2.concurrent.SignallingRef
 import fs2.Stream
 import edu.gemini.grackle.Query
-import scala.concurrent.ExecutionContext
 import io.circe.Json
 import edu.gemini.grackle.QueryCompiler
 import edu.gemini.grackle.Value
@@ -21,9 +21,6 @@ import edu.gemini.grackle.syntax._
 import scala.concurrent.duration._
 
 final class SubscriptionSpec extends CatsSuite {
-
-  implicit val ioContextShift: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-  implicit val ioTimer: Timer[IO] = IO.timer(ExecutionContext.global)
 
   def mapping(ref: SignallingRef[IO, Int]): Mapping[IO] =
     new ValueMapping[IO] {
@@ -125,7 +122,8 @@ final class SubscriptionSpec extends CatsSuite {
         _   <- IO.sleep(100.milli)
         _   <- map.compileAndRunOne("mutation { put(n: 77) }")
         _   <- IO.sleep(100.milli)
-        res <- fib.join
+        out <- fib.join
+        res <- out.embed(IO.raiseError(new RuntimeException("canceled")))
       } yield res
 
     assert(prog.unsafeRunSync() == List(
