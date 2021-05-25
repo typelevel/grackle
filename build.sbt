@@ -4,7 +4,7 @@ val catsEffectVersion           = "2.4.1"
 val catsTestkitScalaTestVersion = "2.1.5"
 val doobieVersion               = "0.13.2"
 val fs2Version                  = "2.5.6"
-val http4sVersion               = "0.21.22"
+val http4sVersion               = "0.22.0-M8"
 val kindProjectorVersion        = "0.11.3"
 val literallyVersion            = "1.0.2"
 val logbackVersion              = "1.2.3"
@@ -178,7 +178,7 @@ lazy val demo = project
       "org.http4s"        %% "http4s-blaze-client"    % http4sVersion,
       "org.http4s"        %% "http4s-circe"           % http4sVersion,
       "org.http4s"        %% "http4s-dsl"             % http4sVersion
-    ).filterNot(_ => scalaVersion.value.startsWith("3."))
+    )
   )
 
 lazy val docs = project
