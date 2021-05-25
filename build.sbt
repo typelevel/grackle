@@ -22,6 +22,14 @@ inThisBuild(Seq(
   homepage := Some(url("https://github.com/gemini-hlsw/gsp-graphql")),
   scalaVersion := Scala2,
   crossScalaVersions := Seq(Scala2, Scala3),
+    organization     := "edu.gemini",
+    organizationName := "Association of Universities for Research in Astronomy, Inc. (AURA)",
+    startYear        := Some(2019),
+    licenses         += (("BSD-3-Clause", new URL("https://opensource.org/licenses/BSD-3-Clause"))),
+    developers := List(
+      Developer("milessabin", "Miles Sabin", "miles@milessabin.com", url("http://milessabin.com/blog")),
+      Developer("tpolecat",   "Rob Norris",  "rnorris@gemini.edu",   url("http://www.tpolecat.org")),
+    )
 ))
 
 lazy val commonSettings = Seq(
