@@ -9,7 +9,6 @@ import cats.effect.{ Async, ExitCode, IO, IOApp }
 import cats.implicits._
 import fs2.Stream
 import org.http4s.implicits._
-
 import org.http4s.blaze.server.BlazeServerBuilder
 import org.http4s.server.middleware.Logger
 import org.http4s.server.staticcontent._
