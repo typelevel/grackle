@@ -21,7 +21,7 @@ import QueryInterpreter.mkErrorResult
  * we need to be able to construct where clauses from predicates over fields/attributes), so
  * these cannot be arbitrary functions `Cursor => Boolean`.
  */
-trait Term[T] extends Product with Serializable {
+trait Term[T] extends Product with Serializable { // fun fact: making this covariant crashes Scala 3
   def apply(c: Cursor): Result[T]
 }
 
@@ -61,7 +61,10 @@ object Path {
     */
   case class ListPath[T](val path: List[String]) extends Term[List[T]] with Path {
     def apply(c: Cursor): Result[List[T]] =
-      c.flatListPath(path).map(_.map { case ScalarFocus(f: T @unchecked) => f })
+      c.flatListPath(path).map(_.map {
+        case ScalarFocus(f: T @unchecked) => f
+        case _ => sys.error("impossible")
+      })
 
     def prepend(prefix: List[String]): Path =
       ListPath(prefix ++ path)

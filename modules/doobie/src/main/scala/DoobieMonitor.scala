@@ -9,7 +9,7 @@ import cats.Applicative
 import cats.implicits._
 import edu.gemini.grackle.QueryInterpreter.ProtoJson
 import edu.gemini.grackle.sql.Row
-import io.chrisdavenport.log4cats.Logger
+import org.typelevel.log4cats.Logger
 import edu.gemini.grackle.sql.SqlStatsMonitor
 import cats.effect.concurrent.Ref
 import cats.effect.Sync

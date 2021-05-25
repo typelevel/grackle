@@ -5,6 +5,7 @@ package starwars
 
 import cats.Id
 import cats.implicits._
+import cats.catsInstancesForId
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._

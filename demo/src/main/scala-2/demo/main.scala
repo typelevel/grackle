@@ -10,7 +10,7 @@ import cats.effect.{ Blocker, ContextShift, ConcurrentEffect, ExitCode, IO, IOAp
 import cats.implicits._
 import fs2.Stream
 import org.http4s.implicits._
-import org.http4s.server.blaze.BlazeServerBuilder
+import org.http4s.blaze.server.BlazeServerBuilder
 import org.http4s.server.middleware.Logger
 import org.http4s.server.staticcontent._
 
@@ -30,7 +30,7 @@ object DemoServer {
 
     val httpApp0 = (
       // Routes for static resources, ie. GraphQL Playground
-      resourceService[F](ResourceService.Config("/assets", blocker)) <+>
+      resourceServiceBuilder[F]("/assets", blocker).toRoutes <+>
       // Routes for the Star Wars GraphQL service
       StarWarsService.routes[F](starWarsService)
     ).orNotFound

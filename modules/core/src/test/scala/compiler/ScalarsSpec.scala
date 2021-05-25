@@ -9,6 +9,7 @@ import scala.util.Try
 
 import cats.{Eq, Id, Order}
 import cats.implicits._
+import cats.catsInstancesForId
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle._

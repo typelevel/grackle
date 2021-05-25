@@ -3,7 +3,7 @@
 
 package subscription
 
-import cats.effect.IO
+import cats.effect._
 import cats.tests.CatsSuite
 import edu.gemini.grackle.Mapping
 import edu.gemini.grackle.Result
@@ -22,8 +22,8 @@ import scala.concurrent.duration._
 
 final class SubscriptionSpec extends CatsSuite {
 
-  implicit val ioContextShift = IO.contextShift(ExecutionContext.global)
-  implicit val ioTimer        = IO.timer(ExecutionContext.global)
+  implicit val ioContextShift: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
+  implicit val ioTimer: Timer[IO] = IO.timer(ExecutionContext.global)
 
   def mapping(ref: SignallingRef[IO, Int]): Mapping[IO] =
     new ValueMapping[IO] {
@@ -75,83 +75,83 @@ final class SubscriptionSpec extends CatsSuite {
 
     }
 
-    test("sanity check (get, put, get)") {
+  test("sanity check (get, put, get)") {
 
-      val prog: IO[(Json, Json, Json)] =
-        for {
-          ref <- SignallingRef[IO, Int](0)
-          map  = mapping(ref)
-          r0  <- map.compileAndRunOne("query { get }")
-          r1  <- map.compileAndRunOne("mutation { put(n: 42) }")
-          r2  <- map.compileAndRunOne("query { get }")
-        } yield (r0, r1, r2)
+    val prog: IO[(Json, Json, Json)] =
+      for {
+        ref <- SignallingRef[IO, Int](0)
+        map  = mapping(ref)
+        r0  <- map.compileAndRunOne("query { get }")
+        r1  <- map.compileAndRunOne("mutation { put(n: 42) }")
+        r2  <- map.compileAndRunOne("query { get }")
+      } yield (r0, r1, r2)
 
-      assert(prog.unsafeRunSync() == ((
-        json"""
-          {
-            "data" : {
-              "get" : 0
-            }
+    assert(prog.unsafeRunSync() == ((
+      json"""
+        {
+          "data" : {
+            "get" : 0
           }
-        """,
-        json"""
-          {
-            "data" : {
-              "put" : 42
-            }
+        }
+      """,
+      json"""
+        {
+          "data" : {
+            "put" : 42
           }
-        """,
-        json"""
-          {
-            "data" : {
-              "get" : 42
-            }
+        }
+      """,
+      json"""
+        {
+          "data" : {
+            "get" : 42
           }
-        """
-      )))
+        }
+      """
+    )))
 
-    }
+  }
 
-    test("subscription") {
+  test("subscription") {
 
-      val prog: IO[List[Json]] =
-        for {
-          ref <- SignallingRef[IO, Int](0)
-          map  = mapping(ref)
-          fib <- map.compileAndRunAll("subscription { watch }").take(3).compile.toList.start
-          _   <- map.compileAndRunOne("mutation { put(n: 123) }")
-          _   <- IO.sleep(100.milli) // this is the best we can do for now; I will try to improve in a followup
-          _   <- map.compileAndRunOne("mutation { put(n: 42) }")
-          _   <- IO.sleep(100.milli)
-          _   <- map.compileAndRunOne("mutation { put(n: 77) }")
-          _   <- IO.sleep(100.milli)
-          res <- fib.join
-        } yield res
+    val prog: IO[List[Json]] =
+      for {
+        ref <- SignallingRef[IO, Int](0)
+        map  = mapping(ref)
+        fib <- map.compileAndRunAll("subscription { watch }").take(3).compile.toList.start
+        _   <- map.compileAndRunOne("mutation { put(n: 123) }")
+        _   <- IO.sleep(100.milli) // this is the best we can do for now; I will try to improve in a followup
+        _   <- map.compileAndRunOne("mutation { put(n: 42) }")
+        _   <- IO.sleep(100.milli)
+        _   <- map.compileAndRunOne("mutation { put(n: 77) }")
+        _   <- IO.sleep(100.milli)
+        res <- fib.join
+      } yield res
 
-      assert(prog.unsafeRunSync() == List(
-        json"""
-          {
-            "data" : {
-              "watch" : 123
-            }
+    assert(prog.unsafeRunSync() == List(
+      json"""
+        {
+          "data" : {
+            "watch" : 123
           }
-        """,
-        json"""
-          {
-            "data" : {
-              "watch" : 42
-            }
+        }
+      """,
+      json"""
+        {
+          "data" : {
+            "watch" : 42
           }
-        """,
-        json"""
-          {
-            "data" : {
-              "watch" : 77
-            }
+        }
+      """,
+      json"""
+        {
+          "data" : {
+            "watch" : 77
           }
-        """,
-      ))
+        }
+      """,
+    ))
 
-    }
+  }
 
 }

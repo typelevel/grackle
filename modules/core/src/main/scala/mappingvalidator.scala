@@ -219,14 +219,10 @@ trait MappingValidator {
   }
 
   protected def validateObjectMapping(m: ObjectMapping): Chain[Failure] =
-    m match {
-      case om : ObjectMapping =>
-        om.tpe.dealias match {
-          case ot: ObjectType   => validateObjectFieldMappings(om, ot)
-          case _: InterfaceType => Chain(CannotValidateTypeMapping(m))
-          case _                => Chain(InapplicableGraphQLType(m, "ObjectType"))
-        }
-      case other =>  Chain(CannotValidateTypeMapping(other))
+    m.tpe.dealias match {
+      case ot: ObjectType   => validateObjectFieldMappings(m, ot)
+      case _: InterfaceType => Chain(CannotValidateTypeMapping(m))
+      case _                => Chain(InapplicableGraphQLType(m, "ObjectType"))
     }
 
 }

@@ -1,34 +1,43 @@
-val attoVersion                 = "0.9.3"
-val catsVersion                 = "2.5.0"
+val attoVersion                 = "0.9.5"
+val catsVersion                 = "2.6.1"
 val catsEffectVersion           = "2.4.1"
-val catsTestkitScalaTestVersion = "2.1.3"
-val circeVersion                = "0.13.0"
-val circeOpticsVersion          = "0.13.0"
-val doobieVersion               = "0.12.1"
-val fs2Version                  = "2.5.4"
-val http4sVersion               = "0.21.22"
+val catsTestkitScalaTestVersion = "2.1.5"
+val doobieVersion               = "0.13.4"
+val fs2Version                  = "2.5.6"
+val http4sVersion               = "0.22.0-M8"
 val kindProjectorVersion        = "0.11.3"
-val literallyVersion            = "1.0.0"
+val literallyVersion            = "1.0.2"
 val logbackVersion              = "1.2.3"
-val log4catsVersion             = "1.1.1"
-val skunkVersion                = "0.0.25"
+val log4catsVersion             = "1.3.1"
+val skunkVersion                = "0.0.28"
 val shapelessVersion            = "2.3.4"
-val sourcePosVersion            = "0.1.2"
-val testContainersVersion       = "0.39.3"
-val typenameVersion             = "0.1.6"
+val sourcePosVersion            = "1.0.0"
+val testContainersVersion       = "0.39.5"
+val typenameVersion             = "1.0.0"
+
+val Scala2 = "2.13.5"
+val Scala3 = "3.0.0"
 
 inThisBuild(Seq(
   homepage := Some(url("https://github.com/gemini-hlsw/gsp-graphql")),
-  addCompilerPlugin("org.typelevel" %% "kind-projector" % kindProjectorVersion cross CrossVersion.full),
-  scalaVersion := "2.13.5"
-) ++ gspPublishSettings)
+  scalaVersion := Scala2,
+  crossScalaVersions := Seq(Scala2, Scala3),
+))
 
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
   libraryDependencies ++= Seq(
     "org.typelevel"     %% "cats-testkit"           % catsVersion % "test",
     "org.typelevel"     %% "cats-testkit-scalatest" % catsTestkitScalaTestVersion % "test"
-  )
+  ) ++ Seq(
+    compilerPlugin("org.typelevel" %% "kind-projector" % "0.11.3" cross CrossVersion.full),
+  ).filterNot(_ => scalaVersion.value.startsWith("3.")),
+  headerMappings := headerMappings.value + (HeaderFileType.scala -> HeaderCommentStyle.cppStyleLineComment),
+  headerLicense  := Some(HeaderLicense.Custom(
+    """|Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
+        |For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
+        |""".stripMargin
+  ))
 )
 
 lazy val noPublishSettings = Seq(
@@ -61,17 +70,22 @@ lazy val core = project
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-core",
-    libraryDependencies ++= Seq(
-      "org.tpolecat"      %% "atto-core"              % attoVersion,
-      "org.typelevel"     %% "cats-core"              % catsVersion,
-      "org.typelevel"     %% "literally"              % literallyVersion,
-      "io.circe"          %% "circe-core"             % circeVersion,
-      "io.circe"          %% "circe-optics"           % circeOpticsVersion,
-      "io.circe"          %% "circe-parser"           % circeVersion,
-      "org.tpolecat"      %% "typename"               % typenameVersion,
-      "org.tpolecat"      %% "sourcepos"              % sourcePosVersion,
-      "co.fs2"            %% "fs2-core"               % fs2Version,
-    )
+    libraryDependencies ++= {
+      val circeVersion = scalaVersion.value match {
+        case Scala3 => "0.14.0-M7"
+        case Scala2 => "0.13.0"
+      }
+      Seq(
+        "org.tpolecat"      %% "atto-core"              % attoVersion,
+        "org.typelevel"     %% "cats-core"              % catsVersion,
+        "org.typelevel"     %% "literally"              % literallyVersion,
+        "io.circe"          %% "circe-core"             % circeVersion,
+        "io.circe"          %% "circe-parser"           % circeVersion,
+        "org.tpolecat"      %% "typename"               % typenameVersion,
+        "org.tpolecat"      %% "sourcepos"              % sourcePosVersion,
+        "co.fs2"            %% "fs2-core"               % fs2Version,
+      )
+    }
   )
 
 lazy val circe = project
@@ -82,13 +96,6 @@ lazy val circe = project
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-circe",
-    libraryDependencies ++= Seq(
-      "org.tpolecat"      %% "atto-core"              % attoVersion,
-      "org.typelevel"     %% "cats-core"              % catsVersion,
-      "io.circe"          %% "circe-core"             % circeVersion,
-      "io.circe"          %% "circe-optics"           % circeOpticsVersion,
-      "io.circe"          %% "circe-parser"           % circeVersion
-    )
   )
 
 lazy val sql = project
@@ -100,8 +107,7 @@ lazy val sql = project
   .settings(
     name := "gsp-graphql-sql",
     libraryDependencies ++= Seq(
-      "org.typelevel"     %% "cats-effect"            % catsEffectVersion,
-      "io.chrisdavenport" %% "log4cats-slf4j"         % log4catsVersion,
+      "org.typelevel"     %% "log4cats-slf4j"         % log4catsVersion,
       "ch.qos.logback"    %  "logback-classic"        % logbackVersion % "test",
       "com.dimafeng"      %% "testcontainers-scala-scalatest"  % testContainersVersion % "test",
       "com.dimafeng"      %% "testcontainers-scala-postgresql" % testContainersVersion % "test",
@@ -119,8 +125,8 @@ lazy val doobie = project
     Test / fork := true,
     Test / parallelExecution := false,
     libraryDependencies ++= Seq(
-      "org.tpolecat"      %% "doobie-core"           % doobieVersion,
-      "org.tpolecat"      %% "doobie-postgres-circe" % doobieVersion,
+      "org.tpolecat" %% "doobie-core"           % doobieVersion,
+      "org.tpolecat" %% "doobie-postgres-circe" % doobieVersion,
     )
   )
 
@@ -147,27 +153,24 @@ lazy val generic = project
   .dependsOn(core)
   .settings(commonSettings)
   .settings(
+    publish / skip := scalaVersion.value.startsWith("3."),
     name := "gsp-graphql-generic",
     libraryDependencies ++= Seq(
-      "org.tpolecat"      %% "atto-core"              % attoVersion,
-      "org.typelevel"     %% "cats-core"              % catsVersion,
-      "io.circe"          %% "circe-core"             % circeVersion,
-      "io.circe"          %% "circe-optics"           % circeOpticsVersion,
-      "io.circe"          %% "circe-parser"           % circeVersion,
       "com.chuusai"       %% "shapeless"              % shapelessVersion
-    )
+    ).filterNot(_ => scalaVersion.value.startsWith("3."))
   )
 
+// TODO: re-enable when http4s is available for 3.0.0-RC3
 lazy val demo = project
   .in(file("demo"))
   .enablePlugins(AutomateHeaderPlugin)
   .dependsOn(core, generic)
   .settings(commonSettings)
   .settings(
+    publish / skip := true,
     name := "gsp-graphql-demo",
     libraryDependencies ++= Seq(
-      "org.typelevel"     %% "cats-effect"            % catsEffectVersion,
-      "io.chrisdavenport" %% "log4cats-slf4j"         % log4catsVersion,
+      "org.typelevel"     %% "log4cats-slf4j"         % log4catsVersion,
       "ch.qos.logback"    %  "logback-classic"        % logbackVersion,
       "org.tpolecat"      %% "doobie-core"            % doobieVersion,
       "org.tpolecat"      %% "doobie-postgres"        % doobieVersion,

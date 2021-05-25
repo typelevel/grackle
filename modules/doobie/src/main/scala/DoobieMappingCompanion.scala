@@ -6,7 +6,7 @@ package doobie
 
 import _root_.doobie.util.transactor.Transactor
 import cats.effect.Sync
-import io.chrisdavenport.log4cats.Logger
+import org.typelevel.log4cats.Logger
 
 trait DoobieMappingCompanion {
   def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F]

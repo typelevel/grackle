@@ -14,8 +14,21 @@ trait SqlModule[F[_]] {
   /** The type of a codec that reads and writes column values of type `A`. */
   type Codec[A]
 
+  /** A codec that has forgotten its type argument. */
+  trait ExistentialCodec {
+    type A
+    def codec: Codec[A]
+  }
+  object ExistentialCodec {
+    def apply[T](c: Codec[T]): ExistentialCodec =
+      new ExistentialCodec {
+        type A = T
+        val codec = c
+      }
+  }
+
   /** The type of an encoder that writes column values of type `A`. */
-  type Encoder[A]
+  type Encoder[-A]
 
   /** Extract an encoder from a codec. */
   def toEncoder[A](c: Codec[A]): Encoder[A]
@@ -50,6 +63,6 @@ trait SqlModule[F[_]] {
   def booleanEncoder: Encoder[Boolean]
   def doubleEncoder:  Encoder[Double]
 
-  def fetch(fragment: Fragment, metas: List[(Boolean, Codec[_])]): F[Table]
+  def fetch(fragment: Fragment, metas: List[(Boolean, ExistentialCodec)]): F[Table]
 
 }

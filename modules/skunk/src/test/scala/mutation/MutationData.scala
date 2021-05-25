@@ -128,11 +128,11 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
           )
         ).rightIor
 
-        case Select("createCity", List(Binding("name", StringValue(name)), Binding("countryCode", StringValue(code)), Binding("population", IntValue(pop))), child) =>
-          Environment(
-            Cursor.Env("name" -> name, "countryCode" -> code, "population" -> pop),
-            Select("createCity", Nil, child)
-          ).rightIor
+      case Select("createCity", List(Binding("name", StringValue(name)), Binding("countryCode", StringValue(code)), Binding("population", IntValue(pop))), child) =>
+        Environment(
+          Cursor.Env("name" -> name, "countryCode" -> code, "population" -> pop),
+          Select("createCity", Nil, child)
+        ).rightIor
 
     }
   ))

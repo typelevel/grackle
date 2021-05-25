@@ -26,23 +26,23 @@ trait AstArb {
 
   implicit lazy val arbValueVariable: Arbitrary[Value.Variable] =
     Arbitrary {
-      arbitrary[Name].map(Value.Variable)
+      arbitrary[Name].map(Value.Variable.apply)
     }
 
   // We want to generate reasonable named types.
-  implicit val arbTypeNamed =
+  implicit val arbTypeNamed: Arbitrary[Type.Named] =
     Arbitrary {
       oneOf("String", "Float").map(s => Type.Named(Name(s)))
     }
 
-  implicit val arbTypeList  =
+  implicit val arbTypeList: Arbitrary[Type.List]  =
     Arbitrary {
-      arbitrary[Type].map(Type.List)
+      arbitrary[Type].map(Type.List.apply)
     }
 
-  implicit val arbTypeNonNull =
+  implicit val arbTypeNonNull: Arbitrary[Type.NonNull] =
     Arbitrary {
-      arbitrary[Either[Type.Named, Type.List]].map(Type.NonNull)
+      arbitrary[Either[Type.Named, Type.List]].map(Type.NonNull.apply)
     }
 
   implicit lazy val arbType: Arbitrary[Type] =
@@ -54,10 +54,10 @@ trait AstArb {
     Arbitrary {
       oneOf(
         arbitrary[Value.Variable],
-        arbitrary[Int].map(Value.IntValue),
-        arbitrary[Double].map(Value.FloatValue),
-        alphaStr.map(Value.StringValue),
-        arbitrary[Boolean].map(Value.BooleanValue),
+        arbitrary[Int].map(Value.IntValue.apply),
+        arbitrary[Double].map(Value.FloatValue.apply),
+        alphaStr.map(Value.StringValue.apply),
+        arbitrary[Boolean].map(Value.BooleanValue.apply),
         Gen.const(Value.NullValue),
         // TODO: enum
         // TODO: list
@@ -76,8 +76,8 @@ trait AstArb {
   def genValueForType(t: Type): Gen[Value] =
     t match {
 
-      case Type.Named(Name("String")) => oneOf(alphaStr.map(Value.StringValue), const(Value.NullValue))
-      case Type.Named(Name("Float"))  => oneOf(arbitrary[Double].map(Value.FloatValue), const(Value.NullValue))
+      case Type.Named(Name("String")) => oneOf(alphaStr.map(Value.StringValue.apply), const(Value.NullValue))
+      case Type.Named(Name("Float"))  => oneOf(arbitrary[Double].map(Value.FloatValue.apply), const(Value.NullValue))
       // no other named types are known yet
       case Type.Named(x) => sys.error(s"unknown type: $x")
 

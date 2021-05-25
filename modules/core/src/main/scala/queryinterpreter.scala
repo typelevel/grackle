@@ -170,7 +170,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             case Ior.Right(elem) => (errors, elem :: elems)
             case Ior.Both(errs, elem) => (errs.toChain ++ errors, elem :: elems)
           }
-      }).map(_.reverse)
+      }).fmap(_.reverse)
     }
 
   def cursorCompatible(tpe: Type, cursorTpe: Type): Boolean = {
@@ -610,6 +610,7 @@ object QueryInterpreter {
             case ProtoObject(fields)  => loop(Chain.fromSeq(fields.map(_._2)) ++ tl, acc)
             case ProtoArray(elems)    => loop(Chain.fromSeq(elems) ++ tl, acc)
             case ProtoSelect(elem, _) => loop(elem +: tl, acc)
+            case _                    => sys.error("impossible")
           }
         }
 
@@ -643,6 +644,8 @@ object QueryInterpreter {
             Json.fromValues(elems0)
           case ProtoSelect(elem, fieldName) =>
             loop(elem).asObject.flatMap(_(fieldName)).getOrElse(Json.Null)
+
+          case _ => sys.error("impossible")
         }
 
       loop(pj)

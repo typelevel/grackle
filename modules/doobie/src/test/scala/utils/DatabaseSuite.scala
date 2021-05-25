@@ -7,15 +7,16 @@ import scala.concurrent.ExecutionContext
 
 import cats.effect.{ContextShift, IO}
 import doobie.Transactor
-import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 import grackle.test.SqlDatabaseSuite
+import org.typelevel.log4cats.Logger
 
 trait DatabaseSuite extends SqlDatabaseSuite {
 
   implicit def contextShift: ContextShift[IO] =
     IO.contextShift(ExecutionContext.global)
 
-  implicit val log = Slf4jLogger.unsafeCreate[IO]
+  implicit val log: Logger[IO] = Slf4jLogger.unsafeCreate[IO]
 
   // lazy vals because the container is not initialised until the test is run
 

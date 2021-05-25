@@ -189,7 +189,7 @@ object GraphQLParser {
     QueryShorthand.widen[Ast.OperationDefinition] | Operation.widen
 
   lazy val QueryShorthand: Parser[Ast.OperationDefinition.QueryShorthand] =
-    SelectionSet.map(Ast.OperationDefinition.QueryShorthand)
+    SelectionSet.map(Ast.OperationDefinition.QueryShorthand.apply)
 
   lazy val Operation: Parser[Ast.OperationDefinition.Operation] =
     for {
@@ -232,7 +232,7 @@ object GraphQLParser {
     (Name <~ keyword(":")) ~ Value
 
   lazy val FragmentSpread: Parser[Ast.Selection.FragmentSpread] =
-    keyword("...") ~> (FragmentName, Directives).mapN(Ast.Selection.FragmentSpread)
+    keyword("...") ~> (FragmentName, Directives).mapN(Ast.Selection.FragmentSpread.apply)
 
   lazy val InlineFragment: Parser[Ast.Selection.InlineFragment] =
     for {
@@ -277,10 +277,10 @@ object GraphQLParser {
       case Ast.Name("false") => false
       case Ast.Name("null")  => false
       case _                 => true
-    } .map(Ast.Value.EnumValue)
+    } .map(Ast.Value.EnumValue.apply)
 
   lazy val ListValue: Parser[Ast.Value.ListValue] =
-    token(squareBrackets(many(Value)).map(Ast.Value.ListValue))
+    token(squareBrackets(many(Value)).map(Ast.Value.ListValue.apply))
 
   lazy val IntValue: Parser[Ast.Value.IntValue] =
     token(bigDecimal).filter(_.isValidInt).map(a => Ast.Value.IntValue(a.toInt))
@@ -289,13 +289,13 @@ object GraphQLParser {
     token(bigDecimal).filter(_.isDecimalDouble).map(a => Ast.Value.FloatValue(a.toDouble))
 
   lazy val StringValue: Parser[Ast.Value.StringValue] =
-    token(stringLiteral).map(Ast.Value.StringValue)
+    token(stringLiteral).map(Ast.Value.StringValue.apply)
 
   lazy val BooleanValue: Parser[Ast.Value.BooleanValue] =
-    (keyword("true").as(true) | keyword("false").as(false)).map(Ast.Value.BooleanValue)
+    (keyword("true").as(true) | keyword("false").as(false)).map(Ast.Value.BooleanValue.apply)
 
   lazy val ObjectValue: Parser[Ast.Value.ObjectValue] =
-    braces(many(ObjectField)).map(Ast.Value.ObjectValue)
+    braces(many(ObjectField)).map(Ast.Value.ObjectValue.apply)
 
   lazy val ObjectField: Parser[(Ast.Name, Ast.Value)] =
     (Name <~ keyword(":")) ~ Value
@@ -312,7 +312,7 @@ object GraphQLParser {
     } yield Ast.VariableDefinition(v.name, tpe, dv)
 
   lazy val Variable: Parser[Ast.Value.Variable] =
-    keyword("$") ~> Name.map(Ast.Value.Variable)
+    keyword("$") ~> Name.map(Ast.Value.Variable.apply)
 
   lazy val DefaultValue: Parser[Ast.Value] =
     keyword("=") ~> Value
@@ -321,10 +321,10 @@ object GraphQLParser {
     NonNullType.widen[Ast.Type] | ListType.widen | NamedType.widen
 
   lazy val NamedType: Parser[Ast.Type.Named] =
-    Name.map(Ast.Type.Named)
+    Name.map(Ast.Type.Named.apply)
 
   lazy val ListType: Parser[Ast.Type.List] =
-    squareBrackets(Type).map(Ast.Type.List)
+    squareBrackets(Type).map(Ast.Type.List.apply)
 
   lazy val NonNullType: Parser[Ast.Type.NonNull] =
     (NamedType <~ keyword("!")).map(a => Ast.Type.NonNull(Left(a))).widen |

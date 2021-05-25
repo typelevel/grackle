@@ -59,26 +59,23 @@ object QueryParser {
     }
   }
 
-  def parseOperation(op: Operation, fragments: Map[String, FragmentDefinition]): Result[UntypedOperation] = op match {
-    case Operation(opType, _, vds, _, sels) =>
-      val q = parseSelections(sels, None, fragments)
-      val vs = vds.map {
-        case VariableDefinition(nme, tpe, _) => UntypedVarDef(nme.value, tpe, None)
+  def parseOperation(op: Operation, fragments: Map[String, FragmentDefinition]): Result[UntypedOperation] = {
+    val Operation(opType, _, vds, _, sels) = op
+    val q = parseSelections(sels, None, fragments)
+    val vs = vds.map {
+      case VariableDefinition(nme, tpe, _) => UntypedVarDef(nme.value, tpe, None)
+    }
+    q.map(q =>
+      opType match {
+        case OperationType.Query => UntypedQuery(q, vs)
+        case OperationType.Mutation => UntypedMutation(q, vs)
+        case OperationType.Subscription => UntypedSubscription(q, vs)
       }
-      q.map(q =>
-        opType match {
-          case OperationType.Query => UntypedQuery(q, vs)
-          case OperationType.Mutation => UntypedMutation(q, vs)
-          case OperationType.Subscription => UntypedSubscription(q, vs)
-        }
-      )
-    case _ => mkErrorResult("Selection required")
+    )
   }
 
-  def parseQueryShorthand(qs: QueryShorthand, fragments: Map[String, FragmentDefinition]): Result[UntypedOperation] = qs match {
-    case QueryShorthand(sels) => parseSelections(sels, None, fragments).map(q => UntypedQuery(q, Nil))
-    case _ => mkErrorResult("Selection required")
-  }
+  def parseQueryShorthand(qs: QueryShorthand, fragments: Map[String, FragmentDefinition]): Result[UntypedOperation] =
+    parseSelections(qs.selectionSet, None, fragments).map(q => UntypedQuery(q, Nil))
 
   def parseSelections(sels: List[Selection], typeCondition: Option[String], fragments: Map[String, FragmentDefinition]): Result[Query] =
     sels.traverse(parseSelection(_, typeCondition, fragments)).map { sels0 =>
@@ -162,11 +159,11 @@ object QueryParser {
       case Ast.Value.EnumValue(e) => UntypedEnumValue(e.value).rightIor
       case Ast.Value.Variable(v) => UntypedVariableValue(v.value).rightIor
       case Ast.Value.NullValue => NullValue.rightIor
-      case Ast.Value.ListValue(vs) => vs.traverse(parseValue).map(ListValue)
+      case Ast.Value.ListValue(vs) => vs.traverse(parseValue).map(ListValue(_))
       case Ast.Value.ObjectValue(fs) =>
         fs.traverse { case (name, value) =>
           parseValue(value).map(v => (name.value, v))
-        }.map(ObjectValue)
+        }.map(ObjectValue(_))
     }
   }
 }
@@ -485,12 +482,12 @@ object QueryCompiler {
             case Some((_, value)) => value.rightIor
             case None => mkErrorResult(s"Undefined variable '$varName'")
           }
-          case ObjectValue(fields) =>
+        case ObjectValue(fields) =>
             val (keys, values) = fields.unzip
             values.traverse(elaborateValue(vars)).map(evs => ObjectValue(keys.zip(evs)))
-          case ListValue(elems) => elems.traverse(elaborateValue(vars)).map(ListValue)
-          case other => other.rightIor
-        }
+        case ListValue(elems) => elems.traverse(elaborateValue(vars)).map(ListValue.apply)
+        case other => other.rightIor
+      }
 
 
     def extractCond(vars: Vars, value: Value): Result[Boolean] =

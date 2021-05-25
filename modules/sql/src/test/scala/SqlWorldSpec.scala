@@ -4,7 +4,6 @@
 package grackle.test
 
 import edu.gemini.grackle.syntax._
-import io.circe.optics.JsonPath.root
 import org.scalatest.funsuite.AnyFunSuite
 import edu.gemini.grackle.QueryExecutor
 import cats.effect.IO
@@ -26,9 +25,14 @@ trait SqlWorldSpec extends AnyFunSuite {
     val expected = 239
 
     val res = mapping.compileAndRun(query).unsafeRunSync()
-    //println(res)
+    // println(res)
 
-    val resSize = root.data.countries.arr.getOption(res).map(_.size)
+    val resSize =
+      res
+        .hcursor
+        .downField("data")
+        .downField("countries")
+        .values.map(_.size)
 
     assert(resSize == Some(expected))
   }
@@ -802,8 +806,18 @@ trait SqlWorldSpec extends AnyFunSuite {
       }
     """
     val json      = mapping.compileAndRun(query).unsafeRunSync()
-    val countries = root.data.countries.arr.getOption(json).get
-    val map       = countries.map(j => root.name.string.getOption(j).get -> root.cities.arr.getOption(j).get.length).toMap
+
+    val countries = //root.data.countries.arr.getOption(json).get
+      json
+        .hcursor
+        .downField("data")
+        .downField("countries")
+        .values
+        .map(_.toVector)
+        .get
+
+    val map = countries.map(j => j.hcursor.downField("name").as[String].toOption.get -> j.hcursor.downField("cities").values.map(_.size).get).toMap
+
     assert(map("Kazakstan")  == 21)
     assert(map("Antarctica") == 0)
   }

@@ -6,6 +6,7 @@ package compiler
 import cats.Id
 import cats.data.{Chain, Ior}
 import cats.implicits._
+import cats.catsInstancesForId
 import cats.tests.CatsSuite
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
@@ -31,7 +32,7 @@ final class CompilerSuite extends CatsSuite {
     assert(res == Ior.Right(UntypedQuery(expected, Nil)))
   }
 
- test("simple mutation") {
+  test("simple mutation") {
     val query = """
       mutation {
         update_character(id: "1000", name: "Luke") {

@@ -5,6 +5,7 @@ package edu.gemini.grackle
 package circetests
 
 import cats.Id
+import cats.catsInstancesForId
 
 import edu.gemini.grackle.circe.CirceMapping
 import edu.gemini.grackle.syntax._
