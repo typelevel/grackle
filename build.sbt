@@ -1,22 +1,22 @@
-val attoVersion                 = "0.9.4"
-val catsVersion                 = "2.6.0"
+val attoVersion                 = "0.9.5"
+val catsVersion                 = "2.6.1"
 val catsEffectVersion           = "2.4.1"
-val catsTestkitScalaTestVersion = "2.1.4"
+val catsTestkitScalaTestVersion = "2.1.5"
 val doobieVersion               = "0.13.2"
-val fs2Version                  = "2.5.5"
+val fs2Version                  = "2.5.6"
 val http4sVersion               = "0.21.22"
 val kindProjectorVersion        = "0.11.3"
-val literallyVersion            = "1.0.1"
+val literallyVersion            = "1.0.2"
 val logbackVersion              = "1.2.3"
-val log4catsVersion             = "1.3.0"
-val skunkVersion                = "0.0.26"
+val log4catsVersion             = "1.3.1"
+val skunkVersion                = "0.0.28"
 val shapelessVersion            = "2.3.4"
-val sourcePosVersion            = "0.1.3"
-val testContainersVersion       = "0.39.4-SNAPSHOT"
-val typenameVersion             = "0.1.7"
+val sourcePosVersion            = "1.0.0"
+val testContainersVersion       = "0.39.5"
+val typenameVersion             = "1.0.0"
 
 val Scala2 = "2.13.5"
-val Scala3 = "3.0.0-RC3"
+val Scala3 = "3.0.0"
 
 inThisBuild(Seq(
   homepage := Some(url("https://github.com/gemini-hlsw/gsp-graphql")),
@@ -72,7 +72,7 @@ lazy val core = project
     name := "gsp-graphql-core",
     libraryDependencies ++= {
       val circeVersion = scalaVersion.value match {
-        case Scala3 => "0.14.0-M6"
+        case Scala3 => "0.14.0-M7"
         case Scala2 => "0.13.0"
       }
       Seq(
