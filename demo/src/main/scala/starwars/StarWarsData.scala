@@ -3,7 +3,7 @@
 
 package starwars
 
-import cats.Id
+import cats._
 import cats.implicits._
 
 import edu.gemini.grackle._

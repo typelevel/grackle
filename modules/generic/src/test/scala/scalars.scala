@@ -8,7 +8,7 @@ import java.time.{Duration, LocalDate, LocalTime, ZonedDateTime}
 import java.util.UUID
 import scala.util.Try
 
-import cats.{Eq, Id, Order}
+import cats._
 import cats.implicits._
 import cats.tests.CatsSuite
 import io.circe.Encoder

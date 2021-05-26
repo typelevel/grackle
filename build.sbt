@@ -10,7 +10,8 @@ val literallyVersion            = "1.0.2"
 val logbackVersion              = "1.2.3"
 val log4catsVersion             = "1.3.1"
 val skunkVersion                = "0.0.28"
-val shapelessVersion            = "2.3.4"
+val shapeless2Version           = "2.3.7"
+val shapeless3Version           = "3.0.1"
 val sourcePosVersion            = "1.0.0"
 val testContainersVersion       = "0.39.5"
 val typenameVersion             = "1.0.0"
@@ -161,11 +162,12 @@ lazy val generic = project
   .dependsOn(core)
   .settings(commonSettings)
   .settings(
-    publish / skip := scalaVersion.value.startsWith("3."),
     name := "gsp-graphql-generic",
-    libraryDependencies ++= Seq(
-      "com.chuusai"       %% "shapeless"              % shapelessVersion
-    ).filterNot(_ => scalaVersion.value.startsWith("3."))
+    libraryDependencies += (
+      scalaVersion.value match {
+        case Scala3 => "org.typelevel" %% "shapeless3-deriving" % shapeless3Version
+        case Scala2 => "com.chuusai"   %% "shapeless"           % shapeless2Version
+      })
   )
 
 // TODO: re-enable when http4s is available for 3.0.0-RC3
