@@ -130,7 +130,7 @@ object CursorBuilder {
     }
   }
 
-  implicit def deriveEnumerationCursorBuilder[T <: Enumeration#Value](tpe0: Type): CursorBuilder[T] = {
+  def deriveEnumerationCursorBuilder[T <: Enumeration#Value](tpe0: Type): CursorBuilder[T] = {
     case class EnumerationCursor(path: List[String], focus: T, parent: Option[Cursor], env: Env) extends PrimitiveCursor[T] {
       val tpe = tpe0
       def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
