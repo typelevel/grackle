@@ -4,7 +4,7 @@
 package edu.gemini.grackle
 package generic
 
-import cats.Id
+import cats._
 import cats.implicits._
 import cats.tests.CatsSuite
 

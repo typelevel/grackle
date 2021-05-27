@@ -6,7 +6,7 @@ package generic
 
 import java.time._
 
-import cats.Id
+import cats._
 import cats.data.Ior
 import cats.implicits._
 import cats.tests.CatsSuite

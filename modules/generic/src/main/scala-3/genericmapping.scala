@@ -4,37 +4,29 @@
 package edu.gemini.grackle
 package generic
 
-import scala.annotation.{ nowarn, tailrec }
-
 import cats.implicits._
-import shapeless.{ Coproduct, Generic, ::, HList, HNil, Inl, Inr, LabelledGeneric }
-import shapeless.ops.hlist.{ LiftAll => PLiftAll }
-import shapeless.ops.coproduct.{ LiftAll => CLiftAll }
-import shapeless.ops.record.Keys
+import shapeless3.deriving._
 
 import Cursor.Env
 import QueryInterpreter.{ mkErrorResult, mkOneError }
-import ShapelessUtils._
 
 trait MkObjectCursorBuilder[T] {
   def apply(tpe: Type): ObjectCursorBuilder[T]
 }
 
 object MkObjectCursorBuilder {
-  implicit def productCursorBuilder[T <: Product, R <: HList, L <: HList]
+  implicit def productCursorBuilder[T <: Product]
     (implicit
-      @nowarn gen: Generic.Aux[T, R],
-      elems0: => PLiftAll[CursorBuilder, R],
-      @nowarn lgen: LabelledGeneric.Aux[T, L],
-      keys0: Keys[L]
+      inst:      K0.ProductInstances[CursorBuilder, T],
+      labelling: Labelling[T],
     ): MkObjectCursorBuilder[T] =
     new MkObjectCursorBuilder[T] {
       def apply(tpe: Type): ObjectCursorBuilder[T] = {
         def fieldMap: Map[String, (List[String], T, Option[Cursor], Env) => Result[Cursor]] = {
-          val keys: List[String] = unsafeToList[Symbol](keys0()).map(_.name)
-          val elems = unsafeToList[CursorBuilder[Any]](elems0.instances)
-          keys.zip(elems.zipWithIndex).map {
-            case (fieldName, (elem, idx)) => (fieldName, (p: List[String], t: T, c: Option[Cursor], e: Env) => elem.build(p, t.productElement(idx), c, e))
+          labelling.elemLabels.zipWithIndex.map {
+            case (fieldName, idx) =>
+              (fieldName, (p: List[String], t: T, c: Option[Cursor], e: Env) =>
+                inst.project(t)(idx)([t] => (builder: CursorBuilder[t], pt: t) => builder.build(p, pt, c, e)))
           }.toMap
         }
         new Impl[T](tpe, fieldMap)
@@ -74,31 +66,20 @@ trait MkInterfaceCursorBuilder[T] {
 }
 
 object MkInterfaceCursorBuilder {
-  implicit def coproductCursorBuilder[T, R <: Coproduct]
+  implicit def coproductCursorBuilder[T]
     (implicit
-      gen: Generic.Aux[T, R],
-      elems0: => CLiftAll[CursorBuilder, R]
+      inst: => K0.CoproductInstances[CursorBuilder, T]
     ): MkInterfaceCursorBuilder[T] =
     new MkInterfaceCursorBuilder[T] {
-      def apply(tpe: Type): CursorBuilder[T] = {
-        def elems = unsafeToList[CursorBuilder[T]](elems0.instances).toArray
-        def sel(t: T) = {
-          @tailrec
-          def loop(c: Coproduct, acc: Int): Int = c match {
-            case Inl(_) => acc
-            case Inr(tl) => loop(tl, acc+1)
-          }
-          loop(gen.to(t), 0)
-        }
-        new Impl[T](tpe, sel, elems)
-      }
+      def apply(tpe: Type): CursorBuilder[T] = new Impl[T](tpe, inst)
     }
 
-  class Impl[T](tpe0: Type, sel: T => Int, elems: => Array[CursorBuilder[T]]) extends CursorBuilder[T] {
+  class Impl[T](tpe0: Type, inst: K0.CoproductInstances[CursorBuilder, T]) extends CursorBuilder[T] {
     val tpe = tpe0
     def build(path: List[String], focus: T, parent: Option[Cursor], env: Env): Result[Cursor] = {
-      val builder = elems(sel(focus))
-      builder.build(path, focus, parent, env).map(cursor => CursorImpl(tpe, builder.tpe, cursor, parent, env))
+      inst.fold(focus)([t] => (builder: CursorBuilder[t], pt: t) =>
+        builder.build(path, pt, parent, env).map(cursor => CursorImpl(tpe, builder.tpe, cursor, parent, env))
+      )
     }
   }
 
@@ -119,16 +100,5 @@ object MkInterfaceCursorBuilder {
     override def narrow(subtpe: TypeRef): Result[Cursor] =
       if (narrowsTo(subtpe)) copy(tpe = subtpe).rightIor
       else mkErrorResult(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
-  }
-}
-
-object ShapelessUtils {
-  def unsafeToList[U](l: HList): List[U] = {
-    @tailrec
-    def loop(l: HList, acc: List[U]): List[U] = l match {
-      case HNil => acc.reverse
-      case hd :: tl => loop(tl, hd.asInstanceOf[U] :: acc)
-    }
-    loop(l, Nil)
   }
 }
