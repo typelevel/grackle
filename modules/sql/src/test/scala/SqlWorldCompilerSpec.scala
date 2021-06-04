@@ -8,6 +8,7 @@ import org.scalatest.funsuite.AnyFunSuite
 import edu.gemini.grackle.QueryExecutor
 import cats.effect.IO
 import io.circe.Json
+import edu.gemini.grackle.sql.Like
 import edu.gemini.grackle.sql.SqlStatsMonitor
 import edu.gemini.grackle.sql.SqlMonitor
 import edu.gemini.grackle.Query
@@ -23,6 +24,9 @@ trait SqlWorldCompilerSpec extends AnyFunSuite {
 
   /** Expected SQL string for the simple restricted query test. */
   def simpleRestrictedQuerySql: String
+
+  /** Expected SQL string for the simple filtered query test. */
+  def simpleFilteredQuerySql: String
 
   test("simple restricted query") {
 
@@ -72,4 +76,59 @@ trait SqlWorldCompilerSpec extends AnyFunSuite {
 
   }
 
+  test("simple filtered query") {
+
+    val query =
+      """
+        query {
+          cities(namePattern: "Linh%") {
+            name
+          }
+        }
+      """
+
+    val expected =
+      json"""
+        {
+          "data" : {
+            "cities" : [
+              {
+                "name" : "Linhe"
+              },
+              {
+                "name" : "Linhai"
+              },
+              {
+                "name" : "Linhares"
+              }
+            ]
+          }
+        }
+      """
+
+    val prog: IO[(Json, List[SqlStatsMonitor.SqlStats])] =
+      for {
+        mon <- monitor
+        map  = mapping(mon)
+        res <- map.compileAndRun(query)
+        ss  <- mon.take
+      } yield (res, ss.map(_.normalize))
+
+    val (res, stats) = prog.unsafeRunSync()
+
+    assert(res == expected)
+
+    assert(
+      stats == List(
+        SqlStatsMonitor.SqlStats(
+          Query.Filter(Like(UniquePath(List("name")),"Linh%",true),Query.Select("name",List(),Query.Empty)),
+          simpleFilteredQuerySql,
+          List("Linh%"),
+          3,
+          2
+        )
+      )
+    )
+
+  }
 }

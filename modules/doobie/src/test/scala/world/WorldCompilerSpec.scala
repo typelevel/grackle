@@ -25,4 +25,6 @@ final class WorldCompilerSpec extends DatabaseSuite with SqlWorldCompilerSpec {
   def simpleRestrictedQuerySql: String =
     "SELECT country.name, country.code FROM country WHERE (country.code = ?)"
 
+  def simpleFilteredQuerySql: String =
+    "SELECT city.name, city.id FROM city WHERE (city.name ILIKE ?)"
 }

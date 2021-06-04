@@ -267,7 +267,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
               val prefix = termPath.path.init
               obj.path(prefix).flatMap { parent =>
                 val name = termPath.path.last
-                termColumnForField(path.reverse_:::(termPath.path), parent, name)
+                termColumnForField(path.reverse_:::(prefix), parent, name)
               }
             }
           case _ => sys.error("impossible")
@@ -282,9 +282,9 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
       def putForTerm[A](x: Term[A]): Option[Encoder[A]] =
         x match {
-          case path: Path =>
+          case termPath: Path =>
             for {
-              cr <- primaryColumnForTerm(path.path, tpe, path)
+              cr <- primaryColumnForTerm(path, tpe, termPath)
             } yield toEncoder(cr.codec.codec.asInstanceOf[Codec[Any]])
 
           case (_: And)|(_: Or)|(_: Not)|(_: Eql[_])|(_: NEql[_])|(_: Lt[_])|(_: LtEql[_])|(_: Gt[_])|(_: GtEql[_])  => Some(booleanEncoder)
