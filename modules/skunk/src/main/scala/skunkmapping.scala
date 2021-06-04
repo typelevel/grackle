@@ -13,6 +13,7 @@ import cats.implicits._
 import edu.gemini.grackle.sql._
 import scala.util.control.NonFatal
 import scala.annotation.unchecked.uncheckedVariance
+import org.tpolecat.typename.TypeName
 
 abstract class SkunkMapping[F[_]: Sync](
   val pool:    Resource[F, Session[F]],
@@ -33,7 +34,7 @@ abstract class SkunkMapping[F[_]: Sync](
   def intEncoder     = int4
 
   class TableDef(name: String) {
-    def col(colName: String, codec: Codec[_]): ColumnRef =
+    def col[A : TypeName](colName: String, codec: Codec[A]): ColumnRef =
       ColumnRef(name, colName, codec)
   }
 

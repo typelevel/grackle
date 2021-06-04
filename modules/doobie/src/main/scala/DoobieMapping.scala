@@ -13,6 +13,7 @@ import _root_.doobie.implicits._
 import _root_.doobie.util.fragments
 import java.sql.ResultSet
 import scala.annotation.unchecked.uncheckedVariance
+import org.tpolecat.typename.TypeName
 
 abstract class DoobieMapping[F[_]: Sync](
   val transactor: Transactor[F],
@@ -31,7 +32,7 @@ abstract class DoobieMapping[F[_]: Sync](
   def doubleEncoder  = (Put[Double], false)
 
   class TableDef(name: String) {
-    def col(colName: String, codec: Meta[_], nullable: Boolean = false): ColumnRef =
+    def col[A : TypeName](colName: String, codec: Meta[A], nullable: Boolean = false): ColumnRef =
       ColumnRef(name, colName, (codec, nullable))
   }
 
