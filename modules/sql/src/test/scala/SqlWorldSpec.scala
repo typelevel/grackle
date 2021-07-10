@@ -3,11 +3,14 @@
 
 package grackle.test
 
-import edu.gemini.grackle.syntax._
-import org.scalatest.funsuite.AnyFunSuite
-import edu.gemini.grackle.QueryExecutor
 import cats.effect.IO
 import io.circe.Json
+import org.scalatest.funsuite.AnyFunSuite
+
+import edu.gemini.grackle._
+import syntax._
+
+import GraphQLResponseTests.assertWeaklyEqual
 
 trait SqlWorldSpec extends AnyFunSuite {
 
@@ -25,7 +28,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val expected = 239
 
     val res = mapping.compileAndRun(query).unsafeRunSync()
-    // println(res)
+    //println(res)
 
     val resSize =
       res
@@ -59,7 +62,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("simple restricted nested query") {
@@ -132,7 +135,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("multiple aliased root queries") {
@@ -163,7 +166,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("recursive query (0)") {
@@ -207,7 +210,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("recursive query (1)") {
@@ -294,7 +297,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("recursive query (2)") {
@@ -443,7 +446,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("recursive query (3)") {
@@ -496,7 +499,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("recursive query (4)") {
@@ -559,7 +562,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("recursive query (5)") {
@@ -632,7 +635,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("recursive query (6)") {
@@ -719,7 +722,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("recursive query (7)") {
@@ -761,7 +764,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("country with no cities") {
@@ -790,7 +793,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   // Outer join in which some parents have children and others do not.
@@ -845,7 +848,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("multiple missing countries") {
@@ -872,7 +875,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("nullable column (null)") {
@@ -899,7 +902,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("nullable column (non-null)") {
@@ -926,7 +929,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("query with introspection") {
@@ -953,7 +956,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("structured predicates") {
@@ -994,7 +997,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("simple query with limit") {
@@ -1027,7 +1030,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("simple query with limit, filter and ordering") {
@@ -1064,7 +1067,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected, strictPaths = List(List("data", "countries")))
   }
 
   test("query with ordering, ordering field not selected") {
@@ -1118,6 +1121,6 @@ trait SqlWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected, strictPaths = List(List("data", "countries")))
   }
 }

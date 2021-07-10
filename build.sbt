@@ -2,10 +2,11 @@ val attoVersion                 = "0.9.5"
 val catsVersion                 = "2.6.1"
 val catsEffectVersion           = "2.4.1"
 val catsTestkitScalaTestVersion = "2.1.5"
+val circeVersion                = "0.14.1"
 val doobieVersion               = "0.13.4"
-val fs2Version                  = "2.5.6"
-val http4sVersion               = "0.22.0-M8"
-val kindProjectorVersion        = "0.11.3"
+val fs2Version                  = "2.5.8"
+val http4sVersion               = "0.22.0-RC1"
+val kindProjectorVersion        = "0.13.0"
 val literallyVersion            = "1.0.2"
 val logbackVersion              = "1.2.3"
 val log4catsVersion             = "1.3.1"
@@ -16,7 +17,7 @@ val sourcePosVersion            = "1.0.0"
 val testContainersVersion       = "0.39.5"
 val typenameVersion             = "1.0.0"
 
-val Scala2 = "2.13.5"
+val Scala2 = "2.13.6"
 val Scala3 = "3.0.0"
 
 inThisBuild(Seq(
@@ -39,7 +40,7 @@ lazy val commonSettings = Seq(
     "org.typelevel"     %% "cats-testkit"           % catsVersion % "test",
     "org.typelevel"     %% "cats-testkit-scalatest" % catsTestkitScalaTestVersion % "test"
   ) ++ Seq(
-    compilerPlugin("org.typelevel" %% "kind-projector" % "0.11.3" cross CrossVersion.full),
+    compilerPlugin("org.typelevel" %% "kind-projector" % kindProjectorVersion cross CrossVersion.full),
   ).filterNot(_ => scalaVersion.value.startsWith("3.")),
   headerMappings := headerMappings.value + (HeaderFileType.scala -> HeaderCommentStyle.cppStyleLineComment),
   headerLicense  := Some(HeaderLicense.Custom(
@@ -79,11 +80,7 @@ lazy val core = project
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-core",
-    libraryDependencies ++= {
-      val circeVersion = scalaVersion.value match {
-        case Scala3 => "0.14.0-M7"
-        case Scala2 => "0.13.0"
-      }
+    libraryDependencies ++=
       Seq(
         "org.tpolecat"      %% "atto-core"              % attoVersion,
         "org.typelevel"     %% "cats-core"              % catsVersion,
@@ -94,7 +91,6 @@ lazy val core = project
         "org.tpolecat"      %% "sourcepos"              % sourcePosVersion,
         "co.fs2"            %% "fs2-core"               % fs2Version,
       )
-    }
   )
 
 lazy val circe = project

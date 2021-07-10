@@ -11,7 +11,6 @@ import cats.data.Ior
 import cats.kernel.{ Eq, Order }
 import cats.implicits._
 
-import Query._
 import QueryInterpreter.mkErrorResult
 
 /**
@@ -23,6 +22,17 @@ import QueryInterpreter.mkErrorResult
  */
 trait Term[T] extends Product with Serializable { // fun fact: making this covariant crashes Scala 3
   def apply(c: Cursor): Result[T]
+
+  def children: List[Term[_]]
+
+  def fold[Acc](acc: Acc)(f: (Acc, Term[_]) => Acc): Acc =
+    children.foldLeft(f(acc, this)) { case (acc, child) => child.fold(acc)(f) }
+
+  def exists(f: Term[_] => Boolean): Boolean =
+    f(this) || children.exists(_.exists(f))
+
+  def forall(f: Term[_] => Boolean): Boolean =
+    f(this) && children.forall(_.forall(f))
 }
 
 sealed trait Path {
@@ -49,6 +59,8 @@ object Path {
 
     def prepend(prefix: List[String]): Path =
       UniquePath(prefix ++ path)
+
+    def children = Nil
   }
 
   /**
@@ -68,6 +80,8 @@ object Path {
 
     def prepend(prefix: List[String]): Path =
       ListPath(prefix ++ path)
+
+    def children = Nil
   }
 }
 
@@ -87,10 +101,14 @@ object Predicate {
 
   case object True extends Predicate {
     def apply(c: Cursor): Result[Boolean] = true.rightIor
+
+    def children = Nil
   }
 
   case object False extends Predicate {
     def apply(c: Cursor): Result[Boolean] = false.rightIor
+
+    def children = Nil
   }
 
   def and(props: List[Predicate]): Predicate = {
@@ -121,66 +139,70 @@ object Predicate {
 
   case class Const[T](v: T) extends Term[T] {
     def apply(c: Cursor): Result[T] = v.rightIor
-  }
-
-  case class Project(path: List[String], pred: Predicate) extends Predicate {
-    def apply(c: Cursor): Result[Boolean] = {
-      c.listPath(path).flatMap(cs => Cursor.flatten(cs).flatMap(_.traverse(pred(_)).map(bs => bs.exists(identity))))
-    }
+    def children = Nil
   }
 
   case class And(x: Predicate, y: Predicate) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_ && _)
+    def children = List(x, y)
   }
 
   case class Or(x: Predicate, y: Predicate) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_ || _)
+    def children = List(x, y)
   }
 
   case class Not(x: Predicate) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = x(c).map(! _)
+    def children = List(x)
   }
 
   case class Eql[T: Eq](x: Term[T], y: Term[T]) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_ === _)
     def eqInstance: Eq[T] = implicitly[Eq[T]]
+    def children = List(x, y)
   }
 
   case class NEql[T: Eq](x: Term[T], y: Term[T]) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_ =!= _)
+    def children = List(x, y)
   }
 
   case class Contains[T: Eq](x: Term[List[T]], y: Term[T]) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))((xs, y0) => xs.exists(_ === y0))
+    def children = List(x, y)
   }
 
   case class Lt[T: Order](x: Term[T], y: Term[T]) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_.compare(_) < 0)
+    def children = List(x, y)
   }
 
   case class LtEql[T: Order](x: Term[T], y: Term[T]) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_.compare(_) <= 0)
+    def children = List(x, y)
   }
 
   case class Gt[T: Order](x: Term[T], y: Term[T]) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_.compare(_) > 0)
+    def children = List(x, y)
   }
 
   case class GtEql[T: Order](x: Term[T], y: Term[T]) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_.compare(_) >= 0)
+    def children = List(x, y)
   }
 
   case class In[T: Eq](x: Term[T], y: List[T]) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = x(c).map(y.contains_)
-
-    def mkDiscriminator: GroupDiscriminator[T] = GroupDiscriminator(x, y)
+    def children = List(x)
   }
 
   object In {
     def fromEqls[T](eqls: List[Eql[T]]): Option[In[T]] = {
       val paths = eqls.map(_.x).distinct
       val consts = eqls.collect { case Eql(_, Const(c)) => c }
-      if (eqls.map(_.x).distinct.size == 1 && consts.size == eqls.size)
+      if (eqls.map(_.x).distinct.sizeCompare(1) == 0 && consts.sizeCompare(eqls) == 0)
         Some(In(paths.head, consts)(eqls.head.eqInstance))
       else
         None
@@ -189,33 +211,41 @@ object Predicate {
 
   case class AndB(x: Term[Int], y: Term[Int]) extends Term[Int] {
     def apply(c: Cursor): Result[Int] = Apply[Result].map2(x(c), y(c))(_ & _)
+    def children = List(x, y)
   }
 
   case class OrB(x: Term[Int], y: Term[Int]) extends Term[Int] {
     def apply(c: Cursor): Result[Int] = Apply[Result].map2(x(c), y(c))(_ | _)
+    def children = List(x, y)
   }
 
   case class XorB(x: Term[Int], y: Term[Int]) extends Term[Int] {
     def apply(c: Cursor): Result[Int] = Apply[Result].map2(x(c), y(c))(_ ^ _)
+    def children = List(x, y)
   }
 
   case class NotB(x: Term[Int]) extends Term[Int] {
     def apply(c: Cursor): Result[Int] = x(c).map(~ _)
+    def children = List(x)
   }
 
   case class Matches(x: Term[String], r: Regex) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = x(c).map(r.matches(_))
+    def children = List(x)
   }
 
   case class StartsWith(x: Term[String], prefix: String) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = x(c).map(_.startsWith(prefix))
+    def children = List(x)
   }
 
   case class ToUpperCase(x: Term[String]) extends Term[String] {
     def apply(c: Cursor): Result[String] = x(c).map(_.toUpperCase)
+    def children = List(x)
   }
 
   case class ToLowerCase(x: Term[String]) extends Term[String] {
     def apply(c: Cursor): Result[String] = x(c).map(_.toLowerCase)
+    def children = List(x)
   }
 }

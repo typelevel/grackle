@@ -5,8 +5,7 @@ package edu.gemini.grackle
 
 import scala.annotation.tailrec
 
-import cats.kernel.{ Eq, Order }
-import cats.implicits._
+import cats.kernel.Order
 
 import Cursor.Env
 import Query._
@@ -49,12 +48,12 @@ object Query {
     def render = queries.map(_.render).mkString("[", ", ", "]")
   }
 
-  /** Picks out the unique element satisfying `pred` and continues with `child` */
-  case class Unique(pred: Predicate, child: Query) extends Query {
-    def render = s"<unique: $pred ${child.render}>"
+  /** Continues with single-element-list-producing `child` and yields the single element */
+  case class Unique(child: Query) extends Query {
+    def render = s"<unique: ${child.render}>"
   }
 
-  /** Retains only elements satisfying `pred` and continuse with `child` */
+  /** Retains only elements satisfying `pred` and continues with `child` */
   case class Filter(pred: Predicate, child: Query) extends Query {
     def render = s"<filter: $pred ${child.render}>"
   }
@@ -67,6 +66,7 @@ object Query {
     def render = s"<component: $mapping ${child.render}>"
   }
 
+  /** Evaluates an introspection query relative to `schema` */
   case class Introspect(schema: Schema, child: Query) extends Query {
     def render = s"<introspect: ${child.render}>"
   }
@@ -79,10 +79,7 @@ object Query {
     def render = s"<defer: ${child.render}>"
   }
 
-  case class Context(path: List[String], child: Query) extends Query {
-    def render = s"<context: $path ${child.render}>"
-  }
-
+  /** Add `env` to the environment for the continuation `child` */
   case class Environment(env: Env, child: Query) extends Query {
     def render = s"<environment: $env ${child.render}>"
   }
@@ -121,14 +118,19 @@ object Query {
     def render = s"<narrow: $subtpe ${child.render}>"
   }
 
+  /** Skips/includes the continuation `child` depending on the value of `cond` */
   case class Skip(sense: Boolean, cond: Value, child: Query) extends Query {
     def render = s"<skip: $sense $cond ${child.render}>"
   }
 
+  /** Limits the results of list-producing continuation `child` to `num` elements */
   case class Limit(num: Int, child: Query) extends Query {
     def render = s"<limit: $num ${child.render}>"
   }
 
+  /** Orders the results of list-producing continuation `child` by fields
+   *  specified by `selections`.
+   */
   case class OrderBy(selections: OrderSelections, child: Query) extends Query {
     def render = s"<order-by: $selections ${child.render}>"
   }
@@ -172,38 +174,7 @@ object Query {
     }
   }
 
-  case class GroupBy(discriminator: GroupDiscriminator[_], child: Query) extends Query {
-    def render = s"<group-by: $discriminator ${child.render}>"
-  }
-
-  case class GroupDiscriminator[T: Eq](t: Term[T], ds: List[T]) {
-    def group(cs: List[Cursor]): List[List[Cursor]] = {
-      def deref(c: Cursor): Option[T] =
-        if (c.isNullable) c.asNullable.getOrElse(None).flatMap(t(_).toOption)
-        else t(c).toOption
-
-      val tagged: List[(Cursor, Int)] = cs.map { c =>
-        (c, deref(c).map { t => ds.indexWhere(_ === t) }.getOrElse(-1))
-      }
-
-      val sorted: List[(Cursor, Int)] = tagged.sortBy(_._2).dropWhile(_._2 == -1)
-
-      val ngroups = ds.length
-
-      def loop(cis: List[(Cursor, Int)], prev: Int, acc0: List[Cursor], acc1: List[List[Cursor]]): List[List[Cursor]] =
-        cis match {
-          case Nil =>
-            val pad = List.fill(ngroups-prev-1)(Nil)
-            (pad ++ (acc0.reverse :: acc1)).reverse
-          case (c, i) :: tl if i == prev => loop(tl, i, c :: acc0, acc1)
-          case (c, i) :: tl if i == prev+1 => loop(tl, i, List(c), acc0.reverse :: acc1)
-          case cis => loop(cis, prev+1, Nil, acc0.reverse :: acc1)
-        }
-
-      loop(sorted, 0, Nil, Nil)
-    }
-  }
-
+  /** A placeholder for a skipped node */
   case object Skipped extends Query {
     def render = "<skipped>"
   }
@@ -223,10 +194,16 @@ object Query {
 
   case class UntypedVarDef(name: String, tpe: Ast.Type, default: Option[Value])
 
+  /** Extractor for nested Rename/Select patterns in the query algebra */
   object PossiblyRenamedSelect {
     def apply(sel: Select, resultName: String): Query = sel match {
       case Select(`resultName`, _, _) => sel
       case _ => Rename(resultName, sel)
+    }
+
+    def apply(sel: Select, resultName: Option[String]): Query = resultName match {
+      case Some(resultName) => Rename(resultName, sel)
+      case None => sel
     }
 
     def unapply(q: Query): Option[(Select, String)] =
@@ -253,5 +230,75 @@ object Query {
     case Wrap(name, _)            => Some(name)
     case Rename(name, _)          => Some(name)
     case _                        => None
+  }
+
+  /** Extractor for nested Filter/OrderBy/Limit patterns in the query algebra */
+  object FilterOrderByLimit {
+    def unapply(q: Query): Option[(Option[Predicate], Option[List[OrderSelection[_]]], Option[Int], Query)] = {
+      val (limit, q0) = q match {
+        case Limit(lim, child) => (Some(lim), child)
+        case child => (None, child)
+      }
+      val (order, q1) = q0 match {
+        case OrderBy(OrderSelections(oss), child) => (Some(oss), child)
+        case child => (None, child)
+      }
+      val (filter, q2) = q1 match {
+        case Filter(pred, child) => (Some(pred), child)
+        case child => (None, child)
+      }
+
+      limit.orElse(order).orElse(filter).map { _ =>
+        (filter, order, limit, q2)
+      }
+    }
+  }
+
+  /** Construct a query which yields all the supplied paths */
+  def mkPathQuery(paths: List[List[String]]): List[Query] =
+    paths match {
+      case Nil => Nil
+      case paths =>
+        val oneElemPaths = paths.filter(_.sizeCompare(1) == 0).distinct
+        val oneElemQueries: List[Query] = oneElemPaths.map(p => Select(p.head, Nil, Empty))
+        val multiElemPaths = paths.filter(_.length > 1).distinct
+        val grouped: List[Query] = multiElemPaths.groupBy(_.head).toList.map {
+          case (fieldName, suffixes) =>
+            Select(fieldName, Nil, mergeQueries(mkPathQuery(suffixes.map(_.tail).filterNot(_.isEmpty))))
+        }
+        oneElemQueries ++ grouped
+    }
+
+  /** Merge the given queries as a single query */
+  def mergeQueries(qs: List[Query]): Query = {
+    qs.filterNot(_ == Empty) match {
+      case Nil => Empty
+      case List(one) => one
+      case qs =>
+        def flattenLevel(qs: List[Query]): List[Query] = {
+          def loop(qs: List[Query], acc: List[Query]): List[Query] =
+            qs match {
+              case Nil => acc.reverse
+              case Group(gs) :: tl => loop(gs ++ tl, acc)
+              case Empty :: tl => loop(tl, acc)
+              case hd :: tl => loop(tl, hd :: acc)
+            }
+          loop(qs, Nil)
+        }
+
+        val flattened = flattenLevel(qs)
+        val (selects, rest) = flattened.partition { case PossiblyRenamedSelect(_, _) => true ; case _ => false }
+
+        val mergedSelects =
+          selects.groupBy { case PossiblyRenamedSelect(Select(fieldName, _, _), resultName) => (fieldName, resultName) ; case _ => sys.error("Impossible") }.values.map { rsels =>
+            val PossiblyRenamedSelect(Select(fieldName, _, _), resultName) = rsels.head
+            val sels = rsels.map { case PossiblyRenamedSelect(sel, _) => sel ; case _ => sys.error("Impossible") }
+            val children = sels.map(_.child)
+            val merged = mergeQueries(children)
+            PossiblyRenamedSelect(Select(fieldName, Nil, merged), resultName)
+          }
+
+        Group(rest ++ mergedSelects)
+      }
   }
 }

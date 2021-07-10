@@ -3,10 +3,9 @@
 
 package compiler
 
-import cats.Id
+import cats.{Id, catsInstancesForId}
 import cats.data.Ior
 import cats.implicits._
-import cats.catsInstancesForId
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle._
@@ -37,23 +36,25 @@ final class FragmentSuite extends CatsSuite {
 
     val expected =
       Select("user", Nil,
-        Unique(Eql(UniquePath(List("id")), Const("1")),
-          Group(List(
-            Select("friends", Nil,
-              Group(List(
-                Select("id", Nil, Empty),
-                Select("name", Nil, Empty),
-                Select("profilePic", Nil, Empty)
-              ))
-            ),
-            Select("mutualFriends", Nil,
-              Group(List(
-                Select("id", Nil, Empty),
-                Select("name", Nil, Empty),
-                Select("profilePic", Nil, Empty)
-              ))
-            )
-          ))
+        Unique(
+          Filter(Eql(UniquePath(List("id")), Const("1")),
+            Group(List(
+              Select("friends", Nil,
+                Group(List(
+                  Select("id", Nil, Empty),
+                  Select("name", Nil, Empty),
+                  Select("profilePic", Nil, Empty)
+                ))
+              ),
+              Select("mutualFriends", Nil,
+                Group(List(
+                  Select("id", Nil, Empty),
+                  Select("name", Nil, Empty),
+                  Select("profilePic", Nil, Empty)
+                ))
+              )
+            ))
+          )
         )
     )
 
@@ -125,23 +126,25 @@ final class FragmentSuite extends CatsSuite {
 
     val expected =
       Select("user", Nil,
-        Unique(Eql(UniquePath(List("id")), Const("1")),
-          Group(List(
-            Select("friends", Nil,
-              Group(List(
-                Select("id", Nil, Empty),
-                Select("name", Nil, Empty),
-                Select("profilePic", Nil, Empty)
-              ))
-            ),
-            Select("mutualFriends", Nil,
-              Group(List(
-                Select("id", Nil, Empty),
-                Select("name", Nil, Empty),
-                Select("profilePic", Nil, Empty)
-              ))
-            )
-          ))
+        Unique(
+          Filter(Eql(UniquePath(List("id")), Const("1")),
+            Group(List(
+              Select("friends", Nil,
+                Group(List(
+                  Select("id", Nil, Empty),
+                  Select("name", Nil, Empty),
+                  Select("profilePic", Nil, Empty)
+                ))
+              ),
+              Select("mutualFriends", Nil,
+                Group(List(
+                  Select("id", Nil, Empty),
+                  Select("name", Nil, Empty),
+                  Select("profilePic", Nil, Empty)
+                ))
+              )
+            ))
+          )
         )
       )
 
@@ -365,35 +368,39 @@ final class FragmentSuite extends CatsSuite {
     val expected =
       Group(List(
         Select("user", Nil,
-          Unique(Eql(UniquePath(List("id")), Const("1")),
-            Select("favourite", Nil,
-              Group(List(
-                Introspect(FragmentMapping.schema, Select("__typename", Nil, Empty)),
+          Unique(
+            Filter(Eql(UniquePath(List("id")), Const("1")),
+              Select("favourite", Nil,
                 Group(List(
-                  Narrow(User, Select("id", Nil, Empty)),
-                  Narrow(User, Select("name", Nil, Empty)))),
-                Group(List(
-                  Narrow(Page, Select("id", Nil, Empty)),
-                  Narrow(Page, Select("title", Nil, Empty))
+                  Introspect(FragmentMapping.schema, Select("__typename", Nil, Empty)),
+                  Group(List(
+                    Narrow(User, Select("id", Nil, Empty)),
+                    Narrow(User, Select("name", Nil, Empty)))),
+                  Group(List(
+                    Narrow(Page, Select("id", Nil, Empty)),
+                    Narrow(Page, Select("title", Nil, Empty))
+                  ))
                 ))
-              ))
+              )
             )
           )
         ),
         Rename("page", Select("user", Nil,
-          Unique(Eql(UniquePath(List("id")), Const("2")),
-            Select("favourite", Nil,
-              Group(List(
-                Introspect(FragmentMapping.schema, Select("__typename", Nil, Empty)),
+          Unique(
+            Filter(Eql(UniquePath(List("id")), Const("2")),
+              Select("favourite", Nil,
                 Group(List(
-                  Narrow(User, Select("id", Nil, Empty)),
-                  Narrow(User, Select("name", Nil, Empty))
-                )),
-                Group(List(
-                  Narrow(Page, Select("id", Nil, Empty)),
-                  Narrow(Page, Select("title", Nil, Empty))
+                  Introspect(FragmentMapping.schema, Select("__typename", Nil, Empty)),
+                  Group(List(
+                    Narrow(User, Select("id", Nil, Empty)),
+                    Narrow(User, Select("name", Nil, Empty))
+                  )),
+                  Group(List(
+                    Narrow(Page, Select("id", Nil, Empty)),
+                    Narrow(Page, Select("title", Nil, Empty))
+                  ))
                 ))
-              ))
+              )
             )
           )
         ))
@@ -532,7 +539,7 @@ object FragmentMapping extends ValueMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("user", List(Binding("id", IDValue(id))), child) =>
-        Select("user", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
+        Select("user", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
       case sel@Select("profiles", _, _) =>
         sel.rightIor
     }

@@ -4,8 +4,7 @@
 package grackle.test
 
 import cats.tests.CatsSuite
-import com.dimafeng.testcontainers.ForAllTestContainer
-import com.dimafeng.testcontainers.PostgreSQLContainer
+import com.dimafeng.testcontainers.{ForAllTestContainer, PostgreSQLContainer}
 import org.scalatest.funsuite.AnyFunSuite
 import org.testcontainers.containers.BindMode
 
@@ -16,5 +15,4 @@ trait SqlDatabaseSuite extends AnyFunSuite with CatsSuite with ForAllTestContain
     c.container.withClasspathResourceMapping("db", "/docker-entrypoint-initdb.d/", BindMode.READ_ONLY)
     c
   }
-
 }

@@ -4,10 +4,13 @@
 package grackle.test
 
 import cats.effect.IO
-import edu.gemini.grackle.QueryExecutor
 import io.circe.Json
-import edu.gemini.grackle.syntax._
 import org.scalatest.funsuite.AnyFunSuite
+
+import edu.gemini.grackle._
+import syntax._
+
+import GraphQLResponseTests.assertWeaklyEqual
 
 trait SqlUnionSpec extends AnyFunSuite {
   def mapping: QueryExecutor[IO, Json]
@@ -44,7 +47,7 @@ trait SqlUnionSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("union query with introspection") {
@@ -83,7 +86,7 @@ trait SqlUnionSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("unrequested members of union returns empty response") {
@@ -114,7 +117,7 @@ trait SqlUnionSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("union query with only introspection") {
@@ -149,6 +152,6 @@ trait SqlUnionSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 }

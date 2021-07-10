@@ -3,15 +3,14 @@
 
 package world
 
-import cats.effect.Sync
+import cats.effect.{Resource, Sync}
 import cats.implicits._
+import skunk.Session
 
 import edu.gemini.grackle._, skunk._, syntax._
-import edu.gemini.grackle.sql.Like
 import Query._, Path._, Predicate._, Value._
 import QueryCompiler._
-import cats.effect.Resource
-import _root_.skunk.Session
+import sql.Like
 
 trait WorldPostgresSchema[F[_]] extends SkunkMapping[F] {
 
@@ -149,7 +148,7 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
       ObjectMapping(
         tpe = LanguageType,
         fieldMappings = List(
-          SqlField("language", countrylanguage.language, key = true),
+          SqlField("language", countrylanguage.language, key = true, associative = true),
           SqlField("isOfficial", countrylanguage.isOfficial),
           SqlField("percentage", countrylanguage.percentage),
           SqlField("countrycode", countrylanguage.countrycode, hidden = true),
@@ -163,7 +162,7 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
     QueryType -> {
 
       case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Eql(UniquePath(List("code")), Const(code)), child)).rightIor
+        Select("country", Nil, Unique(Filter(Eql(UniquePath(List("code")), Const(code)), child))).rightIor
 
       case Select("countries", List(Binding("limit", IntValue(num)), Binding("minPopulation", IntValue(min)), Binding("byPopulation", BooleanValue(byPop))), child) =>
         def limit(query: Query): Query =
@@ -184,7 +183,7 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
         Select("cities", Nil, Filter(Like(UniquePath(List("name")), namePattern, true), child)).rightIor
 
       case Select("language", List(Binding("language", StringValue(language))), child) =>
-        Select("language", Nil, Unique(Eql(UniquePath(List("language")), Const(language)), child)).rightIor
+        Select("language", Nil, Unique(Filter(Eql(UniquePath(List("language")), Const(language)), child))).rightIor
 
       case Select("search", List(Binding("minPopulation", IntValue(min)), Binding("indepSince", IntValue(year))), child) =>
         Select("search", Nil,

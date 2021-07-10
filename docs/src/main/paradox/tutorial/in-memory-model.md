@@ -257,7 +257,7 @@ Extracting out the case for the `character` selector,
 
 ```scala
 case Select("character", List(Binding("id", IDValue(id))), child) =>
-  Select("character", Nil, Unique(Eql(FieldPath(List("id")), Const(id)), child)).rightIor
+  Select("character", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
 ```
 
 we can see that this transforms the previous term as follows,

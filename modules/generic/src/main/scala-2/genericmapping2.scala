@@ -4,16 +4,16 @@
 package edu.gemini.grackle
 package generic
 
-import scala.annotation.{ nowarn, tailrec }
+import scala.annotation.{nowarn, tailrec}
 
 import cats.implicits._
-import shapeless.{ Coproduct, Generic, ::, HList, HNil, Inl, Inr, LabelledGeneric }
-import shapeless.ops.hlist.{ LiftAll => PLiftAll }
-import shapeless.ops.coproduct.{ LiftAll => CLiftAll }
+import shapeless.{Coproduct, Generic, ::, HList, HNil, Inl, Inr, LabelledGeneric}
+import shapeless.ops.hlist.{LiftAll => PLiftAll}
+import shapeless.ops.coproduct.{LiftAll => CLiftAll}
 import shapeless.ops.record.Keys
 
-import Cursor.Env
-import QueryInterpreter.{ mkErrorResult, mkOneError }
+import Cursor.{Context, Env}
+import QueryInterpreter.{mkErrorResult, mkOneError}
 import ShapelessUtils._
 
 trait MkObjectCursorBuilder[T] {
@@ -21,6 +21,8 @@ trait MkObjectCursorBuilder[T] {
 }
 
 object MkObjectCursorBuilder {
+  type FieldMap[T] = Map[String, (Context, T, Option[Cursor], Env) => Result[Cursor]]
+
   implicit def productCursorBuilder[T <: Product, R <: HList, L <: HList]
     (implicit
       @nowarn gen: Generic.Aux[T, R],
@@ -30,41 +32,50 @@ object MkObjectCursorBuilder {
     ): MkObjectCursorBuilder[T] =
     new MkObjectCursorBuilder[T] {
       def apply(tpe: Type): ObjectCursorBuilder[T] = {
-        def fieldMap: Map[String, (List[String], T, Option[Cursor], Env) => Result[Cursor]] = {
+        def fieldMap: Map[String, (Context, T, Option[Cursor], Env) => Result[Cursor]] = {
           val keys: List[String] = unsafeToList[Symbol](keys0()).map(_.name)
           val elems = unsafeToList[CursorBuilder[Any]](elems0.instances)
           keys.zip(elems.zipWithIndex).map {
-            case (fieldName, (elem, idx)) => (fieldName, (p: List[String], t: T, c: Option[Cursor], e: Env) => elem.build(p, t.productElement(idx), c, e))
+            case (fieldName, (elem, idx)) =>
+              def build(context: Context, focus: T, parent: Option[Cursor], env: Env) =
+                elem.build(context, focus.productElement(idx), parent, env)
+              (fieldName, build _)
           }.toMap
         }
         new Impl[T](tpe, fieldMap)
       }
     }
 
-  class Impl[T](tpe0: Type, fieldMap0: => Map[String, (List[String], T, Option[Cursor], Env) => Result[Cursor]]) extends ObjectCursorBuilder[T] {
+  class Impl[T](tpe0: Type, fieldMap0: => FieldMap[T]) extends ObjectCursorBuilder[T] {
     lazy val fieldMap = fieldMap0
 
     val tpe = tpe0
 
-    def build(path: List[String], focus: T, parent: Option[Cursor], env: Env): Result[Cursor] =
-      CursorImpl(path, tpe, focus, fieldMap, parent, env).rightIor
+    def build(context: Context, focus: T, parent: Option[Cursor], env: Env): Result[Cursor] =
+      CursorImpl(context.asType(tpe), focus, fieldMap, parent, env).rightIor
 
     def renameField(from: String, to: String): ObjectCursorBuilder[T] =
       transformFieldNames { case `from` => to ; case other => other }
     def transformFieldNames(f: String => String): ObjectCursorBuilder[T] =
       new Impl(tpe, fieldMap0.map { case (k, v) => (f(k), v) })
-    def transformField[U](fieldName: String)(f: T => Result[U])(implicit cb: => CursorBuilder[U]): ObjectCursorBuilder[T] =
-      new Impl(tpe, fieldMap0.updated(fieldName, (path: List[String], focus: T, parent: Option[Cursor], env: Env) => f(focus).flatMap(f => cb.build(path, f, parent, env))))
+    def transformField[U](fieldName: String)(f: T => Result[U])(implicit cb: => CursorBuilder[U]): ObjectCursorBuilder[T] = {
+      def build(context: Context, focus: T, parent: Option[Cursor], env: Env) =
+        f(focus).flatMap(f => cb.build(context, f, parent, env))
+
+      new Impl(tpe, fieldMap0.updated(fieldName, build _))
+    }
   }
 
-  case class CursorImpl[T](path: List[String], tpe: Type, focus: T, fieldMap: Map[String, (List[String], T, Option[Cursor], Env) => Result[Cursor]], parent: Option[Cursor], env: Env)
+  case class CursorImpl[T](context: Context, focus: T, fieldMap: FieldMap[T], parent: Option[Cursor], env: Env)
     extends AbstractCursor[Product] {
     def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
     override def hasField(fieldName: String): Boolean = fieldMap.contains(fieldName)
 
-    override def field(fieldName: String): Result[Cursor] = {
-      fieldMap.get(fieldName).toRightIor(mkOneError(s"No field '$fieldName' for type $tpe")).flatMap(f => f(fieldName :: path, focus, Some(this), Env.empty))
+    override def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
+      fieldMap.get(fieldName).toRightIor(mkOneError(s"No field '$fieldName' for type $tpe")).flatMap { f =>
+        f(context.forFieldOrAttribute(fieldName, resultName), focus, Some(this), Env.empty)
+      }
     }
   }
 }
@@ -96,28 +107,28 @@ object MkInterfaceCursorBuilder {
 
   class Impl[T](tpe0: Type, sel: T => Int, elems: => Array[CursorBuilder[T]]) extends CursorBuilder[T] {
     val tpe = tpe0
-    def build(path: List[String], focus: T, parent: Option[Cursor], env: Env): Result[Cursor] = {
+    def build(context: Context, focus: T, parent: Option[Cursor], env: Env): Result[Cursor] = {
       val builder = elems(sel(focus))
-      builder.build(path, focus, parent, env).map(cursor => CursorImpl(tpe, builder.tpe, cursor, parent, env))
+      builder.build(context.asType(tpe), focus, parent, env).map(cursor => CursorImpl(tpe, builder.tpe, cursor, parent, env))
     }
   }
 
-  case class CursorImpl[T](tpe: Type, rtpe: Type, cursor: Cursor, parent: Option[Cursor], env: Env)
+  case class CursorImpl[T](tpe0: Type, rtpe: Type, cursor: Cursor, parent: Option[Cursor], env: Env)
     extends AbstractCursor[T] {
     def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
     def focus: Any = cursor.focus
-    def path: List[String] = cursor.path
+    val context: Context = cursor.context.asType(tpe0)
 
     override def hasField(fieldName: String): Boolean = cursor.hasField(fieldName)
 
-    override def field(fieldName: String): Result[Cursor] = cursor.field(fieldName)
+    override def field(fieldName: String, resultName: Option[String]): Result[Cursor] = cursor.field(fieldName, resultName)
 
     override def narrowsTo(subtpe: TypeRef): Boolean =
       subtpe <:< tpe && rtpe <:< subtpe
 
     override def narrow(subtpe: TypeRef): Result[Cursor] =
-      if (narrowsTo(subtpe)) copy(tpe = subtpe).rightIor
+      if (narrowsTo(subtpe)) copy(tpe0 = subtpe).rightIor
       else mkErrorResult(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
   }
 }

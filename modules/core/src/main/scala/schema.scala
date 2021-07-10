@@ -5,13 +5,14 @@ package edu.gemini.grackle
 
 import atto.Atto._
 import cats.data.{Ior, NonEmptyChain}
+import cats.implicits._
 import io.circe.Json
+import org.tpolecat.sourcepos.SourcePos
+
 import Ast.{EnumTypeDefinition, FieldDefinition, InterfaceTypeDefinition, ObjectTypeDefinition, TypeDefinition}
 import QueryInterpreter.{mkError, mkErrorResult, mkOneError}
 import ScalarType._
 import Value._
-import cats.implicits._
-import org.tpolecat.sourcepos.SourcePos
 
 /**
  * Representation of a GraphQL schema
@@ -279,6 +280,13 @@ sealed trait Type extends Product {
     case tpe => ListType(tpe)
   }
 
+  def underlying: Type = this match {
+    case NullableType(tpe) => tpe.underlying
+    case ListType(tpe) => tpe.underlying
+    case _: TypeRef => dealias.underlying
+    case _ => this
+  }
+
   /**
    * Yield the object type underlying this type.
    *
@@ -372,6 +380,15 @@ sealed trait Type extends Product {
     case _: TypeRef => dealias.underlyingLeaf
     case (_: ObjectType)|(_: InterfaceType)|(_: UnionType) => None
     case tpe => Some(tpe)
+  }
+
+  def withModifiersOf(tpe: Type): Type = {
+    def loop(rtpe: Type, tpe: Type): Type = tpe match {
+      case NullableType(tpe) => loop(NullableType(rtpe), tpe)
+      case ListType(tpe) => loop(ListType(rtpe), tpe)
+      case _ => rtpe
+    }
+    loop(this, tpe)
   }
 
   def isNamed: Boolean = false
@@ -1112,7 +1129,7 @@ object SchemaRenderer {
         ).flatten
 
     val schemaDefn =
-      if (fields.size == 1 && schema.queryType =:= schema.ref("Query")) ""
+      if (fields.sizeCompare(1) == 0 && schema.queryType =:= schema.ref("Query")) ""
       else fields.mkString("schema {\n  ", "\n  ", "\n}\n")
 
     schemaDefn ++

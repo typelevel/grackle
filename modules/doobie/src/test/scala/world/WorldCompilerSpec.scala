@@ -3,14 +3,15 @@
 
 package world
 
-import utils.DatabaseSuite
-import edu.gemini.grackle.sql.{SqlStatsMonitor}
-import cats.effect.IO
-import edu.gemini.grackle.QueryExecutor
-import edu.gemini.grackle.sql.SqlMonitor
 import io.circe.Json
-import grackle.test.SqlWorldCompilerSpec
+import cats.effect.IO
+
+import edu.gemini.grackle.QueryExecutor
 import edu.gemini.grackle.doobie.DoobieMonitor
+import edu.gemini.grackle.sql.{SqlMonitor, SqlStatsMonitor}
+
+import grackle.test.SqlWorldCompilerSpec
+import utils.DatabaseSuite
 
 final class WorldCompilerSpec extends DatabaseSuite with SqlWorldCompilerSpec {
 
@@ -23,8 +24,8 @@ final class WorldCompilerSpec extends DatabaseSuite with SqlWorldCompilerSpec {
     WorldMapping.mkMapping(xa, monitor)
 
   def simpleRestrictedQuerySql: String =
-    "SELECT country.name, country.code FROM country WHERE (country.code = ?)"
+   "SELECT country.name, country.code FROM (SELECT country.name, country.code FROM country INNER JOIN (SELECT DISTINCT country.code FROM country WHERE (country.code IS NOT NULL ) AND (country.code = ?) ) AS pred_0 ON pred_0.code = country.code ) AS country"
 
   def simpleFilteredQuerySql: String =
-    "SELECT city.name, city.id FROM city WHERE (city.name ILIKE ?)"
+    "SELECT city.name, city.id FROM (SELECT city.name, city.id FROM city INNER JOIN (SELECT DISTINCT city.id FROM city WHERE (city.id IS NOT NULL ) AND (city.name ILIKE ?) ) AS pred_0 ON pred_0.id = city.id ) AS city"
 }

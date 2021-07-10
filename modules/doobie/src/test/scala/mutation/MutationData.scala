@@ -3,21 +3,22 @@
 
 package mutation
 
-import _root_.doobie.{ Meta, Transactor }
-import _root_.doobie.implicits._
 import cats.effect.{ Bracket, Sync }
 import cats.syntax.all._
+import doobie.{ Meta, Transactor }
+import doobie.implicits._
 import fs2.Stream
 
 import edu.gemini.grackle._
-import edu.gemini.grackle.doobie.DoobieMapping
-import edu.gemini.grackle.doobie.DoobieMappingCompanion
-import edu.gemini.grackle.doobie.DoobieMonitor
-import edu.gemini.grackle.Path._
-import edu.gemini.grackle.Predicate._
-import edu.gemini.grackle.Query._
-import edu.gemini.grackle.QueryCompiler._
-import edu.gemini.grackle.Value._
+import doobie.DoobieMapping
+import doobie.DoobieMappingCompanion
+import doobie.DoobieMonitor
+import Path._
+import Predicate._
+import Query._
+import QueryCompiler._
+import Value._
+
 import grackle.test.SqlMutationSchema
 
 trait MutationSchema[F[_]] extends DoobieMapping[F] with SqlMutationSchema {
@@ -83,7 +84,7 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
                     """.query[Int]
                       .unique
                       .transact(transactor)
-                      .map { id => (Unique(Eql(UniquePath(List("id")), Const(id)), child), e).rightIor }
+                      .map { id => (Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child)), e).rightIor }
                 }
             }
           }),
@@ -112,7 +113,7 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("city", List(Binding("id", IntValue(id))), child) =>
-        Select("city", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
+        Select("city", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
     },
     MutationType -> {
 
@@ -122,7 +123,7 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
           Select("updatePopulation", Nil,
             // We could also do this in the SqlRoot's mutation, and in fact would need to do so if
             // the mutation generated a new id. But for now it seems easiest to do it here.
-            Unique(Eql(UniquePath(List("id")), Const(id)), child)
+            Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))
           )
         ).rightIor
 

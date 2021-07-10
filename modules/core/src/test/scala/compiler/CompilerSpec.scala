@@ -3,11 +3,11 @@
 
 package compiler
 
-import cats.Id
+import cats.{Id, catsInstancesForId}
 import cats.data.{Chain, Ior}
 import cats.implicits._
-import cats.catsInstancesForId
 import cats.tests.CatsSuite
+
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
 import Query._, Path._, Predicate._, Value._, UntypedOperation._
@@ -199,12 +199,14 @@ final class CompilerSuite extends CatsSuite {
     val expected =
       Select(
         "character", Nil,
-        Unique(Eql(UniquePath(List("id")), Const("1000")),
-          Select("name", Nil) ~
-            Select(
-              "friends", Nil,
-              Select("name", Nil)
-            )
+        Unique(
+          Filter(Eql(UniquePath(List("id")), Const("1000")),
+            Select("name", Nil) ~
+              Select(
+                "friends", Nil,
+                Select("name", Nil)
+              )
+          )
         )
     )
 
@@ -367,7 +369,7 @@ object AtomicMapping extends Mapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("character", List(Binding("id", StringValue(id))), child) =>
-        Select("character", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
+        Select("character", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
     }
   ))
 }

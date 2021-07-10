@@ -3,14 +3,16 @@
 
 package grackle.test
 
-import edu.gemini.grackle.syntax._
-import org.scalatest.funsuite.AnyFunSuite
-import edu.gemini.grackle.QueryExecutor
 import cats.effect.IO
 import cats.syntax.all._
 import io.circe.Json
-import edu.gemini.grackle.sql.SqlStatsMonitor
-import edu.gemini.grackle.sql.SqlMonitor
+import org.scalatest.funsuite.AnyFunSuite
+
+import edu.gemini.grackle._
+import syntax._
+import sql.{SqlMonitor, SqlStatsMonitor}
+
+import GraphQLResponseTests.assertWeaklyEqual
 
 trait SqlCoalesceSpec extends AnyFunSuite {
 
@@ -105,13 +107,13 @@ trait SqlCoalesceSpec extends AnyFunSuite {
 
     val (res, stats) = prog.unsafeRunSync()
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
 
     val numQueries = stats.length
     val numCells   = stats.foldMap(s => s.rows * s.cols)
 
-    assert(numQueries == 2)
-    assert(numCells   == 32)
+    assert(numQueries == 1)
+    assert(numCells   == 40)
 
   }
 }

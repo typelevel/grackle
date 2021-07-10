@@ -6,10 +6,10 @@ package sql
 
 import scala.util.matching.Regex
 
-
 case class Like(x: Term[String], pattern: String, caseInsensitive: Boolean) extends Predicate {
   lazy val r = Like.likeToRegex(pattern, caseInsensitive)
   def apply(c: Cursor): Result[Boolean] = x(c).map(r.matches(_))
+  def children = List(x)
 }
 
 object Like {

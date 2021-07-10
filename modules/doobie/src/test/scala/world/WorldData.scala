@@ -6,17 +6,15 @@ package world
 import cats.effect.Sync
 import cats.implicits._
 
-import _root_.doobie.util.meta.Meta
-import _root_.doobie.util.transactor.Transactor
+import doobie.util.meta.Meta
+import doobie.util.transactor.Transactor
 
 import edu.gemini.grackle._
-import edu.gemini.grackle.sql.Like
-import edu.gemini.grackle.syntax._
+import doobie.{DoobieMapping, DoobieMappingCompanion, DoobieMonitor}
+import sql.Like
+import syntax._
 import Query._, Path._, Predicate._, Value._
 import QueryCompiler._
-import edu.gemini.grackle.doobie.DoobieMapping
-import edu.gemini.grackle.doobie.DoobieMappingCompanion
-import edu.gemini.grackle.doobie.DoobieMonitor
 
 trait WorldPostgresSchema[F[_]] extends DoobieMapping[F] {
 
@@ -151,7 +149,7 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
       ObjectMapping(
         tpe = LanguageType,
         fieldMappings = List(
-          SqlField("language", countrylanguage.language, key = true),
+          SqlField("language", countrylanguage.language, key = true, associative = true),
           SqlField("isOfficial", countrylanguage.isOfficial),
           SqlField("percentage", countrylanguage.percentage),
           SqlField("countrycode", countrylanguage.countrycode, hidden = true),
@@ -165,7 +163,7 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
     QueryType -> {
 
       case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Eql(UniquePath(List("code")), Const(code)), child)).rightIor
+        Select("country", Nil, Unique(Filter(Eql(UniquePath(List("code")), Const(code)), child))).rightIor
 
       case Select("countries", List(Binding("limit", IntValue(num)), Binding("minPopulation", IntValue(min)), Binding("byPopulation", BooleanValue(byPop))), child) =>
         def limit(query: Query): Query =
@@ -186,7 +184,7 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
         Select("cities", Nil, Filter(Like(UniquePath(List("name")), namePattern, true), child)).rightIor
 
       case Select("language", List(Binding("language", StringValue(language))), child) =>
-        Select("language", Nil, Unique(Eql(UniquePath(List("language")), Const(language)), child)).rightIor
+        Select("language", Nil, Unique(Filter(Eql(UniquePath(List("language")), Const(language)), child))).rightIor
 
       case Select("search", List(Binding("minPopulation", IntValue(min)), Binding("indepSince", IntValue(year))), child) =>
         Select("search", Nil,

@@ -3,18 +3,17 @@
 
 package projection
 
-import cats.effect.Sync
+import cats.effect.{Resource, Sync}
 import cats.implicits._
+import skunk.Session
+import skunk.codec.all._
 
 import edu.gemini.grackle._, skunk._, syntax._
-import edu.gemini.grackle.Path._
-import edu.gemini.grackle.Predicate.{Const, Eql, Project}
-import edu.gemini.grackle.Query.{Binding, Filter, Select}
-import edu.gemini.grackle.QueryCompiler.SelectElaborator
-import edu.gemini.grackle.Value.{BooleanValue, ObjectValue}
-import cats.effect.Resource
-import _root_.skunk.Session
-import _root_.skunk.codec.all._
+import Path._
+import Predicate.{Const, Eql}
+import Query.{Binding, Filter, Select}
+import QueryCompiler.SelectElaborator
+import Value.{BooleanValue, ObjectValue}
 
 trait ProjectionMapping[F[_]] extends SkunkMapping[F] {
 
@@ -105,7 +104,7 @@ trait ProjectionMapping[F[_]] extends SkunkMapping[F] {
     def unapply(input: ObjectValue): Option[Predicate] = {
       input.fields match {
         case List(("attr", BooleanValue(attr))) =>
-          Some(Project(List("level1", "level2"), Eql(UniquePath(List("attr")), Const(attr))))
+          Some(Eql(UniquePath(List("level1", "level2", "attr")), Const(attr)))
         case _ => None
       }
     }
@@ -115,7 +114,7 @@ trait ProjectionMapping[F[_]] extends SkunkMapping[F] {
     def unapply(input: ObjectValue): Option[Predicate] = {
       input.fields match {
         case List(("attr", BooleanValue(attr))) =>
-          Some(Project(List("level2"), Eql(UniquePath(List("attr")), Const(attr))))
+          Some(Eql(UniquePath(List("level2", "attr")), Const(attr)))
         case _ => None
       }
     }

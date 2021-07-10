@@ -6,17 +6,17 @@ package edu.gemini.grackle
 import cats.Monad
 import cats.data.{ Ior, IorT }
 import cats.implicits._
+import fs2.Stream
 import io.circe.{Encoder, Json}
 import io.circe.syntax._
-import org.tpolecat.typename._
 import org.tpolecat.sourcepos.SourcePos
+import org.tpolecat.typename._
 
-import Cursor.Env
+import Cursor.{Context, Env}
 import Query.Select
 import QueryCompiler.{ComponentElaborator, SelectElaborator, IntrospectionLevel}
 import QueryInterpreter.mkErrorResult
 import IntrospectionLevel._
-import fs2.Stream
 
 trait QueryExecutor[F[_], T] { outer =>
 
@@ -69,38 +69,38 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
   val validator: MappingValidator =
     MappingValidator(this)
 
-  def rootMapping(path: List[String], tpe: Type, fieldName: String): Option[RootMapping] =
-    tpe match {
+  def rootMapping(context: Context, fieldName: String): Option[RootMapping] =
+    context.tpe match {
       case JoinType(componentName, _) =>
-        rootMapping(Nil, schema.queryType, componentName)
+        rootMapping(Context(Nil, Nil, schema.queryType), componentName)
       case _ =>
-        fieldMapping(path, tpe, fieldName).collect {
+        fieldMapping(context, fieldName).collect {
           case rm: RootMapping => rm
         }
     }
 
-  def rootCursor(path: List[String], rootTpe: Type, fieldName: String, child: Query, env: Env): Stream[F,Result[(Query, Cursor)]] =
-    rootMapping(path, rootTpe, fieldName) match {
+  def rootCursor(context: Context, fieldName: String, resultName: Option[String], child: Query, env: Env): Stream[F,Result[(Query, Cursor)]] =
+    rootMapping(context, fieldName) match {
       case Some(root) =>
-        root.run(child, env)
+        root.run(child, env, resultName)
       case None =>
-        mkErrorResult[(Query, Cursor)](s"No root field '$fieldName' in $rootTpe").pure[Stream[F,*]]
+        mkErrorResult[(Query, Cursor)](s"No root field '$fieldName' in ${context.tpe}").pure[Stream[F,*]]
     }
 
-  def objectMapping(path: List[String], tpe: Type): Option[ObjectMapping] =
-    typeMapping(tpe) match {
+  def objectMapping(context: Context): Option[ObjectMapping] =
+    typeMapping(context.tpe) match {
       case Some(om: ObjectMapping) => Some(om)
       case Some(pm: PrefixedMapping) =>
-        val matching = pm.mappings.filter(m => path.startsWith(m._1.reverse))
+        val matching = pm.mappings.filter(m => context.path.startsWith(m._1.reverse))
         matching.sortBy(m => -m._1.length).headOption.map(_._2)
       case _ => None
     }
 
-  def fieldMapping(path: List[String], tpe: Type, fieldName: String): Option[FieldMapping] =
-    objectMapping(path, tpe).flatMap(_.fieldMappings.find(_.fieldName == fieldName).orElse {
-      tpe.dealias match {
+  def fieldMapping(context: Context, fieldName: String): Option[FieldMapping] =
+    objectMapping(context).flatMap(_.fieldMappings.find(_.fieldName == fieldName).orElse {
+      context.tpe.dealias match {
         case ot: ObjectType =>
-          ot.interfaces.collectFirstSome(nt => fieldMapping(path, nt, fieldName))
+          ot.interfaces.collectFirstSome(nt => fieldMapping(context.asType(nt), fieldName))
         case _ => None
       }
     })
@@ -170,13 +170,13 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
      * Run this `RootMapping`'s mutation, if any, then construct and return the result cursor along
      * with the [possibly updated] query.
      */
-    final def run(query: Query, env: Env): Stream[F, Result[(Query, Cursor)]] =
+    final def run(query: Query, env: Env, resultName: Option[String]): Stream[F, Result[(Query, Cursor)]] =
       IorT(mutation.run(query, env)).flatMap { case (q, e) =>
-        IorT(cursor(q, e)).tupleLeft(q)
+        IorT(cursor(q, e, resultName))
       } .value
 
     def hidden = false
-    def cursor(query: Query, env: Env): Stream[F, Result[Cursor]]
+    def cursor(query: Query, env: Env, resultName: Option[String]): Stream[F, Result[(Query, Cursor)]]
     def withParent(tpe: Type): RootMapping
   }
 

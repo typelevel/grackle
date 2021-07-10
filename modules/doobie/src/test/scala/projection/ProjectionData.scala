@@ -9,11 +9,11 @@ import doobie.Transactor
 import doobie.util.meta.Meta
 
 import edu.gemini.grackle._, doobie._, syntax._
-import edu.gemini.grackle.Path._
-import edu.gemini.grackle.Predicate.{Const, Eql, Project}
-import edu.gemini.grackle.Query.{Binding, Filter, Select}
-import edu.gemini.grackle.QueryCompiler.SelectElaborator
-import edu.gemini.grackle.Value.{BooleanValue, ObjectValue}
+import Path._
+import Predicate.{Const, Eql}
+import Query.{Binding, Filter, Select}
+import QueryCompiler.SelectElaborator
+import Value.{BooleanValue, ObjectValue}
 
 trait ProjectionMapping[F[_]] extends DoobieMapping[F] {
 
@@ -104,7 +104,7 @@ trait ProjectionMapping[F[_]] extends DoobieMapping[F] {
     def unapply(input: ObjectValue): Option[Predicate] = {
       input.fields match {
         case List(("attr", BooleanValue(attr))) =>
-          Some(Project(List("level1", "level2"), Eql(UniquePath(List("attr")), Const(Option(attr)))))
+          Some(Eql(UniquePath(List("level1", "level2", "attr")), Const(Option(attr))))
         case _ => None
       }
     }
@@ -114,7 +114,7 @@ trait ProjectionMapping[F[_]] extends DoobieMapping[F] {
     def unapply(input: ObjectValue): Option[Predicate] = {
       input.fields match {
         case List(("attr", BooleanValue(attr))) =>
-          Some(Project(List("level2"), Eql(UniquePath(List("attr")), Const(Option(attr)))))
+          Some(Eql(UniquePath(List("level2", "attr")), Const(Option(attr))))
         case _ => None
       }
     }

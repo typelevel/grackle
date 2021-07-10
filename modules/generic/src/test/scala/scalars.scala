@@ -13,7 +13,6 @@ import cats.implicits._
 import cats.tests.CatsSuite
 import io.circe.Encoder
 
-import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
 import Query._, Path._, Predicate._, Value._
 import QueryCompiler._
@@ -180,7 +179,7 @@ object MovieMapping extends GenericMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("movieById", List(Binding("id", UUIDValue(id))), child) =>
-        Select("movieById", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
+        Select("movieById", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
       case Select("moviesByGenre", List(Binding("genre", GenreValue(genre))), child) =>
         Select("moviesByGenre", Nil, Filter(Eql(UniquePath(List("genre")), Const(genre)), child)).rightIor
       case Select("moviesReleasedBetween", List(Binding("from", DateValue(from)), Binding("to", DateValue(to))), child) =>

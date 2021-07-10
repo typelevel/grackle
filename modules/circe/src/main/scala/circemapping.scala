@@ -6,19 +6,19 @@ package circe
 
 import cats.Monad
 import cats.implicits._
-import io.circe.Json
 import fs2.Stream
+import io.circe.Json
+import org.tpolecat.sourcepos.SourcePos
 
-import Cursor.Env
+import Cursor.{Context, Env}
 import QueryInterpreter.{mkErrorResult, mkOneError}
 import ScalarType._
-import org.tpolecat.sourcepos.SourcePos
 
 abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
   case class CirceRoot(val otpe: Option[Type], val fieldName: String, root: Json, mutation: Mutation)(
     implicit val pos: SourcePos
   ) extends RootMapping {
-    def cursor(query: Query, env: Env): Stream[F,Result[Cursor]] = {
+    def cursor(query: Query, env: Env, resultName: Option[String]): Stream[F,Result[(Query, Cursor)]] = {
       (for {
         tpe      <- otpe
         fieldTpe <- tpe.field(fieldName)
@@ -27,7 +27,7 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
           case _: Query.Unique => fieldTpe.nonNull.list
           case _ => fieldTpe
         }
-        CirceCursor(Nil, cursorTpe, root, None, env).rightIor
+        (query, CirceCursor(Context(fieldName, resultName, cursorTpe), root, None, env)).rightIor
       }).getOrElse(mkErrorResult(s"Type ${otpe.getOrElse("unspecified type")} has no field '$fieldName'")).pure[Stream[F,*]]
     }
 
@@ -41,16 +41,15 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
   }
 
   case class CirceCursor(
-    path:   List[String],
-    tpe:    Type,
+    context: Context,
     focus:  Json,
     parent: Option[Cursor],
     env:    Env
   ) extends Cursor {
     def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
-    def mkChild(path: List[String] = path, tpe: Type = tpe, focus: Json = focus): CirceCursor =
-      CirceCursor(path, tpe, focus, Some(this), Env.empty)
+    def mkChild(context: Context = context, focus: Json = focus): CirceCursor =
+      CirceCursor(context, focus, Some(this), Env.empty)
 
     def isLeaf: Boolean =
       tpe.dealias match {
@@ -80,7 +79,7 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
 
     def asList: Result[List[Cursor]] = tpe match {
       case ListType(elemTpe) if focus.isArray =>
-        focus.asArray.map(_.map(e => mkChild(tpe = elemTpe, focus = e)).toList)
+        focus.asArray.map(_.map(e => mkChild(context.asType(elemTpe), e)).toList)
           .toRightIor(mkOneError(s"Expected List type, found $tpe for focus ${focus.noSpaces}"))
       case _ =>
         mkErrorResult(s"Expected List type, found $tpe for focus ${focus.noSpaces}")
@@ -91,7 +90,7 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
     def asNullable: Result[Option[Cursor]] = tpe match {
       case NullableType(tpe) =>
         if (focus.isNull) None.rightIor
-        else Some(mkChild(tpe = tpe)).rightIor
+        else Some(mkChild(context.asType(tpe))).rightIor
       case _ => mkErrorResult(s"Expected Nullable type, found $focus for $tpe")
     }
 
@@ -108,18 +107,18 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
 
     def narrow(subtpe: TypeRef): Result[Cursor] =
       if (narrowsTo(subtpe))
-        mkChild(tpe = subtpe).rightIor
+        mkChild(context.asType(subtpe)).rightIor
       else
         mkErrorResult(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
 
     def hasField(fieldName: String): Boolean =
       tpe.hasField(fieldName) && focus.asObject.map(_.contains(fieldName)).getOrElse(false)
 
-    def field(fieldName: String): Result[Cursor] = {
+    def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
       val f = focus.asObject.flatMap(_(fieldName))
-      (tpe.field(fieldName), f) match {
-        case (Some(ftpe), None) if ftpe.isNullable => mkChild(path = fieldName :: path, tpe = ftpe, focus = Json.Null).rightIor
-        case (Some(ftpe), Some(json)) => mkChild(path = fieldName :: path, tpe = ftpe, focus = json).rightIor
+      (context.forField(fieldName, resultName), f) match {
+        case (Some(fieldContext), None) if fieldContext.tpe.isNullable => mkChild(fieldContext, Json.Null).rightIor
+        case (Some(fieldContext), Some(json)) => mkChild(fieldContext, json).rightIor
         case _ =>
           mkErrorResult(s"No field '$fieldName' for type $tpe")
       }

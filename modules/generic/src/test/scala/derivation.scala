@@ -11,8 +11,9 @@ import cats.data.Ior
 import cats.implicits._
 import cats.tests.CatsSuite
 import io.circe.Json
-import edu.gemini.grackle.syntax._
 
+import edu.gemini.grackle.syntax._
+import Cursor.Context
 import Query._, Path._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.{ mkErrorResult, mkOneError }
@@ -199,11 +200,11 @@ object StarWarsMapping extends GenericMapping[Id] {
     QueryType -> {
       case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
         Episode.values.find(_.toString == e.name).map { episode =>
-          Select("hero", Nil, Unique(Eql(UniquePath(List("id")), Const(hero(episode).id)), child)).rightIor
+          Select("hero", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(hero(episode).id)), child))).rightIor
         }.getOrElse(mkErrorResult(s"Unknown episode '${e.name}'"))
 
       case Select(f@("character" | "human" | "droid"), List(Binding("id", IDValue(id))), child) =>
-        Select(f, Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
+        Select(f, Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
     }
   ))
 }
@@ -214,7 +215,7 @@ final class DerivationSpec extends CatsSuite {
   test("primitive types have leaf cursor builders") {
     val i =
       for {
-        c <- CursorBuilder[Int].build(Nil, 23)
+        c <- CursorBuilder[Int].build(Context.empty, 23)
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -222,7 +223,7 @@ final class DerivationSpec extends CatsSuite {
 
     val s =
       for {
-        c <- CursorBuilder[String].build(Nil, "foo")
+        c <- CursorBuilder[String].build(Context.empty, "foo")
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -230,7 +231,7 @@ final class DerivationSpec extends CatsSuite {
 
     val b =
       for {
-        c <- CursorBuilder[Boolean].build(Nil, true)
+        c <- CursorBuilder[Boolean].build(Context.empty, true)
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -238,7 +239,7 @@ final class DerivationSpec extends CatsSuite {
 
     val f =
       for {
-        c <- CursorBuilder[Double].build(Nil, 13.0)
+        c <- CursorBuilder[Double].build(Context.empty, 13.0)
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -248,7 +249,7 @@ final class DerivationSpec extends CatsSuite {
   test("types with a Circe Encoder instance have leaf cursor builders") {
     val z =
       for {
-        c <- CursorBuilder.leafCursorBuilder[ZonedDateTime].build(Nil, ZonedDateTime.parse("2020-03-25T16:24:06.081Z"))
+        c <- CursorBuilder.leafCursorBuilder[ZonedDateTime].build(Context.empty, ZonedDateTime.parse("2020-03-25T16:24:06.081Z"))
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -258,7 +259,7 @@ final class DerivationSpec extends CatsSuite {
   test("Scala Enumeration types have leaf cursor builders") {
     val e =
       for {
-        c <- CursorBuilder.enumerationCursorBuilder[Episode.Value].build(Nil, Episode.JEDI)
+        c <- CursorBuilder.enumerationCursorBuilder[Episode.Value].build(Context.empty, Episode.JEDI)
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -268,8 +269,8 @@ final class DerivationSpec extends CatsSuite {
   test("product types have cursor builders") {
     val name =
       for {
-        c <- CursorBuilder[Human].build(Nil, lukeSkywalker)
-        f <- c.field("name")
+        c <- CursorBuilder[Human].build(Context.empty, lukeSkywalker)
+        f <- c.field("name", None)
         n <- f.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
         l <- n.asLeaf
       } yield l
@@ -279,8 +280,8 @@ final class DerivationSpec extends CatsSuite {
   test("cursor builders can be resolved for nested types") {
     val appearsIn =
       for {
-        c <- CursorBuilder[Character].build(Nil, lukeSkywalker)
-        f <- c.field("appearsIn")
+        c <- CursorBuilder[Character].build(Context.empty, lukeSkywalker)
+        f <- c.field("appearsIn", None)
         n <- f.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
         l <- n.asList
         s <- l.traverse(_.asLeaf)
@@ -291,11 +292,11 @@ final class DerivationSpec extends CatsSuite {
   test("default cursor builders can be customised by mapping fields") {
     val friends =
       for {
-        c <- CursorBuilder[Human].build(Nil, lukeSkywalker)
-        f <- c.field("friends")
+        c <- CursorBuilder[Human].build(Context.empty, lukeSkywalker)
+        f <- c.field("friends", None)
         n <- f.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
         l <- n.asList
-        m <- l.traverse(_.field("name"))
+        m <- l.traverse(_.field("name", None))
         p <- m.traverse(_.asNullable.flatMap(_.toRightIor(mkOneError("missing"))))
         q <- p.traverse(_.asLeaf)
       } yield q
@@ -305,9 +306,9 @@ final class DerivationSpec extends CatsSuite {
   test("sealed ADTs have narrowable cursor builders") {
     val homePlanets =
       for {
-        c <- CursorBuilder[Character].build(Nil, lukeSkywalker)
+        c <- CursorBuilder[Character].build(Context.empty, lukeSkywalker)
         h <- c.narrow(HumanType)
-        m <- h.field("homePlanet")
+        m <- h.field("homePlanet", None)
         n <- m.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
         l <- n.asLeaf
       } yield l
