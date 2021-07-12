@@ -151,20 +151,20 @@ lazy val circe = project
 //     )
 //   )
 
-// lazy val generic = project
-//   .in(file("modules/generic"))
-//   .enablePlugins(AutomateHeaderPlugin)
-//   .disablePlugins(RevolverPlugin)
-//   .dependsOn(core)
-//   .settings(commonSettings)
-//   .settings(
-//     name := "gsp-graphql-generic",
-//     libraryDependencies += (
-//       scalaVersion.value match {
-//         case Scala3 => "org.typelevel" %% "shapeless3-deriving" % shapeless3Version
-//         case Scala2 => "com.chuusai"   %% "shapeless"           % shapeless2Version
-//       })
-//   )
+lazy val generic = project
+  .in(file("modules/generic"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(core)
+  .settings(commonSettings)
+  .settings(
+    name := "gsp-graphql-generic",
+    libraryDependencies += (
+      scalaVersion.value match {
+        case Scala3 => "org.typelevel" %% "shapeless3-deriving" % shapeless3Version
+        case Scala2 => "com.chuusai"   %% "shapeless"           % shapeless2Version
+      })
+  )
 
 // lazy val demo = project
 //   .in(file("demo"))
