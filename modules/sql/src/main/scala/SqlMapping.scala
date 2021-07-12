@@ -961,7 +961,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
               getOrElse(sys.error(s"No parent table for type ${context.tpe}"))
 
           val newJoins =
-            (table: @unchecked) match { // @unchecked to work around https://github.com/lampepfl/dotty/issues/12408
+            table match {
               case sr@SubqueryRef(sq: SqlSelect, _) =>
                 // If this SELECT is on a SELECT subquery then push the columns required for the
                 // joins down into the subquery
@@ -1251,7 +1251,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         val newChild =
           if(child.refName != from.refName) child
           else {
-            ((child, to): @unchecked) match { // @unchecked to work around https://github.com/lampepfl/dotty/issues/12408
+            (child, to) match {
               case (sr: SubqueryRef, to: TableRef) => sr.copy(alias0 = to.refName)
               case _ => to
             }
@@ -1518,7 +1518,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
             for {
               folNode    <- folQuery.map(q => loop(q, context, AliasedMappings.empty).map(_._1)).orElse(Some(None))
-              folSelect  <- folNode.map(q => (q: @unchecked) match { case s: SqlSelect => Some(s) ; case _ => None }).orElse(Some(None)) // @unchecked to work around https://github.com/lampepfl/dotty/issues/12408
+              folSelect  <- folNode.map(q => q match { case s: SqlSelect => Some(s) ; case _ => None }).orElse(Some(None))
               (node, am) <- loop(mergedChild, context, aliasedMappings)
               res        <- node.addFilterOrderByLimit(pred, oss, lim, folSelect, am)
             } yield res

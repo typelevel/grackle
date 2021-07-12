@@ -13,7 +13,6 @@ import _root_.doobie.enumerated.Nullability.{Nullable, NoNulls}
 import _root_.doobie.implicits._
 import _root_.doobie.util.fragments
 import java.sql.ResultSet
-import scala.annotation.unchecked.uncheckedVariance
 import org.tpolecat.typename.TypeName
 
 abstract class DoobieMapping[F[_]: Sync](
@@ -22,7 +21,7 @@ abstract class DoobieMapping[F[_]: Sync](
 ) extends SqlMapping[F] {
 
   type Codec   = (Meta[_], Boolean)
-  type Encoder = (Put[_], Boolean) @uncheckedVariance
+  type Encoder = (Put[_], Boolean)
   type Fragment   = DoobieFragment
 
   def toEncoder(c: Codec): Encoder = (c._1.put, c._2)

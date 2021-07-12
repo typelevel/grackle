@@ -18,7 +18,7 @@ val testContainersVersion       = "0.39.5"
 val typenameVersion             = "1.0.0"
 
 val Scala2 = "2.13.6"
-val Scala3 = "3.0.0"
+val Scala3 = "3.0.1"
 
 inThisBuild(Seq(
   homepage := Some(url("https://github.com/gemini-hlsw/gsp-graphql")),
@@ -166,7 +166,6 @@ lazy val generic = project
       })
   )
 
-// TODO: re-enable when http4s is available for 3.0.0-RC3
 lazy val demo = project
   .in(file("demo"))
   .enablePlugins(AutomateHeaderPlugin)
