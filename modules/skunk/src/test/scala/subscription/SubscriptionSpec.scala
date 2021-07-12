@@ -7,15 +7,13 @@ import utils.DatabaseSuite
 import edu.gemini.grackle.syntax._
 import io.circe.Json
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import skunk.implicits._
 import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext
-import cats.effect.Timer
 
 class SubscriptionSpec extends DatabaseSuite {
 
   lazy val mapping = SubscriptionMapping.mkMapping(pool)
-  implicit val ioTimer: Timer[IO] = IO.timer(ExecutionContext.global)
 
   test("subscription driven by a Postgres channel") {
 
@@ -73,7 +71,8 @@ class SubscriptionSpec extends DatabaseSuite {
               }
 
         // Now rejoin the fiber
-        js <- fi.join
+        out <- fi.join
+        js  <- out.embedNever
 
       } yield js
 

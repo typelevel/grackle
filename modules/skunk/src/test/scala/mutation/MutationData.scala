@@ -4,7 +4,7 @@
 package mutation
 
 import cats.data.IorT
-import cats.effect.{ Bracket, Resource, Sync }
+import cats.effect.{ MonadCancel, Resource, Sync }
 import cats.syntax.all._
 import fs2.Stream
 import skunk.codec.all._
@@ -39,7 +39,7 @@ trait MutationSchema[F[_]] extends SkunkMapping[F] with SqlMutationSchema {
 
 trait MutationMapping[F[_]] extends MutationSchema[F] {
 
-  implicit def ev: Bracket[F, Throwable]
+  implicit def ev: MonadCancel[F, Throwable]
 
   val QueryType    = schema.ref("Query")
   val MutationType = schema.ref("Mutation")
