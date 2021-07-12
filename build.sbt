@@ -93,15 +93,15 @@ lazy val core = project
       )
   )
 
-// lazy val circe = project
-//   .in(file("modules/circe"))
-//   .enablePlugins(AutomateHeaderPlugin)
-//   .disablePlugins(RevolverPlugin)
-//   .dependsOn(core)
-//   .settings(commonSettings)
-//   .settings(
-//     name := "gsp-graphql-circe",
-//   )
+lazy val circe = project
+  .in(file("modules/circe"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(core)
+  .settings(commonSettings)
+  .settings(
+    name := "gsp-graphql-circe",
+  )
 
 // lazy val sql = project
 //   .in(file("modules/sql"))
