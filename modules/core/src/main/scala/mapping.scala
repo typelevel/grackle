@@ -6,7 +6,7 @@ package edu.gemini.grackle
 import cats.Monad
 import cats.data.{ Ior, IorT }
 import cats.implicits._
-import fs2.Stream
+import fs2.{ Stream, Compiler }
 import io.circe.{Encoder, Json}
 import io.circe.syntax._
 import org.tpolecat.sourcepos.SourcePos
@@ -24,14 +24,14 @@ trait QueryExecutor[F[_], T] { outer =>
 
   // TODO: deprecate
   def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty)(
-    implicit sc: Stream.Compiler[F,F]
+    implicit sc: Compiler[F,F]
   ): F[T] =
     compileAndRunOne(text, name, untypedVars, introspectionLevel, env)
 
   def compileAndRunAll(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): Stream[F,T]
 
   def compileAndRunOne(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty)(
-    implicit sc: Stream.Compiler[F,F]
+    implicit sc: Compiler[F,F]
   ): F[T]
 
 }
@@ -47,7 +47,7 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
     run(op.query, op.rootTpe, env)
 
   def compileAndRunOne(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty)(
-    implicit sc: Stream.Compiler[F,F]
+    implicit sc: Compiler[F,F]
   ): F[Json] =
     compileAndRunAll(text, name, untypedVars, introspectionLevel, env).compile.toList.map {
       case List(j) => j
