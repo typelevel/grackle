@@ -4,7 +4,7 @@
 package starwars
 
 import cats.{ Applicative }
-import cats.effect.Sync
+import cats.effect.Concurrent
 import cats.implicits._
 import io.circe.{ Json, ParsingFailure, parser }
 import org.http4s.{ HttpRoutes, InvalidMessageBodyFailure, ParseFailure, QueryParamDecoder }
@@ -17,7 +17,7 @@ trait StarWarsService[F[_]]{
 }
 
 object StarWarsService {
-  def routes[F[_]: Sync](service: StarWarsService[F]): HttpRoutes[F] = {
+  def routes[F[_]: Concurrent](service: StarWarsService[F]): HttpRoutes[F] = {
     val dsl = new Http4sDsl[F]{}
     import dsl._
 

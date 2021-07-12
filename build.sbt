@@ -5,7 +5,7 @@ val catsTestkitScalaTestVersion = "2.1.5"
 val circeVersion                = "0.14.1"
 val doobieVersion               = "1.0.0-M5"
 val fs2Version                  = "3.0.6"
-val http4sVersion               = "0.22.0-RC1"
+val http4sVersion               = "0.23.0-RC1"
 val kindProjectorVersion        = "0.13.0"
 val literallyVersion            = "1.0.2"
 val logbackVersion              = "1.2.3"
@@ -56,12 +56,12 @@ lazy val noPublishSettings = Seq(
 
 lazy val modules: List[ProjectReference] = List(
   core,
-  // circe,
-  // sql,
-  // doobie,
-  // skunk,
-  // generic,
-  // demo
+  circe,
+  sql,
+  doobie,
+  skunk,
+  generic,
+  demo
 )
 
 lazy val `gsp-graphql` = project.in(file("."))
@@ -166,25 +166,25 @@ lazy val generic = project
       })
   )
 
-// lazy val demo = project
-//   .in(file("demo"))
-//   .enablePlugins(AutomateHeaderPlugin)
-//   .dependsOn(core, generic)
-//   .settings(commonSettings)
-//   .settings(
-//     publish / skip := true,
-//     name := "gsp-graphql-demo",
-//     libraryDependencies ++= Seq(
-//       "org.typelevel"     %% "log4cats-slf4j"         % log4catsVersion,
-//       "ch.qos.logback"    %  "logback-classic"        % logbackVersion,
-//       "org.tpolecat"      %% "doobie-core"            % doobieVersion,
-//       "org.tpolecat"      %% "doobie-postgres"        % doobieVersion,
-//       "org.http4s"        %% "http4s-blaze-server"    % http4sVersion,
-//       "org.http4s"        %% "http4s-blaze-client"    % http4sVersion,
-//       "org.http4s"        %% "http4s-circe"           % http4sVersion,
-//       "org.http4s"        %% "http4s-dsl"             % http4sVersion
-//     )
-//   )
+lazy val demo = project
+  .in(file("demo"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .dependsOn(core, generic)
+  .settings(commonSettings)
+  .settings(
+    publish / skip := true,
+    name := "gsp-graphql-demo",
+    libraryDependencies ++= Seq(
+      "org.typelevel"     %% "log4cats-slf4j"         % log4catsVersion,
+      "ch.qos.logback"    %  "logback-classic"        % logbackVersion,
+      "org.tpolecat"      %% "doobie-core"            % doobieVersion,
+      "org.tpolecat"      %% "doobie-postgres"        % doobieVersion,
+      "org.http4s"        %% "http4s-blaze-server"    % http4sVersion,
+      "org.http4s"        %% "http4s-blaze-client"    % http4sVersion,
+      "org.http4s"        %% "http4s-circe"           % http4sVersion,
+      "org.http4s"        %% "http4s-dsl"             % http4sVersion
+    )
+  )
 
 lazy val docs = project
   .in(file("docs"))
