@@ -3,7 +3,7 @@ val catsVersion                 = "2.6.1"
 val catsEffectVersion           = "3.1.1"
 val catsTestkitScalaTestVersion = "2.1.5"
 val circeVersion                = "0.14.1"
-val doobieVersion               = "0.13.4"
+val doobieVersion               = "1.0.0-M5"
 val fs2Version                  = "3.0.6"
 val http4sVersion               = "0.22.0-RC1"
 val kindProjectorVersion        = "0.13.0"
@@ -119,21 +119,21 @@ lazy val sql = project
     )
   )
 
-// lazy val doobie = project
-//   .in(file("modules/doobie"))
-//   .enablePlugins(AutomateHeaderPlugin)
-//   .disablePlugins(RevolverPlugin)
-//   .dependsOn(sql % "test->test;compile->compile", circe)
-//   .settings(commonSettings)
-//   .settings(
-//     name := "gsp-graphql-doobie",
-//     Test / fork := true,
-//     Test / parallelExecution := false,
-//     libraryDependencies ++= Seq(
-//       "org.tpolecat" %% "doobie-core"           % doobieVersion,
-//       "org.tpolecat" %% "doobie-postgres-circe" % doobieVersion,
-//     )
-//   )
+lazy val doobie = project
+  .in(file("modules/doobie"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(sql % "test->test;compile->compile", circe)
+  .settings(commonSettings)
+  .settings(
+    name := "gsp-graphql-doobie",
+    Test / fork := true,
+    Test / parallelExecution := false,
+    libraryDependencies ++= Seq(
+      "org.tpolecat" %% "doobie-core"           % doobieVersion,
+      "org.tpolecat" %% "doobie-postgres-circe" % doobieVersion,
+    )
+  )
 
 lazy val skunk = project
   .in(file("modules/skunk"))

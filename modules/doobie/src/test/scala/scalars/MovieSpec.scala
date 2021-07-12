@@ -4,6 +4,7 @@
 package scalars
 
 import edu.gemini.grackle.syntax._
+import cats.effect.unsafe.implicits.global
 import utils.DatabaseSuite
 import grackle.test.SqlMovieSpec
 
