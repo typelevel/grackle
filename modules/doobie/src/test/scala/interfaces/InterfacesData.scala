@@ -5,13 +5,13 @@ package interfaces
 
 import cats.effect.Sync
 import cats.kernel.Eq
-import _root_.doobie.util.meta.Meta
-import _root_.doobie.util.transactor.Transactor
+import doobie.util.meta.Meta
+import doobie.util.transactor.Transactor
 import io.circe.Encoder
 
 import edu.gemini.grackle._
-import edu.gemini.grackle.doobie._
-import edu.gemini.grackle.syntax._
+import doobie._
+import syntax._
 
 trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
 
@@ -55,6 +55,7 @@ trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
         id: ID!
         entityType: EntityType!
         title: String
+        synopses: Synopses
         numberOfEpisodes: Int
         episodes: [Episode!]!
       }
@@ -97,15 +98,15 @@ trait InterfacesMapping[F[_]] extends DoobieMapping[F] {
           List(
             SqlField("id", entities.id, key = true),
             SqlField("entityType", entities.entityType, discriminator = true),
-            SqlField("title", entities.title)
+            SqlField("title", entities.title),
+            SqlObject("synopses")
           )
       ),
       ObjectMapping(
         tpe = FilmType,
         fieldMappings =
           List(
-            SqlField("rating", entities.filmRating),
-            SqlObject("synopses")
+            SqlField("rating", entities.filmRating)
           )
       ),
       ObjectMapping(

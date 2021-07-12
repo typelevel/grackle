@@ -4,26 +4,22 @@
 package scalars
 
 
-import java.time.Duration
-import java.time.LocalDate
-import java.time.LocalTime
-import java.time.ZonedDateTime
+import java.time.{Duration, LocalDate, LocalTime, ZonedDateTime}
 import java.util.UUID
 
 import scala.reflect.ClassTag
 import scala.util.Try
 
-import cats.Eq
-import cats.Order
+import cats.{Eq, Order}
 import cats.effect.Sync
 import cats.implicits._
 import doobie.Transactor
 import doobie.postgres.implicits._
 import doobie.util.meta.Meta
-import edu.gemini.grackle._
-import edu.gemini.grackle.syntax._
 import io.circe.Encoder
 
+import edu.gemini.grackle._
+import syntax._
 import doobie._
 import Query._
 import Path._
@@ -254,7 +250,7 @@ trait MovieMapping[F[_]] extends DoobieMapping[F] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("movieById", List(Binding("id", UUIDValue(id))), child) =>
-        Select("movieById", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
+        Select("movieById", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
       case Select("moviesByGenre", List(Binding("genre", GenreValue(genre))), child) =>
         Select("moviesByGenre", Nil, Filter(Eql(UniquePath(List("genre")), Const(genre)), child)).rightIor
       case Select("moviesReleasedBetween", List(Binding("from", DateValue(from)), Binding("to", DateValue(to))), child) =>

@@ -3,15 +3,14 @@
 
 package interfaces
 
-import cats.effect.Sync
+import cats.effect.{Resource, Sync}
 import cats.kernel.Eq
 import cats.syntax.all._
 import io.circe.Encoder
-import _root_.skunk.codec.all._
+import skunk.{Codec, Session}
+import skunk.codec.all._
+
 import edu.gemini.grackle._, skunk._, syntax._
-import _root_.skunk.Codec
-import cats.effect.Resource
-import _root_.skunk.Session
 
 trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
 
@@ -55,6 +54,7 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
         id: ID!
         entityType: EntityType!
         title: String
+        synopses: Synopses
         numberOfEpisodes: Int
         episodes: [Episode!]!
       }
@@ -97,15 +97,15 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
           List(
             SqlField("id", entities.id, key = true),
             SqlField("entityType", entities.entityType, discriminator = true),
-            SqlField("title", entities.title)
+            SqlField("title", entities.title),
+            SqlObject("synopses")
           )
       ),
       ObjectMapping(
         tpe = FilmType,
         fieldMappings =
           List(
-            SqlField("rating", entities.filmRating),
-            SqlObject("synopses")
+            SqlField("rating", entities.filmRating)
           )
       ),
       ObjectMapping(

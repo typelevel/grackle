@@ -3,19 +3,20 @@
 
 package subscription
 
-import _root_.skunk.codec.all._
-import _root_.skunk.implicits._
-import _root_.skunk.Session
 import cats.effect.{ Bracket, Resource, Sync }
 import cats.syntax.all._
+import skunk.Session
+import skunk.codec.all._
+import skunk.implicits._
+
 import edu.gemini.grackle._
-import edu.gemini.grackle.syntax._
-import edu.gemini.grackle.Path._
-import edu.gemini.grackle.Predicate._
-import edu.gemini.grackle.Query._
-import edu.gemini.grackle.QueryCompiler._
-import edu.gemini.grackle.skunk._
-import edu.gemini.grackle.Value._
+import syntax._
+import Path._
+import Predicate._
+import Query._
+import QueryCompiler._
+import skunk._
+import Value._
 
 trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
 
@@ -92,7 +93,7 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
               for {
                 s  <- fs2.Stream.resource(pool)
                 id <- s.channel(id"city_channel").listen(256).map(_.value.toInt)
-                qʹ  = Unique(Eql(UniquePath(List("id")), Const(id)), q)
+                qʹ  = Unique(Filter(Eql(UniquePath(List("id")), Const(id)), q))
               } yield Result((qʹ, e))
             }
           ),
@@ -103,7 +104,7 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("city", List(Binding("id", IntValue(id))), child) =>
-        Select("city", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
+        Select("city", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
     },
   ))
 }

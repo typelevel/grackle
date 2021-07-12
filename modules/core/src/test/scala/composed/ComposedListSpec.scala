@@ -66,7 +66,7 @@ object CollectionMapping extends ValueMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("collectionByName", List(Binding("name", StringValue(name))), child) =>
-        Select("collectionByName", Nil, Unique(Eql(UniquePath(List("name")), Const(name)), child)).rightIor
+        Select("collectionByName", Nil, Unique(Filter(Eql(UniquePath(List("name")), Const(name)), child))).rightIor
     }
   ))
 }
@@ -115,7 +115,7 @@ object ItemMapping extends ValueMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("itemById", List(Binding("id", IDValue(id))), child) =>
-        Select("itemById", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
+        Select("itemById", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
     }
   ))
 }
@@ -167,16 +167,16 @@ object ComposedListMapping extends Mapping[Id] {
   override val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {
       case Select("itemById", List(Binding("id", IDValue(id))), child) =>
-        Select("itemById", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
+        Select("itemById", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
       case Select("collectionByName", List(Binding("name", StringValue(name))), child) =>
-        Select("collectionByName", Nil, Unique(Eql(UniquePath(List("name")), Const(name)), child)).rightIor
+        Select("collectionByName", Nil, Unique(Filter(Eql(UniquePath(List("name")), Const(name)), child))).rightIor
     }
   ))
 
   def collectionItemJoin(c: Cursor, q: Query): Result[Query] =
     (c.focus, q) match {
       case (c: CollectionData.Collection, Select("items", _, child)) =>
-        GroupList(c.itemIds.map(id => Select("itemById", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)))).rightIor
+        GroupList(c.itemIds.map(id => Select("itemById", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))))).rightIor
       case _ =>
         mkErrorResult(s"Unexpected cursor focus type in collectionItemJoin")
     }

@@ -3,21 +3,23 @@
 
 package mutation
 
-import _root_.skunk.codec.all._
-import _root_.skunk.implicits._
-import _root_.skunk.Session
 import cats.data.IorT
 import cats.effect.{ Bracket, Resource, Sync }
 import cats.syntax.all._
-import edu.gemini.grackle._
-import edu.gemini.grackle.Path._
-import edu.gemini.grackle.Predicate._
-import edu.gemini.grackle.Query._
-import edu.gemini.grackle.QueryCompiler._
-import edu.gemini.grackle.skunk._
-import edu.gemini.grackle.Value._
-import grackle.test.SqlMutationSchema
 import fs2.Stream
+import skunk.codec.all._
+import skunk.implicits._
+import skunk.Session
+
+import edu.gemini.grackle._
+import Path._
+import Predicate._
+import Query._
+import QueryCompiler._
+import Value._
+import skunk._
+
+import grackle.test.SqlMutationSchema
 
 trait MutationSchema[F[_]] extends SkunkMapping[F] with SqlMutationSchema {
 
@@ -83,7 +85,7 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
                       """.query(int4)
                     s.prepare(q).use { ps =>
                       ps.unique(name ~ cc ~ pop).map { id =>
-                        (Unique(Eql(UniquePath(List("id")), Const(id)), child), e).rightIor
+                        (Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child)), e).rightIor
                       }
                     }
                   }
@@ -115,7 +117,7 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("city", List(Binding("id", IntValue(id))), child) =>
-        Select("city", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
+        Select("city", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
     },
     MutationType -> {
 
@@ -124,7 +126,7 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
           Cursor.Env("id" -> id, "population" -> pop),
           Select("updatePopulation", Nil,
             // We already know the final form of the query so we can rewrite it here.
-            Unique(Eql(UniquePath(List("id")), Const(id)), child)
+            Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))
           )
         ).rightIor
 

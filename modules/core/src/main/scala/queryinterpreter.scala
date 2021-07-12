@@ -10,12 +10,12 @@ import scala.jdk.CollectionConverters._
 import cats.Monoid
 import cats.data.{ Chain, Ior, IorT, Kleisli, NonEmptyChain }
 import cats.implicits._
+import fs2.Stream
 import io.circe.Json
 import io.circe.syntax._
-import fs2.Stream
 
-import Cursor.Env
-import Query._, Predicate.In
+import Cursor.{Context, Env}
+import Query._
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
 
 class QueryInterpreter[F[_]](mapping: Mapping[F]) {
@@ -101,48 +101,26 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
    *
    *  Errors are accumulated on the `Left` of the result.
    */
-  def runRootValue0(query: Query, path: List[String], rootTpe: Type, env: Env): Stream[F,Result[ProtoJson]] =
+  def runRootValue0(query: Query, context: Context, env: Env): Stream[F,Result[ProtoJson]] =
     query match {
-      case Context(cpath, child) =>
-        runRootValue0(child, cpath ++ path, rootTpe, env)
-
       case Environment(childEnv: Env, child: Query) =>
-        runRootValue0(child, path, rootTpe, env.add(childEnv))
-
-      case Select("__staged", _, child) =>
-        (for {
-          qc     <- IorT(mapping.rootCursor(path, rootTpe, "__staged", child, env))
-          value  <- IorT(runValue(Wrap("__staged", qc._1), rootTpe.list, qc._2).pure[Stream[F,*]])
-        } yield
-          ProtoJson.unpackObject(value) match {
-            case Some(List(unpacked)) => unpacked
-            case _ => ProtoJson.fromValues(Nil)
-          }
-        ).value
+        runRootValue0(child, context, env.add(childEnv))
 
       case PossiblyRenamedSelect(Select(fieldName, _, child), resultName) =>
         (for {
-          fieldTpe <- IorT.fromOption[Stream[F,*]](rootTpe.field(fieldName), QueryInterpreter.mkOneError(s"Root type $rootTpe has no field '$fieldName'"))
-          qc       <- IorT(mapping.rootCursor(path, rootTpe, fieldName, child, env))
+          fieldTpe <- IorT.fromOption[Stream[F,*]](context.tpe.field(fieldName), QueryInterpreter.mkOneError(s"Root type ${context.tpe} has no field '$fieldName'"))
+          qc       <- IorT(mapping.rootCursor(context, fieldName, Some(resultName), child, env))
           value    <- IorT(runValue(Wrap(resultName, qc._1), fieldTpe, qc._2).pure[Stream[F,*]])
         } yield value).value
 
-      case GroupBy(disc, Select(fieldName, args, child)) =>
-        (for {
-          elemTpe <- IorT.fromOption[Stream[F,*]](rootTpe.item, QueryInterpreter.mkOneError(s"Root type $rootTpe is not a list type"))
-          qc      <- IorT(mapping.rootCursor(path, elemTpe, fieldName, child, env))
-          q0      =  GroupBy(disc, Select(fieldName, args, qc._1))
-          value   <- IorT(runValue(q0, rootTpe, qc._2).pure[Stream[F,*]])
-        } yield value).value
-
       case Wrap(_, Component(mapping, _, child)) =>
-        mapping.asInstanceOf[Mapping[F]].interpreter.runRootValue(child, rootTpe, env)
+        mapping.asInstanceOf[Mapping[F]].interpreter.runRootValue(child, context.tpe, env)
 
       case _ =>
         mkErrorResult(s"Bad root query '${query.render}' in QueryInterpreter").pure[Stream[F,*]]
     }
 
-  def runRootValue(query: Query, rootTpe: Type, env: Env): Stream[F, Result[ProtoJson]] = runRootValue0(query, Nil, rootTpe, env)
+  def runRootValue(query: Query, rootTpe: Type, env: Env): Stream[F, Result[ProtoJson]] = runRootValue0(query, Context(Nil, Nil, rootTpe), env)
 
   /** Interpret multiple queries with respect to their expected types.
    *
@@ -236,7 +214,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
         case (PossiblyRenamedSelect(Select(fieldName, _, child), resultName), tpe) =>
           for {
             fieldTpe <- tpe.field(fieldName).toRightIor(QueryInterpreter.mkOneError(s"Type $tpe has no field '$fieldName'"))
-            c        <- cursor.field(fieldName)
+            c        <- cursor.field(fieldName, Some(resultName))
             value    <- runValue(child, fieldTpe, c)
           } yield List((resultName, value))
 
@@ -298,9 +276,6 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
       }
 
       (query, tpe.dealias) match {
-        case (Context(_, child), tpe) =>
-          runValue(child, tpe, cursor)
-
         case (Environment(childEnv: Env, child: Query), tpe) =>
           runValue(child, tpe, cursor.withEnv(childEnv))
 
@@ -354,7 +329,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             }
           else stage(cursor)
 
-        case (Unique(pred, child), _) =>
+        case (Unique(Filter(pred, child)), _) =>
           val cursors =
             if (cursor.isNullable)
               cursor.asNullable.flatMap {
@@ -372,46 +347,24 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             }
           )
 
-        case (GroupBy(discriminator, Select(_, _, child)), ListType(ltpe)) =>
-          val cursors =
-            if (cursor.isNullable)
-              cursor.asNullable.flatMap {
-                case None => Nil.rightIor
-                case Some(c) => c.asList
-              }
-            else cursor.asList
+        case (Unique(child), _) =>
+          val oc =
+            if (cursor.isNullable) cursor.asNullable
+            else Some(cursor).rightIor
 
-          val grouped: Result[List[List[Cursor]]] = cursors.map(cs => discriminator.group(cs))
-
-          object PArr {
-            def unapply(p: ProtoJson): Option[List[ProtoJson]] =
-              p match {
-                case ProtoJson.ProtoArray(elems) => Some(elems)
-                case j: Json if j.isArray => j.asArray.map(ja => ja.toList.asInstanceOf[List[ProtoJson]])
-                case _ => None
+          oc.flatMap {
+            case Some(c) =>
+              runValue(child, tpe.nonNull.list, c).flatMap { pj =>
+                ProtoJson.unpackList(pj).map {
+                  case Nil if tpe.isNullable => ProtoJson.fromJson(Json.Null).rightIor
+                  case Nil => mkErrorResult(s"No match")
+                  case List(elem) => elem.rightIor
+                  case _ => mkErrorResult(s"Multiple matches")
+                }.getOrElse(mkErrorResult(s"Unique result of the wrong shape: $pj"))
               }
+            case None =>
+              ProtoJson.fromJson(Json.Null).rightIor
           }
-
-          val gr: Result[List[ProtoJson]] = grouped.flatMap(_.traverse { cs =>
-            if(cs.isEmpty) {
-              // If this group is empty we need to evaluate the continuation
-              // relative to an empty cursor to create the appropriate empty
-              // child
-              child match {
-                case Filter(In(_, _), cont) => runValue(cont, ltpe, Cursor.EmptyCursor(Nil, ltpe))
-                case _ => ProtoJson.fromJson(Json.Null).rightIor
-              }
-            } else
-              runList(child, ltpe, cs, Kleisli(_.rightIor)).flatMap { orig =>
-                orig match {
-                  case PArr(Nil) => ProtoJson.fromJson(Json.Null).rightIor
-                  case PArr(List(value)) => value.rightIor
-                  case pj => mkErrorResult(s"Grouped result of wrong shape: $pj")
-                }
-              }
-          })
-
-          gr.map(ProtoJson.fromValues)
 
         case (_, ListType(tpe)) =>
           cursor.asList.flatMap { cursors =>

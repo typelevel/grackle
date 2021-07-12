@@ -4,13 +4,14 @@
 package edu.gemini.grackle
 package skunk
 
-import _root_.skunk.AppliedFragment
 import cats.Applicative
 import cats.implicits._
-import edu.gemini.grackle.QueryInterpreter.ProtoJson
-import edu.gemini.grackle.sql._
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
+import _root_.skunk.AppliedFragment
+
+import QueryInterpreter.ProtoJson
+import sql._
 
 case class SkunkStats(
   query: Query,
@@ -24,10 +25,8 @@ object SkunkMonitor {
 
   def noopMonitor[F[_]: Applicative]: SkunkMonitor[F] =
     new SkunkMonitor[F] {
-      def stageStarted: F[Unit] = ().pure[F]
       def queryMapped(query: Query, fragment: AppliedFragment, table: List[Row]): F[Unit] = ().pure[F]
       def resultComputed(result: Result[ProtoJson]): F[Unit] = ().pure[F]
-      def stageCompleted: F[Unit] = ().pure[F]
     }
 
   def statsMonitor[F[_]: Sync]: F[SqlStatsMonitor[F, AppliedFragment]] =

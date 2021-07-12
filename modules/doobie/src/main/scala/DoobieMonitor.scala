@@ -26,17 +26,12 @@ object DoobieMonitor {
 
   def noopMonitor[F[_]: Applicative]: DoobieMonitor[F] =
     new DoobieMonitor[F] {
-      def stageStarted: F[Unit] = ().pure[F]
       def queryMapped(query: Query, fragment: Fragment, table: List[Row]): F[Unit] = ().pure[F]
       def resultComputed(result: Result[ProtoJson]): F[Unit] = ().pure[F]
-      def stageCompleted: F[Unit] = ().pure[F]
     }
 
   def loggerMonitor[F[_]](logger: Logger[F]): DoobieMonitor[F] =
     new DoobieMonitor[F] {
-
-      def stageStarted: F[Unit] =
-        logger.info(s"stage started")
 
       def queryMapped(query: Query, fragment: Fragment, table: List[Row]): F[Unit] =
         logger.info(
@@ -48,9 +43,6 @@ object DoobieMonitor {
 
       def resultComputed(result: Result[ProtoJson]): F[Unit] =
         logger.info(s"result: $result")
-
-      def stageCompleted: F[Unit] =
-        logger.info(s"stage completed")
     }
 
   def statsMonitor[F[_]: Sync]: F[SqlStatsMonitor[F, Fragment]] =

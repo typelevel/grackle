@@ -3,11 +3,14 @@
 
 package grackle.test
 
-import org.scalatest.funsuite.AnyFunSuite
-import edu.gemini.grackle.QueryExecutor
 import cats.effect.IO
 import io.circe.Json
-import edu.gemini.grackle.syntax._
+import org.scalatest.funsuite.AnyFunSuite
+
+import edu.gemini.grackle._
+import syntax._
+
+import GraphQLResponseTests.assertWeaklyEqual
 
 trait SqlMutationSchema {
 
@@ -42,7 +45,7 @@ trait SqlMutationSpec extends AnyFunSuite {
   def mapping: QueryExecutor[IO, Json]
 
   def check(query: String, expected: Json) =
-    assert(mapping.compileAndRun(query).unsafeRunSync() == expected)
+    assertWeaklyEqual(mapping.compileAndRun(query).unsafeRunSync(), expected)
 
   // In this test the query is fully elaborated prior to execution.
   test("simple update") {

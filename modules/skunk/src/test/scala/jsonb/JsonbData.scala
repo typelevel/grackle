@@ -3,16 +3,15 @@
 
 package jsonb
 
-import cats.effect.Sync
+import cats.effect.{Resource, Sync}
 import cats.implicits._
+import skunk.Session
+import skunk.circe.codec.all._
+import skunk.codec.all._
 
 import edu.gemini.grackle._, skunk._, syntax._
 import Query._, Path._, Predicate._, Value._
 import QueryCompiler._
-import _root_.skunk.codec.all._
-import _root_.skunk.circe.codec.all._
-import cats.effect.Resource
-import _root_.skunk.Session
 
 trait JsonbMapping[F[_]] extends SkunkMapping[F] {
 
@@ -88,7 +87,7 @@ trait JsonbMapping[F[_]] extends SkunkMapping[F] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("record", List(Binding("id", IntValue(id))), child) =>
-        Select("record", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
+        Select("record", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
     }
   ))
 }

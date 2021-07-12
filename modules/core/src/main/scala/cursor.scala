@@ -9,7 +9,7 @@ import cats.data.Ior
 import cats.implicits._
 import io.circe.Json
 
-import Cursor.{ cast, Env }
+import Cursor.{ cast, Context, Env }
 import QueryInterpreter.{ mkErrorResult, mkOneError }
 
 /**
@@ -20,11 +20,17 @@ trait Cursor {
   def parent: Option[Cursor]
   /** The value at the position represented by this `Cursor`. */
   def focus: Any
-  /** The GraphQL type of the value at the position represented by this `Cursor`. */
-  def tpe: Type
+
+  def context: Context
 
   /** The selection path from the root */
-  def path: List[String]
+  def path: List[String] = context.path
+
+  /** The selection path from the root modified by query aliases */
+  def resultPath: List[String] = context.resultPath
+
+  /** The GraphQL type of the value at the position represented by this `Cursor`. */
+  def tpe: Type = context.tpe
 
   def withEnv(env: Env): Cursor
   def env: Env
@@ -36,7 +42,7 @@ trait Cursor {
    * an error or the left hand side otherwise.
    */
   def as[T: ClassTag]: Result[T] =
-    cast[T](focus).toRightIor(mkOneError(s"Expected value of type ${classTag[T]} for focus of type $tpe, found $focus"))
+    cast[T](focus).toRightIor(mkOneError(s"Expected value of type ${classTag[T]} for focus of type $tpe at path $path, found $focus"))
 
   /** Is the value at this `Cursor` of a scalar or enum type? */
   def isLeaf: Boolean
@@ -86,14 +92,14 @@ trait Cursor {
    * value at this `Cursor`, or an error on the left hand side if there is no
    * such field.
    */
-  def field(fieldName: String): Result[Cursor]
+  def field(fieldName: String, resultName: Option[String]): Result[Cursor]
 
   /**
    * Yield the value of the field `fieldName` of this `Cursor` as a value of
    * type `T` if possible, an error or the left hand side otherwise.
    */
   def fieldAs[T: ClassTag](fieldName: String): Result[T] =
-    field(fieldName).flatMap(_.as[T])
+    field(fieldName, None).flatMap(_.as[T])
 
   def isNull: Boolean =
     isNullable && (asNullable match {
@@ -126,7 +132,7 @@ trait Cursor {
         case Ior.Left(es) => es.leftIor
         case Ior.Both(es, _) => es.leftIor
       }
-    else field(fieldName)
+    else field(fieldName, None)
 
   /** Does the value at this `Cursor` have a field identified by the path `fns`? */
   def hasPath(fns: List[String]): Boolean = fns match {
@@ -198,7 +204,7 @@ trait Cursor {
           case other => other
         }
       else
-        field(fieldName) match {
+        field(fieldName, None) match {
           case Ior.Right(c) => c.listPath(rest)
           case Ior.Left(es) => es.leftIor
           case Ior.Both(es, _) => es.leftIor
@@ -217,6 +223,54 @@ trait Cursor {
 }
 
 object Cursor {
+  /**
+   * Context represents a position in the output tree in terms of,
+   * 1) the path through the schema to the position
+   * 2) the path through the schema with query aliases applied
+   * 3) the type of the element at the position
+   */
+  case class Context(
+    path: List[String],
+    resultPath: List[String],
+    tpe: Type
+  ) {
+    assert(path.sizeCompare(resultPath) == 0)
+
+    def asType(tpe: Type): Context = copy(tpe = tpe)
+
+    def forField(fieldName: String, resultName: String): Option[Context] =
+      tpe.underlyingField(fieldName).map { fieldTpe =>
+        Context(fieldName :: path, resultName :: resultPath, fieldTpe)
+      }
+
+    def forField(fieldName: String, resultName: Option[String]): Option[Context] =
+      tpe.underlyingField(fieldName).map { fieldTpe =>
+        Context(fieldName :: path, resultName.getOrElse(fieldName) :: resultPath, fieldTpe)
+      }
+
+    def forPath(path0: List[String]): Option[Context] =
+      tpe.underlyingObject.flatMap { obj =>
+        obj.path(path0).map { fieldTpe =>
+          Context(path.reverse_:::(path0), resultPath.reverse_:::(path0), fieldTpe)
+        }
+      }
+
+    def forFieldOrAttribute(fieldName: String, resultName: Option[String]): Context = {
+      val fieldTpe = tpe.underlyingField(fieldName).getOrElse(ScalarType.AttributeType)
+      Context(fieldName :: path, resultName.getOrElse(fieldName) :: resultPath, fieldTpe)
+    }
+  }
+
+  object Context {
+    def apply(fieldName: String, resultName: Option[String], tpe: Type): Context =
+      new Context(List(fieldName), List(resultName.getOrElse(fieldName)), tpe)
+
+    def apply(fieldName: String, resultName: Option[String]): Context =
+      new Context(List(fieldName), List(resultName.getOrElse(fieldName)), ScalarType.AttributeType)
+
+    val empty = Context(Nil, Nil, ScalarType.AttributeType)
+  }
+
   def flatten(c: Cursor): Result[List[Cursor]] =
     if(c.isList) c.asList.flatMap(flatten)
     else if(c.isNullable) c.asNullable.flatMap(oc => flatten(oc.toList))
@@ -224,42 +278,6 @@ object Cursor {
 
   def flatten(cs: List[Cursor]): Result[List[Cursor]] =
     cs.flatTraverse(flatten)
-
-  case class EmptyCursor(
-    path: List[String],
-    tpe:  Type,
-    env:  Env = Env.empty
-  ) extends Cursor {
-    def parent: Option[Cursor] = None
-    def focus: Any = ???
-    def withEnv(env: Env): Cursor = copy(env = env)
-
-    def isLeaf: Boolean = false
-    def asLeaf: Result[Json] =
-      mkErrorResult(s"Expected Scalar type, found empty $tpe")
-
-    def isList: Boolean = tpe.isList
-    def asList: Result[List[Cursor]] = tpe match {
-      case _: ListType => Nil.rightIor
-      case _ => mkErrorResult(s"Expected List type, found $tpe")
-    }
-
-    def isNullable: Boolean = tpe.isNullable
-    def asNullable: Result[Option[Cursor]] = tpe match {
-      case _: NullableType => None.rightIor
-      case _ => mkErrorResult(s"Expected Nullable type, found $tpe")
-    }
-
-    def narrowsTo(subtpe: TypeRef): Boolean = false
-    def narrow(subtpe: TypeRef): Result[Cursor] =
-      mkErrorResult(s"Empty cursor of static type $tpe cannot be narrowed to $subtpe")
-
-    def hasField(fieldName: String): Boolean =
-      tpe.hasField(fieldName)
-
-    def field(fieldName: String): Result[Cursor] =
-      tpe.field(fieldName).map(fieldTpe => copy(tpe = fieldTpe, path = fieldName :: path)).toRightIor(mkOneError(s"Type $tpe has no field '$fieldName'"))
-  }
 
   sealed trait Env {
     def add[T](items: (String, T)*): Env

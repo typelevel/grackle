@@ -7,20 +7,20 @@ import scala.reflect.ClassTag
 
 import cats.Monad
 import cats.implicits._
-import io.circe.Json
 import fs2.Stream
+import io.circe.Json
+import org.tpolecat.sourcepos.SourcePos
 
-import Cursor.Env
+import Cursor.{Context, Env}
 import QueryInterpreter.{mkErrorResult, mkOneError}
 import ScalarType._
-import org.tpolecat.sourcepos.SourcePos
 
 abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
 
   case class ValueRoot(otpe: Option[Type], fieldName: String, root: F[Any], mutation: Mutation)(
     implicit val pos: SourcePos
   ) extends RootMapping {
-    def cursor(query: Query, env: Env): Stream[F,Result[Cursor]] = {
+    def cursor(query: Query, env: Env, resultName: Option[String]): Stream[F,Result[(Query, Cursor)]] = {
       (for {
         tpe      <- otpe
         fieldTpe <- tpe.field(fieldName)
@@ -29,8 +29,8 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
           case _: Query.Unique => fieldTpe.nonNull.list
           case _ => fieldTpe
         }
-        Stream.eval(root).map(r => Result(ValueCursor(Nil, cursorTpe, r, None, env)))
-      }).getOrElse(mkErrorResult[Cursor](s"Type ${otpe.getOrElse("unspecified type")} has no field '$fieldName'").pure[Stream[F,*]])
+        Stream.eval(root).map(r => Result((query, ValueCursor(Context(fieldName, resultName, cursorTpe), r, None, env))))
+      }).getOrElse(mkErrorResult[(Query, Cursor)](s"Type ${otpe.getOrElse("unspecified type")} has no field '$fieldName'").pure[Stream[F,*]])
     }
 
     def withParent(tpe: Type): ValueRoot =
@@ -79,16 +79,15 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
     new ValueObjectMapping(tpe, fieldMappings.map(_.withParent(tpe)), classTag)
 
   case class ValueCursor(
-    path:   List[String],
-    tpe:    Type,
+    context: Context,
     focus:  Any,
     parent: Option[Cursor],
     env:    Env
   ) extends Cursor {
     def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
-    def mkChild(path: List[String] = path, tpe: Type = tpe, focus: Any = focus): ValueCursor =
-      ValueCursor(path, tpe, focus, Some(this), Env.empty)
+    def mkChild(context: Context = context, focus: Any = focus): ValueCursor =
+      ValueCursor(context, focus, Some(this), Env.empty)
 
     def isLeaf: Boolean =
       tpe.dealias match {
@@ -120,7 +119,7 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
     }
 
     def asList: Result[List[Cursor]] = (tpe, focus) match {
-      case (ListType(tpe), it: List[_]) => it.map(f => mkChild(tpe = tpe, focus = f)).rightIor
+      case (ListType(tpe), it: List[_]) => it.map(f => mkChild(context.asType(tpe), f)).rightIor
       case _ => mkErrorResult(s"Expected List type, found $tpe")
     }
 
@@ -130,14 +129,14 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
     }
 
     def asNullable: Result[Option[Cursor]] = (tpe, focus) match {
-      case (NullableType(tpe), o: Option[_]) => o.map(f => mkChild(tpe = tpe, focus = f)).rightIor
+      case (NullableType(tpe), o: Option[_]) => o.map(f => mkChild(context.asType(tpe), f)).rightIor
       case (_: NullableType, _) => mkErrorResult(s"Found non-nullable $focus for $tpe")
       case _ => mkErrorResult(s"Expected Nullable type, found $focus for $tpe")
     }
 
     def narrowsTo(subtpe: TypeRef): Boolean =
       subtpe <:< tpe &&
-        objectMapping(path, subtpe).map {
+        objectMapping(context.asType(subtpe)).map {
           case ValueObjectMapping(_, _, classTag) =>
             classTag.runtimeClass.isInstance(focus)
           case _ => false
@@ -146,20 +145,20 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
 
     def narrow(subtpe: TypeRef): Result[Cursor] =
       if (narrowsTo(subtpe))
-        mkChild(tpe = subtpe).rightIor
+        mkChild(context.asType(subtpe)).rightIor
       else
         mkErrorResult(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
 
     def hasField(fieldName: String): Boolean =
-      fieldMapping(path, tpe, fieldName).isDefined
+      fieldMapping(context, fieldName).isDefined
 
-    def field(fieldName: String): Result[Cursor] = {
-      val fieldTpe = tpe.field(fieldName).getOrElse(AttributeType)
-      fieldMapping(path, tpe, fieldName) match {
+    def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
+      val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
+      fieldMapping(context, fieldName) match {
         case Some(ValueField(_, f, _)) =>
-          mkChild(tpe = fieldTpe, focus = f.asInstanceOf[Any => Any](focus), path = fieldName :: path).rightIor
+          mkChild(fieldContext, f.asInstanceOf[Any => Any](focus)).rightIor
         case Some(CursorField(_, f, _, _, _)) =>
-          f(this).map(res => mkChild(tpe = fieldTpe, focus = res))
+          f(this).map(res => mkChild(fieldContext, res))
         case _ =>
           mkErrorResult(s"No field '$fieldName' for type $tpe")
       }

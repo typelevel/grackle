@@ -3,17 +3,17 @@
 
 package grackle.test
 
-import edu.gemini.grackle.syntax._
-import org.scalatest.funsuite.AnyFunSuite
-import edu.gemini.grackle.QueryExecutor
 import cats.effect.IO
 import io.circe.Json
-import edu.gemini.grackle.sql.Like
-import edu.gemini.grackle.sql.SqlStatsMonitor
-import edu.gemini.grackle.sql.SqlMonitor
-import edu.gemini.grackle.Query
-import edu.gemini.grackle.Path._
-import edu.gemini.grackle.Predicate._
+import org.scalatest.funsuite.AnyFunSuite
+
+import edu.gemini.grackle._
+import Path._
+import Predicate._
+import sql.{Like, SqlMonitor, SqlStatsMonitor}
+import syntax._
+
+import GraphQLResponseTests.assertWeaklyEqual
 
 /** Tests that confirm the compiler is writing the queries we want. */
 trait SqlWorldCompilerSpec extends AnyFunSuite {
@@ -60,12 +60,14 @@ trait SqlWorldCompilerSpec extends AnyFunSuite {
 
     val (res, stats) = prog.unsafeRunSync()
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
+
+    //println(stats.head.sql)
 
     assert(
       stats == List(
         SqlStatsMonitor.SqlStats(
-          Query.Unique(Eql(UniquePath(List("code")),Const("GBR")),Query.Select("name",List(),Query.Empty)),
+          Query.Unique(Query.Filter(Eql(UniquePath(List("code")),Const("GBR")),Query.Select("name",List(),Query.Empty))),
           simpleRestrictedQuerySql,
           List("GBR"),
           1,
@@ -116,7 +118,9 @@ trait SqlWorldCompilerSpec extends AnyFunSuite {
 
     val (res, stats) = prog.unsafeRunSync()
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
+
+    //println(stats.head.sql)
 
     assert(
       stats == List(

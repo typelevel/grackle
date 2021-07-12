@@ -3,12 +3,14 @@
 
 package grackle.test
 
-import edu.gemini.grackle.syntax._
-
-import org.scalatest.funsuite.AnyFunSuite
-import edu.gemini.grackle.QueryExecutor
 import cats.effect.IO
 import io.circe.Json
+import org.scalatest.funsuite.AnyFunSuite
+
+import edu.gemini.grackle._
+import syntax._
+
+import GraphQLResponseTests.assertWeaklyEqual
 
 trait SqlEmbeddingSpec extends AnyFunSuite {
   def mapping: QueryExecutor[IO, Json]
@@ -59,7 +61,7 @@ trait SqlEmbeddingSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("simple embedded query (2)") {
@@ -108,7 +110,7 @@ trait SqlEmbeddingSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("Multiply embedded query") {
@@ -187,7 +189,7 @@ trait SqlEmbeddingSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("nested embedded query") {
@@ -312,6 +314,6 @@ trait SqlEmbeddingSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 }

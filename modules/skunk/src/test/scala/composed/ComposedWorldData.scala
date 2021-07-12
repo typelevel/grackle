@@ -5,16 +5,15 @@ package composed
 
 import cats.Monad
 import cats.data.Ior
-import cats.effect.Sync
+import cats.effect.{Resource, Sync}
 import cats.implicits._
+import skunk.Session
 
 import edu.gemini.grackle._, skunk._, syntax._
-import edu.gemini.grackle.sql.Like
 import Query._, Path._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.mkErrorResult
-import cats.effect.Resource
-import _root_.skunk.Session
+import sql.Like
 
 /* Currency component */
 
@@ -310,7 +309,7 @@ class ComposedMapping[F[_] : Monad]
   override val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {
       case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Eql(UniquePath(List("code")), Const(code)), child)).rightIor
+        Select("country", Nil, Unique(Filter(Eql(UniquePath(List("code")), Const(code)), child))).rightIor
       case Select("countries", _, child) =>
         Select("countries", Nil, child).rightIor
       case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>

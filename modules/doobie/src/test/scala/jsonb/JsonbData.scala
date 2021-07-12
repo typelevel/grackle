@@ -3,18 +3,16 @@
 
 package jsonb
 
-import _root_.doobie.Get
-import _root_.doobie.Meta
-import _root_.doobie.Put
-import _root_.doobie.postgres.circe.jsonb.implicits._
-import _root_.doobie.util.transactor.Transactor
+import doobie.{Get, Meta, Put}
+import doobie.postgres.circe.jsonb.implicits._
+import doobie.util.transactor.Transactor
 import cats.effect.Sync
 import cats.implicits._
 import io.circe.Json
 
 import edu.gemini.grackle._
-import edu.gemini.grackle.doobie._
-import edu.gemini.grackle.syntax._
+import doobie._
+import syntax._
 
 import Query._
 import Path._
@@ -96,7 +94,7 @@ trait JsonbMapping[F[_]] extends DoobieMapping[F] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("record", List(Binding("id", IntValue(id))), child) =>
-        Select("record", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
+        Select("record", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
     }
   ))
 }

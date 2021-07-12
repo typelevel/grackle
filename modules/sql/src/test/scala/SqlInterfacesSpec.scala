@@ -3,12 +3,14 @@
 
 package grackle.test
 
-import edu.gemini.grackle.syntax._
-
-import org.scalatest.funsuite.AnyFunSuite
-import edu.gemini.grackle.QueryExecutor
 import cats.effect.IO
 import io.circe.Json
+import org.scalatest.funsuite.AnyFunSuite
+
+import edu.gemini.grackle._
+import syntax._
+
+import GraphQLResponseTests.assertWeaklyEqual
 
 trait SqlInterfacesSpec extends AnyFunSuite {
   def mapping: QueryExecutor[IO, Json]
@@ -94,7 +96,7 @@ trait SqlInterfacesSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("interface query with fragment") {
@@ -162,7 +164,7 @@ trait SqlInterfacesSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("interface query with fragment, no explicit discriminator") {
@@ -223,7 +225,7 @@ trait SqlInterfacesSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("interface query with introspection") {
@@ -286,7 +288,7 @@ trait SqlInterfacesSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("interface query with subobject list") {
@@ -378,7 +380,7 @@ trait SqlInterfacesSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("interface query with subobject list and embedded subobjects") {
@@ -471,7 +473,7 @@ trait SqlInterfacesSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("interface query with only introspection fields") {
@@ -513,6 +515,6 @@ trait SqlInterfacesSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 }

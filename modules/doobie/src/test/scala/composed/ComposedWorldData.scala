@@ -309,7 +309,7 @@ class ComposedMapping[F[_] : Monad]
   override val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {
       case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Eql(UniquePath(List("code")), Const(code)), child)).rightIor
+        Select("country", Nil, Unique(Filter(Eql(UniquePath(List("code")), Const(code)), child))).rightIor
       case Select("countries", _, child) =>
         Select("countries", Nil, child).rightIor
       case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>

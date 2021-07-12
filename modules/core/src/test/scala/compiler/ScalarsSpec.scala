@@ -7,9 +7,8 @@ import java.time.{Duration, LocalDate, LocalTime, ZonedDateTime}
 import java.util.UUID
 import scala.util.Try
 
-import cats.{Eq, Id, Order}
+import cats.{Eq, Id, Order, catsInstancesForId}
 import cats.implicits._
-import cats.catsInstancesForId
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle._
@@ -194,7 +193,7 @@ object MovieMapping extends ValueMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("movieById", List(Binding("id", UUIDValue(id))), child) =>
-        Select("movieById", Nil, Unique(Eql(UniquePath(List("id")), Const(id)), child)).rightIor
+        Select("movieById", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
       case Select("moviesByGenre", List(Binding("genre", GenreValue(genre))), child) =>
         Select("moviesByGenre", Nil, Filter(Eql(UniquePath(List("genre")), Const(genre)), child)).rightIor
       case Select("moviesReleasedBetween", List(Binding("from", DateValue(from)), Binding("to", DateValue(to))), child) =>

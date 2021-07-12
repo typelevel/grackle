@@ -3,12 +3,14 @@
 
 package grackle.test
 
-import edu.gemini.grackle.syntax._
-
-import org.scalatest.funsuite.AnyFunSuite
-import edu.gemini.grackle.QueryExecutor
 import cats.effect.IO
 import io.circe.Json
+import org.scalatest.funsuite.AnyFunSuite
+
+import edu.gemini.grackle._
+import syntax._
+
+import GraphQLResponseTests.assertWeaklyEqual
 
 trait SqlComposedWorldSpec extends AnyFunSuite {
   def mapping: QueryExecutor[IO, Json]
@@ -45,7 +47,7 @@ trait SqlComposedWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("simple multiple nested query") {
@@ -100,7 +102,7 @@ trait SqlComposedWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("composed query with introspection") {
@@ -139,6 +141,6 @@ trait SqlComposedWorldSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 }

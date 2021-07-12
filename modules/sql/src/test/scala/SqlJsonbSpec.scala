@@ -3,12 +3,14 @@
 
 package grackle.test
 
-import edu.gemini.grackle.syntax._
-
-import org.scalatest.funsuite.AnyFunSuite
-import edu.gemini.grackle.QueryExecutor
-import cats.effect.IO
 import io.circe.Json
+import cats.effect.IO
+import org.scalatest.funsuite.AnyFunSuite
+
+import edu.gemini.grackle._
+import syntax._
+
+import GraphQLResponseTests.assertWeaklyEqual
 
 trait SqlJsonbSpec extends AnyFunSuite {
 
@@ -51,7 +53,7 @@ trait SqlJsonbSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("enums") {
@@ -92,7 +94,7 @@ trait SqlJsonbSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("objects") {
@@ -127,7 +129,7 @@ trait SqlJsonbSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("arrays") {
@@ -191,7 +193,7 @@ trait SqlJsonbSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("fragments") {
@@ -237,7 +239,7 @@ trait SqlJsonbSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 
   test("introspection") {
@@ -286,6 +288,6 @@ trait SqlJsonbSpec extends AnyFunSuite {
     val res = mapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
-    assert(res == expected)
+    assertWeaklyEqual(res, expected)
   }
 }

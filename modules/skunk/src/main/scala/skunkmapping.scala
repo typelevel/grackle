@@ -4,16 +4,17 @@
 package edu.gemini.grackle
 package skunk
 
-import _root_.skunk.{ AppliedFragment, Decoder, Session, Fragment => SFragment }
-import _root_.skunk.codec.all.{ bool, varchar, int4, float8 }
-import _root_.skunk.implicits._
+import scala.util.control.NonFatal
+
 import cats.Reducible
 import cats.effect.{ Resource, Sync }
 import cats.implicits._
-import edu.gemini.grackle.sql._
-import scala.util.control.NonFatal
-import scala.annotation.unchecked.uncheckedVariance
+import _root_.skunk.{ AppliedFragment, Decoder, Session, Fragment => SFragment }
+import _root_.skunk.codec.all.{ bool, varchar, int4, float8 }
+import _root_.skunk.implicits._
 import org.tpolecat.typename.TypeName
+
+import edu.gemini.grackle.sql._
 
 abstract class SkunkMapping[F[_]: Sync](
   val pool:    Resource[F, Session[F]],
@@ -21,11 +22,11 @@ abstract class SkunkMapping[F[_]: Sync](
 ) extends SqlMapping[F] { outer =>
 
   // Grackle needs to know about codecs, encoders, and fragments.
-  type Codec[A]   = _root_.skunk.Codec[A]
-  type Encoder[-A] = _root_.skunk.Encoder[A] @uncheckedVariance
-  type Fragment   = _root_.skunk.AppliedFragment
+  type Codec    = _root_.skunk.Codec[_]
+  type Encoder  = _root_.skunk.Encoder[_]
+  type Fragment = _root_.skunk.AppliedFragment
 
-  def toEncoder[A](c: Codec[A]): Encoder[A] = c
+  def toEncoder(c: Codec): Encoder = c
 
   // Also we need to know how to encode the basic GraphQL types.
   def booleanEncoder = bool
@@ -34,8 +35,8 @@ abstract class SkunkMapping[F[_]: Sync](
   def intEncoder     = int4
 
   class TableDef(name: String) {
-    def col[A : TypeName](colName: String, codec: Codec[A]): ColumnRef =
-      ColumnRef(name, colName, codec)
+    def col[T: TypeName](colName: String, codec: _root_.skunk.Codec[T]): ColumnRef =
+      ColumnRef[T](name, colName, codec)
   }
 
   // We need to demonstrate that our `Fragment` type has certain compositional properties.
@@ -46,8 +47,8 @@ abstract class SkunkMapping[F[_]: Sync](
 
       // N.B. the casts here are due to a bug in the Scala 3 sql interpreter, caused by something
       // that may or may not be a bug in dotty. https://github.com/lampepfl/dotty/issues/12343
-      def bind[A](encoder: Encoder[A], value: A) = sql"$encoder".asInstanceOf[SFragment[A]].apply(value)
-      def in[G[_]: Reducible, A](f: AppliedFragment, fs: G[A], enc: Encoder[A]): AppliedFragment = fs.toList.map(sql"$enc".asInstanceOf[SFragment[A]].apply).foldSmash(f |+| void" IN (", void", ", void")")
+      def bind[A](encoder: Encoder, value: A) = sql"$encoder".asInstanceOf[SFragment[A]].apply(value)
+      def in[G[_]: Reducible, A](f: AppliedFragment, fs: G[A], enc: Encoder): AppliedFragment = fs.toList.map(sql"$enc".asInstanceOf[SFragment[A]].apply).foldSmash(f |+| void" IN (", void", ", void")")
 
       def const(s: String) = sql"#$s".apply(_root_.skunk.Void)
       def and(fs: AppliedFragment*): AppliedFragment = fs.toList.map(parentheses).intercalate(void" AND ")
@@ -57,20 +58,32 @@ abstract class SkunkMapping[F[_]: Sync](
       def whereAnd(fs: AppliedFragment*): AppliedFragment = if (fs.isEmpty) AppliedFragment.empty else void"WHERE " |+| and(fs: _*)
       def whereAndOpt(fs: Option[AppliedFragment]*): AppliedFragment = whereAnd(fs.toList.unite: _*)
       def parentheses(f: AppliedFragment): AppliedFragment = void"(" |+| f |+| void")"
+
+      def needsCollation(codec: Codec): Boolean =
+        codec.types.head.name match {
+          case "char" => true
+          case "character" => true
+          case "character varying" => true
+          case "text" => true
+          case "varchar" => true
+          case _ => false
+        }
+
+      def sqlTypeName(codec: Codec): Option[String] =
+        Some(codec.types.head.name)
     }
 
   // And we need to be able to fetch `Rows` given a `Fragment` and a list of decoders.
-  def fetch(fragment: Fragment, metas: List[(Boolean, ExistentialCodec)]): F[Table] = {
-
+  def fetch(fragment: Fragment, codecs: List[(Boolean, Codec)]): F[Table] = {
     lazy val rowDecoder: Decoder[Row] =
       new Decoder[Row] {
 
-        lazy val types = metas.flatMap { case (_, ec) => ec.codec.types }
+        lazy val types = codecs.flatMap { case (_, d) => d.types }
 
-        lazy val decodersWithOffsets: List[(Boolean, ExistentialCodec, Int)] =
-          metas.foldLeft((0, List.empty[(Boolean, ExistentialCodec, Int)])) {
-            case ((offset, accum), (isJoin, ec)) =>
-              (offset + ec.codec.length, (isJoin, ec, offset) :: accum)
+        lazy val decodersWithOffsets: List[(Boolean, Decoder[_], Int)] =
+          codecs.foldLeft((0, List.empty[(Boolean, Decoder[_], Int)])) {
+            case ((offset, accum), (isJoin, decoder)) =>
+              (offset + decoder.length, (isJoin, decoder, offset) :: accum)
           } ._2.reverse
 
         def decode(start: Int, ssx: List[Option[String]]): Either[Decoder.Error, Row] = {
@@ -80,8 +93,8 @@ abstract class SkunkMapping[F[_]: Sync](
             // If the column is the outer part of a join and it's a non-nullable in the schema then
             // we read it as an option and collapse it, using FailedJoin in the None case. Otherwise
             // read as normal.
-            case (true,  ec, offset) => ec.codec.opt.decode(0, ss.drop(offset).take(ec.codec.length)).map(_.getOrElse(FailedJoin))
-            case (false, ec, offset) => ec.codec    .decode(0, ss.drop(offset).take(ec.codec.length))
+            case (true,  c, offset) => c.opt.decode(0, ss.drop(offset).take(c.length)).map(_.getOrElse(FailedJoin))
+            case (false, c, offset) => c    .decode(0, ss.drop(offset).take(c.length))
 
           } .map(Row(_))
         }

@@ -3,6 +3,8 @@
 
 package edu.gemini.grackle
 
+import scala.annotation.tailrec
+
 import atto.Atto._
 import cats.data.Ior
 import cats.implicits._
@@ -12,8 +14,6 @@ import Query._, Predicate._, Path._, Value._, UntypedOperation._
 import QueryCompiler._
 import QueryInterpreter.{ mkErrorResult, mkOneError }
 import ScalarType._
-
-import scala.annotation.tailrec
 
 /**
  * GraphQL query parser
@@ -79,7 +79,7 @@ object QueryParser {
 
   def parseSelections(sels: List[Selection], typeCondition: Option[String], fragments: Map[String, FragmentDefinition]): Result[Query] =
     sels.traverse(parseSelection(_, typeCondition, fragments)).map { sels0 =>
-      if (sels0.size == 1) sels0.head else Group(sels0)
+      if (sels0.sizeCompare(1) == 0) sels0.head else Group(sels0)
     }
 
   def parseSelection(sel: Selection, typeCondition: Option[String], fragments: Map[String, FragmentDefinition]): Result[Query] = sel match {
@@ -406,15 +406,13 @@ object QueryCompiler {
         case r@Rename(_, child)       => transform(child, vars, schema, tpe).map(ec => r.copy(child = ec))
         case g@Group(children)        => children.traverse(q => transform(q, vars, schema, tpe)).map(eqs => g.copy(queries = eqs))
         case g@GroupList(children)    => children.traverse(q => transform(q, vars, schema, tpe)).map(eqs => g.copy(queries = eqs))
-        case u@Unique(_, child)       => transform(child, vars, schema, tpe.nonNull).map(ec => u.copy(child = ec))
+        case u@Unique(child)          => transform(child, vars, schema, tpe.nonNull.list).map(ec => u.copy(child = ec))
         case f@Filter(_, child)       => tpe.item.toRightIor(mkOneError(s"Filter of non-List type $tpe")).flatMap(item => transform(child, vars, schema, item).map(ec => f.copy(child = ec)))
         case c@Component(_, _, child) => transform(child, vars, schema, tpe).map(ec => c.copy(child = ec))
         case d@Defer(_, child, _)     => transform(child, vars, schema, tpe).map(ec => d.copy(child = ec))
         case s@Skip(_, _, child)      => transform(child, vars, schema, tpe).map(ec => s.copy(child = ec))
         case l@Limit(_, child)        => transform(child, vars, schema, tpe).map(ec => l.copy(child = ec))
         case o@OrderBy(_, child)      => transform(child, vars, schema, tpe).map(ec => o.copy(child = ec))
-        case g@GroupBy(_, child)      => transform(child, vars, schema, tpe).map(ec => g.copy(child = ec))
-        case c@Context(_, child)      => transform(child, vars, schema, tpe).map(ec => c.copy(child = ec))
         case e@Environment(_, child)  => transform(child, vars, schema, tpe).map(ec => e.copy(child = ec))
         case Skipped                  => Skipped.rightIor
         case Empty                    => Empty.rightIor
@@ -600,7 +598,7 @@ object QueryCompiler {
   val introspectionMapping: Map[TypeRef, PartialFunction[Select, Result[Query]]] = Map(
     Introspection.schema.ref("Query") -> {
       case sel@Select("__type", List(Binding("name", StringValue(name))), _) =>
-        sel.eliminateArgs(child => Unique(Eql(UniquePath(List("name")), Const(Option(name))), child)).rightIor
+        sel.eliminateArgs(child => Unique(Filter(Eql(UniquePath(List("name")), Const(Option(name))), child))).rightIor
     },
     Introspection.schema.ref("__Type") -> {
       case sel@Select("fields", List(Binding("includeDeprecated", BooleanValue(include))), _) =>
@@ -695,12 +693,10 @@ object QueryCompiler {
           case Group(queries) => handleGroupedQueries(queries, depth, width)
           case GroupList(queries) => handleGroupedQueries(queries, depth, width)
           case Component(_, _, child) => loop(child, depth, width, false)
-          case Context(_, child) => loop(child, depth, width, false)
           case Environment(_, child) => loop(child, depth, width, false)
           case Empty => (depth, width)
           case Defer(_, child, _) => loop(child, depth, width, false)
           case Filter(_, child) => loop(child, depth, width, false)
-          case GroupBy(_, child) => loop(child, depth, width, false)
           case Introspect(_, _) => (depth, width)
           case Limit(_, child) => loop(child, depth, width, false)
           case Narrow(_, child) => loop(child, depth, width, true)
@@ -708,7 +704,7 @@ object QueryCompiler {
           case Rename(_, child) => loop(child, depth, width, false)
           case Skip(_, _, child) => loop(child, depth, width, false)
           case Skipped => (depth, width)
-          case Unique(_, child) => loop(child, depth, width, false)
+          case Unique(child) => loop(child, depth, width, false)
           case UntypedNarrow(_, child) => loop(child, depth, width, false)
           case Wrap(_, child) => loop(child, depth, width, false)
         }
