@@ -5,7 +5,7 @@ package demo
 
 import scala.concurrent.ExecutionContext.global
 
-import cats.effect._
+import cats.effect.{ Async, ExitCode, IO, IOApp }
 import cats.implicits._
 import fs2.Stream
 import org.http4s.implicits._
