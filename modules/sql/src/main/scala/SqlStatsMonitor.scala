@@ -5,7 +5,7 @@ package edu.gemini.grackle
 package sql
 
 import cats.Applicative
-import cats.effect.concurrent.Ref
+import cats.effect.Ref
 import cats.syntax.all._
 
 import SqlStatsMonitor.SqlStats

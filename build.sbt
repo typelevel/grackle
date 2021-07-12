@@ -9,7 +9,7 @@ val http4sVersion               = "0.22.0-RC1"
 val kindProjectorVersion        = "0.13.0"
 val literallyVersion            = "1.0.2"
 val logbackVersion              = "1.2.3"
-val log4catsVersion             = "1.3.1"
+val log4catsVersion             = "2.1.1"
 val skunkVersion                = "0.0.28"
 val shapeless2Version           = "2.3.7"
 val shapeless3Version           = "3.0.1"
@@ -103,21 +103,21 @@ lazy val circe = project
     name := "gsp-graphql-circe",
   )
 
-// lazy val sql = project
-//   .in(file("modules/sql"))
-//   .enablePlugins(AutomateHeaderPlugin)
-//   .disablePlugins(RevolverPlugin)
-//   .dependsOn(circe)
-//   .settings(commonSettings)
-//   .settings(
-//     name := "gsp-graphql-sql",
-//     libraryDependencies ++= Seq(
-//       "org.typelevel"     %% "log4cats-slf4j"         % log4catsVersion,
-//       "ch.qos.logback"    %  "logback-classic"        % logbackVersion % "test",
-//       "com.dimafeng"      %% "testcontainers-scala-scalatest"  % testContainersVersion % "test",
-//       "com.dimafeng"      %% "testcontainers-scala-postgresql" % testContainersVersion % "test",
-//     )
-//   )
+lazy val sql = project
+  .in(file("modules/sql"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(circe)
+  .settings(commonSettings)
+  .settings(
+    name := "gsp-graphql-sql",
+    libraryDependencies ++= Seq(
+      "org.typelevel"     %% "log4cats-slf4j"         % log4catsVersion,
+      "ch.qos.logback"    %  "logback-classic"        % logbackVersion % "test",
+      "com.dimafeng"      %% "testcontainers-scala-scalatest"  % testContainersVersion % "test",
+      "com.dimafeng"      %% "testcontainers-scala-postgresql" % testContainersVersion % "test",
+    )
+  )
 
 // lazy val doobie = project
 //   .in(file("modules/doobie"))
