@@ -36,10 +36,6 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   case class ColumnRef(table: String, column: String, codec: Codec, scalaTypeName: String)(
     implicit val pos: SourcePos
   ) { outer =>
-
-    if (table == "collection_items" && column == "version_ccid")
-      Thread.dumpStack
-
     /** This `ColumnRef` as a SQL expression of the form `table.column`. */
     def toSql: String =
       if(table == "_null_")
