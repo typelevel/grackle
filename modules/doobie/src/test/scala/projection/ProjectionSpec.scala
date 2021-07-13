@@ -4,6 +4,7 @@
 package projection
 
 import edu.gemini.grackle.syntax._
+import cats.effect.unsafe.implicits.global
 
 import grackle.test.SqlProjectionSpec
 import grackle.test.GraphQLResponseTests.assertWeaklyEqual

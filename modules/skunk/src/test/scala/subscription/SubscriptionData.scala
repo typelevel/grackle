@@ -3,7 +3,7 @@
 
 package subscription
 
-import cats.effect.{ Bracket, Resource, Sync }
+import cats.effect.{ MonadCancel, Resource, Sync }
 import cats.syntax.all._
 import skunk.Session
 import skunk.codec.all._
@@ -51,7 +51,7 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
     val population  = col("population", int4)
   }
 
-  implicit def ev: Bracket[F, Throwable]
+  implicit def ev: MonadCancel[F, Throwable]
 
   val QueryType        = schema.ref("Query")
   val SubscriptionType = schema.ref("Subscription")

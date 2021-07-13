@@ -9,7 +9,7 @@ import java.util.UUID
 import scala.util.Try
 
 import cats.{Eq, Order}
-import cats.effect._
+import cats.effect.{ Unique => _, _ }
 import cats.syntax.all._
 import io.circe.Encoder
 import skunk.{Codec, Session}

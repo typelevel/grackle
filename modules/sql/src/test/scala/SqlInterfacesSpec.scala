@@ -6,6 +6,7 @@ package grackle.test
 import cats.effect.IO
 import io.circe.Json
 import org.scalatest.funsuite.AnyFunSuite
+import cats.effect.unsafe.implicits.global
 
 import edu.gemini.grackle._
 import syntax._

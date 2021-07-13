@@ -7,7 +7,7 @@ package skunk
 import cats.Applicative
 import cats.implicits._
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
+import cats.effect.Ref
 import _root_.skunk.AppliedFragment
 
 import QueryInterpreter.ProtoJson
