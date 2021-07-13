@@ -59,6 +59,7 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
     schema"""
       type Query {
         cities(namePattern: String = "%"): [City!]
+        city(id: Int): City
         country(code: String): Country
         countries(limit: Int = -1, minPopulation: Int = 0, byPopulation: Boolean = false): [Country!]
         language(language: String): Language
@@ -107,6 +108,7 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
         tpe = QueryType,
         fieldMappings = List(
           SqlRoot("cities"),
+          SqlRoot("city"),
           SqlRoot("country"),
           SqlRoot("countries"),
           SqlRoot("language"),
@@ -164,6 +166,9 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
 
       case Select("country", List(Binding("code", StringValue(code))), child) =>
         Select("country", Nil, Unique(Filter(Eql(UniquePath(List("code")), Const(code)), child))).rightIor
+
+      case Select("city", List(Binding("id", IntValue(id))), child) =>
+        Select("city", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
 
       case Select("countries", List(Binding("limit", IntValue(num)), Binding("minPopulation", IntValue(min)), Binding("byPopulation", BooleanValue(byPop))), child) =>
         def limit(query: Query): Query =
