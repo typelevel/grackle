@@ -22,11 +22,11 @@ abstract class SkunkMapping[F[_]: Sync](
 ) extends SqlMapping[F] { outer =>
 
   // Grackle needs to know about codecs, encoders, and fragments.
-  type Codec    = _root_.skunk.Codec[_]
+  type Codec    = (_root_.skunk.Codec[_], Boolean)
   type Encoder  = _root_.skunk.Encoder[_]
   type Fragment = _root_.skunk.AppliedFragment
 
-  def toEncoder(c: Codec): Encoder = c
+  def toEncoder(c: Codec): Encoder = c._1
 
   // Also we need to know how to encode the basic GraphQL types.
   def booleanEncoder = bool
@@ -35,8 +35,18 @@ abstract class SkunkMapping[F[_]: Sync](
   def intEncoder     = int4
 
   class TableDef(name: String) {
-    def col[T: TypeName](colName: String, codec: _root_.skunk.Codec[T]): ColumnRef =
-      ColumnRef[T](name, colName, codec)
+    sealed trait IsNullable[T] {
+      def isNullable: Boolean
+    }
+    object IsNullable extends IsNullable0 {
+      implicit def nullable[T]: IsNullable[Option[T]] = new IsNullable[Option[T]] { def isNullable = true }
+    }
+    trait IsNullable0 {
+      implicit def notNullable[T]: IsNullable[T] = new IsNullable[T] { def isNullable = false }
+    }
+
+    def col[T: TypeName](colName: String, codec: _root_.skunk.Codec[T])(implicit isNullable: IsNullable[T]): ColumnRef =
+      ColumnRef[T](name, colName, (codec, isNullable.isNullable))
   }
 
   // We need to demonstrate that our `Fragment` type has certain compositional properties.
@@ -60,7 +70,7 @@ abstract class SkunkMapping[F[_]: Sync](
       def parentheses(f: AppliedFragment): AppliedFragment = void"(" |+| f |+| void")"
 
       def needsCollation(codec: Codec): Boolean =
-        codec.types.head.name match {
+        codec._1.types.head.name match {
           case "char" => true
           case "character" => true
           case "character varying" => true
@@ -70,7 +80,7 @@ abstract class SkunkMapping[F[_]: Sync](
         }
 
       def sqlTypeName(codec: Codec): Option[String] =
-        Some(codec.types.head.name)
+        Some(codec._1.types.head.name)
     }
 
   // And we need to be able to fetch `Rows` given a `Fragment` and a list of decoders.
@@ -78,12 +88,12 @@ abstract class SkunkMapping[F[_]: Sync](
     lazy val rowDecoder: Decoder[Row] =
       new Decoder[Row] {
 
-        lazy val types = codecs.flatMap { case (_, d) => d.types }
+        lazy val types = codecs.flatMap { case (_, (d, _)) => d.types }
 
         lazy val decodersWithOffsets: List[(Boolean, Decoder[_], Int)] =
           codecs.foldLeft((0, List.empty[(Boolean, Decoder[_], Int)])) {
-            case ((offset, accum), (isJoin, decoder)) =>
-              (offset + decoder.length, (isJoin, decoder, offset) :: accum)
+            case ((offset, accum), (isJoin, (decoder, isNullable))) =>
+              (offset + decoder.length, (isJoin && !isNullable, decoder, offset) :: accum)
           } ._2.reverse
 
         def decode(start: Int, ssx: List[Option[String]]): Either[Decoder.Error, Row] = {
@@ -95,10 +105,8 @@ abstract class SkunkMapping[F[_]: Sync](
             // read as normal.
             case (true,  c, offset) => c.opt.decode(0, ss.drop(offset).take(c.length)).map(_.getOrElse(FailedJoin))
             case (false, c, offset) => c    .decode(0, ss.drop(offset).take(c.length))
-
-          } .map(Row(_))
+          }.map(Row(_))
         }
-
       }
 
     pool.use { s =>

@@ -1124,4 +1124,38 @@ trait SqlWorldSpec extends AnyFunSuite {
 
     assertWeaklyEqual(res, expected, strictPaths = List(List("data", "countries")))
   }
+
+  test("null in a nullable joined column") {
+    val query = """
+      query {
+        city(id: 33) {
+          name
+          country {
+            name
+            indepyear
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "city" : {
+            "name" : "Willemstad",
+            "country" : {
+              "name" : "Netherlands Antilles",
+              "indepyear" : null
+            }
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
 }
