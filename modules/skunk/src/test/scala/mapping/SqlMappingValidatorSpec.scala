@@ -22,7 +22,7 @@ final class SqlMappingValidatorSpec extends AnyFunSuite {
         tpe = schema.ref("Foo"),
         fieldMappings =
           List(
-            SqlField("bar", ColumnRef("foo", "bar", int2))
+            SqlField("bar", ColumnRef("foo", "bar", (int2, false)))
           )
       ),
       LeafMapping[String](schema.ref("Baz")),
