@@ -288,7 +288,7 @@ object GraphQLParser2 {
     token(intLiteral).map(a => Ast.Value.IntValue(a.toInt))
 
   lazy val FloatValue: Parser[Ast.Value.FloatValue] =
-    token(bigDecimal).filter(_.isDecimalDouble).map(a => Ast.Value.FloatValue(a.toDouble))
+    token(floatLiteral).map(a => Ast.Value.FloatValue(a.toDouble))
 
   lazy val StringValue: Parser[Ast.Value.StringValue] =
     token(stringLiteral).map(Ast.Value.StringValue.apply)
@@ -414,12 +414,28 @@ object Literals {
 
   }
 
-  lazy val intLiteral = bigInt.filter(_.isValidInt).backtrack
+  lazy val intLiteral = {
+    //TODO implement this properly from the spec
+    bigInt.filter(_.isValidInt).backtrack
+  }
 
   lazy val booleanLiteral = string("true").as(true) | string("false").as(false)
 
   lazy val floatLiteral = {
 
+    lazy val bigDecimal: Parser[BigDecimal] = for {
+      a <- intLiteral
+      b <- (char('.') *> digit.rep).string.?
+      c <- ((char('e') | char('E')) *> intLiteral).string.?
+      res <- (a,b,c) match {
+        case (a, Some(b), None) => pure(BigDecimal(s"$a.$b"))
+        case (a, None, Some(c)) => pure(BigDecimal(s"${a}E$c"))
+        case (a, Some(b), Some(c)) => pure(BigDecimal(s"$a.${b}E$c"))
+        case (a, None, None) => failWith(s"$a is not a valid float - must have at least one of a fractional or exponent part")
+      }
+    } yield res
+
+    bigDecimal.map(_.toFloat)
   }
 
 
