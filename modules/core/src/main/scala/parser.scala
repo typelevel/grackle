@@ -6,9 +6,10 @@ package edu.gemini.grackle
 import cats.parse.{Parser, Parser0}
 import cats.parse.Parser._
 import cats.parse.Numbers._
-import cats.parse.Rfc5234._
+import cats.parse.Rfc5234.{cr, crlf, digit, hexdig, lf}
 import cats.implicits._
 import CommentedText2._
+import Literals._
 
 object GraphQLParser2 {
 
@@ -284,7 +285,7 @@ object GraphQLParser2 {
     token(squareBrackets(many(Value)).map(Ast.Value.ListValue.apply))
 
   lazy val IntValue: Parser[Ast.Value.IntValue] =
-    token(bigInt).filter(_.isValidInt).map(a => Ast.Value.IntValue(a.toInt))
+    token(intLiteral).map(a => Ast.Value.IntValue(a.toInt))
 
   lazy val FloatValue: Parser[Ast.Value.FloatValue] =
     token(bigDecimal).filter(_.isDecimalDouble).map(a => Ast.Value.FloatValue(a.toDouble))
@@ -293,7 +294,7 @@ object GraphQLParser2 {
     token(stringLiteral).map(Ast.Value.StringValue.apply)
 
   lazy val BooleanValue: Parser[Ast.Value.BooleanValue] =
-    (keyword("true").as(true) | keyword("false").as(false)).map(Ast.Value.BooleanValue.apply)
+    token(booleanLiteral).map(Ast.Value.BooleanValue.apply)
 
   lazy val ObjectValue: Parser[Ast.Value.ObjectValue] =
     braces(many(ObjectField)).map(Ast.Value.ObjectValue.apply)
@@ -393,17 +394,33 @@ object CommentedText2 {
 
 object Literals {
 
-  lazy val stringLiteral: Parser[String] = (stringCharacter.rep0.surroundedBy(char('"')) | (blockStringCharacter.rep0.surroundedBy(stringIn("\"\"\"")))).string
+  lazy val stringLiteral: Parser[String] = {
+    //TODO more options
+    lazy val stringCharacter = (sourceCharacter | (string("\\u") ~ escapedUnicode) | (char('\\') ~ escapedCharacter)).string
 
-  //TODO more options
-  lazy val stringCharacter = (string("\\u") ~ escapedUnicode).string | (char('\\') ~ escapedCharacter).string
+    lazy val blockStringCharacter = string("TODO").string
 
-  lazy val blockStringCharacter = ???
+    //TODO should this be a Parser[Char] which converts to unicode? I guess so?
+    //See Atto for reference
+    lazy val escapedUnicode = (digit | hexdig).repExactlyAs[String](4)
 
-  //TODO should this be a Parser[Char] which converts to unicode? I guess so?
-  //See Atto for reference
-  lazy val escapedUnicode = (digit | hexdig).repExactlyAs[String](4)
+    lazy val escapedCharacter = charIn('"', '\\', '/', 'b', 'f', 'n', 'r', 't')
 
-  lazy val escapedCharacter = charIn('"', '\\', '/', 'b', 'f', 'n', 'r', 't')
+    lazy val sourceCharacter = charIn(0x0009.toChar, 0x000A.toChar, 0x000D.toChar) | charIn(0x0020.toChar to 0xFFFF.toChar)
+
+    lazy val lineTerminator = (lf | cr | crlf).string
+
+    (stringCharacter.rep0.surroundedBy(char('"')) | (blockStringCharacter.rep0.surroundedBy(stringIn("\"\"\"")))).string
+
+  }
+
+  lazy val intLiteral = bigInt.filter(_.isValidInt).backtrack
+
+  lazy val booleanLiteral = string("true").as(true) | string("false").as(false)
+
+  lazy val floatLiteral = {
+
+  }
+
 
 }
