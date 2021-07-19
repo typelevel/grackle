@@ -48,7 +48,7 @@ object GraphQLParser2 {
 
   lazy val ScalarTypeDefinition: Parser[Ast.ScalarTypeDefinition] =
     for {
-      desc   <- opt(Description)
+      desc   <- opt(Description).with1
       _      <- keyword("scalar")
       name   <- Name
       dirs   <- opt(Directives)
@@ -56,7 +56,7 @@ object GraphQLParser2 {
 
   lazy val ObjectTypeDefinition: Parser[Ast.ObjectTypeDefinition] =
     for {
-      desc   <- opt(Description)
+      desc   <- opt(Description).with1
       _      <- keyword("type")
       name   <- Name
       ifs    <- opt(ImplementsInterfaces)
@@ -66,7 +66,7 @@ object GraphQLParser2 {
 
   lazy val InterfaceTypeDefinition: Parser[Ast.InterfaceTypeDefinition] =
     for {
-      desc   <- opt(Description)
+      desc   <- opt(Description).with1
       _      <- keyword("interface")
       name   <- Name
       ifs    <- opt(ImplementsInterfaces)
@@ -76,7 +76,7 @@ object GraphQLParser2 {
 
   lazy val UnionTypeDefinition: Parser[Ast.UnionTypeDefinition] =
     for {
-      desc   <- opt(Description)
+      desc   <- opt(Description).with1
       _      <- keyword("union")
       name   <- Name
       dirs   <- opt(Directives)
@@ -85,7 +85,7 @@ object GraphQLParser2 {
 
   lazy val EnumTypeDefinition: Parser[Ast.EnumTypeDefinition] =
     for {
-      desc   <- opt(Description)
+      desc   <- opt(Description).with1
       _      <- keyword("enum")
       name   <- Name
       dirs   <- opt(Directives)
@@ -94,7 +94,7 @@ object GraphQLParser2 {
 
   lazy val InputObjectTypeDefinition: Parser[Ast.InputObjectTypeDefinition] =
     for {
-      desc   <- opt(Description)
+      desc   <- opt(Description).with1
       _      <- keyword("input")
       name   <- Name
       dirs   <- opt(Directives)
@@ -111,7 +111,7 @@ object GraphQLParser2 {
 
   lazy val FieldDefinition: Parser[Ast.FieldDefinition] =
     for {
-      desc   <- opt(Description)
+      desc   <- opt(Description).with1
       name   <- Name
       args   <- opt(ArgumentsDefinition)
       _      <- keyword(":")
@@ -127,7 +127,7 @@ object GraphQLParser2 {
 
   lazy val InputValueDefinition: Parser[Ast.InputValueDefinition] =
     for {
-      desc   <- opt(Description)
+      desc   <- opt(Description).with1
       name   <- Name
       _      <- keyword(":")
       tpe    <- Type
@@ -143,14 +143,14 @@ object GraphQLParser2 {
 
   lazy val EnumValueDefinition: Parser[Ast.EnumValueDefinition] =
     for {
-      desc   <- opt(Description)
+      desc   <- opt(Description).with1
       name   <- Name
       dirs   <- opt(Directives)
     } yield Ast.EnumValueDefinition(name, desc.map(_.value), dirs.getOrElse(Nil))
 
   lazy val DirectiveDefinition: Parser[Ast.DirectiveDefinition] =
     for {
-      desc   <- opt(Description)
+      desc   <- opt(Description).with1
       _      <- keyword("directive")
       _      <- keyword("@")
       name   <- Name
@@ -217,7 +217,7 @@ object GraphQLParser2 {
 
   lazy val Field: Parser[Ast.Selection.Field] =
     for {
-      alias <- opt(Alias)
+      alias <- opt(Alias).with1
       name  <- Name
       args  <- opt(Arguments)
       dirs  <- Directives
@@ -376,7 +376,7 @@ object CommentedText2 {
     token(left) *> token0(p) <* token(right)
 
   /** Turns a parser into one that consumes surrounding parentheses `()` */
-  def parens[A](p: => Parser[A]): Parser[A] =
+  def parens[A](p: => Parser0[A]): Parser[A] =
     _bracket(char('('), p, char(')')).withContext(s"parens(${p.toString})")
 
   /** Turns a parser into one that consumes surrounding curly braces `{}` */
@@ -395,7 +395,8 @@ object CommentedText2 {
 object Literals {
 
   lazy val stringLiteral: Parser[String] = {
-    //TODO more options
+
+    //TODO exclude line terminator from sourceCharacter
     lazy val stringCharacter = (sourceCharacter | (string("\\u") ~ escapedUnicode) | (char('\\') ~ escapedCharacter)).string
 
     lazy val blockStringCharacter = string("TODO").string
