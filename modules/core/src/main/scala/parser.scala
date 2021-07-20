@@ -332,7 +332,7 @@ object GraphQLParser2 {
     (NamedType <* keyword("!")).map(a => Ast.Type.NonNull(Left(a))).widen |
     (ListType  <* keyword("!")).map(a => Ast.Type.NonNull(Right(a))).widen
 
-  lazy val Directives: Parser[List[Ast.Directive]] =
+  lazy val Directives: Parser0[List[Ast.Directive]] =
     many(Directive)
 
   lazy val Directive: Parser[Ast.Directive] =
@@ -341,7 +341,7 @@ object GraphQLParser2 {
   lazy val Name: Parser[Ast.Name] = {
     val initial    = ('A' to 'Z').toSet ++ ('a' to 'z').toSet + '_'
     val subsequent = initial ++ ('0' to '9').toSet
-    token((charWhere(initial), many(charWhere(subsequent))).mapN((h, t) => Ast.Name((h :: t).mkString)))
+    token(charIn(initial) ~ many(charIn(subsequent))).map{case (h, t) => Ast.Name((h :: t).mkString)}
   }
 }
 
@@ -415,14 +415,15 @@ object Literals {
 
   }
 
-  lazy val intLiteral = {
-    //TODO implement this properly from the spec?
-    bigInt.filter(_.isValidInt).backtrack
-  }
+  lazy val intLiteral: Parser[Int] =
+    bigInt.flatMap {
+      case v if v.isValidInt => pure(v.toInt)
+      case v => failWith(s"$v is larger than max int")
+    }
 
-  lazy val booleanLiteral = string("true").as(true) | string("false").as(false)
+  lazy val booleanLiteral: Parser[Boolean] = string("true").as(true) | string("false").as(false)
 
-  lazy val floatLiteral = {
+  lazy val floatLiteral: Parser[Float] = {
 
     lazy val bigDecimal: Parser[BigDecimal] = for {
       a <- intLiteral
