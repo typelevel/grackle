@@ -8,10 +8,10 @@ import cats.parse.Parser._
 import cats.parse.Numbers._
 import cats.parse.Rfc5234.{cr, crlf, digit, hexdig, lf}
 import cats.implicits._
-import CommentedText2._
+import CommentedText._
 import Literals._
 
-object GraphQLParser2 {
+object GraphQLParser {
 
   def keyword(s: String) = token(string(s))
 
@@ -341,11 +341,13 @@ object GraphQLParser2 {
   lazy val Name: Parser[Ast.Name] = {
     val initial    = ('A' to 'Z').toSet ++ ('a' to 'z').toSet + '_'
     val subsequent = initial ++ ('0' to '9').toSet
-    token(charIn(initial) ~ many(charIn(subsequent))).map{case (h, t) => Ast.Name((h :: t).mkString)}
+    token(charIn(initial) ~ many(charIn(subsequent))).map {
+      case (h, t) => Ast.Name((h :: t).mkString)
+    }
   }
 }
 
-object CommentedText2 {
+object CommentedText {
 
   lazy val whitespace: Parser[Char] = charWhere(_.isWhitespace)
 
@@ -397,21 +399,25 @@ object Literals {
   lazy val stringLiteral: Parser[String] = {
 
     //TODO exclude line terminator from sourceCharacter
-    lazy val stringCharacter = (sourceCharacter | (string("\\u") ~ escapedUnicode) | (char('\\') ~ escapedCharacter)).string
+    lazy val stringCharacter: Parser[String] = (
+      (peek(not(charIn('"', '\\') | lineTerminator)).with1 *> sourceCharacter) |
+        (string("\\u") ~ escapedUnicode).string |
+        (char('\\') ~ escapedCharacter).string
+    )
 
     lazy val blockStringCharacter = string("TODO").string
 
     //TODO should this be a Parser[Char] which converts to unicode? I guess so?
     //See Atto for reference
-    lazy val escapedUnicode = (digit | hexdig).repExactlyAs[String](4)
+    lazy val escapedUnicode: Parser[String] = (digit | hexdig).repExactlyAs[String](4)
 
     lazy val escapedCharacter = charIn('"', '\\', '/', 'b', 'f', 'n', 'r', 't')
 
-    lazy val sourceCharacter = charIn(0x0009.toChar, 0x000A.toChar, 0x000D.toChar) | charIn(0x0020.toChar to 0xFFFF.toChar)
+    lazy val sourceCharacter: Parser[String] = (charIn(0x0009.toChar, 0x000A.toChar, 0x000D.toChar) | charIn(0x0020.toChar to 0xFFFF.toChar)).string
 
     lazy val lineTerminator = (lf | cr | crlf).string
 
-    (stringCharacter.rep0.surroundedBy(char('"')) | (blockStringCharacter.rep0.surroundedBy(stringIn("\"\"\"")))).string
+    (stringCharacter.rep0.with1.surroundedBy(char('"')) | (blockStringCharacter.rep0.with1.surroundedBy(string("\"\"\"")))).string
 
   }
 

@@ -3,7 +3,6 @@
 
 package parser
 
-import atto.Atto._
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle.{ Ast, GraphQLParser }
@@ -30,7 +29,7 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(query).option match {
+    GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
@@ -62,7 +61,7 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(query).option match {
+    GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
@@ -94,7 +93,7 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(query).option match {
+    GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
@@ -142,7 +141,7 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(query).option match {
+    GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
@@ -184,7 +183,7 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(query).option match {
+    GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
@@ -216,7 +215,7 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(query).option match {
+    GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
@@ -248,7 +247,7 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(query).option match {
+    GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
@@ -280,7 +279,7 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(query).option match {
+    GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
@@ -332,14 +331,14 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(query).option match {
+    GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
   }
 
   test("invalid document") {
-    GraphQLParser.Document.parseOnly("scalar Foo woozle").option match {
+    GraphQLParser.Document.parseAll("scalar Foo woozle").toOption match {
       case Some(_) => fail("should have failed")
       case None    => succeed
     }

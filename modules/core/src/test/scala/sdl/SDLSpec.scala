@@ -3,7 +3,6 @@
 
 package sdl
 
-import atto.Atto._
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle.{ Ast, GraphQLParser, SchemaParser }
@@ -31,7 +30,7 @@ final class SDLSuite extends CatsSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseOnly(schema).option
+    val res = GraphQLParser.Document.parseAll(schema).toOption
     //println(res)
     assert(res == Some(expected))
   }
@@ -51,7 +50,7 @@ final class SDLSuite extends CatsSuite {
         ScalarTypeDefinition(Name("Time"), Some("A scalar type"), List(Directive(Name("deprecated"), Nil)))
       )
 
-    val res = GraphQLParser.Document.parseOnly(schema).option
+    val res = GraphQLParser.Document.parseAll(schema).toOption
     //println(res)
     assert(res == Some(expected))
   }
@@ -83,7 +82,7 @@ final class SDLSuite extends CatsSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseOnly(schema).option
+    val res = GraphQLParser.Document.parseAll(schema).toOption
     //println(res)
     assert(res == Some(expected))
   }
@@ -115,7 +114,7 @@ final class SDLSuite extends CatsSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseOnly(schema).option
+    val res = GraphQLParser.Document.parseAll(schema).toOption
     //println(res)
     assert(res == Some(expected))
   }
@@ -136,7 +135,7 @@ final class SDLSuite extends CatsSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseOnly(schema).option
+    val res = GraphQLParser.Document.parseAll(schema).toOption
     //println(res)
     assert(res == Some(expected))
   }
@@ -164,7 +163,7 @@ final class SDLSuite extends CatsSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseOnly(schema).option
+    val res = GraphQLParser.Document.parseAll(schema).toOption
     //println(res)
     assert(res == Some(expected))
   }
@@ -189,7 +188,7 @@ final class SDLSuite extends CatsSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseOnly(schema).option
+    val res = GraphQLParser.Document.parseAll(schema).toOption
     //println(res)
     assert(res == Some(expected))
   }
@@ -213,7 +212,7 @@ final class SDLSuite extends CatsSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseOnly(schema).option
+    val res = GraphQLParser.Document.parseAll(schema).toOption
     //println(res)
     assert(res == Some(expected))
   }

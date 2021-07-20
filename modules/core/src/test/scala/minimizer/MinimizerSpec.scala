@@ -3,7 +3,6 @@
 
 package minimizer
 
-import atto.Atto._
 import cats.tests.CatsSuite
 import org.scalatest.Assertion
 
@@ -17,8 +16,8 @@ final class MinimizerSuite extends CatsSuite {
 
     assert(minimized == expected)
 
-    val Some(parsed0) = GraphQLParser.Document.parseOnly(query).option
-    val Some(parsed1) = GraphQLParser.Document.parseOnly(minimized).option
+    val Some(parsed0) = GraphQLParser.Document.parseAll(query).toOption
+    val Some(parsed1) = GraphQLParser.Document.parseAll(minimized).toOption
 
     assert(parsed0 == parsed1)
   }
