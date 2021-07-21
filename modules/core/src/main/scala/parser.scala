@@ -321,18 +321,20 @@ object GraphQLParser {
   lazy val DefaultValue: Parser[Ast.Value] =
     keyword("=") *> Value
 
-  lazy val Type: Parser[Ast.Type] =
+  lazy val Type: Parser[Ast.Type] = recursive[Ast.Type] { rec =>
+
+    lazy val ListType: Parser[Ast.Type.List] =
+      squareBrackets(rec).map(Ast.Type.List.apply)
+
+    lazy val NonNullType: Parser[Ast.Type.NonNull] =
+      (NamedType <* keyword("!")).map(a => Ast.Type.NonNull(Left(a))).widen |
+      (ListType  <* keyword("!")).map(a => Ast.Type.NonNull(Right(a))).widen
+
     NonNullType.widen[Ast.Type] | ListType.widen | NamedType.widen
+  }
 
   lazy val NamedType: Parser[Ast.Type.Named] =
     Name.map(Ast.Type.Named.apply)
-
-  lazy val ListType: Parser[Ast.Type.List] =
-    squareBrackets(Type).map(Ast.Type.List.apply)
-
-  lazy val NonNullType: Parser[Ast.Type.NonNull] =
-    (NamedType <* keyword("!")).map(a => Ast.Type.NonNull(Left(a))).widen |
-    (ListType  <* keyword("!")).map(a => Ast.Type.NonNull(Right(a))).widen
 
   lazy val Directives: Parser0[List[Ast.Directive]] =
     many(Directive)
