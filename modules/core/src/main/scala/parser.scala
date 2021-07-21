@@ -326,11 +326,17 @@ object GraphQLParser {
     lazy val ListType: Parser[Ast.Type.List] =
       squareBrackets(rec).map(Ast.Type.List.apply)
 
-    lazy val NonNullType: Parser[Ast.Type.NonNull] =
-      (NamedType <* keyword("!")).map(a => Ast.Type.NonNull(Left(a))).widen |
-      (ListType  <* keyword("!")).map(a => Ast.Type.NonNull(Right(a))).widen
+    val namedMaybeNull: Parser[Ast.Type] = (NamedType ~ keyword("!").?).map {
+      case (t, None) => t
+      case (t, _) => Ast.Type.NonNull(Left(t))
+    }
 
-    NonNullType.widen[Ast.Type] | ListType.widen | NamedType.widen
+    val listMaybeNull: Parser[Ast.Type] = (ListType ~ keyword("!").?).map {
+      case (t, None) => t
+      case (t, _) => Ast.Type.NonNull(Right(t))
+    }
+
+    namedMaybeNull | listMaybeNull
   }
 
   lazy val NamedType: Parser[Ast.Type.Named] =
