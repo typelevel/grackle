@@ -433,8 +433,8 @@ object Literals {
 
     lazy val bigDecimal: Parser[BigDecimal] = for {
       a <- intLiteral
-      b <- (char('.') *> digit.rep).string.?
-      c <- ((char('e') | char('E')) *> intLiteral).string.?
+      b <- (char('.') *> digit.rep.string).?
+      c <- ((char('e') | char('E')) *> intLiteral.string).?
       res <- (a,b,c) match {
         case (a, Some(b), None) => pure(BigDecimal(s"$a.$b"))
         case (a, None, Some(c)) => pure(BigDecimal(s"${a}E$c"))
