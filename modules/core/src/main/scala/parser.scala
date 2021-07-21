@@ -272,7 +272,6 @@ object GraphQLParser {
         case _                 => true
       } .map(Ast.Value.EnumValue.apply)
 
-    //TODO this is recursive and SOs on construction of the parser
     lazy val ListValue: Parser[Ast.Value.ListValue] =
       token(squareBrackets(many(rec)).map(Ast.Value.ListValue.apply))
 
@@ -338,7 +337,6 @@ object GraphQLParser {
   lazy val Directives: Parser0[List[Ast.Directive]] =
     many(Directive)
 
-  //TODO why does this hang?
   lazy val Directive: Parser[Ast.Directive] =
     keyword("@") *> (Name ~ opt(Arguments)).map { case (n, ods) => Ast.Directive(n, ods.orEmpty)}
 
@@ -402,7 +400,6 @@ object Literals {
 
   lazy val stringLiteral: Parser[String] = {
 
-    //TODO exclude line terminator from sourceCharacter
     lazy val stringCharacter: Parser[String] = (
       (peek(not(charIn('"', '\\') | lineTerminator)).with1 *> sourceCharacter) |
         (string("\\u") ~ escapedUnicode).string |
