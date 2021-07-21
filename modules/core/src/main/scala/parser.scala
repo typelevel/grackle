@@ -259,7 +259,38 @@ object GraphQLParser {
   lazy val TypeCondition: Parser[Ast.Type.Named] =
     keyword("on") *> NamedType
 
-  lazy val Value: Parser[Ast.Value] =
+  lazy val Value: Parser[Ast.Value] = recursive[Ast.Value] { rec =>
+
+    lazy val NullValue: Parser[Ast.Value.NullValue.type] =
+      keyword("null").as(Ast.Value.NullValue)
+
+    lazy val EnumValue: Parser[Ast.Value.EnumValue] =
+      Name.filter {
+        case Ast.Name("true")  => false
+        case Ast.Name("false") => false
+        case Ast.Name("null")  => false
+        case _                 => true
+      } .map(Ast.Value.EnumValue.apply)
+
+    //TODO this is recursive and SOs on construction of the parser
+    lazy val ListValue: Parser[Ast.Value.ListValue] =
+      token(squareBrackets(many(rec)).map(Ast.Value.ListValue.apply))
+
+    lazy val IntValue: Parser[Ast.Value.IntValue] =
+      token(intLiteral).map(a => Ast.Value.IntValue(a.toInt))
+
+    lazy val FloatValue: Parser[Ast.Value.FloatValue] =
+      token(floatLiteral).map(a => Ast.Value.FloatValue(a.toDouble))
+
+    lazy val BooleanValue: Parser[Ast.Value.BooleanValue] =
+      token(booleanLiteral).map(Ast.Value.BooleanValue.apply)
+
+    lazy val ObjectValue: Parser[Ast.Value.ObjectValue] =
+      braces(many(ObjectField)).map(Ast.Value.ObjectValue.apply)
+
+    lazy val ObjectField: Parser[(Ast.Name, Ast.Value)] =
+      (Name <* keyword(":")) ~ rec
+
     Variable    .widen[Ast.Value] |
     IntValue    .widen            |
     FloatValue  .widen            |
@@ -269,38 +300,10 @@ object GraphQLParser {
     EnumValue   .widen            |
     ListValue   .widen            |
     ObjectValue .widen
-
-  lazy val NullValue: Parser[Ast.Value.NullValue.type] =
-    keyword("null").as(Ast.Value.NullValue)
-
-  lazy val EnumValue: Parser[Ast.Value.EnumValue] =
-    Name.filter {
-      case Ast.Name("true")  => false
-      case Ast.Name("false") => false
-      case Ast.Name("null")  => false
-      case _                 => true
-    } .map(Ast.Value.EnumValue.apply)
-
-  lazy val ListValue: Parser[Ast.Value.ListValue] =
-    token(squareBrackets(many(Value)).map(Ast.Value.ListValue.apply))
-
-  lazy val IntValue: Parser[Ast.Value.IntValue] =
-    token(intLiteral).map(a => Ast.Value.IntValue(a.toInt))
-
-  lazy val FloatValue: Parser[Ast.Value.FloatValue] =
-    token(floatLiteral).map(a => Ast.Value.FloatValue(a.toDouble))
+  }
 
   lazy val StringValue: Parser[Ast.Value.StringValue] =
     token(stringLiteral).map(Ast.Value.StringValue.apply)
-
-  lazy val BooleanValue: Parser[Ast.Value.BooleanValue] =
-    token(booleanLiteral).map(Ast.Value.BooleanValue.apply)
-
-  lazy val ObjectValue: Parser[Ast.Value.ObjectValue] =
-    braces(many(ObjectField)).map(Ast.Value.ObjectValue.apply)
-
-  lazy val ObjectField: Parser[(Ast.Name, Ast.Value)] =
-    (Name <* keyword(":")) ~ Value
 
   lazy val VariableDefinitions: Parser[List[Ast.VariableDefinition]] =
     parens(many(VariableDefinition))
@@ -335,8 +338,9 @@ object GraphQLParser {
   lazy val Directives: Parser0[List[Ast.Directive]] =
     many(Directive)
 
+  //TODO why does this hang?
   lazy val Directive: Parser[Ast.Directive] =
-    keyword("@") *> (Name, opt(Arguments)).mapN((n, ods) => Ast.Directive(n, ods.orEmpty))
+    keyword("@") *> (Name ~ opt(Arguments)).map { case (n, ods) => Ast.Directive(n, ods.orEmpty)}
 
   lazy val Name: Parser[Ast.Name] = {
     val initial    = ('A' to 'Z').toSet ++ ('a' to 'z').toSet + '_'
@@ -355,12 +359,12 @@ object CommentedText {
 
   def many[A](parser: Parser[A]): Parser0[List[A]] = parser.rep0
 
-  def skipWhitespace: Parser[Unit] =
-    charsWhile(c => c.isWhitespace || c == ',').void.withContext("whitespace")
+  def skipWhitespace: Parser0[Unit] =
+    charsWhile0(c => c.isWhitespace || c == ',').void.withContext("whitespace")
 
   /** Parser that consumes a comment */
   def comment: Parser[Unit] = {
-    (char('#') *> many((charWhere(c => c != '\n' && c != '\r'))) <* charIn('\n', '\r') <* skipWhitespace).void
+    (char('#') *> many((charWhere(c => c != '\n' && c != '\r'))) <* charIn('\n', '\r') <* skipWhitespace).void.withContext("comment")
   }
 
   /** Turns a parser into one that skips trailing whitespace and comments */
