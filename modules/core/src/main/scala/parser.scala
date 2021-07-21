@@ -418,7 +418,7 @@ object Literals {
 
     lazy val lineTerminator = (lf | cr | crlf).string
 
-    (stringCharacter.rep0.with1.surroundedBy(char('"')) | (blockStringCharacter.rep0.with1.surroundedBy(string("\"\"\"")))).string
+    stringCharacter.rep0.string.with1.surroundedBy(char('"')) | (blockStringCharacter.rep0.string.with1.surroundedBy(string("\"\"\"")))
 
   }
 
