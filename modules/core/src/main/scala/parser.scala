@@ -22,7 +22,7 @@ object GraphQLParser {
     ExecutableDefinition | TypeSystemDefinition // | TypeSystemExtension
 
   lazy val TypeSystemDefinition: Parser[Ast.TypeSystemDefinition] =
-    SchemaDefinition | TypeDefinition | DirectiveDefinition
+    SchemaDefinition | TypeDefinition.backtrack | DirectiveDefinition
 
   lazy val SchemaDefinition: Parser[Ast.SchemaDefinition] =
     for {
@@ -39,11 +39,11 @@ object GraphQLParser {
     } yield Ast.RootOperationTypeDefinition(optpe, tpe)
 
   lazy val TypeDefinition: Parser[Ast.TypeDefinition] =
-    ScalarTypeDefinition.widen[Ast.TypeDefinition] |
-    ObjectTypeDefinition |
-    InterfaceTypeDefinition |
-    UnionTypeDefinition |
-    EnumTypeDefinition |
+    ScalarTypeDefinition.widen[Ast.TypeDefinition].backtrack |
+    ObjectTypeDefinition.backtrack |
+    InterfaceTypeDefinition.backtrack |
+    UnionTypeDefinition.backtrack |
+    EnumTypeDefinition.backtrack |
     InputObjectTypeDefinition
 
   lazy val ScalarTypeDefinition: Parser[Ast.ScalarTypeDefinition] =
