@@ -1,4 +1,3 @@
-val attoVersion                 = "0.9.5"
 val catsVersion                 = "2.6.1"
 val catsParseVersion            = "0.3.4"
 val catsEffectVersion           = "3.1.1"
@@ -83,7 +82,6 @@ lazy val core = project
     name := "gsp-graphql-core",
     libraryDependencies ++=
       Seq(
-        "org.tpolecat"      %% "atto-core"              % attoVersion,
         "org.typelevel"     %% "cats-parse"             % catsParseVersion,
         "org.typelevel"     %% "cats-core"              % catsVersion,
         "org.typelevel"     %% "literally"              % literallyVersion,
