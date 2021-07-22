@@ -115,7 +115,7 @@ final class SubscriptionSpec extends CatsSuite {
       for {
         ref <- SignallingRef[IO, Int](0)
         map  = mapping(ref)
-        fib <- map.compileAndRunAll("subscription { watch }").take(3).compile.toList.start
+        fib <- map.compileAndRunAll("subscription { watch }").take(4).compile.toList.start
         _   <- map.compileAndRunOne("mutation { put(n: 123) }")
         _   <- IO.sleep(100.milli) // this is the best we can do for now; I will try to improve in a followup
         _   <- map.compileAndRunOne("mutation { put(n: 42) }")
@@ -127,6 +127,13 @@ final class SubscriptionSpec extends CatsSuite {
       } yield res
 
     assert(prog.unsafeRunSync() == List(
+      json"""
+        {
+          "data" : {
+            "watch" : 0
+          }
+        }
+      """,
       json"""
         {
           "data" : {
