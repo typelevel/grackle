@@ -212,7 +212,7 @@ object GraphQLParser {
 
   lazy val Selection: Parser[Ast.Selection] =
     Field.widen[Ast.Selection] |
-    FragmentSpread.widen       |
+    FragmentSpread.widen.backtrack       |
     InlineFragment.widen
 
   lazy val Field: Parser[Ast.Selection.Field] =
