@@ -9,6 +9,25 @@ object GraphQLResponseTests {
   def assertWeaklyEqual(x: Json, y: Json, strictPaths: List[List[String]] = Nil): Unit =
     assert(weaklyEqual(x, y, strictPaths))
 
+  def assertNoErrors(x: Json): Unit =
+    assert(noErrors(x))
+
+  def hasField(x: Json, fieldName: String): Boolean =
+    (for {
+      x0 <- x.asObject
+      _  <- x0(fieldName)
+    } yield true).getOrElse(false)
+
+  def errorsOf(x: Json): Seq[Json] =
+    (for {
+      x0          <- x.asObject
+      errorsField <- x0("errors")
+      errors      <- errorsField.asArray
+    } yield errors).getOrElse(Nil)
+
+  def noErrors(x: Json): Boolean =
+    hasField(x, "data") && !hasField(x, "errors") || errorsOf(x).isEmpty
+
   def weaklyEqual(x: Json, y: Json, strictPaths: List[List[String]] = Nil): Boolean = {
     def cmpObject(x: JsonObject, y: JsonObject, strictPaths: List[List[String]], path: List[String]): Boolean = {
       val xkeys = x.keys
