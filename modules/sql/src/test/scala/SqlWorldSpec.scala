@@ -11,7 +11,7 @@ import cats.effect.unsafe.implicits.global
 import edu.gemini.grackle._
 import syntax._
 
-import GraphQLResponseTests.assertWeaklyEqual
+import GraphQLResponseTests.{assertNoErrors, assertWeaklyEqual}
 
 trait SqlWorldSpec extends AnyFunSuite {
 
@@ -1158,4 +1158,94 @@ trait SqlWorldSpec extends AnyFunSuite {
     assertWeaklyEqual(res, expected)
   }
 
+  test("multiple nested lists (1)") {
+    val query = """
+      query {
+        language(language: "Icelandic") {
+          one: countries {
+            cities {
+              name
+            }
+            languages {
+              language
+            }
+          }
+          two: countries {
+            cities {
+              name
+            }
+            languages {
+              language
+              one: countries {
+                cities {
+                  name
+                }
+                languages {
+                  language
+                }
+              }
+            }
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertNoErrors(res)
+  }
+
+  test("multiple nested lists (2)") {
+    val query = """
+      query {
+        language(language: "Icelandic") {
+          countries {
+            cities {
+              name
+            }
+            languages {
+              countries {
+                cities {
+                  name
+                }
+                languages {
+                  language
+                }
+              }
+            }
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertNoErrors(res)
+  }
+
+  test("multiple nested lists (3)") {
+    val query = """
+      query {
+        language(language: "Icelandic") {
+          countries {
+            cities {
+              name
+            }
+            languages {
+              countries {
+                name
+              }
+            }
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertNoErrors(res)
+  }
 }

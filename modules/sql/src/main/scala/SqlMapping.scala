@@ -257,9 +257,14 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     /** Alias the given table at all the paths from the context result path and below */
     def aliasTable(context: Context, table: String): (AliasedMappings, String) = {
       val baseTable = unaliasTable(table)
-      val alias = s"${baseTable}_alias_${tableAliases.size}"
-      val aliases0 = (context.resultPath, baseTable, alias) :: tableAliases
-      (copy(tableAliases = aliases0), alias)
+
+      tableAliases.find(alias => alias._1 == context.resultPath && alias._2 == baseTable) match {
+        case Some(existing) => (this, existing._3)
+        case _ =>
+          val alias = s"${baseTable}_alias_${tableAliases.size}"
+          val aliases0 = (context.resultPath, baseTable, alias) :: tableAliases
+          (copy(tableAliases = aliases0), alias)
+      }
     }
 
     /** Derive a column alias for the given column in new table `table` */
@@ -540,12 +545,18 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     private def applyColumnAliases(resultPath: List[String], cr: ColumnRef): ColumnRef = {
       // First apply any in-scope table aliases
       val colWithTableAliases =
-        tableAliases.filter(alias => resultPath.endsWith(alias._1) && alias._2 == cr.table).sortBy(-_._1.length).headOption.map {
-          case (_, _, alias) => cr.copy(table = alias)
-        }.getOrElse(cr)
+        tableAliases.filter(alias => resultPath.endsWith(alias._1) && alias._2 == cr.table).sortBy(-_._1.length)
+          .headOption.map {
+            case (_, _, alias) => cr.copy(table = alias)
+          }.getOrElse(cr)
 
       // Apply any column aliases
-      columnAliases.filter(alias => resultPath.endsWith(alias._1) && alias._2 == colWithTableAliases).sortBy(_._1.length).headOption.map(_._3).getOrElse(colWithTableAliases)
+      val aliased =
+        columnAliases.filter(alias => resultPath.endsWith(alias._1) && alias._2 == colWithTableAliases).sortBy(_._1.length)
+          .headOption.map(_._3).getOrElse(colWithTableAliases)
+
+      if (aliased == cr) aliased
+      else applyColumnAliases(resultPath, aliased)
     }
 
     /** Return the given join with any column aliases applied */
@@ -952,10 +963,6 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             aliasedMappings.parentTableForType(parentContext).
               getOrElse(sys.error(s"No parent table for type ${parentContext.tpe}"))
 
-          val childTable: TableRef =
-            aliasedMappings.parentTableForType(context).
-              getOrElse(sys.error(s"No parent table for type ${context.tpe}"))
-
           val newJoins =
             table match {
               case sr@SubqueryRef(sq: SqlSelect, _) =>
@@ -994,24 +1001,6 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
                       val sr0 = sr.copy(subquery = sq0)
                       ij.subst(table, sr0)
                   }
-                }
-
-              case sr@SubqueryRef(sq: SqlUnion, _) =>
-                // If the subquery is wrapping a UNION then apply any column aliases to the
-                // new joins
-                extraJoins.map { sjoin =>
-                  val joinCols = sjoin.on.map(_._2)
-                  val newOn = sjoin.on.map {
-                    case (p, c) if c.table == childTable.refName =>
-                      (p, aliasedMappings.computeColumnAlias(childTable.refName, c))
-                    case other => other
-                  }
-
-                  val sq0 = sq.addColumns(joinCols)
-                  val cols0 = sq0.alignedCols
-                  val sq1 = sq0.copy(aliases = aliasedMappings.computeColumnAliases(childTable.refName, cols0).map(_.column))
-                  val sr0 = sr.copy(subquery = sq1)
-                  sjoin.copy(child = sr0, on = newOn)
                 }
 
               case _ =>
@@ -1182,8 +1171,44 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         extraJoins: List[SqlJoin],
         aliasedMappings: AliasedMappings
       ): (SqlQuery, AliasedMappings) = {
-        val (sel, am) = toSelect(aliasedMappings)
-        sel.nest(parentContext, fieldName, resultName, extraCols, extraJoins, am)
+        val childTable: TableRef =
+          aliasedMappings.parentTableForType(context).
+            getOrElse(sys.error(s"No parent table for type ${context.tpe}"))
+
+        val (am0, parentAlias) = aliasedMappings.aliasTable(context, childTable.refName)
+
+        val joinCols = extraJoins.flatMap { join =>
+          join.on.collect { case (_, c) if c.table == childTable.refName => c }
+        }
+        val thisWithJoinCols = this.addColumns(joinCols)
+
+        val aliasedCols = am0.computeColumnAliases(parentAlias, thisWithJoinCols.alignedCols)
+        val (am1, outerColumns) = am0.aliasColumns(context, thisWithJoinCols.alignedCols, aliasedCols)
+        val innerAliases = outerColumns.map(_.column)
+        val thisWithAliases = thisWithJoinCols.copy(aliases = innerAliases)
+        val ref = SubqueryRef(thisWithAliases, parentAlias)
+
+        val from =
+          if (extraJoins.isEmpty) ref
+          else
+            am1.parentTableForType(parentContext).
+              getOrElse(sys.error(s"No parent table for type ${parentContext.tpe}"))
+
+        val cols = (extraCols ++ outerColumns).distinct
+
+        val joins =
+          extraJoins.map { join =>
+            val newOn = join.on.map {
+              case (p, c) if c.table == childTable.refName =>
+                (p, am1.computeColumnAlias(parentAlias, c))
+              case other => other
+            }
+
+            join.copy(child = ref, on = newOn)
+          }
+
+        val sel = SqlSelect(parentContext, from, cols, joins, Nil, Nil, None, false)
+        (sel, am1)
       }
 
       /** Add WHERE, ORDER BY and LIMIT to this query */
@@ -1207,23 +1232,6 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
               }
             Some((SqlUnion(elems0), am0))
         }
-      }
-
-      /** Wrap this UNION in a SELECT with explicitly aliased columns so that it
-       *  can be used as a subobject query
-       */
-      def toSelect(aliasedMappings: AliasedMappings): (SqlSelect, AliasedMappings) = {
-        val parentTable: TableRef =
-          aliasedMappings.parentTableForType(context).
-            getOrElse(sys.error(s"No parent table for type ${context.tpe}"))
-
-        val aliasedCols = aliasedMappings.computeColumnAliases(parentTable.refName, alignedCols)
-        val (am1, outerColumns) = aliasedMappings.aliasColumns(context, alignedCols, aliasedCols)
-        val innerAliases = outerColumns.map(_.column)
-
-        val ref = SubqueryRef(this.copy(aliases = innerAliases), parentTable.refName)
-        val sel = SqlSelect(context, ref, outerColumns, Nil, Nil, Nil, None, false)
-        (sel, am1)
       }
 
       def toFragment: Fragment =
