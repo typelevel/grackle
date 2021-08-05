@@ -793,9 +793,11 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             binaryOp(x, y)(Fragments.const(" >= "))
 
           case In(x, y) =>
-            NonEmptyList.fromList(y).flatMap { ys =>
-              binaryOp2(x)(nx => Fragments.in(nx.toFragment, ys, e))
-            }
+            for {
+              enc <- encoderForTerm(context, x)
+              ys  <- NonEmptyList.fromList(y)
+              w   <- binaryOp2(x)(nx => Fragments.in(nx.toFragment, ys, enc))
+            } yield w
 
           case AndB(x, y) =>
             binaryOp(x, y)(Fragments.const(" & "), Some(intEncoder))
