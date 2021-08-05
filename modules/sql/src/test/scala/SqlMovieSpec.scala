@@ -380,4 +380,44 @@ trait SqlMovieSpec extends AnyFunSuite {
     assertWeaklyEqual(res, expected)
   }
 
+  test("query with enum list argument") {
+    val query = """
+      query {
+        moviesByGenres(genres: [COMEDY, ACTION]) {
+          title
+          genre
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "moviesByGenres" : [
+            {
+              "title" : "Zazie dans le Métro",
+              "genre" : "COMEDY"
+            },
+            {
+              "title" : "Alphaville",
+              "genre" : "ACTION"
+            },
+            {
+              "title" : "Weekend",
+              "genre" : "COMEDY"
+            },
+            {
+              "title" : "Daisies",
+              "genre" : "COMEDY"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
 }

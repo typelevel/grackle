@@ -116,6 +116,7 @@ trait MovieMapping[F[_]] extends SkunkMapping[F] {
       type Query {
         movieById(id: UUID!): Movie
         moviesByGenre(genre: Genre!): [Movie!]!
+        moviesByGenres(genres: [Genre!]): [Movie!]!
         moviesReleasedBetween(from: Date!, to: Date!): [Movie!]!
         moviesLongerThan(duration: Interval!): [Movie!]!
         moviesShownLaterThan(time: Time!): [Movie!]!
@@ -169,6 +170,7 @@ trait MovieMapping[F[_]] extends SkunkMapping[F] {
           List(
             SqlRoot("movieById"),
             SqlRoot("moviesByGenre"),
+            SqlRoot("moviesByGenres"),
             SqlRoot("moviesReleasedBetween"),
             SqlRoot("moviesLongerThan"),
             SqlRoot("moviesShownLaterThan"),
@@ -242,12 +244,22 @@ trait MovieMapping[F[_]] extends SkunkMapping[F] {
       Genre.fromString(e.value.name)
   }
 
+  object GenreListValue {
+    def unapply(gs: ListValue): Option[List[Genre]] =
+      gs.elems.traverse {
+        case GenreValue(g) => Some(g)
+        case _ => None
+      }
+  }
+
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("movieById", List(Binding("id", UUIDValue(id))), child) =>
         Select("movieById", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
       case Select("moviesByGenre", List(Binding("genre", GenreValue(genre))), child) =>
         Select("moviesByGenre", Nil, Filter(Eql(UniquePath(List("genre")), Const(genre)), child)).rightIor
+      case Select("moviesByGenres", List(Binding("genres", GenreListValue(genres))), child) =>
+        Select("moviesByGenres", Nil, Filter(In(UniquePath(List("genre")), genres), child)).rightIor
       case Select("moviesReleasedBetween", List(Binding("from", DateValue(from)), Binding("to", DateValue(to))), child) =>
         Select("moviesReleasedBetween", Nil,
           Filter(
