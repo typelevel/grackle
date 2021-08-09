@@ -193,6 +193,11 @@ object Predicate {
     def children = List(x, y)
   }
 
+  case class IsNull[T](x: Term[Option[T]], isNull: Boolean) extends Predicate {
+    def apply(c: Cursor): Result[Boolean] = x(c).map(_.isEmpty == isNull)
+    def children = List(x)
+  }
+
   case class In[T: Eq](x: Term[T], y: List[T]) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = x(c).map(y.contains_)
     def children = List(x)

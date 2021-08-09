@@ -483,7 +483,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             !isComputedField(parentContext, termPath.path.last)
           }.getOrElse(true)
         case _: Const[_] | _: And | _: Or | _: Not | _: Eql[_] | _: NEql[_] | _: Contains[_] | _: Lt[_] | _: LtEql[_] | _: Gt[_] |
-             _: GtEql[_] | _: In[_] | _: AndB | _: OrB | _: XorB | _: NotB | _: Matches | _: StartsWith |
+             _: GtEql[_] | _: In[_] | _: AndB | _: OrB | _: XorB | _: NotB | _: Matches | _: StartsWith | _: IsNull[_] |
              _: ToUpperCase | _: ToLowerCase | _: Like => true
         case _ => false
       }
@@ -828,6 +828,10 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
           case ToLowerCase(x) =>
             binaryOp2(x)(nx => Fragments.const("lower(") |+| nx.toFragment |+| Fragments.const(s")"), Some(stringEncoder))
+
+          case IsNull(x, isNull) =>
+            val sense = if (isNull) "" else "NOT"
+            binaryOp2(x)(nx => nx.toFragment |+| Fragments.const(s" IS $sense NULL "))
 
           case Like(x, pattern, caseInsensitive) =>
             val op = if(caseInsensitive) " ILIKE " else " LIKE "

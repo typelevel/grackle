@@ -63,6 +63,7 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
         countries(limit: Int = -1, minPopulation: Int = 0, byPopulation: Boolean = false): [Country!]
         language(language: String): Language
         search(minPopulation: Int!, indepSince: Int!): [Country!]!
+        search2(indep: Boolean!, limit: Int!): [Country!]!
       }
       type City {
         name: String!
@@ -111,7 +112,8 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
           SqlRoot("country"),
           SqlRoot("countries"),
           SqlRoot("language"),
-          SqlRoot("search")
+          SqlRoot("search"),
+          SqlRoot("search2")
         )
       ),
       ObjectMapping(
@@ -201,6 +203,8 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
           )
         ).rightIor
 
+      case Select("search2", List(Binding("indep", BooleanValue(indep)), Binding("limit", IntValue(num))), child) =>
+        Select("search2", Nil, Limit(num, Filter(IsNull[Int](UniquePath(List("indepyear")), isNull = !indep), child))).rightIor
     }
   ))
 }

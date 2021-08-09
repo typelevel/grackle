@@ -1248,4 +1248,78 @@ trait SqlWorldSpec extends AnyFunSuite {
 
     assertNoErrors(res)
   }
+
+  test("non-null filter") {
+    val query = """
+      query {
+        search2(indep: true, limit: 3) {
+          name
+          indepyear
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "search2" : [
+            {
+              "name" : "Afghanistan",
+              "indepyear" : 1919
+            },
+            {
+              "name" : "Albania",
+              "indepyear" : 1912
+            },
+            {
+              "name" : "Angola",
+              "indepyear" : 1975
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
+  test("null filter") {
+    val query = """
+      query {
+        search2(indep: false, limit: 3) {
+          name
+          indepyear
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "search2" : [
+            {
+              "name" : "Netherlands Antilles",
+              "indepyear" : null
+            },
+            {
+              "name" : "Anguilla",
+              "indepyear" : null
+            },
+            {
+              "name" : "Aruba",
+              "indepyear" : null
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
 }
