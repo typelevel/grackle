@@ -384,24 +384,20 @@ object CommentedText {
    * Consumes `left` and `right`, including the trailing and preceding whitespace,
    * respectively, and returns the value of `p`.
    */
-  private def _bracket[A,B,C](left: Parser[B], p: => Parser0[A], right: => Parser[C]): Parser[A] =
+  private def _bracket[A,B,C](left: Parser[B], p: Parser0[A], right: Parser[C]): Parser[A] =
     token(left) *> token0(p) <* token(right)
 
   /** Turns a parser into one that consumes surrounding parentheses `()` */
-  def parens[A](p: => Parser0[A]): Parser[A] =
+  def parens[A](p: Parser0[A]): Parser[A] =
     _bracket(char('('), p, char(')')).withContext(s"parens(${p.toString})")
 
   /** Turns a parser into one that consumes surrounding curly braces `{}` */
-  def braces[A](p: => Parser0[A]): Parser[A] = {
-    lazy val q = p
-    _bracket(char('{'), q, char('}')).withContext(s"braces(${q.toString})")
-  }
+  def braces[A](p: Parser0[A]): Parser[A] =
+    _bracket(char('{'), p, char('}')).withContext(s"braces(${p.toString})")
 
   /** Turns a parser into one that consumes surrounding square brackets `[]` */
-  def squareBrackets[A](p: => Parser0[A]): Parser[A] = {
-    lazy val q = p
-    _bracket(char('['), q, char(']')).withContext(s"squareBrackets(${q.toString})")
-  }
+  def squareBrackets[A](p: Parser0[A]): Parser[A] =
+    _bracket(char('['), p, char(']')).withContext(s"squareBrackets(${p.toString})")
 }
 
 object Literals {
