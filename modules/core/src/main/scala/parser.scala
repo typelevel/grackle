@@ -349,8 +349,8 @@ object GraphQLParser {
     keyword("@") *> (Name ~ opt(Arguments)).map { case (n, ods) => Ast.Directive(n, ods.orEmpty)}
 
   lazy val Name: Parser[Ast.Name] = {
-    val initial    = ('A' to 'Z').toSet ++ ('a' to 'z').toSet + '_'
-    val subsequent = initial ++ ('0' to '9').toSet
+    val initial    = ('A' to 'Z') ++ ('a' to 'z') ++ Seq('_')
+    val subsequent = initial ++ ('0' to '9')
     token(charIn(initial) ~ many(charIn(subsequent))).map {
       case (h, t) => Ast.Name((h :: t).mkString)
     }
@@ -369,9 +369,8 @@ object CommentedText {
     charsWhile0(c => c.isWhitespace || c == ',').void.withContext("whitespace")
 
   /** Parser that consumes a comment */
-  def comment: Parser[Unit] = {
+  def comment: Parser[Unit] =
     (char('#') *> many((charWhere(c => c != '\n' && c != '\r'))) <* charIn('\n', '\r') <* skipWhitespace).void.withContext("comment")
-  }
 
   /** Turns a parser into one that skips trailing whitespace and comments */
   def token[A](p: Parser[A]): Parser[A] =
