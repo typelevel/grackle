@@ -39,7 +39,7 @@ object GraphQLParser {
     } yield Ast.RootOperationTypeDefinition(optpe, tpe)
 
   lazy val TypeDefinition: Parser[Ast.TypeDefinition] =
-    ScalarTypeDefinition.widen[Ast.TypeDefinition].backtrack |
+    ScalarTypeDefinition.backtrack |
     ObjectTypeDefinition.backtrack |
     InterfaceTypeDefinition.backtrack |
     UnionTypeDefinition.backtrack |
@@ -164,31 +164,31 @@ object GraphQLParser {
     opt(keyword("|")) *> DirectiveLocation.repSep0(keyword("|"))
 
   lazy val DirectiveLocation: Parser[Ast.DirectiveLocation] =
-    keyword("QUERY")       .as(Ast.DirectiveLocation.QUERY).widen[Ast.DirectiveLocation]     |
-    keyword("MUTATION")    .as(Ast.DirectiveLocation.MUTATION).widen                         |
-    keyword("SUBSCRIPTION").as(Ast.DirectiveLocation.SUBSCRIPTION).widen                     |
-    keyword("FIELD").as(Ast.DirectiveLocation.FIELD).widen                                   |
-    keyword("FRAGMENT_DEFINITION").as(Ast.DirectiveLocation.FRAGMENT_DEFINITION).widen       |
-    keyword("FRAGMENT_SPREAD").as(Ast.DirectiveLocation.FRAGMENT_SPREAD).widen               |
-    keyword("INLINE_FRAGMENT").as(Ast.DirectiveLocation.INLINE_FRAGMENT).widen               |
-    keyword("VARIABLE_DEFINITION").as(Ast.DirectiveLocation.VARIABLE_DEFINITION).widen       |
-    keyword("SCHEMA").as(Ast.DirectiveLocation.SCHEMA).widen                                 |
-    keyword("SCALAR").as(Ast.DirectiveLocation.SCALAR).widen                                 |
-    keyword("OBJECT").as(Ast.DirectiveLocation.OBJECT).widen                                 |
-    keyword("FIELD_DEFINITION").as(Ast.DirectiveLocation.FIELD_DEFINITION).widen             |
-    keyword("ARGUMENT_DEFINITION").as(Ast.DirectiveLocation.ARGUMENT_DEFINITION).widen       |
-    keyword("INTERFACE").as(Ast.DirectiveLocation.INTERFACE).widen                           |
-    keyword("UNION").as(Ast.DirectiveLocation.UNION).widen                                   |
-    keyword("ENUM").as(Ast.DirectiveLocation.ENUM).widen                                     |
-    keyword("ENUM_VALUE").as(Ast.DirectiveLocation.ENUM_VALUE).widen                         |
-    keyword("INPUT_OBJECT").as(Ast.DirectiveLocation.INPUT_OBJECT).widen                     |
-    keyword("INPUT_FIELD_DEFINITION").as(Ast.DirectiveLocation.INPUT_FIELD_DEFINITION).widen
+    keyword("QUERY")       .as(Ast.DirectiveLocation.QUERY) |
+    keyword("MUTATION")    .as(Ast.DirectiveLocation.MUTATION) |
+    keyword("SUBSCRIPTION").as(Ast.DirectiveLocation.SUBSCRIPTION) |
+    keyword("FIELD").as(Ast.DirectiveLocation.FIELD) |
+    keyword("FRAGMENT_DEFINITION").as(Ast.DirectiveLocation.FRAGMENT_DEFINITION) |
+    keyword("FRAGMENT_SPREAD").as(Ast.DirectiveLocation.FRAGMENT_SPREAD) |
+    keyword("INLINE_FRAGMENT").as(Ast.DirectiveLocation.INLINE_FRAGMENT) |
+    keyword("VARIABLE_DEFINITION").as(Ast.DirectiveLocation.VARIABLE_DEFINITION) |
+    keyword("SCHEMA").as(Ast.DirectiveLocation.SCHEMA) |
+    keyword("SCALAR").as(Ast.DirectiveLocation.SCALAR) |
+    keyword("OBJECT").as(Ast.DirectiveLocation.OBJECT) |
+    keyword("FIELD_DEFINITION").as(Ast.DirectiveLocation.FIELD_DEFINITION) |
+    keyword("ARGUMENT_DEFINITION").as(Ast.DirectiveLocation.ARGUMENT_DEFINITION) |
+    keyword("INTERFACE").as(Ast.DirectiveLocation.INTERFACE) |
+    keyword("UNION").as(Ast.DirectiveLocation.UNION) |
+    keyword("ENUM").as(Ast.DirectiveLocation.ENUM) |
+    keyword("ENUM_VALUE").as(Ast.DirectiveLocation.ENUM_VALUE) |
+    keyword("INPUT_OBJECT").as(Ast.DirectiveLocation.INPUT_OBJECT) |
+    keyword("INPUT_FIELD_DEFINITION").as(Ast.DirectiveLocation.INPUT_FIELD_DEFINITION)
 
   lazy val ExecutableDefinition: Parser[Ast.ExecutableDefinition] =
     OperationDefinition | FragmentDefinition
 
   lazy val OperationDefinition: Parser[Ast.OperationDefinition] =
-    QueryShorthand.widen[Ast.OperationDefinition] | Operation.widen
+    QueryShorthand | Operation
 
   lazy val QueryShorthand: Parser[Ast.OperationDefinition.QueryShorthand] =
     SelectionSet.map(Ast.OperationDefinition.QueryShorthand.apply)
@@ -203,17 +203,17 @@ object GraphQLParser {
     } yield Ast.OperationDefinition.Operation(op, name, vars.orEmpty, dirs, sels)
 
   lazy val OperationType: Parser[Ast.OperationType] =
-    keyword("query")       .as(Ast.OperationType.Query)       .widen[Ast.OperationType] |
-    keyword("mutation")    .as(Ast.OperationType.Mutation)    .widen                    |
-    keyword("subscription").as(Ast.OperationType.Subscription).widen
+    keyword("query")       .as(Ast.OperationType.Query) |
+    keyword("mutation")    .as(Ast.OperationType.Mutation) |
+    keyword("subscription").as(Ast.OperationType.Subscription)
 
   lazy val SelectionSet: Parser[List[Ast.Selection]] =
     braces(many(Selection))
 
   lazy val Selection: Parser[Ast.Selection] =
-    Field.widen[Ast.Selection] |
-    FragmentSpread.widen.backtrack       |
-    InlineFragment.widen
+    Field |
+    FragmentSpread.backtrack |
+    InlineFragment
 
   lazy val Field: Parser[Ast.Selection.Field] =
     for {
@@ -290,15 +290,15 @@ object GraphQLParser {
     lazy val ObjectField: Parser[(Ast.Name, Ast.Value)] =
       (Name <* keyword(":")) ~ rec
 
-    Variable    .widen[Ast.Value] |
-    IntValue    .widen            |
-    FloatValue  .widen            |
-    StringValue .widen            |
-    BooleanValue.widen            |
-    NullValue   .widen            |
-    EnumValue   .widen            |
-    ListValue   .widen            |
-    ObjectValue .widen
+    Variable |
+      IntValue |
+      FloatValue |
+      StringValue |
+      BooleanValue |
+      NullValue |
+      EnumValue |
+      ListValue |
+      ObjectValue
   }
 
   lazy val StringValue: Parser[Ast.Value.StringValue] =
