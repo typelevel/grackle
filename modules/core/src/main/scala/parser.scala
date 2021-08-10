@@ -160,39 +160,37 @@ object GraphQLParser {
     keyword("mutation")    .as(Ast.OperationType.Mutation) |
     keyword("subscription").as(Ast.OperationType.Subscription)
 
-  lazy val SelectionSet: Parser[List[Ast.Selection]] =
+  lazy val SelectionSet: Parser[List[Ast.Selection]] = recursive[List[Ast.Selection]] { rec =>
+
+    lazy val Selection: Parser[Ast.Selection] =
+      Field |
+      FragmentSpread.backtrack |
+      InlineFragment
+
+    lazy val Field: Parser[Ast.Selection.Field] =
+      (opt(Alias).with1 ~ Name ~ opt(Arguments) ~ Directives ~ opt(rec)).map {
+        case ((((alias, name), args), dirs), sel) => Ast.Selection.Field(alias, name, args.orEmpty, dirs, sel.orEmpty)
+      }
+
+    lazy val Alias: Parser[Ast.Name] =
+      Name <* keyword(":")
+
+    lazy val FragmentSpread: Parser[Ast.Selection.FragmentSpread] =
+      keyword("...") *> (FragmentName, Directives).mapN(Ast.Selection.FragmentSpread.apply)
+
+    lazy val InlineFragment: Parser[Ast.Selection.InlineFragment] =
+      ((keyword("...") *> opt(TypeCondition)) ~ Directives ~ rec).map {
+        case ((cond, dirs), sel) => Ast.Selection.InlineFragment(cond, dirs, sel)
+      }
+
     braces(many(Selection))
-
-  lazy val Selection: Parser[Ast.Selection] =
-    Field |
-    FragmentSpread.backtrack |
-    InlineFragment
-
-  lazy val Field: Parser[Ast.Selection.Field] =
-    for {
-      alias <- opt(Alias).with1
-      name  <- Name
-      args  <- opt(Arguments)
-      dirs  <- Directives
-      sel   <- opt(SelectionSet)
-    } yield Ast.Selection.Field(alias, name, args.orEmpty, dirs, sel.orEmpty)
-
-  lazy val Alias: Parser[Ast.Name] =
-    Name <* keyword(":")
+  }
 
   lazy val Arguments: Parser[List[(Ast.Name, Ast.Value)]] =
     parens(many(Argument))
 
   lazy val Argument: Parser[(Ast.Name, Ast.Value)] =
     (Name <* keyword(":")) ~ Value
-
-  lazy val FragmentSpread: Parser[Ast.Selection.FragmentSpread] =
-    keyword("...") *> (FragmentName, Directives).mapN(Ast.Selection.FragmentSpread.apply)
-
-  lazy val InlineFragment: Parser[Ast.Selection.InlineFragment] =
-    ((keyword("...") *> opt(TypeCondition)) ~ Directives ~ SelectionSet).map {
-      case ((cond, dirs), sel) => Ast.Selection.InlineFragment(cond, dirs, sel)
-    }
 
   lazy val FragmentDefinition: Parser[Ast.FragmentDefinition] =
     ((keyword("fragment") *> FragmentName) ~ TypeCondition ~ Directives ~ SelectionSet).map {
