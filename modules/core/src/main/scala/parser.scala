@@ -34,43 +34,48 @@ object GraphQLParser {
       case (optpe, _, tpe) => Ast.RootOperationTypeDefinition(optpe, tpe)
     }
 
-  lazy val TypeDefinition: Parser[Ast.TypeDefinition] =
-    ScalarTypeDefinition.backtrack |
-    ObjectTypeDefinition.backtrack |
-    InterfaceTypeDefinition.backtrack |
-    UnionTypeDefinition.backtrack |
-    EnumTypeDefinition.backtrack |
-    InputObjectTypeDefinition
+  lazy val TypeDefinition: Parser[Ast.TypeDefinition] = {
 
-  lazy val ScalarTypeDefinition: Parser[Ast.ScalarTypeDefinition] =
-    ((opt(Description).with1 <* keyword("scalar")) ~ Name ~ opt(Directives)).map {
-      case ((desc, name), dirs) => Ast.ScalarTypeDefinition(name, desc.map(_.value), dirs.getOrElse(Nil))
+    def scalarTypeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.ScalarTypeDefinition] =
+      ((keyword("scalar") *> Name) ~ opt(Directives)).map {
+        case (name, dirs) => Ast.ScalarTypeDefinition(name, desc.map(_.value), dirs.getOrElse(Nil))
+      }
+
+    def objectTypeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.ObjectTypeDefinition] =
+      ((keyword("type") *> Name) ~ opt(ImplementsInterfaces) ~ opt(Directives) ~ FieldsDefinition).map {
+        case (((name, ifs), dirs), fields) => Ast.ObjectTypeDefinition(name, desc.map(_.value), fields, ifs.getOrElse(Nil), dirs.getOrElse(Nil))
+      }
+
+    def interfaceTypeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.InterfaceTypeDefinition] =
+      ((keyword("interface") *> Name) ~ opt(ImplementsInterfaces) ~ opt(Directives) ~ FieldsDefinition).map {
+        case (((name, ifs), dirs), fields) => Ast.InterfaceTypeDefinition(name, desc.map(_.value), fields, ifs.getOrElse(Nil), dirs.getOrElse(Nil))
+      }
+
+    def unionTypeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.UnionTypeDefinition] =
+      ((keyword("union") *> Name) ~ opt(Directives) ~ UnionMemberTypes).map {
+        case ((name, dirs), members) => Ast.UnionTypeDefinition(name, desc.map(_.value), dirs.getOrElse(Nil), members)
+      }
+
+    def enumTypeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.EnumTypeDefinition] =
+      ((keyword("enum") *> Name) ~ opt(Directives) ~ EnumValuesDefinition).map {
+        case ((name, dirs), values) => Ast.EnumTypeDefinition(name, desc.map(_.value), dirs.getOrElse(Nil), values)
+      }
+
+    def inputObjectTypeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.InputObjectTypeDefinition] =
+      ((keyword("input") *> Name) ~ opt(Directives) ~ InputFieldsDefinition).map {
+        case ((name, dirs), fields) => Ast.InputObjectTypeDefinition(name, desc.map(_.value), fields, dirs.getOrElse(Nil))
+      }
+
+    opt(Description).with1.flatMap { desc =>
+      scalarTypeDefinition(desc)|
+        objectTypeDefinition(desc) |
+        interfaceTypeDefinition(desc) |
+        unionTypeDefinition(desc) |
+        enumTypeDefinition(desc) |
+        inputObjectTypeDefinition(desc)
     }
 
-  lazy val ObjectTypeDefinition: Parser[Ast.ObjectTypeDefinition] =
-    ((opt(Description).with1 <* keyword("type")) ~ Name ~ opt(ImplementsInterfaces) ~ opt(Directives) ~ FieldsDefinition).map {
-      case ((((desc, name), ifs), dirs), fields) => Ast.ObjectTypeDefinition(name, desc.map(_.value), fields, ifs.getOrElse(Nil), dirs.getOrElse(Nil))
-    }
-
-  lazy val InterfaceTypeDefinition: Parser[Ast.InterfaceTypeDefinition] =
-    ((opt(Description).with1 <* keyword("interface")) ~ Name ~ opt(ImplementsInterfaces) ~ opt(Directives) ~ FieldsDefinition).map {
-      case ((((desc, name), ifs), dirs), fields) => Ast.InterfaceTypeDefinition(name, desc.map(_.value), fields, ifs.getOrElse(Nil), dirs.getOrElse(Nil))
-    }
-
-  lazy val UnionTypeDefinition: Parser[Ast.UnionTypeDefinition] =
-    ((opt(Description).with1 <* keyword("union")) ~ Name ~ opt(Directives) ~ UnionMemberTypes).map {
-      case (((desc, name), dirs), members) => Ast.UnionTypeDefinition(name, desc.map(_.value), dirs.getOrElse(Nil), members)
-    }
-
-  lazy val EnumTypeDefinition: Parser[Ast.EnumTypeDefinition] =
-    ((opt(Description).with1 <* keyword("enum")) ~ Name ~ opt(Directives) ~ EnumValuesDefinition).map {
-      case (((desc, name), dirs), values) => Ast.EnumTypeDefinition(name, desc.map(_.value), dirs.getOrElse(Nil), values)
-    }
-
-  lazy val InputObjectTypeDefinition: Parser[Ast.InputObjectTypeDefinition] =
-    ((opt(Description).with1 <* keyword("input")) ~ Name ~ opt(Directives) ~ InputFieldsDefinition).map {
-      case (((desc, name), dirs), fields) => Ast.InputObjectTypeDefinition(name, desc.map(_.value), fields, dirs.getOrElse(Nil))
-    }
+  }
 
   lazy val Description = StringValue
 
