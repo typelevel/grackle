@@ -101,7 +101,6 @@ abstract class DoobieMapping[F[_]: Sync](
           case Null                  => Some("NULL")
           case Numeric               => Some("NUMERIC")
           case NVarChar              => Some("NVARCHAR")
-          case Other                 => Some("OTHER")
           case Real                  => Some("REAL")
           case Ref                   => Some("REF")
           case RefCursor             => Some("REF CURSOR")
@@ -116,6 +115,13 @@ abstract class DoobieMapping[F[_]: Sync](
           case TinyInt               => Some("TINYINT")
           case VarBinary             => Some("VARBINARY")
           case VarChar               => Some("VARCHAR")
+          case Other                 =>
+            codec._1.put match {
+              case adv: Put.Advanced[_] =>
+                Some(adv.schemaTypes.head)
+              case _ => None
+            }
+
           case _                     => None
         }
     }
