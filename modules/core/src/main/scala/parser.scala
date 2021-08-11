@@ -16,14 +16,14 @@ object GraphQLParser {
   def keyword(s: String) = token(string(s))
 
   lazy val Document: Parser0[Ast.Document] =
-    many(whitespace | comment) *> many(Definition) <* Parser.end
+    (whitespace | comment).rep0 *> Definition.rep0 <* Parser.end
 
   lazy val Definition: Parser[Ast.Definition] =
     ExecutableDefinition | TypeSystemDefinition // | TypeSystemExtension
 
   lazy val TypeSystemDefinition: Parser[Ast.TypeSystemDefinition] = {
     val SchemaDefinition: Parser[Ast.SchemaDefinition] =
-      ((keyword("schema") *> Directives.?) ~ braces(many(RootOperationTypeDefinition))).map {
+      ((keyword("schema") *> Directives.?) ~ braces(RootOperationTypeDefinition.rep0)).map {
         case (dirs, rootdefs) => Ast.SchemaDefinition(rootdefs, dirs.getOrElse(Nil))
       }
 
@@ -91,7 +91,7 @@ object GraphQLParser {
     (keyword("implements") ~ keyword("&").?) *> NamedType.repSep0(keyword("&"))
 
   lazy val FieldsDefinition: Parser[List[Ast.FieldDefinition]] =
-    braces(many(FieldDefinition))
+    braces(FieldDefinition.rep0)
 
   lazy val FieldDefinition: Parser[Ast.FieldDefinition] =
     (Description.?.with1 ~ Name ~ ArgumentsDefinition.? ~ keyword(":") ~ Type ~ Directives.?).map {
@@ -99,10 +99,10 @@ object GraphQLParser {
     }
 
   lazy val ArgumentsDefinition: Parser[List[Ast.InputValueDefinition]] =
-    parens(many(InputValueDefinition))
+    parens(InputValueDefinition.rep0)
 
   lazy val InputFieldsDefinition: Parser[List[Ast.InputValueDefinition]] =
-    braces(many(InputValueDefinition))
+    braces(InputValueDefinition.rep0)
 
   lazy val InputValueDefinition: Parser[Ast.InputValueDefinition] =
     (Description.?.with1 ~ (Name <* keyword(":")) ~ Type ~ DefaultValue.? ~ Directives.?).map {
@@ -113,7 +113,7 @@ object GraphQLParser {
     (keyword("=") ~ keyword("|").?) *> NamedType.repSep0(keyword("|"))
 
   lazy val EnumValuesDefinition: Parser[List[Ast.EnumValueDefinition]] =
-    braces(many(EnumValueDefinition))
+    braces(EnumValueDefinition.rep0)
 
   lazy val EnumValueDefinition: Parser[Ast.EnumValueDefinition] =
     (Description.?.with1 ~ Name ~ Directives.?).map {
@@ -185,11 +185,11 @@ object GraphQLParser {
       Field |
       (keyword("...") *> (InlineFragment | FragmentSpread))
 
-    braces(many(Selection))
+    braces(Selection.rep0)
   }
 
   lazy val Arguments: Parser[List[(Ast.Name, Ast.Value)]] =
-    parens(many(Argument))
+    parens(Argument.rep0)
 
   lazy val Argument: Parser[(Ast.Name, Ast.Value)] =
     (Name <* keyword(":")) ~ Value
@@ -220,7 +220,7 @@ object GraphQLParser {
       } .map(Ast.Value.EnumValue.apply)
 
     val ListValue: Parser[Ast.Value.ListValue] =
-      token(squareBrackets(many(rec)).map(Ast.Value.ListValue.apply))
+      token(squareBrackets(rec.rep0).map(Ast.Value.ListValue.apply))
 
     val IntValue: Parser[Ast.Value.IntValue] =
       token(intLiteral).map(a => Ast.Value.IntValue(a.toInt))
@@ -235,7 +235,7 @@ object GraphQLParser {
       (Name <* keyword(":")) ~ rec
 
     val ObjectValue: Parser[Ast.Value.ObjectValue] =
-      braces(many(ObjectField)).map(Ast.Value.ObjectValue.apply)
+      braces(ObjectField.rep0).map(Ast.Value.ObjectValue.apply)
 
     Variable |
       IntValue |
@@ -252,7 +252,7 @@ object GraphQLParser {
     token(stringLiteral).map(Ast.Value.StringValue.apply)
 
   lazy val VariableDefinitions: Parser[List[Ast.VariableDefinition]] =
-    parens(many(VariableDefinition))
+    parens(VariableDefinition.rep0)
 
   lazy val VariableDefinition: Parser[Ast.VariableDefinition] =
     ((Variable <* keyword(":")) ~ Type ~ DefaultValue.?).map {
@@ -287,7 +287,7 @@ object GraphQLParser {
     Name.map(Ast.Type.Named.apply)
 
   lazy val Directives: Parser0[List[Ast.Directive]] =
-    many(Directive)
+    Directive.rep0
 
   lazy val Directive: Parser[Ast.Directive] =
     keyword("@") *> (Name ~ Arguments.?).map { case (n, ods) => Ast.Directive(n, ods.orEmpty)}
@@ -296,7 +296,7 @@ object GraphQLParser {
     val initial    = ('A' to 'Z') ++ ('a' to 'z') ++ Seq('_')
     val subsequent = initial ++ ('0' to '9')
 
-    token(charIn(initial) ~ many(charIn(subsequent))).map {
+    token(charIn(initial) ~ charIn(subsequent).rep0).map {
       case (h, t) => Ast.Name((h :: t).mkString)
     }
   }
@@ -306,21 +306,19 @@ object CommentedText {
 
   lazy val whitespace: Parser[Char] = charWhere(_.isWhitespace)
 
-  def many[A](parser: Parser[A]): Parser0[List[A]] = parser.rep0
-
   def skipWhitespace: Parser0[Unit] =
     charsWhile0(c => c.isWhitespace || c == ',').void.withContext("whitespace")
 
   /** Parser that consumes a comment */
   def comment: Parser[Unit] =
-    (char('#') *> many((charWhere(c => c != '\n' && c != '\r'))) <* charIn('\n', '\r') <* skipWhitespace).void.withContext("comment")
+    (char('#') *> (charWhere(c => c != '\n' && c != '\r')).rep0 <* charIn('\n', '\r') <* skipWhitespace).void.withContext("comment")
 
   /** Turns a parser into one that skips trailing whitespace and comments */
   def token[A](p: Parser[A]): Parser[A] =
-    p <* skipWhitespace <* many(comment)
+    p <* skipWhitespace <* comment.rep0
 
   def token0[A](p: Parser0[A]): Parser0[A] =
-    p <* skipWhitespace <* many(comment)
+    p <* skipWhitespace <* comment.rep0
 
   /**
    * Consumes `left` and `right`, including the trailing and preceding whitespace,
