@@ -23,39 +23,39 @@ object GraphQLParser {
 
   lazy val TypeSystemDefinition: Parser[Ast.TypeSystemDefinition] = {
     val SchemaDefinition: Parser[Ast.SchemaDefinition] =
-      ((keyword("schema") *> opt(Directives)) ~ braces(many(RootOperationTypeDefinition))).map {
+      ((keyword("schema") *> Directives.?) ~ braces(many(RootOperationTypeDefinition))).map {
         case (dirs, rootdefs) => Ast.SchemaDefinition(rootdefs, dirs.getOrElse(Nil))
       }
 
     def typeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.TypeDefinition] = {
 
       def scalarTypeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.ScalarTypeDefinition] =
-        ((keyword("scalar") *> Name) ~ opt(Directives)).map {
+        ((keyword("scalar") *> Name) ~ Directives.?).map {
           case (name, dirs) => Ast.ScalarTypeDefinition(name, desc.map(_.value), dirs.getOrElse(Nil))
         }
 
       def objectTypeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.ObjectTypeDefinition] =
-        ((keyword("type") *> Name) ~ opt(ImplementsInterfaces) ~ opt(Directives) ~ FieldsDefinition).map {
+        ((keyword("type") *> Name) ~ ImplementsInterfaces.? ~ Directives.? ~ FieldsDefinition).map {
           case (((name, ifs), dirs), fields) => Ast.ObjectTypeDefinition(name, desc.map(_.value), fields, ifs.getOrElse(Nil), dirs.getOrElse(Nil))
         }
 
       def interfaceTypeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.InterfaceTypeDefinition] =
-        ((keyword("interface") *> Name) ~ opt(ImplementsInterfaces) ~ opt(Directives) ~ FieldsDefinition).map {
+        ((keyword("interface") *> Name) ~ ImplementsInterfaces.? ~ Directives.? ~ FieldsDefinition).map {
           case (((name, ifs), dirs), fields) => Ast.InterfaceTypeDefinition(name, desc.map(_.value), fields, ifs.getOrElse(Nil), dirs.getOrElse(Nil))
         }
 
       def unionTypeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.UnionTypeDefinition] =
-        ((keyword("union") *> Name) ~ opt(Directives) ~ UnionMemberTypes).map {
+        ((keyword("union") *> Name) ~ Directives.? ~ UnionMemberTypes).map {
           case ((name, dirs), members) => Ast.UnionTypeDefinition(name, desc.map(_.value), dirs.getOrElse(Nil), members)
         }
 
       def enumTypeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.EnumTypeDefinition] =
-        ((keyword("enum") *> Name) ~ opt(Directives) ~ EnumValuesDefinition).map {
+        ((keyword("enum") *> Name) ~ Directives.? ~ EnumValuesDefinition).map {
           case ((name, dirs), values) => Ast.EnumTypeDefinition(name, desc.map(_.value), dirs.getOrElse(Nil), values)
         }
 
       def inputObjectTypeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.InputObjectTypeDefinition] =
-        ((keyword("input") *> Name) ~ opt(Directives) ~ InputFieldsDefinition).map {
+        ((keyword("input") *> Name) ~ Directives.? ~ InputFieldsDefinition).map {
           case ((name, dirs), fields) => Ast.InputObjectTypeDefinition(name, desc.map(_.value), fields, dirs.getOrElse(Nil))
         }
 
@@ -68,12 +68,13 @@ object GraphQLParser {
     }
 
     def directiveDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.DirectiveDefinition] =
-      ((keyword("directive") *> keyword("@") *> Name) ~ ArgumentsDefinition ~ (opt(keyword("repeatable").void) <* keyword("on")) ~ DirectiveLocations).map {
+      ((keyword("directive") *> keyword("@") *> Name) ~
+         ArgumentsDefinition ~ (keyword("repeatable").? <* keyword("on")) ~ DirectiveLocations).map {
         case (((name, args), rpt), locs) => Ast.DirectiveDefinition(name, desc.map(_.value), args, rpt.isDefined, locs)
       }
 
     SchemaDefinition |
-      opt(Description).with1.flatMap { desc =>
+      Description.?.with1.flatMap { desc =>
         typeDefinition(desc) | directiveDefinition(desc)
       }
   }
@@ -87,13 +88,13 @@ object GraphQLParser {
   lazy val Description = StringValue
 
   lazy val ImplementsInterfaces =
-    (keyword("implements") ~ opt(keyword("&"))) *> NamedType.repSep0(keyword("&"))
+    (keyword("implements") ~ keyword("&").?) *> NamedType.repSep0(keyword("&"))
 
   lazy val FieldsDefinition: Parser[List[Ast.FieldDefinition]] =
     braces(many(FieldDefinition))
 
   lazy val FieldDefinition: Parser[Ast.FieldDefinition] =
-    (opt(Description).with1 ~ Name ~ opt(ArgumentsDefinition) ~ keyword(":") ~ Type ~ opt(Directives)).map {
+    (Description.?.with1 ~ Name ~ ArgumentsDefinition.? ~ keyword(":") ~ Type ~ Directives.?).map {
       case (((((desc, name), args), _), tpe), dirs) => Ast.FieldDefinition(name, desc.map(_.value), args.getOrElse(Nil), tpe, dirs.getOrElse(Nil))
     }
 
@@ -104,23 +105,23 @@ object GraphQLParser {
     braces(many(InputValueDefinition))
 
   lazy val InputValueDefinition: Parser[Ast.InputValueDefinition] =
-    (opt(Description).with1 ~ (Name <* keyword(":")) ~ Type ~ opt(DefaultValue) ~ opt(Directives)).map {
+    (Description.?.with1 ~ (Name <* keyword(":")) ~ Type ~ DefaultValue.? ~ Directives.?).map {
       case ((((desc, name), tpe), dv), dirs) => Ast.InputValueDefinition(name, desc.map(_.value), tpe, dv, dirs.getOrElse(Nil))
     }
 
   lazy val UnionMemberTypes: Parser[List[Ast.Type.Named]] =
-    (keyword("=") ~ opt(keyword("|"))) *> NamedType.repSep0(keyword("|"))
+    (keyword("=") ~ keyword("|").?) *> NamedType.repSep0(keyword("|"))
 
   lazy val EnumValuesDefinition: Parser[List[Ast.EnumValueDefinition]] =
     braces(many(EnumValueDefinition))
 
   lazy val EnumValueDefinition: Parser[Ast.EnumValueDefinition] =
-    (opt(Description).with1 ~ Name ~ opt(Directives)).map {
+    (Description.?.with1 ~ Name ~ Directives.?).map {
       case ((desc, name), dirs) => Ast.EnumValueDefinition(name, desc.map(_.value), dirs.getOrElse(Nil))
     }
 
   lazy val DirectiveLocations: Parser0[List[Ast.DirectiveLocation]] =
-    opt(keyword("|")) *> DirectiveLocation.repSep0(keyword("|"))
+    keyword("|").? *> DirectiveLocation.repSep0(keyword("|"))
 
   lazy val DirectiveLocation: Parser[Ast.DirectiveLocation] =
     keyword("QUERY")       .as(Ast.DirectiveLocation.QUERY) |
@@ -153,7 +154,7 @@ object GraphQLParser {
     SelectionSet.map(Ast.OperationDefinition.QueryShorthand.apply)
 
   lazy val Operation: Parser[Ast.OperationDefinition.Operation] =
-    (OperationType ~ opt(Name) ~ opt(VariableDefinitions) ~ Directives ~ SelectionSet).map {
+    (OperationType ~ Name.? ~ VariableDefinitions.? ~ Directives ~ SelectionSet).map {
       case ((((op, name), vars), dirs), sels) => Ast.OperationDefinition.Operation(op, name, vars.orEmpty, dirs, sels)
     }
 
@@ -168,7 +169,7 @@ object GraphQLParser {
       Name <* keyword(":")
 
     val Field: Parser[Ast.Selection.Field] =
-      (opt(Alias).with1 ~ Name ~ opt(Arguments) ~ Directives ~ opt(rec)).map {
+      (Alias.backtrack.?.with1 ~ Name ~ Arguments.? ~ Directives ~ rec.?).map {
         case ((((alias, name), args), dirs), sel) => Ast.Selection.Field(alias, name, args.orEmpty, dirs, sel.orEmpty)
       }
 
@@ -176,7 +177,7 @@ object GraphQLParser {
       (FragmentName ~ Directives).map{ case (name, dirs) => Ast.Selection.FragmentSpread.apply(name, dirs)}
 
     val InlineFragment: Parser[Ast.Selection.InlineFragment] =
-      ((opt(TypeCondition)~ Directives).with1 ~ rec).map {
+      ((TypeCondition.? ~ Directives).with1 ~ rec).map {
         case ((cond, dirs), sel) => Ast.Selection.InlineFragment(cond, dirs, sel)
       }
 
@@ -254,7 +255,7 @@ object GraphQLParser {
     parens(many(VariableDefinition))
 
   lazy val VariableDefinition: Parser[Ast.VariableDefinition] =
-    ((Variable <* keyword(":")) ~ Type ~ opt(DefaultValue)).map {
+    ((Variable <* keyword(":")) ~ Type ~ DefaultValue.?).map {
       case ((v, tpe), dv) => Ast.VariableDefinition(v.name, tpe, dv)
     }
 
@@ -289,7 +290,7 @@ object GraphQLParser {
     many(Directive)
 
   lazy val Directive: Parser[Ast.Directive] =
-    keyword("@") *> (Name ~ opt(Arguments)).map { case (n, ods) => Ast.Directive(n, ods.orEmpty)}
+    keyword("@") *> (Name ~ Arguments.?).map { case (n, ods) => Ast.Directive(n, ods.orEmpty)}
 
   lazy val Name: Parser[Ast.Name] = {
     val initial    = ('A' to 'Z') ++ ('a' to 'z') ++ Seq('_')
@@ -304,8 +305,6 @@ object GraphQLParser {
 object CommentedText {
 
   lazy val whitespace: Parser[Char] = charWhere(_.isWhitespace)
-
-  def opt[A](parser: Parser0[A]): Parser0[Option[A]] = parser.backtrack.?
 
   def many[A](parser: Parser[A]): Parser0[List[A]] = parser.rep0
 
