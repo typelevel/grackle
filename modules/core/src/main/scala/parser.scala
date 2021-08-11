@@ -162,26 +162,25 @@ object GraphQLParser {
 
   lazy val SelectionSet: Parser[List[Ast.Selection]] = recursive[List[Ast.Selection]] { rec =>
 
-    lazy val Selection: Parser[Ast.Selection] =
-      Field |
-      FragmentSpread.backtrack |
-      InlineFragment
+    val Alias: Parser[Ast.Name] =
+      Name <* keyword(":")
 
-    lazy val Field: Parser[Ast.Selection.Field] =
+    val Field: Parser[Ast.Selection.Field] =
       (opt(Alias).with1 ~ Name ~ opt(Arguments) ~ Directives ~ opt(rec)).map {
         case ((((alias, name), args), dirs), sel) => Ast.Selection.Field(alias, name, args.orEmpty, dirs, sel.orEmpty)
       }
 
-    lazy val Alias: Parser[Ast.Name] =
-      Name <* keyword(":")
+    val FragmentSpread: Parser[Ast.Selection.FragmentSpread] =
+      (FragmentName ~ Directives).map{ case (name, dirs) => Ast.Selection.FragmentSpread.apply(name, dirs)}
 
-    lazy val FragmentSpread: Parser[Ast.Selection.FragmentSpread] =
-      keyword("...") *> (FragmentName, Directives).mapN(Ast.Selection.FragmentSpread.apply)
-
-    lazy val InlineFragment: Parser[Ast.Selection.InlineFragment] =
-      ((keyword("...") *> opt(TypeCondition)) ~ Directives ~ rec).map {
+    val InlineFragment: Parser[Ast.Selection.InlineFragment] =
+      ((opt(TypeCondition)~ Directives).with1 ~ rec).map {
         case ((cond, dirs), sel) => Ast.Selection.InlineFragment(cond, dirs, sel)
       }
+
+    val Selection: Parser[Ast.Selection] =
+      Field |
+      (keyword("...") *> (InlineFragment | FragmentSpread))
 
     braces(many(Selection))
   }
@@ -192,20 +191,21 @@ object GraphQLParser {
   lazy val Argument: Parser[(Ast.Name, Ast.Value)] =
     (Name <* keyword(":")) ~ Value
 
+  lazy val FragmentName: Parser[Ast.Name] =
+    Name.filter(_ != Ast.Name("on"))
+
   lazy val FragmentDefinition: Parser[Ast.FragmentDefinition] =
     ((keyword("fragment") *> FragmentName) ~ TypeCondition ~ Directives ~ SelectionSet).map {
       case (((name, cond), dirs), sel) => Ast.FragmentDefinition(name, cond, dirs, sel)
     }
 
-  lazy val FragmentName: Parser[Ast.Name] =
-    Name.filter(_ != Ast.Name("on"))
 
   lazy val TypeCondition: Parser[Ast.Type.Named] =
     keyword("on") *> NamedType
 
   lazy val Value: Parser[Ast.Value] = recursive[Ast.Value] { rec =>
 
-    lazy val NullValue: Parser[Ast.Value.NullValue.type] =
+    val NullValue: Parser[Ast.Value.NullValue.type] =
       keyword("null").as(Ast.Value.NullValue)
 
     lazy val EnumValue: Parser[Ast.Value.EnumValue] =
@@ -216,23 +216,23 @@ object GraphQLParser {
         case _                 => true
       } .map(Ast.Value.EnumValue.apply)
 
-    lazy val ListValue: Parser[Ast.Value.ListValue] =
+    val ListValue: Parser[Ast.Value.ListValue] =
       token(squareBrackets(many(rec)).map(Ast.Value.ListValue.apply))
 
-    lazy val IntValue: Parser[Ast.Value.IntValue] =
+    val IntValue: Parser[Ast.Value.IntValue] =
       token(intLiteral).map(a => Ast.Value.IntValue(a.toInt))
 
-    lazy val FloatValue: Parser[Ast.Value.FloatValue] =
+    val FloatValue: Parser[Ast.Value.FloatValue] =
       token(floatLiteral).map(a => Ast.Value.FloatValue(a.toDouble))
 
-    lazy val BooleanValue: Parser[Ast.Value.BooleanValue] =
+    val BooleanValue: Parser[Ast.Value.BooleanValue] =
       token(booleanLiteral).map(Ast.Value.BooleanValue.apply)
 
-    lazy val ObjectValue: Parser[Ast.Value.ObjectValue] =
-      braces(many(ObjectField)).map(Ast.Value.ObjectValue.apply)
-
-    lazy val ObjectField: Parser[(Ast.Name, Ast.Value)] =
+    val ObjectField: Parser[(Ast.Name, Ast.Value)] =
       (Name <* keyword(":")) ~ rec
+
+    val ObjectValue: Parser[Ast.Value.ObjectValue] =
+      braces(many(ObjectField)).map(Ast.Value.ObjectValue.apply)
 
     Variable |
       IntValue |
@@ -292,6 +292,7 @@ object GraphQLParser {
   lazy val Name: Parser[Ast.Name] = {
     val initial    = ('A' to 'Z') ++ ('a' to 'z') ++ Seq('_')
     val subsequent = initial ++ ('0' to '9')
+
     token(charIn(initial) ~ many(charIn(subsequent))).map {
       case (h, t) => Ast.Name((h :: t).mkString)
     }
