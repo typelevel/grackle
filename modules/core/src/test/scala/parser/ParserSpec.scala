@@ -427,7 +427,6 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    println(GraphQLParser.Document.parseAll(query))
     GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)

@@ -111,7 +111,7 @@ object GraphQLParser {
     }
 
   lazy val UnionMemberTypes: Parser[List[Ast.Type.Named]] =
-    (keyword("=") ~ keyword("|").?) *> NamedType.repSep0(keyword("|"))
+    (keyword("=") *> keyword("|").?) *> NamedType.repSep0(keyword("|"))
 
   lazy val EnumValuesDefinition: Parser[List[Ast.EnumValueDefinition]] =
     braces(EnumValueDefinition.rep0)
@@ -196,13 +196,12 @@ object GraphQLParser {
     (Name <* keyword(":")) ~ Value
 
   lazy val FragmentName: Parser[Ast.Name] =
-    Name.filter(_ != Ast.Name("on"))
+    not(string("on")).with1 *> Name
 
   lazy val FragmentDefinition: Parser[Ast.FragmentDefinition] =
     ((keyword("fragment") *> FragmentName) ~ TypeCondition ~ Directives ~ SelectionSet).map {
       case (((name, cond), dirs), sel) => Ast.FragmentDefinition(name, cond, dirs, sel)
     }
-
 
   lazy val TypeCondition: Parser[Ast.Type.Named] =
     keyword("on") *> NamedType
@@ -213,12 +212,8 @@ object GraphQLParser {
       keyword("null").as(Ast.Value.NullValue)
 
     lazy val EnumValue: Parser[Ast.Value.EnumValue] =
-      Name.filter {
-        case Ast.Name("true")  => false
-        case Ast.Name("false") => false
-        case Ast.Name("null")  => false
-        case _                 => true
-      } .map(Ast.Value.EnumValue.apply)
+      (not(string("true") | string("false") | string("null")).with1 *> Name)
+        .map(Ast.Value.EnumValue.apply)
 
     val ListValue: Parser[Ast.Value.ListValue] =
       token(squareBrackets(rec.rep0).map(Ast.Value.ListValue.apply))
