@@ -347,13 +347,6 @@ object CommentedText {
 
 object Literals {
 
-  val sourceCharacter: Parser[String] = (charIn(0x0009.toChar, 0x000A.toChar, 0x000D.toChar) | charIn(0x0020.toChar to 0xFFFF.toChar)).string
-
-  val blockStringCharacter: Parser[String] = string("\\\"\"\"").as("\"\"\"") |
-    (not(string("\"\"\"")).with1 *> sourceCharacter)
-
-  val bq = blockStringCharacter.repAs0[String].surroundedBy(string("\"\"\""))
-
   val stringLiteral: Parser[String] = {
 
     val lineTerminator: Parser[String] = (lf | cr | crlf).string
