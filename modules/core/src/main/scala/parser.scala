@@ -10,6 +10,7 @@ import cats.parse.Rfc5234.{cr, crlf, digit, hexdig, lf}
 import cats.implicits._
 import CommentedText._
 import Literals._
+import scala.util.matching.Regex
 
 object GraphQLParser {
 
@@ -351,6 +352,13 @@ object CommentedText {
 
 object Literals {
 
+  val sourceCharacter: Parser[String] = (charIn(0x0009.toChar, 0x000A.toChar, 0x000D.toChar) | charIn(0x0020.toChar to 0xFFFF.toChar)).string
+
+  val blockStringCharacter: Parser[String] = string("\\\"\"\"").as("\"\"\"") |
+    (not(string("\"\"\"")).with1 *> sourceCharacter)
+
+  val bq = blockStringCharacter.repAs0[String].surroundedBy(string("\"\"\""))
+
   val stringLiteral: Parser[String] = {
 
     val lineTerminator: Parser[String] = (lf | cr | crlf).string
@@ -375,20 +383,46 @@ object Literals {
       )
 
     val stringCharacter: Parser[String] = (
-      (peek(not(charIn('"', '\\') | lineTerminator)).with1 *> sourceCharacter) |
+      (not(charIn('"', '\\') | lineTerminator).with1 *> sourceCharacter) |
         escapedUnicode |
        escapedCharacter
     )
 
-    lazy val blockStringCharacter = string("TODO").string
+    val blockStringCharacter: Parser[String] = string("\\\"\"\"").as("\"\"\"") |
+      (not(string("\"\"\"")).with1 *> sourceCharacter)
 
-    //TODO should this be a Parser[Char] which converts to unicode? I guess so?
-    //See Atto for reference
+    //https://spec.graphql.org/June2018/#BlockStringValue()
+    //TODO this traverses over lines a hideous number of times(but matching the
+    //algorithm in the spec). Can it be optimized?
+    val blockQuotesInner: Parser0[String] = blockStringCharacter.repAs0[String].map { str =>
+      val isWhitespace: Regex = "[ \t]*".r
+      var commonIndent: Int = -1
+      var lineNum: Int = 0
+      for (line <- str.linesIterator) {
+        if (lineNum != 0) {
+          val len = line.length()
+          val indent = line.takeWhile(c => c == ' ' || c == '\t').length()
+          if (indent < len) {
+            if (commonIndent < 0 || indent < commonIndent) {
+              commonIndent = indent
+            }
+          }
+        }
+        lineNum = lineNum + 1
+      }
+      val formattedReversed: List[String] = if ( commonIndent >= 0) {
+        str.linesIterator.foldLeft[List[String]](Nil) {
+          (acc, l) => if (acc == Nil) l :: acc else l.drop(commonIndent) :: acc
+        }
+      } else {
+        str.linesIterator.toList
+      }
+      val noTrailingEmpty = formattedReversed.dropWhile(isWhitespace.matches(_)).reverse
+      noTrailingEmpty.dropWhile(isWhitespace.matches(_)).mkString("\n")
+    }
 
 
-
-
-    stringCharacter.repAs0[String].with1.surroundedBy(char('"')) | (blockStringCharacter.rep0.string.with1.surroundedBy(string("\"\"\"")))
+    (not(string("\"\"\"")).with1 *> stringCharacter.repAs0[String].with1.surroundedBy(char('"'))) | blockQuotesInner.with1.surroundedBy(string("\"\"\""))
 
   }
 

@@ -346,11 +346,14 @@ final class ParserSuite extends CatsSuite {
 
   test("value literals") {
 
-    def assertParse(input: String, expected: Value) =
+    def assertParse(input: String, expected: Value) = {
+      val r = GraphQLParser.Value.parseAll(input)
+      println(r)
       GraphQLParser.Value.parseAll(input).toOption match {
         case Some(v) => assert(v == expected)
         case _ => assert(false)
       }
+    }
 
     assertParse("\"fooλ\"", StringValue("fooλ"))
     assertParse("\"\\u03BB\"", StringValue("λ"))
@@ -373,6 +376,9 @@ final class ParserSuite extends CatsSuite {
     assertParse("[1, \"foo\"]", ListValue(List(IntValue(1), StringValue("foo"))))
 
     assertParse("{foo: 1, bar: \"baz\"}", ObjectValue(List(Name("foo") -> IntValue(1), Name("bar") -> StringValue("baz"))))
+
+    assertParse("\"\"\"one\"\"\"", StringValue("one"))
+    assertParse("\"\"\"first\n    second\n  third\n\"\"\"", StringValue("first\n  second\nthird"))
   }
 
 }
