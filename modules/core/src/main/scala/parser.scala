@@ -342,7 +342,7 @@ object CommentedText {
 
 object Literals {
 
-  lazy val stringLiteral: Parser[String] = {
+  val stringLiteral: Parser[String] = {
 
     lazy val stringCharacter: Parser[String] = (
       (peek(not(charIn('"', '\\') | lineTerminator)).with1 *> sourceCharacter) |
@@ -366,27 +366,23 @@ object Literals {
 
   }
 
-  lazy val intLiteral: Parser[Int] =
+  val intLiteral: Parser[Int] =
     bigInt.flatMap {
       case v if v.isValidInt => pure(v.toInt)
       case v => failWith(s"$v is larger than max int")
     }
 
-  lazy val booleanLiteral: Parser[Boolean] = string("true").as(true) | string("false").as(false)
+  val booleanLiteral: Parser[Boolean] = string("true").as(true) | string("false").as(false)
 
-  lazy val floatLiteral: Parser[Float] = {
+  val floatLiteral: Parser[Float] = {
 
-    lazy val bigDecimal: Parser[BigDecimal] = for {
-      a <- intLiteral
-      b <- (char('.') *> digit.rep.string).?
-      c <- ((char('e') | char('E')) *> intLiteral.string).?
-      res <- (a,b,c) match {
-        case (a, Some(b), None) => pure(BigDecimal(s"$a.$b"))
-        case (a, None, Some(c)) => pure(BigDecimal(s"${a}E$c"))
-        case (a, Some(b), Some(c)) => pure(BigDecimal(s"$a.${b}E$c"))
-        case (a, None, None) => failWith(s"$a is not a valid float - must have at least one of a fractional or exponent part")
+    val bigDecimal: Parser[BigDecimal] = (intLiteral ~ (char('.') *> digit.rep.string).? ~ ((char('e') | char('E')) *> intLiteral.string).?)
+      .flatMap {
+        case ((a, Some(b)), None) => pure(BigDecimal(s"$a.$b"))
+        case ((a, None), Some(c)) => pure(BigDecimal(s"${a}E$c"))
+        case ((a, Some(b)), Some(c)) => pure(BigDecimal(s"$a.${b}E$c"))
+        case ((a, None), None) => failWith(s"$a is not a valid float - must have at least one of a fractional or exponent part")
       }
-    } yield res
 
     //Unchecked narrowing
     bigDecimal.map(_.toFloat)
