@@ -344,6 +344,58 @@ final class ParserSuite extends CatsSuite {
     }
   }
 
+  test("fragment") {
+    val query = """
+      query {
+        character(id: 1000) {
+          ...frag
+          ... on Character {
+            age
+          }
+        }
+      }
+
+      fragment frag on Character {
+        name
+      }
+    """
+
+    val expected =
+      List(
+        Operation(Query, None, Nil, Nil,
+          List(
+            Field(None, Name("character"), List((Name("id"), IntValue(1000))), Nil,
+              List(
+                FragmentSpread(Name("frag"),Nil),
+                InlineFragment(
+                  Some(Named(Name("Character"))),
+                  Nil,
+                  List(
+                    Field(None,Name("age"),Nil ,Nil ,Nil)
+                  )
+                )
+              )
+            )
+          )
+        ),
+        FragmentDefinition(
+          Name("frag"),
+          Named(Name("Character")),
+          Nil,
+          List(
+            Field(None,Name("name"),Nil ,Nil ,Nil)
+          )
+        )
+      )
+
+    println(GraphQLParser.Document.parseAll(query))
+    GraphQLParser.Document.parseAll(query).toOption match {
+      case Some(xs) => assert(xs == expected)
+      case _ => assert(false)
+    }
+
+  }
+
   test("value literals") {
 
     def assertParse(input: String, expected: Value) =
@@ -375,7 +427,7 @@ final class ParserSuite extends CatsSuite {
     assertParse("{foo: 1, bar: \"baz\"}", ObjectValue(List(Name("foo") -> IntValue(1), Name("bar") -> StringValue("baz"))))
 
     assertParse("\"\"\"one\"\"\"", StringValue("one"))
-    assertParse("\"\"\"first\n    second\n  third\n\"\"\"", StringValue("first\n  second\nthird"))
+    assertParse("\"\"\"first\n    λ\n  123\n\"\"\"", StringValue("first\n  λ\n123"))
   }
 
 }
