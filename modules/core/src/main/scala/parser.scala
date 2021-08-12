@@ -222,11 +222,21 @@ object GraphQLParser {
     val ListValue: Parser[Ast.Value.ListValue] =
       token(squareBrackets(rec.rep0).map(Ast.Value.ListValue.apply))
 
-    val IntValue: Parser[Ast.Value.IntValue] =
-      token(intLiteral).map(a => Ast.Value.IntValue(a.toInt))
+    val NumericLiteral: Parser[Ast.Value] = {
 
-    val FloatValue: Parser[Ast.Value.FloatValue] =
-      token(floatLiteral).map(a => Ast.Value.FloatValue(a.toDouble))
+      def narrow(d: BigDecimal): Parser0[Ast.Value.FloatValue] =
+        pure(Ast.Value.FloatValue(d.toDouble))
+
+      token(
+        (intLiteral ~ (char('.') *> digit.rep.string).? ~ ((char('e') | char('E')) *> intLiteral.string).?)
+          .flatMap {
+            case ((a, Some(b)), None) => narrow(BigDecimal(s"$a.$b"))
+            case ((a, None), Some(c)) => narrow(BigDecimal(s"${a}E$c"))
+            case ((a, Some(b)), Some(c)) => narrow(BigDecimal(s"$a.${b}E$c"))
+            case ((a, None), None) => pure(Ast.Value.IntValue(a))
+          }
+      )
+    }
 
     val BooleanValue: Parser[Ast.Value.BooleanValue] =
       token(booleanLiteral).map(Ast.Value.BooleanValue.apply)
@@ -238,8 +248,7 @@ object GraphQLParser {
       braces(ObjectField.rep0).map(Ast.Value.ObjectValue.apply)
 
     Variable |
-      IntValue.backtrack |
-      FloatValue |
+      NumericLiteral |
       StringValue |
       BooleanValue |
       NullValue |
@@ -390,20 +399,5 @@ object Literals {
     }
 
   val booleanLiteral: Parser[Boolean] = string("true").as(true) | string("false").as(false)
-
-  val floatLiteral: Parser[Double] = {
-
-    val bigDecimal: Parser[BigDecimal] = (intLiteral ~ (char('.') *> digit.rep.string).? ~ ((char('e') | char('E')) *> intLiteral.string).?)
-      .flatMap {
-        case ((a, Some(b)), None) => pure(BigDecimal(s"$a.$b"))
-        case ((a, None), Some(c)) => pure(BigDecimal(s"${a}E$c"))
-        case ((a, Some(b)), Some(c)) => pure(BigDecimal(s"$a.${b}E$c"))
-        case ((a, None), None) => failWith(s"$a is not a valid float - must have at least one of a fractional or exponent part")
-      }
-
-    //Unchecked narrowing
-    bigDecimal.map(_.toDouble)
-  }
-
 
 }

@@ -359,9 +359,9 @@ final class ParserSuite extends CatsSuite {
     assertParse("\"\\u03BB\"", StringValue("λ"))
     assertParse("\"\\\" \\\\ \\/ \\b \\f \\n \\r \\t\"", StringValue("\" \\ / \b \f \n \r \t"))
 
-    // assertParse("123.2", FloatValue(123.2d))
-    // assertParse("123E2", FloatValue(123E2d))
-    // assertParse("123.2E2", FloatValue(123.2E2d))
+    assertParse("123.2", FloatValue(123.2d))
+    assertParse("123E2", FloatValue(123E2d))
+    assertParse("123.2E2", FloatValue(123.2E2d))
 
     assertParse("123", IntValue(123))
     assertParse("-123", IntValue(-123))
