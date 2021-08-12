@@ -388,9 +388,48 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    println(GraphQLParser.Document.parseAll(query))
     GraphQLParser.Document.parseAll(query).toOption match {
       case Some(xs) => assert(xs == expected)
+      case _ => assert(false)
+    }
+
+  }
+
+  test("fragment with directive") {
+    val query = """
+      query frag($expanded: Boolean){
+        character(id: 1000) {
+          name
+          ... @include(if: $expanded) {
+            age
+          }
+        }
+      }
+    """
+
+    val expected =
+      Operation(
+        Query,
+        Some(Name("frag")),
+        List(VariableDefinition(Name("expanded"),Named(Name("Boolean")),None)),
+        Nil,
+        List(
+          Field(None, Name("character"), List((Name("id"), IntValue(1000))), Nil,
+            List(
+              Field(None, Name("name"), Nil, Nil, Nil),
+              InlineFragment(
+                None,
+                List(Directive(Name("include"),List((Name("if"),Variable(Name("expanded")))))),
+                List(Field(None,Name("age"),List(),List(),List()))
+              )
+            )
+          )
+        )
+      )
+
+    println(GraphQLParser.Document.parseAll(query))
+    GraphQLParser.Document.parseAll(query).toOption match {
+      case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
 
