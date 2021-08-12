@@ -352,7 +352,7 @@ final class ParserSuite extends CatsSuite {
         case _ => assert(false)
       }
 
-    assertParse("\"foo\"", StringValue("foo"))
+    assertParse("\"fooλ\"", StringValue("fooλ"))
     assertParse("\"\\u03BB\"", StringValue("λ"))
     assertParse("\"\\\" \\\\ \\/ \\b \\f \\n \\r \\t\"", StringValue("\" \\ / \b \f \n \r \t"))
 
