@@ -224,16 +224,16 @@ object GraphQLParser {
 
     val NumericLiteral: Parser[Ast.Value] = {
 
-      def narrow(d: BigDecimal): Parser0[Ast.Value.FloatValue] =
-        pure(Ast.Value.FloatValue(d.toDouble))
+      def narrow(d: BigDecimal): Ast.Value.FloatValue =
+        Ast.Value.FloatValue(d.toDouble)
 
       token(
         (intLiteral ~ (char('.') *> digit.rep.string).? ~ ((char('e') | char('E')) *> intLiteral.string).?)
-          .flatMap {
+          .map {
             case ((a, Some(b)), None) => narrow(BigDecimal(s"$a.$b"))
             case ((a, None), Some(c)) => narrow(BigDecimal(s"${a}E$c"))
             case ((a, Some(b)), Some(c)) => narrow(BigDecimal(s"$a.${b}E$c"))
-            case ((a, None), None) => pure(Ast.Value.IntValue(a))
+            case ((a, None), None) => Ast.Value.IntValue(a)
           }
       )
     }
