@@ -238,7 +238,7 @@ object GraphQLParser {
       braces(ObjectField.rep0).map(Ast.Value.ObjectValue.apply)
 
     Variable |
-      IntValue |
+      IntValue.backtrack |
       FloatValue |
       StringValue |
       BooleanValue |
@@ -344,25 +344,42 @@ object Literals {
 
   val stringLiteral: Parser[String] = {
 
-    lazy val stringCharacter: Parser[String] = (
+    val lineTerminator: Parser[String] = (lf | cr | crlf).string
+
+    val sourceCharacter: Parser[String] = (charIn(0x0009.toChar, 0x000A.toChar, 0x000D.toChar) | charIn(0x0020.toChar to 0xFFFF.toChar)).string
+
+    val escapedUnicode: Parser[String] = string("\\u") *>
+      hexdig
+        .repExactlyAs[String](4)
+        .map(hex => Integer.parseInt(hex, 16).toChar.toString)
+
+    val escapedCharacter: Parser[String] = char('\\') *>
+      (
+        char('"').as("\"") |
+          char('\\').as("\\") |
+          char('/').as("/") |
+          char('b').as("\b") |
+          char('f').as("\f") |
+          char('n').as("\n") |
+          char('r').as("\r") |
+          char('t').as("\t")
+      )
+
+    val stringCharacter: Parser[String] = (
       (peek(not(charIn('"', '\\') | lineTerminator)).with1 *> sourceCharacter) |
-        (string("\\u") ~ escapedUnicode).string |
-        (char('\\') ~ escapedCharacter).string
+        escapedUnicode |
+       escapedCharacter
     )
 
     lazy val blockStringCharacter = string("TODO").string
 
     //TODO should this be a Parser[Char] which converts to unicode? I guess so?
     //See Atto for reference
-    lazy val escapedUnicode: Parser[String] = (digit | hexdig).repExactlyAs[String](4)
 
-    lazy val escapedCharacter = charIn('"', '\\', '/', 'b', 'f', 'n', 'r', 't')
 
-    lazy val sourceCharacter: Parser[String] = (charIn(0x0009.toChar, 0x000A.toChar, 0x000D.toChar) | charIn(0x0020.toChar to 0xFFFF.toChar)).string
 
-    lazy val lineTerminator = (lf | cr | crlf).string
 
-    stringCharacter.rep0.string.with1.surroundedBy(char('"')) | (blockStringCharacter.rep0.string.with1.surroundedBy(string("\"\"\"")))
+    stringCharacter.repAs0[String].with1.surroundedBy(char('"')) | (blockStringCharacter.rep0.string.with1.surroundedBy(string("\"\"\"")))
 
   }
 
@@ -374,7 +391,7 @@ object Literals {
 
   val booleanLiteral: Parser[Boolean] = string("true").as(true) | string("false").as(false)
 
-  val floatLiteral: Parser[Float] = {
+  val floatLiteral: Parser[Double] = {
 
     val bigDecimal: Parser[BigDecimal] = (intLiteral ~ (char('.') *> digit.rep.string).? ~ ((char('e') | char('E')) *> intLiteral.string).?)
       .flatMap {
@@ -385,7 +402,7 @@ object Literals {
       }
 
     //Unchecked narrowing
-    bigDecimal.map(_.toFloat)
+    bigDecimal.map(_.toDouble)
   }
 
 
