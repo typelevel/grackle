@@ -465,7 +465,7 @@ final class ParserSuite extends CatsSuite {
     assertParse("{foo: 1, bar: \"baz\"}", ObjectValue(List(Name("foo") -> IntValue(1), Name("bar") -> StringValue("baz"))))
 
     assertParse("\"\"\"one\"\"\"", StringValue("one"))
-    assertParse("\"\"\"first\n    λ\n  123\n\"\"\"", StringValue("first\n  λ\n123"))
+    assertParse("\"\"\"    \n\n   first\n   \tλ\n  123\n\n\n   \t\n\n\"\"\"", StringValue(" first\n \tλ\n123"))
   }
 
 }
