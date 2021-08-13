@@ -3,380 +3,423 @@
 
 package edu.gemini.grackle
 
-import atto._
-import Atto.{token => _, braces => _, parens => _, squareBrackets => _, _}
-import atto.parser.character.char
+import cats.parse.{Parser, Parser0}
+import cats.parse.Parser._
+import cats.parse.Numbers._
+import cats.parse.Rfc5234.{cr, crlf, digit, hexdig, lf}
 import cats.implicits._
 import CommentedText._
+import Literals._
+import scala.util.matching.Regex
 
 object GraphQLParser {
 
   def keyword(s: String) = token(string(s))
 
-  lazy val Document: Parser[Ast.Document] =
-    many(whitespace | comment) ~> many(Definition) <~ endOfInput
+  lazy val Document: Parser0[Ast.Document] =
+    (whitespace | comment).rep0 *> Definition.rep0 <* Parser.end
 
-  lazy val Definition =
+  lazy val Definition: Parser[Ast.Definition] =
     ExecutableDefinition | TypeSystemDefinition // | TypeSystemExtension
 
-  lazy val TypeSystemDefinition =
-    SchemaDefinition | TypeDefinition | DirectiveDefinition
+  lazy val TypeSystemDefinition: Parser[Ast.TypeSystemDefinition] = {
+    val SchemaDefinition: Parser[Ast.SchemaDefinition] =
+      ((keyword("schema") *> Directives.?) ~ braces(RootOperationTypeDefinition.rep0)).map {
+        case (dirs, rootdefs) => Ast.SchemaDefinition(rootdefs, dirs.getOrElse(Nil))
+      }
 
-  lazy val SchemaDefinition =
-    for {
-      _        <- keyword("schema")
-      dirs     <- opt(Directives)
-      rootdefs <- braces(many(RootOperationTypeDefinition))
-    } yield Ast.SchemaDefinition(rootdefs, dirs.getOrElse(Nil))
+    def typeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.TypeDefinition] = {
 
-  lazy val RootOperationTypeDefinition =
-    for {
-      optpe <- OperationType
-      _     <- keyword(":")
-      tpe   <- NamedType
-    } yield Ast.RootOperationTypeDefinition(optpe, tpe)
+      def scalarTypeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.ScalarTypeDefinition] =
+        ((keyword("scalar") *> Name) ~ Directives.?).map {
+          case (name, dirs) => Ast.ScalarTypeDefinition(name, desc.map(_.value), dirs.getOrElse(Nil))
+        }
 
-  lazy val TypeDefinition =
-    ScalarTypeDefinition.widen[Ast.TypeDefinition] |
-    ObjectTypeDefinition |
-    InterfaceTypeDefinition |
-    UnionTypeDefinition |
-    EnumTypeDefinition |
-    InputObjectTypeDefinition
+      def objectTypeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.ObjectTypeDefinition] =
+        ((keyword("type") *> Name) ~ ImplementsInterfaces.? ~ Directives.? ~ FieldsDefinition).map {
+          case (((name, ifs), dirs), fields) => Ast.ObjectTypeDefinition(name, desc.map(_.value), fields, ifs.getOrElse(Nil), dirs.getOrElse(Nil))
+        }
 
-  lazy val ScalarTypeDefinition =
-    for {
-      desc   <- opt(Description)
-      _      <- keyword("scalar")
-      name   <- Name
-      dirs   <- opt(Directives)
-    } yield Ast.ScalarTypeDefinition(name, desc.map(_.value), dirs.getOrElse(Nil))
+      def interfaceTypeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.InterfaceTypeDefinition] =
+        ((keyword("interface") *> Name) ~ ImplementsInterfaces.? ~ Directives.? ~ FieldsDefinition).map {
+          case (((name, ifs), dirs), fields) => Ast.InterfaceTypeDefinition(name, desc.map(_.value), fields, ifs.getOrElse(Nil), dirs.getOrElse(Nil))
+        }
 
-  lazy val ObjectTypeDefinition =
-    for {
-      desc   <- opt(Description)
-      _      <- keyword("type")
-      name   <- Name
-      ifs    <- opt(ImplementsInterfaces)
-      dirs   <- opt(Directives)
-      fields <- FieldsDefinition
-    } yield Ast.ObjectTypeDefinition(name, desc.map(_.value), fields, ifs.getOrElse(Nil), dirs.getOrElse(Nil))
+      def unionTypeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.UnionTypeDefinition] =
+        ((keyword("union") *> Name) ~ Directives.? ~ UnionMemberTypes).map {
+          case ((name, dirs), members) => Ast.UnionTypeDefinition(name, desc.map(_.value), dirs.getOrElse(Nil), members)
+        }
 
-  lazy val InterfaceTypeDefinition =
-    for {
-      desc   <- opt(Description)
-      _      <- keyword("interface")
-      name   <- Name
-      ifs    <- opt(ImplementsInterfaces)
-      dirs   <- opt(Directives)
-      fields <- FieldsDefinition
-    } yield Ast.InterfaceTypeDefinition(name, desc.map(_.value), fields, ifs.getOrElse(Nil), dirs.getOrElse(Nil))
+      def enumTypeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.EnumTypeDefinition] =
+        ((keyword("enum") *> Name) ~ Directives.? ~ EnumValuesDefinition).map {
+          case ((name, dirs), values) => Ast.EnumTypeDefinition(name, desc.map(_.value), dirs.getOrElse(Nil), values)
+        }
 
-  lazy val UnionTypeDefinition =
-    for {
-      desc   <- opt(Description)
-      _      <- keyword("union")
-      name   <- Name
-      dirs   <- opt(Directives)
-      members <- UnionMemberTypes
-    } yield Ast.UnionTypeDefinition(name, desc.map(_.value), dirs.getOrElse(Nil), members)
+      def inputObjectTypeDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.InputObjectTypeDefinition] =
+        ((keyword("input") *> Name) ~ Directives.? ~ InputFieldsDefinition).map {
+          case ((name, dirs), fields) => Ast.InputObjectTypeDefinition(name, desc.map(_.value), fields, dirs.getOrElse(Nil))
+        }
 
-  lazy val EnumTypeDefinition =
-    for {
-      desc   <- opt(Description)
-      _      <- keyword("enum")
-      name   <- Name
-      dirs   <- opt(Directives)
-      values <- EnumValuesDefinition
-    } yield Ast.EnumTypeDefinition(name, desc.map(_.value), dirs.getOrElse(Nil), values)
+      scalarTypeDefinition(desc)|
+        objectTypeDefinition(desc) |
+        interfaceTypeDefinition(desc) |
+        unionTypeDefinition(desc) |
+        enumTypeDefinition(desc) |
+        inputObjectTypeDefinition(desc)
+    }
 
-  lazy val InputObjectTypeDefinition =
-    for {
-      desc   <- opt(Description)
-      _      <- keyword("input")
-      name   <- Name
-      dirs   <- opt(Directives)
-      fields <- InputFieldsDefinition
-    } yield Ast.InputObjectTypeDefinition(name, desc.map(_.value), fields, dirs.getOrElse(Nil))
+    def directiveDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.DirectiveDefinition] =
+      ((keyword("directive") *> keyword("@") *> Name) ~
+         ArgumentsDefinition ~ (keyword("repeatable").? <* keyword("on")) ~ DirectiveLocations).map {
+        case (((name, args), rpt), locs) => Ast.DirectiveDefinition(name, desc.map(_.value), args, rpt.isDefined, locs)
+      }
+
+    SchemaDefinition |
+      Description.?.with1.flatMap { desc =>
+        typeDefinition(desc) | directiveDefinition(desc)
+      }
+  }
+
+  lazy val RootOperationTypeDefinition: Parser[Ast.RootOperationTypeDefinition] =
+    (OperationType, keyword(":"), NamedType).mapN {
+      case (optpe, _, tpe) => Ast.RootOperationTypeDefinition(optpe, tpe)
+    }
+
 
   lazy val Description = StringValue
 
   lazy val ImplementsInterfaces =
-    (keyword("implements") ~ opt(keyword("&"))) ~> sepBy(NamedType, keyword("&"))
+    (keyword("implements") ~ keyword("&").?) *> NamedType.repSep0(keyword("&"))
 
-  lazy val FieldsDefinition =
-    braces(many(FieldDefinition))
+  lazy val FieldsDefinition: Parser[List[Ast.FieldDefinition]] =
+    braces(FieldDefinition.rep0)
 
-  lazy val FieldDefinition =
-    for {
-      desc   <- opt(Description)
-      name   <- Name
-      args   <- opt(ArgumentsDefinition)
-      _      <- keyword(":")
-      tpe    <- Type
-      dirs   <- opt(Directives)
-    } yield Ast.FieldDefinition(name, desc.map(_.value), args.getOrElse(Nil), tpe, dirs.getOrElse(Nil))
+  lazy val FieldDefinition: Parser[Ast.FieldDefinition] =
+    (Description.?.with1 ~ Name ~ ArgumentsDefinition.? ~ keyword(":") ~ Type ~ Directives.?).map {
+      case (((((desc, name), args), _), tpe), dirs) => Ast.FieldDefinition(name, desc.map(_.value), args.getOrElse(Nil), tpe, dirs.getOrElse(Nil))
+    }
 
-  lazy val ArgumentsDefinition =
-    parens(many(InputValueDefinition))
+  lazy val ArgumentsDefinition: Parser[List[Ast.InputValueDefinition]] =
+    parens(InputValueDefinition.rep0)
 
-  lazy val InputFieldsDefinition =
-    braces(many(InputValueDefinition))
+  lazy val InputFieldsDefinition: Parser[List[Ast.InputValueDefinition]] =
+    braces(InputValueDefinition.rep0)
 
-  lazy val InputValueDefinition =
-    for {
-      desc   <- opt(Description)
-      name   <- Name
-      _      <- keyword(":")
-      tpe    <- Type
-      dv     <- opt(DefaultValue)
-      dirs   <- opt(Directives)
-    } yield Ast.InputValueDefinition(name, desc.map(_.value), tpe, dv, dirs.getOrElse(Nil))
+  lazy val InputValueDefinition: Parser[Ast.InputValueDefinition] =
+    (Description.?.with1 ~ (Name <* keyword(":")) ~ Type ~ DefaultValue.? ~ Directives.?).map {
+      case ((((desc, name), tpe), dv), dirs) => Ast.InputValueDefinition(name, desc.map(_.value), tpe, dv, dirs.getOrElse(Nil))
+    }
 
-  lazy val UnionMemberTypes =
-    (keyword("=") ~ opt(keyword("|"))) ~> sepBy(NamedType, keyword("|"))
+  lazy val UnionMemberTypes: Parser[List[Ast.Type.Named]] =
+    (keyword("=") *> keyword("|").?) *> NamedType.repSep0(keyword("|"))
 
-  lazy val EnumValuesDefinition =
-    braces(many(EnumValueDefinition))
+  lazy val EnumValuesDefinition: Parser[List[Ast.EnumValueDefinition]] =
+    braces(EnumValueDefinition.rep0)
 
-  lazy val EnumValueDefinition =
-    for {
-      desc   <- opt(Description)
-      name   <- Name
-      dirs   <- opt(Directives)
-    } yield Ast.EnumValueDefinition(name, desc.map(_.value), dirs.getOrElse(Nil))
+  lazy val EnumValueDefinition: Parser[Ast.EnumValueDefinition] =
+    (Description.?.with1 ~ Name ~ Directives.?).map {
+      case ((desc, name), dirs) => Ast.EnumValueDefinition(name, desc.map(_.value), dirs.getOrElse(Nil))
+    }
 
-  lazy val DirectiveDefinition =
-    for {
-      desc   <- opt(Description)
-      _      <- keyword("directive")
-      _      <- keyword("@")
-      name   <- Name
-      args   <- ArgumentsDefinition
-      rpt    <- opt(keyword("repeatable"))
-      _      <- keyword("on")
-      locs   <- DirectiveLocations
-    } yield Ast.DirectiveDefinition(name, desc.map(_.value), args, rpt.isDefined, locs)
+  lazy val DirectiveLocations: Parser0[List[Ast.DirectiveLocation]] =
+    keyword("|").? *> DirectiveLocation.repSep0(keyword("|"))
 
-  lazy val DirectiveLocations =
-    opt(keyword("|")) ~> sepBy(DirectiveLocation, keyword("|"))
+  lazy val DirectiveLocation: Parser[Ast.DirectiveLocation] =
+    keyword("QUERY")       .as(Ast.DirectiveLocation.QUERY) |
+    keyword("MUTATION")    .as(Ast.DirectiveLocation.MUTATION) |
+    keyword("SUBSCRIPTION").as(Ast.DirectiveLocation.SUBSCRIPTION) |
+    keyword("FIELD").as(Ast.DirectiveLocation.FIELD) |
+    keyword("FRAGMENT_DEFINITION").as(Ast.DirectiveLocation.FRAGMENT_DEFINITION) |
+    keyword("FRAGMENT_SPREAD").as(Ast.DirectiveLocation.FRAGMENT_SPREAD) |
+    keyword("INLINE_FRAGMENT").as(Ast.DirectiveLocation.INLINE_FRAGMENT) |
+    keyword("VARIABLE_DEFINITION").as(Ast.DirectiveLocation.VARIABLE_DEFINITION) |
+    keyword("SCHEMA").as(Ast.DirectiveLocation.SCHEMA) |
+    keyword("SCALAR").as(Ast.DirectiveLocation.SCALAR) |
+    keyword("OBJECT").as(Ast.DirectiveLocation.OBJECT) |
+    keyword("FIELD_DEFINITION").as(Ast.DirectiveLocation.FIELD_DEFINITION) |
+    keyword("ARGUMENT_DEFINITION").as(Ast.DirectiveLocation.ARGUMENT_DEFINITION) |
+    keyword("INTERFACE").as(Ast.DirectiveLocation.INTERFACE) |
+    keyword("UNION").as(Ast.DirectiveLocation.UNION) |
+    keyword("ENUM").as(Ast.DirectiveLocation.ENUM) |
+    keyword("ENUM_VALUE").as(Ast.DirectiveLocation.ENUM_VALUE) |
+    keyword("INPUT_OBJECT").as(Ast.DirectiveLocation.INPUT_OBJECT) |
+    keyword("INPUT_FIELD_DEFINITION").as(Ast.DirectiveLocation.INPUT_FIELD_DEFINITION)
 
-  lazy val DirectiveLocation =
-    keyword("QUERY")       .as(Ast.DirectiveLocation.QUERY).widen[Ast.DirectiveLocation]     |
-    keyword("MUTATION")    .as(Ast.DirectiveLocation.MUTATION).widen                         |
-    keyword("SUBSCRIPTION").as(Ast.DirectiveLocation.SUBSCRIPTION).widen                     |
-    keyword("FIELD").as(Ast.DirectiveLocation.FIELD).widen                                   |
-    keyword("FRAGMENT_DEFINITION").as(Ast.DirectiveLocation.FRAGMENT_DEFINITION).widen       |
-    keyword("FRAGMENT_SPREAD").as(Ast.DirectiveLocation.FRAGMENT_SPREAD).widen               |
-    keyword("INLINE_FRAGMENT").as(Ast.DirectiveLocation.INLINE_FRAGMENT).widen               |
-    keyword("VARIABLE_DEFINITION").as(Ast.DirectiveLocation.VARIABLE_DEFINITION).widen       |
-    keyword("SCHEMA").as(Ast.DirectiveLocation.SCHEMA).widen                                 |
-    keyword("SCALAR").as(Ast.DirectiveLocation.SCALAR).widen                                 |
-    keyword("OBJECT").as(Ast.DirectiveLocation.OBJECT).widen                                 |
-    keyword("FIELD_DEFINITION").as(Ast.DirectiveLocation.FIELD_DEFINITION).widen             |
-    keyword("ARGUMENT_DEFINITION").as(Ast.DirectiveLocation.ARGUMENT_DEFINITION).widen       |
-    keyword("INTERFACE").as(Ast.DirectiveLocation.INTERFACE).widen                           |
-    keyword("UNION").as(Ast.DirectiveLocation.UNION).widen                                   |
-    keyword("ENUM").as(Ast.DirectiveLocation.ENUM).widen                                     |
-    keyword("ENUM_VALUE").as(Ast.DirectiveLocation.ENUM_VALUE).widen                         |
-    keyword("INPUT_OBJECT").as(Ast.DirectiveLocation.INPUT_OBJECT).widen                     |
-    keyword("INPUT_FIELD_DEFINITION").as(Ast.DirectiveLocation.INPUT_FIELD_DEFINITION).widen
-
-  lazy val ExecutableDefinition =
+  lazy val ExecutableDefinition: Parser[Ast.ExecutableDefinition] =
     OperationDefinition | FragmentDefinition
 
   lazy val OperationDefinition: Parser[Ast.OperationDefinition] =
-    QueryShorthand.widen[Ast.OperationDefinition] | Operation.widen
+    QueryShorthand | Operation
 
   lazy val QueryShorthand: Parser[Ast.OperationDefinition.QueryShorthand] =
     SelectionSet.map(Ast.OperationDefinition.QueryShorthand.apply)
 
   lazy val Operation: Parser[Ast.OperationDefinition.Operation] =
-    for {
-      op   <- OperationType
-      name <- opt(Name)
-      vars <- opt(VariableDefinitions)
-      dirs <- Directives
-      sels <- SelectionSet
-    } yield Ast.OperationDefinition.Operation(op, name, vars.orEmpty, dirs, sels)
+    (OperationType ~ Name.? ~ VariableDefinitions.? ~ Directives ~ SelectionSet).map {
+      case ((((op, name), vars), dirs), sels) => Ast.OperationDefinition.Operation(op, name, vars.orEmpty, dirs, sels)
+    }
 
   lazy val OperationType: Parser[Ast.OperationType] =
-    keyword("query")       .as(Ast.OperationType.Query)       .widen[Ast.OperationType] |
-    keyword("mutation")    .as(Ast.OperationType.Mutation)    .widen                    |
-    keyword("subscription").as(Ast.OperationType.Subscription).widen
+    keyword("query")       .as(Ast.OperationType.Query) |
+    keyword("mutation")    .as(Ast.OperationType.Mutation) |
+    keyword("subscription").as(Ast.OperationType.Subscription)
 
-  lazy val SelectionSet: Parser[List[Ast.Selection]] =
-    braces(many(Selection))
+  lazy val SelectionSet: Parser[List[Ast.Selection]] = recursive[List[Ast.Selection]] { rec =>
 
-  lazy val Selection: Parser[Ast.Selection] =
-    Field.widen[Ast.Selection] |
-    FragmentSpread.widen       |
-    InlineFragment.widen
+    val Alias: Parser[Ast.Name] =
+      Name <* keyword(":")
 
-  lazy val Field: Parser[Ast.Selection.Field] =
-    for {
-      alias <- opt(Alias)
-      name  <- Name
-      args  <- opt(Arguments)
-      dirs  <- Directives
-      sel   <- opt(SelectionSet)
-    } yield Ast.Selection.Field(alias, name, args.orEmpty, dirs, sel.orEmpty)
+    val Field: Parser[Ast.Selection.Field] =
+      (Alias.backtrack.?.with1 ~ Name ~ Arguments.? ~ Directives ~ rec.?).map {
+        case ((((alias, name), args), dirs), sel) => Ast.Selection.Field(alias, name, args.orEmpty, dirs, sel.orEmpty)
+      }
 
-  lazy val Alias: Parser[Ast.Name] =
-    Name <~ keyword(":")
+    val FragmentSpread: Parser[Ast.Selection.FragmentSpread] =
+      (FragmentName ~ Directives).map{ case (name, dirs) => Ast.Selection.FragmentSpread.apply(name, dirs)}
+
+    val InlineFragment: Parser[Ast.Selection.InlineFragment] =
+      ((TypeCondition.? ~ Directives).with1 ~ rec).map {
+        case ((cond, dirs), sel) => Ast.Selection.InlineFragment(cond, dirs, sel)
+      }
+
+    val Selection: Parser[Ast.Selection] =
+      Field |
+      (keyword("...") *> (InlineFragment | FragmentSpread))
+
+    braces(Selection.rep0)
+  }
 
   lazy val Arguments: Parser[List[(Ast.Name, Ast.Value)]] =
-    parens(many(Argument))
+    parens(Argument.rep0)
 
   lazy val Argument: Parser[(Ast.Name, Ast.Value)] =
-    (Name <~ keyword(":")) ~ Value
+    (Name <* keyword(":")) ~ Value
 
-  lazy val FragmentSpread: Parser[Ast.Selection.FragmentSpread] =
-    keyword("...") ~> (FragmentName, Directives).mapN(Ast.Selection.FragmentSpread.apply)
+  lazy val FragmentName: Parser[Ast.Name] =
+    not(string("on")).with1 *> Name
 
-  lazy val InlineFragment: Parser[Ast.Selection.InlineFragment] =
-    for {
-      _    <- keyword("...")
-      cond <- opt(TypeCondition)
-      dirs <- Directives
-      sel  <- SelectionSet
-    } yield Ast.Selection.InlineFragment(cond, dirs, sel)
+  lazy val FragmentDefinition: Parser[Ast.FragmentDefinition] =
+    ((keyword("fragment") *> FragmentName) ~ TypeCondition ~ Directives ~ SelectionSet).map {
+      case (((name, cond), dirs), sel) => Ast.FragmentDefinition(name, cond, dirs, sel)
+    }
 
-  lazy val FragmentDefinition =
-    for {
-      _    <- keyword("fragment")
-      name <- FragmentName
-      cond <- TypeCondition
-      dirs <- Directives
-      sel  <- SelectionSet
-    } yield Ast.FragmentDefinition(name, cond, dirs, sel)
+  lazy val TypeCondition: Parser[Ast.Type.Named] =
+    keyword("on") *> NamedType
 
-  lazy val FragmentName =
-    Name.filter(_ != Ast.Name("on"))
+  lazy val Value: Parser[Ast.Value] = recursive[Ast.Value] { rec =>
 
-  lazy val TypeCondition =
-    keyword("on") ~> NamedType
+    val NullValue: Parser[Ast.Value.NullValue.type] =
+      keyword("null").as(Ast.Value.NullValue)
 
-  lazy val Value: Parser[Ast.Value] =
-    Variable    .widen[Ast.Value] |
-    IntValue    .widen            |
-    FloatValue  .widen            |
-    StringValue .widen            |
-    BooleanValue.widen            |
-    NullValue   .widen            |
-    EnumValue   .widen            |
-    ListValue   .widen            |
-    ObjectValue .widen
+    lazy val EnumValue: Parser[Ast.Value.EnumValue] =
+      (not(string("true") | string("false") | string("null")).with1 *> Name)
+        .map(Ast.Value.EnumValue.apply)
 
-  lazy val NullValue: Parser[Ast.Value.NullValue.type] =
-    keyword("null").as(Ast.Value.NullValue)
+    val ListValue: Parser[Ast.Value.ListValue] =
+      token(squareBrackets(rec.rep0).map(Ast.Value.ListValue.apply))
 
-  lazy val EnumValue: Parser[Ast.Value.EnumValue] =
-    Name.filter {
-      case Ast.Name("true")  => false
-      case Ast.Name("false") => false
-      case Ast.Name("null")  => false
-      case _                 => true
-    } .map(Ast.Value.EnumValue.apply)
+    val NumericLiteral: Parser[Ast.Value] = {
 
-  lazy val ListValue: Parser[Ast.Value.ListValue] =
-    token(squareBrackets(many(Value)).map(Ast.Value.ListValue.apply))
+      def narrow(d: BigDecimal): Ast.Value.FloatValue =
+        Ast.Value.FloatValue(d.toDouble)
 
-  lazy val IntValue: Parser[Ast.Value.IntValue] =
-    token(bigDecimal).filter(_.isValidInt).map(a => Ast.Value.IntValue(a.toInt))
+      token(
+        (intLiteral ~ (char('.') *> digit.rep.string).? ~ ((char('e') | char('E')) *> intLiteral.string).?)
+          .map {
+            case ((a, Some(b)), None) => narrow(BigDecimal(s"$a.$b"))
+            case ((a, None), Some(c)) => narrow(BigDecimal(s"${a}E$c"))
+            case ((a, Some(b)), Some(c)) => narrow(BigDecimal(s"$a.${b}E$c"))
+            case ((a, None), None) => Ast.Value.IntValue(a)
+          }
+      )
+    }
 
-  lazy val FloatValue: Parser[Ast.Value.FloatValue] =
-    token(bigDecimal).filter(_.isDecimalDouble).map(a => Ast.Value.FloatValue(a.toDouble))
+    val BooleanValue: Parser[Ast.Value.BooleanValue] =
+      token(booleanLiteral).map(Ast.Value.BooleanValue.apply)
+
+    val ObjectField: Parser[(Ast.Name, Ast.Value)] =
+      (Name <* keyword(":")) ~ rec
+
+    val ObjectValue: Parser[Ast.Value.ObjectValue] =
+      braces(ObjectField.rep0).map(Ast.Value.ObjectValue.apply)
+
+    Variable |
+      NumericLiteral |
+      StringValue |
+      BooleanValue |
+      NullValue |
+      EnumValue |
+      ListValue |
+      ObjectValue
+  }
 
   lazy val StringValue: Parser[Ast.Value.StringValue] =
     token(stringLiteral).map(Ast.Value.StringValue.apply)
 
-  lazy val BooleanValue: Parser[Ast.Value.BooleanValue] =
-    (keyword("true").as(true) | keyword("false").as(false)).map(Ast.Value.BooleanValue.apply)
-
-  lazy val ObjectValue: Parser[Ast.Value.ObjectValue] =
-    braces(many(ObjectField)).map(Ast.Value.ObjectValue.apply)
-
-  lazy val ObjectField: Parser[(Ast.Name, Ast.Value)] =
-    (Name <~ keyword(":")) ~ Value
-
-  lazy val VariableDefinitions =
-    parens(many(VariableDefinition))
+  lazy val VariableDefinitions: Parser[List[Ast.VariableDefinition]] =
+    parens(VariableDefinition.rep0)
 
   lazy val VariableDefinition: Parser[Ast.VariableDefinition] =
-    for {
-      v    <- Variable
-      _    <- keyword(":")
-      tpe  <- Type
-      dv   <- opt(DefaultValue)
-    } yield Ast.VariableDefinition(v.name, tpe, dv)
+    ((Variable <* keyword(":")) ~ Type ~ DefaultValue.?).map {
+      case ((v, tpe), dv) => Ast.VariableDefinition(v.name, tpe, dv)
+    }
 
   lazy val Variable: Parser[Ast.Value.Variable] =
-    keyword("$") ~> Name.map(Ast.Value.Variable.apply)
+    keyword("$") *> Name.map(Ast.Value.Variable.apply)
 
   lazy val DefaultValue: Parser[Ast.Value] =
-    keyword("=") ~> Value
+    keyword("=") *> Value
 
-  lazy val Type: Parser[Ast.Type] =
-    NonNullType.widen[Ast.Type] | ListType.widen | NamedType.widen
+  lazy val Type: Parser[Ast.Type] = recursive[Ast.Type] { rec =>
+
+    lazy val ListType: Parser[Ast.Type.List] =
+      squareBrackets(rec).map(Ast.Type.List.apply)
+
+    val namedMaybeNull: Parser[Ast.Type] = (NamedType ~ keyword("!").?).map {
+      case (t, None) => t
+      case (t, _) => Ast.Type.NonNull(Left(t))
+    }
+
+    val listMaybeNull: Parser[Ast.Type] = (ListType ~ keyword("!").?).map {
+      case (t, None) => t
+      case (t, _) => Ast.Type.NonNull(Right(t))
+    }
+
+    namedMaybeNull | listMaybeNull
+  }
 
   lazy val NamedType: Parser[Ast.Type.Named] =
     Name.map(Ast.Type.Named.apply)
 
-  lazy val ListType: Parser[Ast.Type.List] =
-    squareBrackets(Type).map(Ast.Type.List.apply)
-
-  lazy val NonNullType: Parser[Ast.Type.NonNull] =
-    (NamedType <~ keyword("!")).map(a => Ast.Type.NonNull(Left(a))).widen |
-    (ListType  <~ keyword("!")).map(a => Ast.Type.NonNull(Right(a))).widen
-
-  lazy val Directives =
-    many(Directive)
+  lazy val Directives: Parser0[List[Ast.Directive]] =
+    Directive.rep0
 
   lazy val Directive: Parser[Ast.Directive] =
-    keyword("@") ~> (Name, opt(Arguments)).mapN((n, ods) => Ast.Directive(n, ods.orEmpty))
+    keyword("@") *> (Name ~ Arguments.?).map { case (n, ods) => Ast.Directive(n, ods.orEmpty)}
 
   lazy val Name: Parser[Ast.Name] = {
-    val initial    = ('A' to 'Z').toSet ++ ('a' to 'z').toSet + '_'
-    val subsequent = initial ++ ('0' to '9').toSet
-    token((satisfy(initial), many(satisfy(subsequent))).mapN((h, t) => Ast.Name((h :: t).mkString)))
+    val initial    = ('A' to 'Z') ++ ('a' to 'z') ++ Seq('_')
+    val subsequent = initial ++ ('0' to '9')
+
+    token(charIn(initial) ~ charIn(subsequent).rep0).map {
+      case (h, t) => Ast.Name((h :: t).mkString)
+    }
   }
 }
 
 object CommentedText {
 
-  def skipWhitespace: Parser[Unit] =
-    takeWhile(c => c.isWhitespace || c == ',').void named "whitespace"
+  lazy val whitespace: Parser[Char] = charWhere(_.isWhitespace)
+
+  def skipWhitespace: Parser0[Unit] =
+    charsWhile0(c => c.isWhitespace || c == ',').void.withContext("whitespace")
 
   /** Parser that consumes a comment */
-  def comment: Parser[Unit] = {
-    (char('#') ~> many(noneOf("\n\r")) <~ oneOf("\n\r") <~ skipWhitespace).void
-  }
+  def comment: Parser[Unit] =
+    (char('#') *> (charWhere(c => c != '\n' && c != '\r')).rep0 <* charIn('\n', '\r') <* skipWhitespace).void.withContext("comment")
 
   /** Turns a parser into one that skips trailing whitespace and comments */
   def token[A](p: Parser[A]): Parser[A] =
-    p <~ skipWhitespace <~ many(comment)
+    p <* skipWhitespace <* comment.rep0
+
+  def token0[A](p: Parser0[A]): Parser0[A] =
+    p <* skipWhitespace <* comment.rep0
 
   /**
    * Consumes `left` and `right`, including the trailing and preceding whitespace,
    * respectively, and returns the value of `p`.
    */
-  private def _bracket[A,B,C](left: Parser[B], p: => Parser[A], right: => Parser[C]): Parser[A] =
-    token(left) ~> token(p) <~ token(right)
+  private def _bracket[A,B,C](left: Parser[B], p: Parser0[A], right: Parser[C]): Parser[A] =
+    token(left) *> token0(p) <* token(right)
 
   /** Turns a parser into one that consumes surrounding parentheses `()` */
-  def parens[A](p: => Parser[A]): Parser[A] =
-    _bracket(char('('), p, char(')')).named(s"parens(${p.toString})")
+  def parens[A](p: Parser0[A]): Parser[A] =
+    _bracket(char('('), p, char(')')).withContext(s"parens(${p.toString})")
 
   /** Turns a parser into one that consumes surrounding curly braces `{}` */
-  def braces[A](p: => Parser[A]): Parser[A] = {
-    lazy val q = p
-    _bracket(char('{'), q, char('}')).named(s"braces(${q.toString})")
-  }
+  def braces[A](p: Parser0[A]): Parser[A] =
+    _bracket(char('{'), p, char('}')).withContext(s"braces(${p.toString})")
 
   /** Turns a parser into one that consumes surrounding square brackets `[]` */
-  def squareBrackets[A](p: => Parser[A]): Parser[A] = {
-    lazy val q = p
-    _bracket(char('['), q, char(']')).named(s"squareBrackets(${q.toString})")
+  def squareBrackets[A](p: Parser0[A]): Parser[A] =
+    _bracket(char('['), p, char(']')).withContext(s"squareBrackets(${p.toString})")
+}
+
+object Literals {
+
+  val stringLiteral: Parser[String] = {
+
+    val lineTerminator: Parser[String] = (lf | cr | crlf).string
+
+    val sourceCharacter: Parser[String] = (charIn(0x0009.toChar, 0x000A.toChar, 0x000D.toChar) | charIn(0x0020.toChar to 0xFFFF.toChar)).string
+
+    val escapedUnicode: Parser[String] = string("\\u") *>
+      hexdig
+        .repExactlyAs[String](4)
+        .map(hex => Integer.parseInt(hex, 16).toChar.toString)
+
+    val escapedCharacter: Parser[String] = char('\\') *>
+      (
+        char('"').as("\"") |
+          char('\\').as("\\") |
+          char('/').as("/") |
+          char('b').as("\b") |
+          char('f').as("\f") |
+          char('n').as("\n") |
+          char('r').as("\r") |
+          char('t').as("\t")
+      )
+
+    val stringCharacter: Parser[String] = (
+      (not(charIn('"', '\\') | lineTerminator).with1 *> sourceCharacter) |
+        escapedUnicode |
+       escapedCharacter
+    )
+
+    val blockStringCharacter: Parser[String] = string("\\\"\"\"").as("\"\"\"") |
+      (not(string("\"\"\"")).with1 *> sourceCharacter)
+
+    //https://spec.graphql.org/June2018/#BlockStringValue()
+    //TODO this traverses over lines a hideous number of times(but matching the
+    //algorithm in the spec). Can it be optimized?
+    val blockQuotesInner: Parser0[String] = blockStringCharacter.repAs0[String].map { str =>
+      val isWhitespace: Regex = "[ \t]*".r
+      var commonIndent: Int = -1
+      var lineNum: Int = 0
+      for (line <- str.linesIterator) {
+        if (lineNum != 0) {
+          val len = line.length()
+          val indent = line.takeWhile(c => c == ' ' || c == '\t').length()
+          if (indent < len) {
+            if (commonIndent < 0 || indent < commonIndent) {
+              commonIndent = indent
+            }
+          }
+        }
+        lineNum = lineNum + 1
+      }
+      val formattedReversed: List[String] = if ( commonIndent >= 0) {
+        str.linesIterator.foldLeft[List[String]](Nil) {
+          (acc, l) => if (acc == Nil) l :: acc else l.drop(commonIndent) :: acc
+        }
+      } else {
+        str.linesIterator.toList
+      }
+      val noTrailingEmpty = formattedReversed.dropWhile(isWhitespace.matches(_)).reverse
+      noTrailingEmpty.dropWhile(isWhitespace.matches(_)).mkString("\n")
+    }
+
+
+    (not(string("\"\"\"")).with1 *> stringCharacter.repAs0[String].with1.surroundedBy(char('"'))) | blockQuotesInner.with1.surroundedBy(string("\"\"\""))
+
   }
+
+  val intLiteral: Parser[Int] =
+    bigInt.flatMap {
+      case v if v.isValidInt => pure(v.toInt)
+      case v => failWith(s"$v is larger than max int")
+    }
+
+  val booleanLiteral: Parser[Boolean] = string("true").as(true) | string("false").as(false)
+
 }

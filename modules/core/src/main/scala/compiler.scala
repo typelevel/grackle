@@ -5,8 +5,8 @@ package edu.gemini.grackle
 
 import scala.annotation.tailrec
 
-import atto.Atto._
 import cats.data.Ior
+import cats.parse.Parser
 import cats.implicits._
 import io.circe.Json
 
@@ -27,11 +27,11 @@ object QueryParser {
    *  Yields a Query value on the right and accumulates errors on the left.
    */
   def parseText(text: String, name: Option[String] = None): Result[UntypedOperation] = {
-    def toResult[T](pr: Either[String, T]): Result[T] =
-      Ior.fromEither(pr).leftMap(mkOneError(_))
+    def toResult[T](pr: Either[Parser.Error, T]): Result[T] =
+      Ior.fromEither(pr).leftMap(e => mkOneError(e.expected.toList.mkString(",")))
 
     for {
-      doc   <- toResult(GraphQLParser.Document.parseOnly(text).either)
+      doc   <- toResult(GraphQLParser.Document.parseAll(text))
       query <- parseDocument(doc, name)
     } yield query
   }
@@ -173,7 +173,7 @@ object QueryMinimizer {
 
   def minimizeText(text: String): Either[String, String] = {
     for {
-      doc <- GraphQLParser.Document.parseOnly(text).either
+      doc <- GraphQLParser.Document.parseAll(text).leftMap(_.expected.toList.mkString(","))
     } yield minimizeDocument(doc)
   }
 

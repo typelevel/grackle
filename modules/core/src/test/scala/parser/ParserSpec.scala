@@ -3,7 +3,6 @@
 
 package parser
 
-import atto.Atto._
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle.{ Ast, GraphQLParser }
@@ -30,7 +29,7 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(query).option match {
+    GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
@@ -62,7 +61,7 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(query).option match {
+    GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
@@ -94,7 +93,7 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(query).option match {
+    GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
@@ -142,7 +141,7 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(query).option match {
+    GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
@@ -184,7 +183,7 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(query).option match {
+    GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
@@ -216,7 +215,7 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(query).option match {
+    GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
@@ -248,7 +247,7 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(query).option match {
+    GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
@@ -280,7 +279,7 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(query).option match {
+    GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
@@ -332,17 +331,141 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseOnly(query).option match {
+    GraphQLParser.Document.parseAll(query).toOption match {
       case Some(List(q)) => assert(q == expected)
       case _ => assert(false)
     }
   }
 
   test("invalid document") {
-    GraphQLParser.Document.parseOnly("scalar Foo woozle").option match {
+    GraphQLParser.Document.parseAll("scalar Foo woozle").toOption match {
       case Some(_) => fail("should have failed")
       case None    => succeed
     }
+  }
+
+  test("fragment") {
+    val query = """
+      query {
+        character(id: 1000) {
+          ...frag
+          ... on Character {
+            age
+          }
+        }
+      }
+
+      fragment frag on Character {
+        name
+      }
+    """
+
+    val expected =
+      List(
+        Operation(Query, None, Nil, Nil,
+          List(
+            Field(None, Name("character"), List((Name("id"), IntValue(1000))), Nil,
+              List(
+                FragmentSpread(Name("frag"),Nil),
+                InlineFragment(
+                  Some(Named(Name("Character"))),
+                  Nil,
+                  List(
+                    Field(None,Name("age"),Nil ,Nil ,Nil)
+                  )
+                )
+              )
+            )
+          )
+        ),
+        FragmentDefinition(
+          Name("frag"),
+          Named(Name("Character")),
+          Nil,
+          List(
+            Field(None,Name("name"),Nil ,Nil ,Nil)
+          )
+        )
+      )
+
+    GraphQLParser.Document.parseAll(query).toOption match {
+      case Some(xs) => assert(xs == expected)
+      case _ => assert(false)
+    }
+
+  }
+
+  test("fragment with directive") {
+    val query = """
+      query frag($expanded: Boolean){
+        character(id: 1000) {
+          name
+          ... @include(if: $expanded) {
+            age
+          }
+        }
+      }
+    """
+
+    val expected =
+      Operation(
+        Query,
+        Some(Name("frag")),
+        List(VariableDefinition(Name("expanded"),Named(Name("Boolean")),None)),
+        Nil,
+        List(
+          Field(None, Name("character"), List((Name("id"), IntValue(1000))), Nil,
+            List(
+              Field(None, Name("name"), Nil, Nil, Nil),
+              InlineFragment(
+                None,
+                List(Directive(Name("include"),List((Name("if"),Variable(Name("expanded")))))),
+                List(Field(None,Name("age"),List(),List(),List()))
+              )
+            )
+          )
+        )
+      )
+
+    GraphQLParser.Document.parseAll(query).toOption match {
+      case Some(List(q)) => assert(q == expected)
+      case _ => assert(false)
+    }
+
+  }
+
+  test("value literals") {
+
+    def assertParse(input: String, expected: Value) =
+      GraphQLParser.Value.parseAll(input).toOption match {
+        case Some(v) => assert(v == expected)
+        case _ => assert(false)
+      }
+
+    assertParse("\"fooλ\"", StringValue("fooλ"))
+    assertParse("\"\\u03BB\"", StringValue("λ"))
+    assertParse("\"\\\" \\\\ \\/ \\b \\f \\n \\r \\t\"", StringValue("\" \\ / \b \f \n \r \t"))
+
+    assertParse("123.2", FloatValue(123.2d))
+    assertParse("123E2", FloatValue(123E2d))
+    assertParse("123.2E2", FloatValue(123.2E2d))
+
+    assertParse("123", IntValue(123))
+    assertParse("-123", IntValue(-123))
+
+    assertParse("true", BooleanValue(true))
+    assertParse("false", BooleanValue(false))
+
+    assertParse("null", NullValue)
+
+    assertParse("Foo", EnumValue(Name("Foo")))
+
+    assertParse("[1, \"foo\"]", ListValue(List(IntValue(1), StringValue("foo"))))
+
+    assertParse("{foo: 1, bar: \"baz\"}", ObjectValue(List(Name("foo") -> IntValue(1), Name("bar") -> StringValue("baz"))))
+
+    assertParse("\"\"\"one\"\"\"", StringValue("one"))
+    assertParse("\"\"\"    \n\n   first\n   \tλ\n  123\n\n\n   \t\n\n\"\"\"", StringValue(" first\n \tλ\n123"))
   }
 
 }

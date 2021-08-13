@@ -3,8 +3,8 @@
 
 package edu.gemini.grackle
 
-import atto.Atto._
 import cats.data.{Ior, NonEmptyChain}
+import cats.parse.Parser
 import cats.implicits._
 import io.circe.Json
 import org.tpolecat.sourcepos.SourcePos
@@ -810,11 +810,11 @@ object SchemaParser {
    * Yields a Query value on the right and accumulates errors on the left.
    */
   def parseText(text: String)(implicit pos: SourcePos): Result[Schema] = {
-    def toResult[T](pr: Either[String, T]): Result[T] =
-      Ior.fromEither(pr).leftMap(mkOneError(_))
+    def toResult[T](pr: Either[Parser.Error, T]): Result[T] =
+      Ior.fromEither(pr).leftMap(e => mkOneError(e.expected.toList.mkString(",")))
 
     for {
-      doc <- toResult(GraphQLParser.Document.parseOnly(text).either)
+      doc <- toResult(GraphQLParser.Document.parseAll(text))
       query <- parseDocument(doc)
     } yield query
   }

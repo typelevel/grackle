@@ -107,7 +107,7 @@ object Ast {
     tpe:           Type.Named
   )
 
-  sealed trait TypeDefinition extends TypeSystemDefinition
+  sealed trait TypeDefinition extends TypeSystemDefinition with Product with Serializable
 
   case class ScalarTypeDefinition(
     name: Name,
