@@ -7,11 +7,12 @@ package doobie
 import cats.Reducible
 import edu.gemini.grackle.sql._
 import cats.effect.Sync
-import _root_.doobie.{ Meta, Put, Fragment => DoobieFragment, Read, Transactor }
+import _root_.doobie.{ Meta, Put, Read, Transactor, Fragment => DoobieFragment }
 import _root_.doobie.enumerated.JdbcType._
-import _root_.doobie.enumerated.Nullability.{Nullable, NoNulls}
+import _root_.doobie.enumerated.Nullability.{ NoNulls, Nullable }
 import _root_.doobie.implicits._
 import _root_.doobie.util.fragments
+
 import java.sql.ResultSet
 import org.tpolecat.typename.TypeName
 
@@ -77,7 +78,6 @@ abstract class DoobieMapping[F[_]: Sync](
 
       def sqlTypeName(codec: Codec): Option[String] =
         codec._1.put.jdbcTargets.head match {
-          case Array                 => Some("ARRAY")
           case BigInt                => Some("BIGINT")
           case Binary                => Some("BINARY")
           case Bit                   => Some("BOOLEAN")
@@ -115,7 +115,7 @@ abstract class DoobieMapping[F[_]: Sync](
           case TinyInt               => Some("TINYINT")
           case VarBinary             => Some("VARBINARY")
           case VarChar               => Some("VARCHAR")
-          case Other                 =>
+          case Array | Other         =>
             codec._1.put match {
               case adv: Put.Advanced[_] =>
                 Some(adv.schemaTypes.head)
