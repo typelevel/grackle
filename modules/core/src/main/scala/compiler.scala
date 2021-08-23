@@ -307,13 +307,15 @@ class QueryCompiler(schema: Schema, phases: List[Phase]) {
    *
    * Any errors are accumulated on the left.
    */
-  def compile(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full): Result[Operation] = {
+  def compile(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full): Result[Operation] =
+    QueryParser.parseText(text, name).flatMap(compileUntyped(_, untypedVars, introspectionLevel))
+
+  def compileUntyped(parsed: UntypedOperation, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full): Result[Operation] = {
 
     val allPhases =
       IntrospectionElaborator(introspectionLevel).toList ++ (VariablesAndSkipElaborator :: phases)
 
     for {
-      parsed  <- QueryParser.parseText(text, name)
       varDefs <- compileVarDefs(parsed.variables)
       vars    <- compileVars(varDefs, untypedVars)
       rootTpe <- parsed.rootTpe(schema)
