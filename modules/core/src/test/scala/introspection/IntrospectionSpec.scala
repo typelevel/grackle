@@ -972,8 +972,12 @@ final class IntrospectionSuite extends CatsSuite {
             "queryType" : {
               "name" : "Query"
             },
-            "mutationType" : null,
-            "subscriptionType" : null,
+            "mutationType" : {
+              "name" : "Mutation"
+            },
+            "subscriptionType" : {
+              "name" : "Subscription"
+            },
             "types" : [
               {
                 "kind" : "OBJECT",
@@ -1025,6 +1029,64 @@ final class IntrospectionSuite extends CatsSuite {
                             "ofType" : null
                           }
                         }
+                      }
+                    },
+                    "isDeprecated" : false,
+                    "deprecationReason" : null
+                  }
+                ],
+                "inputFields" : null,
+                "interfaces" : [
+                ],
+                "enumValues" : null,
+                "possibleTypes" : null
+              },
+              {
+                "kind" : "OBJECT",
+                "name" : "Subscription",
+                "description" : null,
+                "fields" : [
+                  {
+                    "name" : "dummy",
+                    "description" : null,
+                    "args" : [
+                    ],
+                    "type" : {
+                      "kind" : "NON_NULL",
+                      "name" : null,
+                      "ofType" : {
+                        "kind" : "SCALAR",
+                        "name" : "Int",
+                        "ofType" : null
+                      }
+                    },
+                    "isDeprecated" : false,
+                    "deprecationReason" : null
+                  }
+                ],
+                "inputFields" : null,
+                "interfaces" : [
+                ],
+                "enumValues" : null,
+                "possibleTypes" : null
+              },
+              {
+                "kind" : "OBJECT",
+                "name" : "Mutation",
+                "description" : null,
+                "fields" : [
+                  {
+                    "name" : "dummy",
+                    "description" : null,
+                    "args" : [
+                    ],
+                    "type" : {
+                      "kind" : "NON_NULL",
+                      "name" : null,
+                      "ofType" : {
+                        "kind" : "SCALAR",
+                        "name" : "Int",
+                        "ofType" : null
                       }
                     },
                     "isDeprecated" : false,
@@ -1391,6 +1453,12 @@ object SmallMapping extends ValueMapping[Id] {
       type Query {
         users: [User!]!
         profiles: [Profile!]!
+      }
+      type Subscription {
+        dummy: Int!
+      }
+      type Mutation {
+        dummy: Int!
       }
       "Profile interface type"
       interface Profile {
