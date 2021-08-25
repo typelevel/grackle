@@ -4,17 +4,19 @@
 package edu.gemini.grackle
 package doobie
 
+import java.sql.ResultSet
+
 import cats.Reducible
-import edu.gemini.grackle.sql._
 import cats.effect.Sync
 import _root_.doobie.{ Meta, Put, Read, Transactor, Fragment => DoobieFragment }
 import _root_.doobie.enumerated.JdbcType._
 import _root_.doobie.enumerated.Nullability.{ NoNulls, Nullable }
 import _root_.doobie.implicits._
 import _root_.doobie.util.fragments
-
-import java.sql.ResultSet
+import org.tpolecat.sourcepos.SourcePos
 import org.tpolecat.typename.TypeName
+
+import edu.gemini.grackle.sql._
 
 abstract class DoobieMapping[F[_]: Sync](
   val transactor: Transactor[F],
@@ -33,8 +35,8 @@ abstract class DoobieMapping[F[_]: Sync](
   def doubleEncoder  = (Put[Double], false)
 
   class TableDef(name: String) {
-    def col[T: TypeName](colName: String, codec: Meta[T], nullable: Boolean = false): ColumnRef =
-      ColumnRef(name, colName, (codec, nullable))
+    def col[T](colName: String, codec: Meta[T], nullable: Boolean = false)(implicit typeName: TypeName[T], pos: SourcePos): Column.ColumnRef =
+      Column.ColumnRef(name, colName, (codec, nullable), typeName.value, pos)
   }
 
   implicit def Fragments: SqlFragment[Fragment] =
@@ -53,6 +55,7 @@ abstract class DoobieMapping[F[_]: Sync](
           }
       }
       def const(s: String): Fragment = DoobieFragment.const(s)
+      def and(fs: Fragment*): Fragment = fragments.and(fs: _*)
       def andOpt(fs: Option[Fragment]*): Fragment = fragments.andOpt(fs: _*)
       def orOpt(fs: Option[Fragment]*): Fragment = fragments.orOpt(fs: _*)
       def whereAnd(fs: Fragment*): Fragment = fragments.whereAnd(fs: _*)

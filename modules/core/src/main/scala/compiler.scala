@@ -404,6 +404,7 @@ object QueryCompiler {
         case n@Narrow(subtpe, child)  => transform(child, vars, schema, subtpe).map(ec => n.copy(child = ec))
         case w@Wrap(_, child)         => transform(child, vars, schema, tpe).map(ec => w.copy(child = ec))
         case r@Rename(_, child)       => transform(child, vars, schema, tpe).map(ec => r.copy(child = ec))
+        case c@Count(_, child)        => transform(child, vars, schema, tpe).map(ec => c.copy(child = ec))
         case g@Group(children)        => children.traverse(q => transform(q, vars, schema, tpe)).map(eqs => g.copy(queries = eqs))
         case g@GroupList(children)    => children.traverse(q => transform(q, vars, schema, tpe)).map(eqs => g.copy(queries = eqs))
         case u@Unique(child)          => transform(child, vars, schema, tpe.nonNull.list).map(ec => u.copy(child = ec))
@@ -689,6 +690,7 @@ object QueryCompiler {
       def loop(q: Query, depth: Int, width: Int, group: Boolean): (Int, Int) =
         q match {
           case Select(_, _, Empty) => if (group) (depth, width + 1) else (depth + 1, width + 1)
+          case Count(_, _) => if (group) (depth, width + 1) else (depth + 1, width + 1)
           case Select(_, _, child) => if (group) loop(child, depth, width, false) else loop(child, depth + 1, width, false)
           case Group(queries) => handleGroupedQueries(queries, depth, width)
           case GroupList(queries) => handleGroupedQueries(queries, depth, width)

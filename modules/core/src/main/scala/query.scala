@@ -29,8 +29,6 @@ object Query {
   case class Select(name: String, args: List[Binding], child: Query = Empty) extends Query {
     def eliminateArgs(elim: Query => Query): Query = copy(args = Nil, child = elim(child))
 
-    def transformChild(f: Query => Query): Query = copy(child = f(child))
-
     def render = {
       val rargs = if(args.isEmpty) "" else s"(${args.map(_.render).mkString(", ")})"
       val rchild = if(child == Empty) "" else s" { ${child.render} }"
@@ -173,6 +171,11 @@ object Query {
       }
     }
   }
+
+  /** Computes the number of top-level elements of `child` as field `name` */
+  case class Count(name: String, child: Query) extends Query {
+    def render = s"$name:count { ${child.render} }"
+   }
 
   /** A placeholder for a skipped node */
   case object Skipped extends Query {

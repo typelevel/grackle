@@ -8,6 +8,14 @@ import edu.gemini.grackle.syntax._
 
 final class StarWarsSpec extends CatsSuite {
 
+  test("validate mapping") {
+    val es = StarWarsMapping.validator.validateMapping()
+    es match {
+      case Nil => succeed
+      case _ => fail(es.foldMap(_.toErrorMessage))
+    }
+  }
+
   test("simple query") {
     val query = """
       query {
@@ -301,6 +309,94 @@ final class StarWarsSpec extends CatsSuite {
               {
                 "name" : "R2-D2",
                 "primaryFunction" : "Astromech"
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = StarWarsMapping.compileAndRun(query)
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("count") {
+    val query = """
+      query {
+        human(id: "1000") {
+          name
+          numberOfFriends
+          friends {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "human" : {
+            "name" : "Luke Skywalker",
+            "numberOfFriends" : 4,
+            "friends" : [
+              {
+                "name" : "Han Solo"
+              },
+              {
+                "name" : "Leia Organa"
+              },
+              {
+                "name" : "C-3PO"
+              },
+              {
+                "name" : "R2-D2"
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = StarWarsMapping.compileAndRun(query)
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("renamed count") {
+    val query = """
+      query {
+        human(id: "1000") {
+          name
+          num:numberOfFriends
+          friends {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "human" : {
+            "name" : "Luke Skywalker",
+            "num" : 4,
+            "friends" : [
+              {
+                "name" : "Han Solo"
+              },
+              {
+                "name" : "Leia Organa"
+              },
+              {
+                "name" : "C-3PO"
+              },
+              {
+                "name" : "R2-D2"
               }
             ]
           }

@@ -10,7 +10,6 @@ import cats.data.NonEmptyList
 import cats.implicits._
 import fs2.Stream
 import io.circe.Json
-import org.tpolecat.typename._
 import org.tpolecat.sourcepos.SourcePos
 
 import Cursor.{Context, Env}
@@ -30,45 +29,108 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   import TableExpr.{SubqueryRef, TableRef}
 
   /**
-   * Name of a SQL schema column and its associated codec. Note that `ColumnRef`s are considered equal
+   * Name of a SQL schema column and its associated codec. Note that `Column`s are considered equal
    * if their table and column names are equal.
    */
-  case class ColumnRef(table: String, column: String, codec: Codec, scalaTypeName: String)(
-    implicit val pos: SourcePos
-  ) { outer =>
-    /** This `ColumnRef` as a SQL expression of the form `table.column`. */
-    def toSql: String =
-      if(table == "_null_")
-        Fragments.sqlTypeName(codec) match {
-          case Some(name) => s"(NULL :: $name)"
-          case None => "NULL"
-        }
-      else s"$table.$column"
+  trait Column {
+    def table: String
+    def column: String
+    def codec: Codec
+    def scalaTypeName: String
+    def pos: SourcePos
 
-    def subst(from: TableExpr, to: TableExpr): ColumnRef =
-      if (table == from.refName) copy(table = to.refName)
-      else this
+    def move(table: String, column: String = column): Column
+    def subst(from: TableExpr, to: TableExpr): Column
+
+    def isRef: Boolean = false
 
     override def equals(other: Any) =
       other match {
-        case ColumnRef(`table`, `column`, _, _) => true
+        case cr: Column => table == cr.table && column == cr.column
         case _ => false
       }
 
     override def hashCode(): Int =
       table.hashCode() + column.hashCode()
+
+    /** This `Column` as a SQL expression of the form `table.column`. */
+    def toFragment: Fragment
   }
 
-  object ColumnRef {
+  object Column {
+    case class ColumnRef(table: String, column: String, codec: Codec, scalaTypeName: String, pos: SourcePos) extends Column {
+      def move(table: String, column: String = column): Column =
+        copy(table = table, column = column)
 
-    def apply[A: TypeName](table: String, column: String, codec: Codec)(
-      implicit pos: SourcePos
-    ): ColumnRef =
-      apply(table, column, codec, typeName)
+      def subst(from: TableExpr, to: TableExpr): Column =
+        if (table == from.refName) copy(table = to.refName)
+        else this
+
+      override def isRef: Boolean = true
+
+      def toFragment: Fragment = Fragments.const(s"$table.$column")
+    }
+
+    object ColumnRef {
+      def apply(col: Column): ColumnRef =
+        ColumnRef(col.table, col.column, col.codec, col.scalaTypeName, col.pos)
+    }
+
+    case class NullColumn(table: String, column: String, codec: Codec, scalaTypeName: String, pos: SourcePos) extends Column {
+      def move(table: String, column: String = column): Column =
+        copy(table = table, column = column)
+
+      def subst(from: TableExpr, to: TableExpr): Column =
+        if (table == from.refName) copy(table = to.refName)
+        else this
+
+      def toFragment: Fragment =
+        Fragments.sqlTypeName(codec) match {
+          case Some(name) => Fragments.const(s"(NULL :: $name)")
+          case None => Fragments.const("NULL")
+        }
+    }
+
+    object NullColumn {
+      def apply(col: Column): NullColumn =
+        NullColumn(col.table, col.column, col.codec, col.scalaTypeName, col.pos)
+    }
+
+    case class SubqueryColumn(table: String, column: String, codec: Codec, scalaTypeName: String, pos: SourcePos, subquery: SqlSelect) extends Column {
+      def move(table: String, column: String = column): Column =
+        copy(table = table, column = column)
+
+      def subst(from: TableExpr, to: TableExpr): Column =
+        if (table == from.refName) copy(table = to.refName)
+        else this
+
+      def toFragment: Fragment = Fragments.parentheses(subquery.toFragment) |+| Fragments.const(s" AS $column")
+    }
+
+    object SubqueryColumn {
+      def apply(col: Column, subquery: SqlSelect): SubqueryColumn =
+        SubqueryColumn(col.table, col.column, col.codec, col.scalaTypeName, col.pos, subquery)
+    }
+
+    case class CountColumn(table: String, column: String, codec: Codec, scalaTypeName: String, pos: SourcePos, cols: List[Column]) extends Column {
+      def move(table: String, column: String = column): Column =
+        copy(table = table, column = column)
+
+      def subst(from: TableExpr, to: TableExpr): Column =
+        if (table == from.refName) copy(table = to.refName)
+        else this
+
+      def toFragment: Fragment = Fragments.const("COUNT(DISTINCT(") |+| cols.map(_.toFragment).intercalate(Fragments.const(", ")) |+| Fragments.const(s")) AS $column")
+    }
+
+    object CountColumn {
+      def apply(col: Column, cols: List[Column]): CountColumn =
+        CountColumn(col.table, col.column, col.codec, col.scalaTypeName, col.pos, cols)
+    }
   }
 
   /** A pair of `ColumnRef`s, representing a SQL join. */
-  case class Join(parent: ColumnRef, child: ColumnRef)
+  case class Join(parent: Column, child: Column)
 
   case class SqlRoot(fieldName: String, orootTpe: Option[Type] = None, mutation: Mutation = Mutation.None)(
     implicit val pos: SourcePos
@@ -87,6 +149,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           case PossiblyRenamedSelect(s@Select(fieldName, _, _), resultName) =>
             val fieldContext = context.forField(fieldName, resultName).getOrElse(sys.error(s"No field '$fieldName' of type ${context.tpe}"))
             PossiblyRenamedSelect(s.copy(child = loop(s.child, fieldContext)), resultName)
+          case Rename(_, Count(_, _)) => Empty
+          case Count(countName, _) => Select(countName, Nil, Empty)
           case Group(queries) => Group(queries.map(q => loop(q, context)))
           case GroupList(queries) => GroupList(queries.map(q => loop(q, context)))
           case u: Unique => u.copy(child = loop(u.child, context.asType(context.tpe.list)))
@@ -138,7 +202,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
   case class SqlField(
     fieldName: String,
-    columnRef: ColumnRef,
+    columnRef: Column.ColumnRef,
     key: Boolean = false,
     discriminator: Boolean = false,
     hidden: Boolean = false,
@@ -154,7 +218,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def apply(fieldName: String, joins: Join*): SqlObject = apply(fieldName, joins.toList)
   }
 
-  case class SqlJson(fieldName: String, columnRef: ColumnRef)(
+  case class SqlJson(fieldName: String, columnRef: Column.ColumnRef)(
     implicit val pos: SourcePos
   ) extends SqlFieldMapping {
     def hidden: Boolean = false
@@ -225,7 +289,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
    * arbitrary fresh names. Currently these are used to name identity/predicate
    * joins.
    */
-  case class AliasedMappings(tableAliases: List[(List[String], String, String)], columnAliases: List[(List[String], ColumnRef, ColumnRef)], seenTables: List[String], nextFresh: Int) {
+  case class AliasedMappings(tableAliases: List[(List[String], String, String)], columnAliases: List[(List[String], Column, Column)], seenTables: List[String], nextFresh: Int) {
     /** Creates a fresh name of the form <prefix>_<unique> */
     def fresh(prefix: String): (AliasedMappings, String) =
       (copy(nextFresh = nextFresh+1), s"${prefix}_${nextFresh}")
@@ -244,14 +308,14 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       }
 
     /** Recover the unaliased form of the given column */
-    def unaliasColumn(col: ColumnRef): ColumnRef = {
+    def unaliasColumn(col: Column): Column = {
       val baseTable = unaliasTable(col.table)
       val baseColumn =
         col.column.indexOf("_of_") match {
           case -1 => col.column
           case n => col.column.take(n)
         }
-      col.copy(table = baseTable, column = baseColumn)
+      col.move(table = baseTable, column = baseColumn)
     }
 
     /** Alias the given table at all the paths from the context result path and below */
@@ -268,17 +332,17 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     }
 
     /** Derive a column alias for the given column in new table `table` */
-    def computeColumnAlias(table: String, col: ColumnRef): ColumnRef =
-      col.copy(table = table, column = s"${col.column}_of_${col.table}")
+    def computeColumnAlias(table: String, col: Column): Column =
+      col.move(table = table, column = s"${col.column}_of_${col.table}")
 
     /** Derive column aliases for the given columns in new table `table` */
-    def computeColumnAliases(table: String, cols: List[ColumnRef]): List[ColumnRef] =
-      cols.map(col => col.copy(table = table, column = s"${col.column}_of_${col.table}"))
+    def computeColumnAliases(table: String, cols: List[Column]): List[Column] =
+      cols.map(col => col.move(table = table, column = s"${col.column}_of_${col.table}"))
 
     /** Alias the given columns to the suppiled aliased columns from the context
      *  result path and above
      */
-    def aliasColumns(context: Context, cols: List[ColumnRef], aliasedCols: List[ColumnRef]): (AliasedMappings, List[ColumnRef]) = {
+    def aliasColumns(context: Context, cols: List[Column], aliasedCols: List[Column]): (AliasedMappings, List[Column]) = {
       val cols0 = cols.map(col => applyColumnAliases(context.resultPath, col))
       val aliases0 = (LazyList.continually(context.resultPath) lazyZip cols0 lazyZip aliasedCols).toList
       (copy(columnAliases = aliases0 ++ columnAliases), aliasedCols)
@@ -299,19 +363,19 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       })
 
     /** Returns the discriminator columns for the context type */
-    def discriminatorColumnsForType(context: Context): List[ColumnRef] =
+    def discriminatorColumnsForType(context: Context): List[Column] =
       objectMapping(context).map(_.fieldMappings.collect {
         case cm: SqlField if cm.discriminator => applyColumnAliases(context.resultPath, cm.columnRef)
       }).getOrElse(Nil)
 
     /** Returns the key columns for the context type */
-    def keyColumnsForType(context: Context): List[ColumnRef] =
+    def keyColumnsForType(context: Context): List[Column] =
       objectMapping(context).map(_.fieldMappings.collect {
         case cm: SqlField if cm.key => applyColumnAliases(context.resultPath, cm.columnRef)
       }).getOrElse(Nil)
 
     /** Returns the columns for leaf field `fieldName` in `context` */
-    def columnsForLeaf(context: Context, fieldName: String): List[ColumnRef] =
+    def columnsForLeaf(context: Context, fieldName: String): List[Column] =
       fieldMapping(context, fieldName) match {
         case Some(SqlField(_, cr, _, _, _, _)) => List(applyColumnAliases(context.resultPath, cr))
         case Some(SqlJson(_, cr)) => List(applyColumnAliases(context.resultPath, cr))
@@ -352,7 +416,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
                         val keys = am.keyColumnsForType(fieldContext)
                         val join0 = join.subst(join.child, TableRef(tr.baseName, Some(idTable)))
                         val joinChild = join.child.refName
-                        val on = keys.map(key => (key.copy(table = idTable), key.copy(table = joinChild)))
+                        val on = keys.map(key => (key.move(table = idTable), key.move(table = joinChild)))
                         val selfJoin = SqlJoin(idTable, join.child, on, plural, false, false)
                         (am1, selfJoin :: join0 :: sjoins0)
                       } else {
@@ -388,7 +452,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       }
 
     /** Returns the aliased columns corresponding to `term` in `context` */
-    def columnForSqlTerm[T](context: Context, term: Term[T]): Option[ColumnRef] =
+    def columnForSqlTerm[T](context: Context, term: Term[T]): Option[Column] =
       term match {
         case termPath: Path =>
           context.forPath(termPath.path.init).flatMap { parentContext =>
@@ -398,7 +462,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       }
 
     /** Returns the aliased column corresponding to the atomic field `fieldName` in `context` */
-    def columnForAtomicField(context: Context, fieldName: String): Option[ColumnRef] = {
+    def columnForAtomicField(context: Context, fieldName: String): Option[Column] = {
       fieldMapping(context, fieldName) match {
         case Some(SqlField(_, cr, _, _, _, _)) => Some(applyColumnAliases(context.resultPath, cr))
         case Some(SqlJson(_, cr)) => Some(applyColumnAliases(context.resultPath, cr))
@@ -407,8 +471,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     }
 
     /** Returns the aliased columns corresponding to `term` in `context` */
-    def columnsForTerm(context: Context, term: Term[_]): List[ColumnRef] =
-      (term.fold(List.empty[ColumnRef]) {
+    def columnsForTerm(context: Context, term: Term[_]): List[Column] =
+      (term.fold(List.empty[Column]) {
         case (acc, termPath: Path) =>
           context.forPath(termPath.path.init).map { parentContext =>
             columnsForLeaf(parentContext, termPath.path.last) ++ acc
@@ -527,6 +591,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         case Narrow(_, child)      => containsNonLeafList(child, context)
         case Wrap(_, child)        => containsNonLeafList(child, context)
         case Rename(_, child)      => containsNonLeafList(child, context)
+        case _: Count              => false
 
         case Environment(_, child) => containsNonLeafList(child, context)
 
@@ -542,12 +607,12 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     }
 
     /** Return the fully aliased column corresponding to the given unaliased columne `cr` in `context` */
-    private def applyColumnAliases(resultPath: List[String], cr: ColumnRef): ColumnRef = {
+    private def applyColumnAliases(resultPath: List[String], cr: Column): Column = {
       // First apply any in-scope table aliases
       val colWithTableAliases =
         tableAliases.filter(alias => resultPath.endsWith(alias._1) && alias._2 == cr.table).sortBy(-_._1.length)
           .headOption.map {
-            case (_, _, alias) => cr.copy(table = alias)
+            case (_, _, alias) => cr.move(table = alias)
           }.getOrElse(cr)
 
       // Apply any column aliases
@@ -630,17 +695,17 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def fetch: F[Table]
 
     /** The index of the given unaliased column in the result set */
-    def index(col: ColumnRef): Int
+    def index(col: Column): Int
 
     /** Add the given columns to this query */
-    def addColumns(cols: List[ColumnRef]): SqlQuery
+    def addColumns(cols: List[Column]): SqlQuery
 
     /** Nest this query as a subobject in the enclosing `parentContext` */
     def nest(
       parentContext: Context,
       fieldName: String,
       resultName: String,
-      extraCols: List[ColumnRef],
+      extraCols: List[Column],
       extraJoins: List[SqlJoin],
       aliasedMappings: AliasedMappings
     ): (SqlQuery, AliasedMappings)
@@ -757,10 +822,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             Some(Where(Fragments.bind(e, value)))
 
           case pathTerm: Path =>
-            aliasedMappings.columnForSqlTerm(context, pathTerm).map { col =>
-              val frag = Fragments.const(col.toSql)
-              Where(frag)
-            }
+            aliasedMappings.columnForSqlTerm(context, pathTerm).map { col => Where(col.toFragment) }
 
           case And(x, y) =>
             binaryOp(x, y)(Fragments.const(" AND "), Some(booleanEncoder))
@@ -892,8 +954,10 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             aliasedMappings.columnForSqlTerm(context, pathTerm).map { col =>
               val dir = if(ascending) "" else " DESC"
               val nulls = s" NULLS ${if(nullsLast) "LAST" else "FIRST"}"
-              val collatedCol = if (!Fragments.needsCollation(col.codec)) col.toSql else s"""(${col.toSql} COLLATE "C")"""
-              val frag = Fragments.const(s"$collatedCol$dir$nulls")
+              val collatedCol =
+                if (!Fragments.needsCollation(col.codec)) col.toFragment
+                else Fragments.parentheses(col.toFragment |+| Fragments.const(s""" COLLATE "C""""))
+              val frag = collatedCol |+| Fragments.const(s"$dir$nulls")
               (col, Order(frag))
             }
           case other =>
@@ -909,14 +973,14 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     case class SqlSelect(
       context:  Context,             // the GraphQL context of the query
       table:    TableExpr,           // the table/subquery
-      cols:     List[ColumnRef],     // the requested columns
+      cols:     List[Column],     // the requested columns
       joins:    List[SqlJoin],       // joins for predicates/subobjects
       wheres:   List[Where],
       orders:   List[Order],
       limit:    Option[Int],
       distinct: Boolean,             // DISTINCT or not
       aliases:  List[String] = Nil,  // column aliases if any
-      collate:  Set[ColumnRef] = Set.empty[ColumnRef]  // The set of columns requiring collation
+      collate:  Set[Column] = Set.empty[Column]  // The set of columns requiring collation
     ) extends SqlQuery {
       assert(aliases.isEmpty || aliases.sizeCompare(cols) == 0)
 
@@ -929,14 +993,14 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         self.fetch(toFragment, cols.map(col => (col.table != table.refName, col.codec)))
 
       /** The index of the given unaliased column in the result set */
-      def index(col: ColumnRef): Int = {
+      def index(col: Column): Int = {
         val i = cols.indexOf(col)
         if (i < 0) throw new RuntimeException(s"Unmapped column ${col.column} of table ${col.table}")
         i
       }
 
       /** Add the given columns to this query */
-      def addColumns(extraCols: List[ColumnRef]): SqlSelect = {
+      def addColumns(extraCols: List[Column]): SqlSelect = {
         val cols0 = (cols ++ extraCols).distinct
 
         table match {
@@ -946,7 +1010,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             val extraCols0 = extraCols.filter(_.table == table.refName)
             val extraCols1 =
               sq match {
-                case s: SqlSelect => extraCols0.map(_.copy(table = s.table.refName))
+                case s: SqlSelect => extraCols0.map(_.move(table = s.table.refName))
                 case _: SqlUnion => extraCols0
               }
             copy(cols = cols0, table = sr.copy(subquery = sq.addColumns(extraCols1)))
@@ -958,7 +1022,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         parentContext: Context,
         fieldName: String,
         resultName: String,
-        extraCols: List[ColumnRef],
+        extraCols: List[Column],
         extraJoins: List[SqlJoin],
         aliasedMappings: AliasedMappings
       ): (SqlSelect, AliasedMappings) = {
@@ -974,7 +1038,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
               case sr@SubqueryRef(sq: SqlSelect, _) =>
                 // If this SELECT is on a SELECT subquery then push the columns required for the
                 // joins down into the subquery
-                val sqCols = (extraJoins.flatMap(_.colsOfChild(table)).map(_.copy(table = sq.table.refName)) ++ sq.cols).distinct
+                val sqCols = (extraJoins.flatMap(_.colsOfChild(table)).map(_.move(table = sq.table.refName)) ++ sq.cols).distinct
 
                 extraJoins.map { ij =>
                   sq match {
@@ -991,7 +1055,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
                       val wheres = ij.on.map {
                         case (p, c) =>
-                          Where(Fragments.const(s"${c.copy(table = sq.table.refName).toSql} = ${p.toSql}"))
+                          Where(c.move(table = sq.table.refName).toFragment |+| Fragments.const(" = ") |+| p.toFragment)
                       }
 
                       val sq0 =
@@ -1040,10 +1104,10 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             val keyCols = predMappings.keyColumnsForType(context)
 
             // GraphQL-level keys aren't necessarily DB-level keys, so could be null. Exclude these.
-            val nonNullKeys = keyCols.map(col => Where(Fragments.const(s"${col.toSql} IS NOT NULL")))
+            val nonNullKeys = keyCols.map(col => Where(col.toFragment |+| Fragments.const(" IS NOT NULL")))
 
             // If there is a limit then use a fallback order for determinism
-            val keyOrder = limit.map(_ => keyCols.map(col => Order(Fragments.const(s"${col.toSql} ASC")))).getOrElse(Nil)
+            val keyOrder = limit.map(_ => keyCols.map(col => Order(col.toFragment |+| Fragments.const(" ASC")))).getOrElse(Nil)
 
             def doInit(folQuery: SqlSelect, @nowarn sel: SqlSelect): Option[SqlSelect] =
               Some(folQuery.copy(cols = keyCols, orders = keyOrder, distinct = true))
@@ -1054,7 +1118,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             def doOrderBy(oss: List[OrderSelection[_]], sel: SqlSelect): Option[SqlSelect] =
               mkOrderBy(context, table, oss, predMappings).map { os =>
                 // Ensure the fallback order only include cols we aren't already ordering on
-                val keyOrder = keyCols.diff(os.cols).map(col => Order(Fragments.const(s"${col.toSql} ASC")))
+                val keyOrder = keyCols.diff(os.cols).map(col => Order(col.toFragment |+| Fragments.const(" ASC")))
                 sel.copy(cols = (os.cols ++ sel.cols).distinct, orders = os.orders ++ keyOrder, collate = sel.collate ++ os.collate)
               }
 
@@ -1074,9 +1138,9 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
               modifier    =  modifier0.copy(wheres = nonNullKeys ++ modifier0.wheres)
             } yield {
               val (am, alias) = aliasedMappings.fresh("pred")
-              val on = keyCols.map(key => (key.copy(table = predTable.refName), key.copy(table = alias)))
+              val on = keyCols.map(key => (key.move(table = predTable.refName), key.move(table = alias)))
               val predJoin = SqlJoin(predTable.refName, SubqueryRef(modifier, alias), on, false, false, true)
-              val selAll = SqlSelect(context, predTable, colsOf(table).map(_.copy(table = predTable.refName)), List(predJoin), Nil, Nil, None, false)
+              val selAll = SqlSelect(context, predTable, colsOf(table).filter(_.isRef).map(_.move(table = predTable.refName)), List(predJoin), Nil, Nil, None, false)
               val subRef = SubqueryRef(selAll, table.refName)
               (copy(table = subRef), am)
             }
@@ -1086,14 +1150,14 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       def toFragment: Fragment = {
         val dist = if (distinct) " DISTINCT" else ""
 
-        def collated(col: ColumnRef): String =
-          if (collate.contains(col)) s"""(${col.toSql} COLLATE "C")""" else col.toSql
+        def collated(col: Column): Fragment =
+          if (collate.contains(col)) Fragments.parentheses(col.toFragment |+| Fragments.const(""" COLLATE "C"""")) else col.toFragment
 
         val cols0 =
           if (aliases.isEmpty) cols.map(collated)
-          else cols.zip(aliases).map { case (c, a) => s"${collated(c)} AS $a" }
+          else cols.zip(aliases).map { case (c, a) => collated(c) |+| Fragments.const(s" AS $a") }
 
-        val select = Fragments.const(s"SELECT$dist ${cols0.mkString(", ")}")
+        val select = Fragments.const(s"SELECT$dist ") |+| cols0.intercalate(Fragments.const(", "))
 
         val from = Fragments.const(" FROM ") |+| table.toFragment
 
@@ -1111,7 +1175,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       }
 
       /** The columns of the given table expression that are referred to by this SELECT */
-      def colsOf(table: TableExpr): List[ColumnRef] =
+      def colsOf(table: TableExpr): List[Column] =
         (cols.filter(_.table == table.refName) ++ joins.flatMap(_.colsOf(table))).distinct
 
       /** Does the result of this query contain lists of subobject? */
@@ -1137,7 +1201,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       /** The union of the columns of the underlying SELECTs in the order they will be
        *  yielded as the columns of this UNION
        */
-      lazy val alignedCols: List[ColumnRef] = elems.flatMap(_.cols).distinct
+      lazy val alignedCols: List[Column] = elems.flatMap(_.cols).distinct
 
       /** The underlying SELECTs with their columns permuted into the aligned order
        *  with any missing columns padded as NULLs
@@ -1146,8 +1210,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         elems.map { elem =>
           val cols = alignedCols.map { col =>
             if (elem.cols.contains(col)) col
-            else
-              col.copy(table = "_null_")
+            else Column.NullColumn(col)
           }
           elem.copy(cols = cols, aliases = aliases)
         }
@@ -1158,14 +1221,14 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         self.fetch(toFragment, alignedCols.map(col => (true, col.codec)))
 
       /** The index of the given unaliased column in the result set */
-      def index(col: ColumnRef): Int = {
+      def index(col: Column): Int = {
         val i = alignedCols.indexOf(col)
         if (i < 0) throw new RuntimeException(s"Unmapped column ${col.column} of table ${col.table}")
         i
       }
 
       /** Add the given columns to this query */
-      def addColumns(cols: List[ColumnRef]): SqlUnion =
+      def addColumns(cols: List[Column]): SqlUnion =
         SqlUnion(elems.map(_.addColumns(cols)))
 
       /** Nest this query as a subobject in the enclosing `parentContext` */
@@ -1173,7 +1236,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         parentContext: Context,
         fieldName: String,
         resultName: String,
-        extraCols: List[ColumnRef],
+        extraCols: List[Column],
         extraJoins: List[SqlJoin],
         aliasedMappings: AliasedMappings
       ): (SqlQuery, AliasedMappings) = {
@@ -1248,7 +1311,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     case class SqlJoin(
       parent:  String,                        // name of parent table
       child:   TableExpr,                     // child table/subquery
-      on:      List[(ColumnRef, ColumnRef)],  // join conditions
+      on:      List[(Column, Column)],  // join conditions
       plural:  Boolean,                       // does the result of this join contain a list of subobjects?
       lateral: Boolean,
       inner:   Boolean
@@ -1271,23 +1334,23 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       }
 
       /** Return the columns of `table` referred to by the parent side of the conditions of this join */
-      def colsOf(table: TableExpr): List[ColumnRef] =
+      def colsOf(table: TableExpr): List[Column] =
         if (table.refName == parent) on.map(_._1)
         else Nil
 
       /** Return the columns of `table` referred to by the child side of the conditions of this join */
-      def colsOfChild(table: TableExpr): List[ColumnRef] =
+      def colsOfChild(table: TableExpr): List[Column] =
         if (table.refName == child.refName) on.map(_._2)
         else Nil
 
       def toFragment: Fragment = {
-        val on0 = on.map { case (p, c) => s"${c.toSql} = ${p.toSql}" }.mkString(" AND ")
-        val onFrag = Fragments.const(s" ON $on0")
+        val on0 = Fragments.and(on.map { case (p, c) => c.toFragment |+| Fragments.const(" = ") |+| p.toFragment }: _*)
+        val onFrag = Fragments.const(s" ON ") |+| on0
         val join = if (inner) "INNER JOIN" else "LEFT JOIN"
         child match {
           case SubqueryRef(sq: SqlSelect, alias) if lateral =>
             val wheres = on.map { case (p, c) =>
-              Where(Fragments.const(s"${c.subst(child, sq.table).toSql} = ${p.subst(child, sq.table).toSql}"))
+              Where(c.subst(child, sq.table).toFragment |+| Fragments.const(" = ") |+| p.subst(child, sq.table).toFragment)
             }
             val sr = SubqueryRef(sq.copy(wheres = wheres ++ sq.wheres), alias)
             Fragments.const(s" $join LATERAL ") |+| sr.toFragment |+| onFrag
@@ -1370,12 +1433,12 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     lazy val fragment = query.toFragment
 
     /** The index of the given unaliased column in the result set */
-    def index(col: ColumnRef): Int = query.index(col)
+    def index(col: Column): Int = query.index(col)
 
-    private def project(row: Row, cols: List[ColumnRef]): Row =
+    private def project(row: Row, cols: List[Column]): Row =
       Row(cols.map(cr => row(index(cr))))
 
-    private def select(row: Row, col: ColumnRef): Any =
+    private def select(row: Row, col: Column): Any =
       row(index(col))
 
     /** Return the value of the field `fieldName` in `context` from `table` */
@@ -1500,6 +1563,34 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           case Wrap(_, child) =>
             loop(child, context, aliasedMappings)
 
+          case Count(countName, child) =>
+            def childContext(q: Query): Option[Context] =
+              q match {
+                case PossiblyRenamedSelect(Select(fieldName, _, _), resultName) =>
+                  context.forField(fieldName, resultName)
+                case FilterOrderByLimit(_, _, _, child) =>
+                  childContext(child)
+                case _ => None
+              }
+
+            val fieldContext = childContext(child).getOrElse(sys.error(s"No context for count of ${child}"))
+            val countCol = columnForAtomicField(context, countName).getOrElse(sys.error(s"Count column $countName not defined"))
+
+            loop(child, context, aliasedMappings).flatMap {
+              case (sq: SqlSelect, _) =>
+                sq.joins match {
+                  case hd :: tl =>
+                    val keyCols = keyColumnsForType(fieldContext)
+                    val parentCols = hd.colsOf(parentTable)
+                    val wheres = hd.on.map { case (p, c) => SqlQuery.Where(c.toFragment |+| Fragments.const(" = ") |+| p.toFragment) }
+                    val ssq = sq.copy(table = hd.child, cols = List(Column.CountColumn(countCol, keyCols)), joins = tl, wheres = wheres)
+                    val ssqCol = Column.SubqueryColumn(countCol, ssq)
+                    Some((SqlSelect(context, parentTable, List(ssqCol) ++ parentCols, Nil, Nil, Nil, None, false), aliasedMappings))
+                  case _ => None
+                }
+              case _ => None
+            }
+
           case Rename(_, child) =>
             loop(child, context, aliasedMappings)
 
@@ -1578,6 +1669,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         focus match {
           case s: String => Json.fromString(s).rightIor
           case i: Int => Json.fromInt(i).rightIor
+          case l: Long => Json.fromLong(l).rightIor
           case d: Double => Json.fromDouble(d) match {
               case Some(j) => j.rightIor
               case None => mkErrorResult(s"Unrepresentable double %d")

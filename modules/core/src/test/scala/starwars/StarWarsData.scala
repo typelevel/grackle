@@ -131,12 +131,14 @@ object StarWarsMapping extends ValueMapping[Id] {
       interface Character {
         id: String!
         name: String
+        numberOfFriends: Int
         friends: [Character!]
         appearsIn: [Episode!]
       }
       type Human implements Character {
         id: String!
         name: String
+        numberOfFriends: Int
         friends: [Character!]
         appearsIn: [Episode!]
         homePlanet: String
@@ -144,6 +146,7 @@ object StarWarsMapping extends ValueMapping[Id] {
       type Droid implements Character {
         id: String!
         name: String
+        numberOfFriends: Int
         friends: [Character!]
         appearsIn: [Episode!]
         primaryFunction: String
@@ -154,6 +157,7 @@ object StarWarsMapping extends ValueMapping[Id] {
   val CharacterType = schema.ref("Character")
   val HumanType = schema.ref("Human")
   val DroidType = schema.ref("Droid")
+  val EpisodeType = schema.ref("Episode")
 
   val typeMappings =
     List(
@@ -174,6 +178,7 @@ object StarWarsMapping extends ValueMapping[Id] {
             ValueField("id", _.id),
             ValueField("name", _.name),
             ValueField("appearsIn", _.appearsIn),
+            PrimitiveField("numberOfFriends"),
             ValueField("friends", resolveFriends _)
           )
       ),
@@ -190,8 +195,15 @@ object StarWarsMapping extends ValueMapping[Id] {
           List(
             ValueField("primaryFunction", _.primaryFunction)
           )
-      )
+      ),
+      PrimitiveMapping(EpisodeType)
     )
+
+  val numberOfFriends: PartialFunction[Query, Result[Query]] = {
+    case Select("numberOfFriends", Nil, Empty) =>
+      Count("numberOfFriends", Select("friends", Nil, Empty)).rightIor
+  }
+
 
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
@@ -200,7 +212,10 @@ object StarWarsMapping extends ValueMapping[Id] {
         Select("hero", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(hero(episode).id)), child))).rightIor
       case Select(f@("character" | "human" | "droid"), List(Binding("id", IDValue(id))), child) =>
         Select(f, Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
-    }
+    },
+    CharacterType -> numberOfFriends,
+    HumanType -> numberOfFriends,
+    DroidType -> numberOfFriends
   ))
 
   val querySizeValidator = new QuerySizeValidator(5, 5)

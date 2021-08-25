@@ -4,11 +4,13 @@
 package validator
 
 import cats.effect.IO
-import edu.gemini.grackle.syntax._
-import edu.gemini.grackle.skunk.SkunkMapping
-import edu.gemini.grackle.skunk.SkunkMonitor
 import org.scalatest.funsuite.AnyFunSuite
-import _root_.skunk.codec.all._
+import org.tpolecat.sourcepos.SourcePos
+import org.tpolecat.typename.TypeName
+import skunk.codec.all._
+
+import edu.gemini.grackle.syntax._
+import edu.gemini.grackle.skunk.{SkunkMapping, SkunkMonitor}
 
 final class SqlMappingValidatorSpec extends AnyFunSuite {
 
@@ -22,7 +24,7 @@ final class SqlMappingValidatorSpec extends AnyFunSuite {
         tpe = schema.ref("Foo"),
         fieldMappings =
           List(
-            SqlField("bar", ColumnRef("foo", "bar", (int2, false)))
+            SqlField("bar", Column.ColumnRef("foo", "bar", (int2, false), implicitly[TypeName[Int]].value, implicitly[SourcePos]))
           )
       ),
       LeafMapping[String](schema.ref("Baz")),

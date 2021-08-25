@@ -27,6 +27,9 @@ trait SqlModule[F[_]] {
 
     def const(s: String): T
 
+    /** Returns `(f1) AND (f2) AND ... (fn)` for all fragments. */
+    def and(fs: T*): T
+
     /** Returns `(f1) AND (f2) AND ... (fn)` for all defined fragments. */
     def andOpt(fs: Option[T]*): T
 

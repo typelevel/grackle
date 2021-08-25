@@ -217,4 +217,40 @@ final class CirceSpec extends CatsSuite {
 
     assert(res == expected)
   }
+
+  test("count") {
+    val query = """
+      query {
+        root {
+          numChildren
+          children {
+            id
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "root" : {
+            "numChildren" : 2,
+            "children" : [
+              {
+                "id" : "a"
+              },
+              {
+                "id" : "b"
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = TestCirceMapping.compileAndRun(query)
+    //println(res)
+
+    assert(res == expected)
+  }
 }

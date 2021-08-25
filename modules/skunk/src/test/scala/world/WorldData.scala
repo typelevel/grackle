@@ -32,6 +32,7 @@ trait WorldPostgresSchema[F[_]] extends SkunkMapping[F] {
     val governmentform = col("governmentform", varchar)
     val headofstate    = col("headofstate", varchar.opt)
     val capitalId      = col("capitalId", varchar.opt)
+    val numCities      = col("num_cities", int8)
     val code2          = col("code2", varchar)
   }
 
@@ -92,6 +93,7 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
         headofstate: String
         capitalId: Int
         code2: String!
+        numCities(namePattern: String): Int!
         cities: [City!]!
         languages: [Language!]!
       }
@@ -134,6 +136,7 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
           SqlField("headofstate",    country.headofstate),
           SqlField("capitalId",      country.capitalId),
           SqlField("code2",          country.code2),
+          SqlField("numCities",      country.numCities),
           SqlObject("cities",        Join(country.code, city.countrycode)),
           SqlObject("languages",     Join(country.code, countrylanguage.countrycode))
         ),
@@ -205,7 +208,14 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
 
       case Select("search2", List(Binding("indep", BooleanValue(indep)), Binding("limit", IntValue(num))), child) =>
         Select("search2", Nil, Limit(num, Filter(IsNull[Int](UniquePath(List("indepyear")), isNull = !indep), child))).rightIor
-    }
+    },
+    CountryType -> {
+      case Select("numCities", List(Binding("namePattern", AbsentValue)), Empty) =>
+        Count("numCities", Select("cities", Nil, Select("name", Nil, Empty))).rightIor
+
+      case Select("numCities", List(Binding("namePattern", StringValue(namePattern))), Empty) =>
+        Count("numCities", Select("cities", Nil, Filter(Like(UniquePath(List("name")), namePattern, true), Select("name", Nil, Empty)))).rightIor
+     }
   ))
 }
 
