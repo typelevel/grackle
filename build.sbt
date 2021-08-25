@@ -61,7 +61,8 @@ lazy val modules: List[ProjectReference] = List(
   doobie,
   skunk,
   generic,
-  demo
+  demo,
+  benchmarks
 )
 
 lazy val `gsp-graphql` = project.in(file("."))
@@ -185,6 +186,11 @@ lazy val demo = project
       "org.http4s"        %% "http4s-dsl"             % http4sVersion
     )
   )
+
+lazy val benchmarks = project
+  .in(file("benchmarks"))
+  .dependsOn(core)
+  .enablePlugins(JmhPlugin)
 
 lazy val docs = project
   .in(file("docs"))
