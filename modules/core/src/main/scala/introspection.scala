@@ -162,7 +162,7 @@ object Introspection {
               ValueField("types", _ => allTypes.map(_.nullable)),
               ValueField("queryType", _.queryType.dealias.nullable),
               ValueField("mutationType", _.mutationType.map(_.dealias.nullable)),
-              ValueField("subscriptionType", _.mutationType.map(_.dealias.nullable)),
+              ValueField("subscriptionType", _.subscriptionType.map(_.dealias.nullable)),
               ValueField("directives", _.directives)
             )
         ),
