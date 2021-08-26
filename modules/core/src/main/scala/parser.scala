@@ -309,13 +309,13 @@ object GraphQLParser {
 
 object CommentedText {
 
-  lazy val whitespace: Parser[Char] = charWhere(_.isWhitespace)
+  val whitespace: Parser[Char] = charWhere(_.isWhitespace)
 
-  def skipWhitespace: Parser0[Unit] =
+  val skipWhitespace: Parser0[Unit] =
     charsWhile0(c => c.isWhitespace || c == ',').void.withContext("whitespace")
 
   /** Parser that consumes a comment */
-  def comment: Parser[Unit] =
+  val comment: Parser[Unit] =
     (char('#') *> (charWhere(c => c != '\n' && c != '\r')).rep0 <* charIn('\n', '\r') <* skipWhitespace).void.withContext("comment")
 
   /** Turns a parser into one that skips trailing whitespace and comments */
