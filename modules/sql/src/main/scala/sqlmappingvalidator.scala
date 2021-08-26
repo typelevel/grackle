@@ -26,7 +26,7 @@ trait SqlMappingValidator extends MappingValidator {
           |
           |- Field ${graphql(s"$owner.${field.name}: ${field.tpe}")} is defined by a Schema at (1).
           |- A ${scala(lm.productPrefix)} at (2) maps ${graphql(field.tpe)} to Scala type ${scala(lm.scalaTypeName)}.
-          |- The ${scala(sf.productPrefix)} at (3) and ${scala(sf.columnRef.productPrefix)} for ${sql(s"${sf.columnRef.table}.${sf.columnRef.column}")} at (4) map ${graphql(field.tpe)} to Scala type ${scala(sf.columnRef.scalaTypeName)}.
+          |- The ${scala(sf.productPrefix)} at (3) and ColumnRef for ${sql(s"${sf.columnRef.table}.${sf.columnRef.column}")} at (4) map ${graphql(field.tpe)} to Scala type ${scala(sf.columnRef.scalaTypeName)}.
           |- ${UNDERLINED}The Scala types are inconsistent.$RESET
           |
           |(1) ${schema.pos}

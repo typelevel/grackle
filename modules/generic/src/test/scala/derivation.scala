@@ -157,12 +157,14 @@ object StarWarsMapping extends GenericMapping[Id] {
       interface Character {
         id: String!
         name: String
+        numberOfFriends: Int
         friends: [Character!]
         appearsIn: [Episode!]
       }
       type Human implements Character {
         id: String!
         name: String
+        numberOfFriends: Int
         friends: [Character!]
         appearsIn: [Episode!]
         homePlanet: String
@@ -170,6 +172,7 @@ object StarWarsMapping extends GenericMapping[Id] {
       type Droid implements Character {
         id: String!
         name: String
+        numberOfFriends: Int
         friends: [Character!]
         appearsIn: [Episode!]
         primaryFunction: String
@@ -196,6 +199,11 @@ object StarWarsMapping extends GenericMapping[Id] {
       )
     )
 
+  val numberOfFriends: PartialFunction[Query, Result[Query]] = {
+    case Select("numberOfFriends", Nil, Empty) =>
+      Count("numberOfFriends", Select("friends", Nil, Empty)).rightIor
+  }
+
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
@@ -205,7 +213,10 @@ object StarWarsMapping extends GenericMapping[Id] {
 
       case Select(f@("character" | "human" | "droid"), List(Binding("id", IDValue(id))), child) =>
         Select(f, Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
-    }
+    },
+    CharacterType -> numberOfFriends,
+    HumanType -> numberOfFriends,
+    DroidType -> numberOfFriends
   ))
 }
 
@@ -447,6 +458,88 @@ final class DerivationSpec extends CatsSuite {
               },
               {
                 "name" : "R2-D2"
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = StarWarsMapping.compileAndRun(query)
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("count") {
+    val query = """
+      query {
+        character(id: "1000") {
+          name
+          numberOfFriends
+          friends {
+            name
+          }
+        }
+        human(id: "1001") {
+          name
+          numberOfFriends
+          friends {
+            name
+          }
+        }
+        droid(id: "2001") {
+          name
+          numberOfFriends
+          friends {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "character" : {
+            "name" : "Luke Skywalker",
+            "numberOfFriends" : 4,
+            "friends" : [
+              {
+                "name" : "Han Solo"
+              },
+              {
+                "name" : "Leia Organa"
+              },
+              {
+                "name" : "C-3PO"
+              },
+              {
+                "name" : "R2-D2"
+              }
+            ]
+          },
+          "human" : {
+            "name" : "Darth Vader",
+            "numberOfFriends" : 1,
+            "friends" : [
+              {
+                "name" : "Wilhuff Tarkin"
+              }
+            ]
+          },
+          "droid" : {
+            "name" : "R2-D2",
+            "numberOfFriends" : 3,
+            "friends" : [
+              {
+                "name" : "Luke Skywalker"
+              },
+              {
+                "name" : "Han Solo"
+              },
+              {
+                "name" : "Leia Organa"
               }
             ]
           }

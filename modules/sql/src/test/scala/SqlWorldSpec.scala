@@ -4,6 +4,7 @@
 package grackle.test
 
 import cats.effect.IO
+import cats.implicits._
 import io.circe.Json
 import org.scalatest.funsuite.AnyFunSuite
 import cats.effect.unsafe.implicits.global
@@ -908,7 +909,7 @@ trait SqlWorldSpec extends AnyFunSuite {
 
   test("nullable column (non-null)") {
     val query = """
-    query {
+      query {
         country(code: "USA") {
           name
           indepyear
@@ -1321,5 +1322,191 @@ trait SqlWorldSpec extends AnyFunSuite {
     //println(res)
 
     assertWeaklyEqual(res, expected)
+  }
+
+  test("count cities") {
+    val query = """
+      query {
+        country(code: "FIN") {
+          numCities
+          cities {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "numCities" : 7,
+            "cities" : [
+              {
+                "name" : "Helsinki [Helsingfors]"
+              },
+              {
+                "name" : "Espoo"
+              },
+              {
+                "name" : "Tampere"
+              },
+              {
+                "name" : "Vantaa"
+              },
+              {
+                "name" : "Turku [Ĺbo]"
+              },
+              {
+                "name" : "Oulu"
+              },
+              {
+                "name" : "Lahti"
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
+  test("count cities with filter") {
+    val query = """
+      query {
+        country(code: "FIN") {
+          numCities(namePattern: "T%")
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "numCities" : 2
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
+  test("count with no cities") {
+    val query = """
+      query {
+        country(code: "ATA") {
+          numCities
+          cities {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data": {
+          "country": {
+            "numCities" : 0,
+            "cities": []
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
+  test("count all cities (1)") {
+    val query = """
+      query {
+        countries {
+          numCities
+          cities {
+            name
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertNoErrors(res)
+
+    val expected = 4079
+
+    val resTotal =
+      res
+        .hcursor
+        .downField("data")
+        .downField("countries")
+        .values.flatMap(_.toSeq.traverse(_.hcursor.downField("numCities").as[Int]).map(_.sum).toOption)
+
+    assert(resTotal == Some(expected))
+  }
+
+  test("count all cities (2)") {
+    val query = """
+      query {
+        countries {
+          numCities
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertNoErrors(res)
+
+    val expected = 4079
+
+    val resTotal =
+      res
+        .hcursor
+        .downField("data")
+        .downField("countries")
+        .values.flatMap(_.toSeq.traverse(_.hcursor.downField("numCities").as[Int]).map(_.sum).toOption)
+
+    assert(resTotal == Some(expected))
+  }
+
+  test("count all cities with filter") {
+    val query = """
+      query {
+        countries {
+          numCities(namePattern: "T%")
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertNoErrors(res)
+
+    val expected = 255
+
+    val resTotal =
+      res
+        .hcursor
+        .downField("data")
+        .downField("countries")
+        .values.flatMap(_.toSeq.traverse(_.hcursor.downField("numCities").as[Int]).map(_.sum).toOption)
+
+    assert(resTotal == Some(expected))
   }
 }

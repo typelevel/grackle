@@ -219,14 +219,28 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
           } yield List((resultName, value))
 
         case (Rename(resultName, Wrap(_, child)), tpe) =>
-          for {
-            value <- runValue(child, tpe, cursor)
-          } yield List((resultName, value))
+          runFields(Wrap(resultName, child), tpe, cursor)
 
         case (Wrap(fieldName, child), tpe) =>
           for {
             value <- runValue(child, tpe, cursor)
           } yield List((fieldName, value))
+
+        case (Rename(resultName, Count(_, child)), tpe) =>
+          runFields(Count(resultName, child), tpe, cursor)
+
+        case (Count(fieldName, Select(countName, _, _)), _) =>
+          cursor.field(countName, None).flatMap { c0 =>
+            if (c0.isNullable)
+              c0.asNullable.flatMap {
+                case None => 0.rightIor
+                case Some(c1) =>
+                  if (c1.isList) c1.asList.map(c2 => c2.size)
+                  else 1.rightIor
+              }
+            else if (c0.isList) c0.asList.map(c2 => c2.size)
+            else 1.rightIor
+          }.map { value => List((fieldName, ProtoJson.fromJson(Json.fromInt(value)))) }
 
         case (Group(siblings), _) =>
           siblings.flatTraverse(query => runFields(query, tpe, cursor))

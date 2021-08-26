@@ -6,9 +6,13 @@ package circetests
 
 import cats.Id
 import cats.catsInstancesForId
+import cats.implicits._
 
 import edu.gemini.grackle.circe.CirceMapping
 import edu.gemini.grackle.syntax._
+
+import Query._
+import QueryCompiler._
 
 object TestCirceMapping extends CirceMapping[Id] {
   val schema =
@@ -23,8 +27,9 @@ object TestCirceMapping extends CirceMapping[Id] {
         string: String
         id: ID
         choice: Choice
-        arrary: [Int!]
+        array: [Int!]
         object: A
+        numChildren: Int
         children: [Child!]!
       }
       enum Choice {
@@ -46,6 +51,7 @@ object TestCirceMapping extends CirceMapping[Id] {
     """
 
   val QueryType = schema.ref("Query")
+  val RootType = schema.ref("Root")
 
   val data =
     json"""
@@ -84,4 +90,11 @@ object TestCirceMapping extends CirceMapping[Id] {
           )
       )
     )
+
+  override val selectElaborator = new SelectElaborator(Map(
+    RootType -> {
+      case Select("numChildren", Nil, Empty) =>
+        Count("numChildren", Select("children", Nil, Empty)).rightIor
+    }
+  ))
 }

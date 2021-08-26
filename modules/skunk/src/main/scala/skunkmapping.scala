@@ -12,6 +12,7 @@ import cats.implicits._
 import _root_.skunk.{ AppliedFragment, Decoder, Session, Fragment => SFragment }
 import _root_.skunk.codec.all.{ bool, varchar, int4, float8 }
 import _root_.skunk.implicits._
+import org.tpolecat.sourcepos.SourcePos
 import org.tpolecat.typename.TypeName
 
 import edu.gemini.grackle.sql._
@@ -45,8 +46,8 @@ abstract class SkunkMapping[F[_]: Sync](
       implicit def notNullable[T]: IsNullable[T] = new IsNullable[T] { def isNullable = false }
     }
 
-    def col[T: TypeName](colName: String, codec: _root_.skunk.Codec[T])(implicit isNullable: IsNullable[T]): ColumnRef =
-      ColumnRef[T](name, colName, (codec, isNullable.isNullable))
+    def col[T](colName: String, codec: _root_.skunk.Codec[T])(implicit typeName: TypeName[T], isNullable: IsNullable[T], pos: SourcePos): Column.ColumnRef =
+      Column.ColumnRef(name, colName, (codec, isNullable.isNullable), typeName.value, pos)
   }
 
   // We need to demonstrate that our `Fragment` type has certain compositional properties.

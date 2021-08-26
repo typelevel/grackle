@@ -144,6 +144,10 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
     def pos: SourcePos
   }
 
+  case class PrimitiveField(fieldName: String, hidden: Boolean = false)(implicit val pos: SourcePos) extends FieldMapping {
+    def withParent(tpe: Type): PrimitiveField = this
+  }
+
   /**
    * Root mappings can perform a mutation prior to constructing the result `Cursor`. A `Mutation`
    * may perform a Unit effect and simply return the passed arguments; or it may refine the passed
