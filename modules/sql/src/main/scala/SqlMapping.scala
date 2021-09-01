@@ -406,7 +406,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
                       val (am, join) =
                         if(am0.seenTables.contains(tr.refName)) {
                           val aliased = am0.aliasTable(fieldContext, tr.refName)
-                          (aliased._1, sjoin.subst(tr, tr.copy(alias = Some(aliased._2))))
+                          (aliased._1, sjoin.substChild(tr, tr.copy(alias = Some(aliased._2))))
                         } else
                           (am0, sjoin)
 
@@ -1331,6 +1331,19 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           }
         val newOn = on.map { case (p, c) => (p.subst(from, to), c.subst(from, to)) }
         copy(parent = newParent, child = newChild, on = newOn)
+      }
+
+      def substChild(from: TableExpr, to: TableExpr): SqlJoin = {
+        val newChild =
+          if(child.refName != from.refName) child
+          else {
+            (child, to) match {
+              case (sr: SubqueryRef, to: TableRef) => sr.copy(alias0 = to.refName)
+              case _ => to
+            }
+          }
+        val newOn = on.map { case (p, c) => (p, c.subst(from, to)) }
+        copy(child = newChild, on = newOn)
       }
 
       /** Return the columns of `table` referred to by the parent side of the conditions of this join */
