@@ -45,7 +45,7 @@ trait TreeMapping[F[_]] extends DoobieMapping[F] {
             SqlRoot("bintree")
           )
       ),
-      SqlUnionMapping(
+      ObjectMapping(
         tpe = BinTreeType,
         fieldMappings =
           List(

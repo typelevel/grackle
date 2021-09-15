@@ -4,7 +4,7 @@
 package edu.gemini.grackle
 package sql
 
-import scala.annotation.nowarn
+import scala.annotation.{nowarn, tailrec}
 
 import cats.data.NonEmptyList
 import cats.implicits._
@@ -381,6 +381,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         case Some(SqlJson(_, cr)) => List(applyColumnAliases(context.resultPath, cr))
         case Some(CursorField(_, _, _, required, _)) =>
           required.flatMap(r => columnsForLeaf(context, r))
+        case None =>
+          sys.error(s"No mapping for field '$fieldName' of type ${context.tpe}")
         case other =>
           sys.error(s"Non-leaf mapping for field '$fieldName' of type ${context.tpe}: $other")
       }
@@ -392,15 +394,15 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         case SqlObject(_, joins) =>
           val aliased = joins.map(j => this.applyJoinAliases(context.resultPath, j))
           for {
-            pt           <- this.parentTableForType(context)
             fieldContext <- context.forField(fieldName, resultName)
             ct           <- this.parentTableForType(fieldContext)
           } yield {
             val inner = !fieldContext.tpe.isNullable && !fieldContext.tpe.isList
-            val sjoins = SqlJoin.fromJoins(pt, ct, aliased, plural, inner)
-            val (am1, sjoins1) =
-              sjoins.foldLeft((this, List.empty[SqlJoin])) {
-                case ((am0, sjoins0), sjoin) =>
+            val sjoins = SqlJoin.fromJoins(ct, aliased, plural, inner)
+            val (am1, _, sjoins1) =
+              sjoins.foldLeft((this, Option.empty[String], List.empty[SqlJoin])) {
+                case ((am0, prevChild, sjoins0), sjoin0) =>
+                  val sjoin = prevChild.map(c => sjoin0.substParent(TableRef.fromRefName(sjoin0.parent), TableRef.fromRefName(c))).getOrElse(sjoin0)
                   sjoin.child match {
                     case tr: TableRef =>
                       val (am, join) =
@@ -408,7 +410,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
                           val aliased = am0.aliasTable(fieldContext, tr.refName)
                           (aliased._1, sjoin.substChild(tr, tr.copy(alias = Some(aliased._2))))
                         } else
-                          (am0, sjoin)
+                          (am0.seenTable(tr.refName), sjoin)
 
                       if (isAssociative(fieldContext)) {
                         // TODO: Merge this with the filter/order by/limit predicate join logic
@@ -418,14 +420,15 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
                         val joinChild = join.child.refName
                         val on = keys.map(key => (key.move(table = idTable), key.move(table = joinChild)))
                         val selfJoin = SqlJoin(idTable, join.child, on, plural, false, false)
-                        (am1, selfJoin :: join0 :: sjoins0)
+                        (am1, Some(selfJoin.child.refName), selfJoin :: join0 :: sjoins0)
                       } else {
-                        (am, join :: sjoins0)
+                        (am, Some(join.child.refName), join :: sjoins0)
                       }
                     case _: SubqueryRef =>
-                      (am0, sjoin :: sjoins0)
+                      (am0, Some(sjoin.child.refName), sjoin :: sjoins0)
                   }
               }
+
             (am1, sjoins1.reverse)
           }
         case _ => None
@@ -745,13 +748,13 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             val wheres = sels.flatMap(_.wheres).distinct
             SqlSelect(context, table, cols, sels.head.joins, wheres, orders, limit, distinct)
           }
-          val sameJoins = joins.groupBy(_.joins.toSet).values.map(combineSameJoins).toList
+          val sameJoins = joins.groupBy(_.joins).values.map(combineSameJoins).toList
 
           val (pluralJoins, singularJoins) = sameJoins.partition(_.plural)
 
           val combined: Option[SqlSelect] = {
             val cols = (singularJoins.flatMap(_.cols) ++ noJoins.flatMap(_.cols)).distinct
-            val joins = singularJoins.flatMap(_.joins).distinct
+            val joins = singularJoins.flatMap(_.joins)
             val wheres = (singularJoins.flatMap(_.wheres) ++ noJoins.flatMap(_.wheres)).distinct
             if (cols.isEmpty) {
               assert(joins.isEmpty && wheres.isEmpty)
@@ -764,7 +767,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             case (Some(c), Nil) => List(c)
             case (Some(c), p :: ps) =>
               val cols = (c.cols ++ p.cols).distinct
-              val joins = (c.joins ++ p.joins).distinct
+              val joins = (c.joins ++ p.joins)
               val wheres = (c.wheres ++ p.wheres).distinct
               p.copy(cols = cols, joins = joins, wheres = wheres) :: ps
           }
@@ -973,7 +976,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     case class SqlSelect(
       context:  Context,             // the GraphQL context of the query
       table:    TableExpr,           // the table/subquery
-      cols:     List[Column],     // the requested columns
+      cols:     List[Column],        // the requested columns
       joins:    List[SqlJoin],       // joins for predicates/subobjects
       wheres:   List[Where],
       orders:   List[Order],
@@ -983,6 +986,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       collate:  Set[Column] = Set.empty[Column]  // The set of columns requiring collation
     ) extends SqlQuery {
       assert(aliases.isEmpty || aliases.sizeCompare(cols) == 0)
+      assert(SqlJoin.checkOrdering(table.refName, joins))
 
       /** This query in the given context */
       def withContext(context: Context): SqlSelect =
@@ -1077,7 +1081,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
                 extraJoins
             }
 
-          (copy(context = parentContext, table = parentTable, cols = (cols ++ extraCols).distinct, joins = (newJoins ++ joins)), aliasedMappings)
+          (copy(context = parentContext, table = parentTable, cols = (cols ++ extraCols).distinct, joins = (newJoins ++ joins.filterNot(newJoins.contains))), aliasedMappings)
         }
       }
 
@@ -1309,14 +1313,15 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
     /** Representation of an SQL join */
     case class SqlJoin(
-      parent:  String,                        // name of parent table
-      child:   TableExpr,                     // child table/subquery
+      parent:  String,                  // name of parent table
+      child:   TableExpr,               // child table/subquery
       on:      List[(Column, Column)],  // join conditions
-      plural:  Boolean,                       // does the result of this join contain a list of subobjects?
+      plural:  Boolean,                 // does the result of this join contain a list of subobjects?
       lateral: Boolean,
       inner:   Boolean
     ) {
       assert(on.forall { case (p, c) => p.table == parent && c.table == child.refName })
+      assert(child.name.map(!_.contains("_alias_")).getOrElse(true))
 
       /** Replace references to `from` with `to` */
       def subst(from: TableExpr, to: TableExpr): SqlJoin = {
@@ -1331,6 +1336,12 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           }
         val newOn = on.map { case (p, c) => (p.subst(from, to), c.subst(from, to)) }
         copy(parent = newParent, child = newChild, on = newOn)
+      }
+
+      def substParent(from: TableExpr, to: TableExpr): SqlJoin = {
+        val newParent = if(parent == from.refName) to.refName else parent
+        val newOn = on.map { case (p, c) => (p.subst(from, to), c) }
+        copy(parent = newParent, on = newOn)
       }
 
       def substChild(from: TableExpr, to: TableExpr): SqlJoin = {
@@ -1375,52 +1386,28 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     }
 
     object SqlJoin {
-      def fromJoins(parent: TableRef, child: TableRef, joins: List[Join], plural: Boolean, inner: Boolean): List[SqlJoin] = {
-        val sjoins =
-          joins.groupBy(j => (j.parent.table, j.child.table)).map { case (_, joins0) =>
-            val first = joins0.head
-            val parent0 = first.parent.table
-            val child0 = first.child.table
-            val child1 = if (child0 == child.refName) child else TableRef(child0)
-
-            new SqlJoin(parent0, child1, joins0.map(j => (j.parent, j.child)), plural, false, inner)
-          }.toList
-
-        if (sjoins.sizeCompare(1) == 0) sjoins
-        else {
-          val allTables = sjoins.flatMap { sjoin => List(sjoin.parent, sjoin.child.refName) }.distinct
-          val descendentTables = allTables.filter(t => t != parent.refName)
-
-          def relates(x: String, ys: List[String])(sjoin: SqlJoin): Boolean =
-            (sjoin.parent == x && ys.contains(sjoin.child.refName)) || (ys.contains(sjoin.parent) && sjoin.child.refName == x)
-
-          def orderTables(tables: List[String], pending: List[String], acc: List[String]): List[String] =
-            tables match {
-              case Nil =>
-                if (!pending.isEmpty) sys.error(s"Unable to order tables: $this")
-                acc.reverse.tail
-              case hd :: tl =>
-                if (sjoins.exists(relates(hd, acc)))
-                  orderTables(tl.reverse_:::(pending), Nil, hd :: acc)
-                else
-                  orderTables(tl, hd :: pending, acc)
-            }
-
-          def orderJoins(tables: List[String], sjoins: List[SqlJoin], seen: List[String], acc: List[SqlJoin]): List[SqlJoin] =
-            tables match {
-              case Nil =>
-                if (!sjoins.isEmpty) sys.error(s"Unable to order joins: $this")
-                acc.reverse
-              case hd :: tl =>
-                val (next, rest) = sjoins.partition(relates(hd, seen))
-                orderJoins(tl, rest, hd :: tl, acc.reverse_:::(next))
-            }
-
-          val orderedTables = orderTables(descendentTables, Nil, List(parent.refName))
-          val orderedJoins = orderJoins(orderedTables, sjoins, List(parent.refName), Nil)
-
-          orderedJoins
+      def unaliasTable(table: String): String =
+        table.indexOf("_alias_") match {
+          case -1 => table
+          case n => table.take(n)
         }
+
+      def fromJoins(child: TableRef, joins: List[Join], plural: Boolean, inner: Boolean): List[SqlJoin] =
+        joins.map { j =>
+          val child0 = if (j.child.table == child.refName) child else TableRef.fromRefName(j.child.table)
+          new SqlJoin(j.parent.table, child0, List((j.parent, j.child)), plural, false, inner)
+        }
+
+      def checkOrdering(parent: String, joins: List[SqlJoin]): Boolean = {
+        @tailrec
+        def loop(joins: List[SqlJoin], seen: Set[String]): Boolean = {
+          joins match {
+            case Nil => true
+            case hd :: tl =>
+              seen.contains(hd.parent) && loop(tl, seen+hd.child.refName)
+          }
+        }
+        loop(joins, Set(parent))
       }
     }
 
