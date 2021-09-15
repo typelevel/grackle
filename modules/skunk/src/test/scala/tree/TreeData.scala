@@ -45,7 +45,7 @@ trait TreeMapping[F[_]] extends SkunkMapping[F] {
             SqlRoot("bintree")
           )
       ),
-      SqlUnionMapping(
+      ObjectMapping(
         tpe = BinTreeType,
         fieldMappings =
           List(
