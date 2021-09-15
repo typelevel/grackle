@@ -381,6 +381,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         case Some(SqlJson(_, cr)) => List(applyColumnAliases(context.resultPath, cr))
         case Some(CursorField(_, _, _, required, _)) =>
           required.flatMap(r => columnsForLeaf(context, r))
+        case None =>
+          sys.error(s"No mapping for field '$fieldName' of type ${context.tpe}")
         case other =>
           sys.error(s"Non-leaf mapping for field '$fieldName' of type ${context.tpe}: $other")
       }
