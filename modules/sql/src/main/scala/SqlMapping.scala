@@ -525,7 +525,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def fieldMappingType(context: Context, fieldName: String): Option[FieldMappingType] =
       fieldMapping(context, fieldName).flatMap {
         case CursorField(_, f, _, _, _) => Some(CursorFieldMapping(f))
-        case CursorFieldJson(_, f, _, _, _) => Some(CursorJsonFieldMapping(f))
+        case CursorFieldJson(_, f, _, _, _) => Some(CursorFieldJsonMapping(f))
         case _: SqlJson => Some(JsonFieldMapping)
         case _: SqlField => Some(LeafFieldMapping)
         case _: SqlObject => Some(ObjectFieldMapping)
@@ -651,7 +651,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       case object JsonFieldMapping extends FieldMappingType
       /** Field mapping is computed */
       case class CursorFieldMapping(f: Cursor => Result[Any]) extends FieldMappingType
-      case class CursorJsonFieldMapping(f: Cursor => Result[Json]) extends FieldMappingType
+      case class CursorFieldJsonMapping(f: Cursor => Result[Json]) extends FieldMappingType
     }
   }
 
@@ -1813,7 +1813,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           case CursorFieldMapping(f) =>
             f(this).map(res => LeafCursor(fieldContext, res, mapped, Some(this), Env.empty))
 
-          case CursorJsonFieldMapping(f) =>
+          case CursorFieldJsonMapping(f) =>
             f(this).map(res => CirceCursor(fieldContext, focus = res, parent = Some(this), env = Env.empty))
 
           case JsonFieldMapping =>
