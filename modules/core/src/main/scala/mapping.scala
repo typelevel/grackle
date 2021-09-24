@@ -213,6 +213,16 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
       new CursorField(fieldName, f, encoder, required, hidden)
   }
 
+  case class CursorFieldJson(fieldName: String, f: Cursor => Result[Json], encoder: Encoder[Json], required: List[String], hidden: Boolean)(
+    implicit val pos: SourcePos
+  ) extends FieldMapping {
+    def withParent(tpe: Type): CursorFieldJson = this
+  }
+  object CursorFieldJson {
+    def apply(fieldName: String, f: Cursor => Result[Json], required: List[String] = Nil, hidden: Boolean = false)(implicit encoder: Encoder[Json], di: DummyImplicit): CursorFieldJson =
+      new CursorFieldJson(fieldName, f, encoder, required, hidden)
+  }
+
   case class Delegate(
     fieldName: String,
     interpreter: Mapping[F],

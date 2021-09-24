@@ -379,6 +379,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       fieldMapping(context, fieldName) match {
         case Some(SqlField(_, cr, _, _, _, _)) => List(applyColumnAliases(context.resultPath, cr))
         case Some(SqlJson(_, cr)) => List(applyColumnAliases(context.resultPath, cr))
+        case Some(CursorFieldJson(_, _, _, required, _)) =>
+          required.flatMap(r => columnsForLeaf(context, r))
         case Some(CursorField(_, _, _, required, _)) =>
           required.flatMap(r => columnsForLeaf(context, r))
         case None =>
@@ -390,6 +392,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     /** Returns the aliased joins for constructing the subobject corresponding to the field `fieldName` in `context` */
     def joinsForSubObject(context: Context, fieldName: String, resultName: String, plural: Boolean): (AliasedMappings, List[SqlJoin]) =
       fieldMapping(context, fieldName).flatMap {
+        case _: CursorFieldJson => Some((this, Nil))
         case SqlObject(_, Nil) => Some((this, Nil))
         case SqlObject(_, joins) =>
           val aliased = joins.map(j => this.applyJoinAliases(context.resultPath, j))
@@ -522,6 +525,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def fieldMappingType(context: Context, fieldName: String): Option[FieldMappingType] =
       fieldMapping(context, fieldName).flatMap {
         case CursorField(_, f, _, _, _) => Some(CursorFieldMapping(f))
+        case CursorFieldJson(_, f, _, _, _) => Some(CursorJsonFieldMapping(f))
         case _: SqlJson => Some(JsonFieldMapping)
         case _: SqlField => Some(LeafFieldMapping)
         case _: SqlObject => Some(ObjectFieldMapping)
@@ -532,6 +536,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def isJsonb(context: Context, fieldName: String): Boolean =
       fieldMapping(context, fieldName) match {
         case Some(_: SqlJson) => true
+        case Some(_: CursorFieldJson) => true
         case _ => false
       }
 
@@ -646,6 +651,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       case object JsonFieldMapping extends FieldMappingType
       /** Field mapping is computed */
       case class CursorFieldMapping(f: Cursor => Result[Any]) extends FieldMappingType
+      case class CursorJsonFieldMapping(f: Cursor => Result[Json]) extends FieldMappingType
     }
   }
 
@@ -1806,6 +1812,9 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         aliasedMappings.fieldMappingType(context, fieldName).toRightIor(mkOneError(s"No field mapping for field '$fieldName' of type $obj")).flatMap {
           case CursorFieldMapping(f) =>
             f(this).map(res => LeafCursor(fieldContext, res, mapped, Some(this), Env.empty))
+
+          case CursorJsonFieldMapping(f) =>
+            f(this).map(res => CirceCursor(fieldContext, focus = res, parent = Some(this), env = Env.empty))
 
           case JsonFieldMapping =>
             asTable.flatMap { table =>
