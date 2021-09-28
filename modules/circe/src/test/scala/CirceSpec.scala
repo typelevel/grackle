@@ -16,6 +16,7 @@ final class CirceSpec extends CatsSuite {
           int
           float
           string
+          bigDecimal
           id
         }
       }
@@ -29,6 +30,7 @@ final class CirceSpec extends CatsSuite {
             "int" : 23,
             "float": 1.3,
             "string": "foo",
+            "bigDecimal": 1.2,
             "id": "bar"
           }
         }
