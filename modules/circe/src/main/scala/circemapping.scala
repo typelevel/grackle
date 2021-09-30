@@ -71,6 +71,7 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
         case e: EnumType       if focus.isString  =>
           if (focus.asString.map(e.hasValue).getOrElse(false)) focus.rightIor
           else mkErrorResult(s"Expected Enum ${e.name}, found ${focus.noSpaces}")
+        case _: ScalarType     if !focus.isObject => focus.rightIor // custom Scalar; any non-object type is fine
         case _ =>
           mkErrorResult(s"Expected Scalar type, found $tpe for focus ${focus.noSpaces}")
       }

@@ -30,6 +30,7 @@ object TestCirceMapping extends CirceMapping[Id] {
         array: [Int!]
         object: A
         numChildren: Int
+        bigDecimal: BigDecimal
         children: [Child!]!
       }
       enum Choice {
@@ -48,10 +49,12 @@ object TestCirceMapping extends CirceMapping[Id] {
         id: ID
         bField: String
       }
+      scalar BigDecimal
     """
 
   val QueryType = schema.ref("Query")
   val RootType = schema.ref("Root")
+  val BigDecimalType = schema.ref("BigDecimal")
 
   val data =
     json"""
@@ -60,6 +63,7 @@ object TestCirceMapping extends CirceMapping[Id] {
         "int": 23,
         "float": 1.3,
         "string": "foo",
+        "bigDecimal": 1.2,
         "id": "bar",
         "array": [1, 2, 3],
         "choice": "ONE",
@@ -88,7 +92,8 @@ object TestCirceMapping extends CirceMapping[Id] {
           List(
             CirceRoot("root", data),
           )
-      )
+      ),
+      LeafMapping[BigDecimal](BigDecimalType)
     )
 
   override val selectElaborator = new SelectElaborator(Map(
