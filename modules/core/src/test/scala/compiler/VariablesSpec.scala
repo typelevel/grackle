@@ -123,6 +123,32 @@ final class VariablesSuite extends CatsSuite {
     assert(compiled.map(_.query) == Ior.Right(expected))
   }
 
+  test("scalar variable query bigdecimal") {
+    val query = """
+      query queryWithBigDecimal($input: BigDecimal) {
+        queryWithBigDecimal(input: $input) {
+          name
+        }
+      }
+    """
+
+    val variables = json"""
+      {
+        "input": 2021
+      }
+    """
+
+    val expected =
+      Select("queryWithBigDecimal",
+        List(Binding("input", IntValue(2021))),
+        Select("name", Nil, Empty)
+      )
+
+    val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
+    //println(compiled)
+    assert(compiled.map(_.query) == Ior.Right(expected))
+  }
+
   test("object variable query") {
     val query = """
       query doSearch($pattern: Pattern) {
@@ -343,6 +369,7 @@ object VariablesMapping extends Mapping[Id] {
         search(pattern: Pattern!): [User!]!
         usersByType(userType: UserType!): [User!]!
         usersLoggedInByDate(date: Date!): [User!]!
+        queryWithBigDecimal(input: BigDecimal!): [User!]!
       }
       type User {
         id: String!
@@ -361,6 +388,7 @@ object VariablesMapping extends Mapping[Id] {
         NORMAL
       }
       scalar Date
+      scalar BigDecimal
     """
 
   val typeMappings = Nil

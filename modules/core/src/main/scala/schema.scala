@@ -453,7 +453,21 @@ case class TypeRef(schema: Schema, name: String) extends NamedType {
 case class ScalarType(
   name: String,
   description: Option[String]
-) extends Type with NamedType
+) extends Type with NamedType {
+  import ScalarType._
+
+  /** True if this is one of the five built-in Scalar types defined in the GraphQL Specification. */
+  def isBuiltIn: Boolean =
+    this match {
+      case IntType     |
+           FloatType   |
+           StringType  |
+           BooleanType |
+           IDType      => true
+      case _           => false
+    }
+
+}
 
 object ScalarType {
   def apply(tpnme: String): Option[ScalarType] = tpnme match {
@@ -715,6 +729,17 @@ object Value {
         value.rightIor
       case (BooleanType, Some(value: BooleanValue)) =>
         value.rightIor
+
+      // Custom Scalars
+      case (s @ ScalarType(_, _), Some(value: IntValue)) if !s.isBuiltIn =>
+        value.rightIor
+      case (s @ ScalarType(_, _), Some(value: FloatValue)) if !s.isBuiltIn =>
+        value.rightIor
+      case (s @ ScalarType(_, _), Some(value: StringValue)) if !s.isBuiltIn =>
+        value.rightIor
+      case (s @ ScalarType(_, _), Some(value: BooleanValue)) if !s.isBuiltIn =>
+        value.rightIor
+
       case (IDType, Some(value: IDValue)) =>
         value.rightIor
       case (IDType, Some(StringValue(s))) =>
@@ -763,6 +788,17 @@ object Value {
         BooleanValue(value).rightIor
       case (IDType, Some(jsonInt(value))) =>
         IDValue(value.toString).rightIor
+
+      // Custom scalars
+      case (s @ ScalarType(_, _), Some(jsonInt(value))) if !s.isBuiltIn =>
+        IntValue(value).rightIor
+      case (s @ ScalarType(_, _), Some(jsonDouble(value))) if !s.isBuiltIn =>
+        FloatValue(value).rightIor
+      case (s @ ScalarType(_, _), Some(jsonString(value))) if !s.isBuiltIn =>
+        StringValue(value).rightIor
+      case (s @ ScalarType(_, _), Some(jsonBoolean(value))) if !s.isBuiltIn =>
+        BooleanValue(value).rightIor
+
       case (IDType, Some(jsonString(value))) =>
         IDValue(value).rightIor
       case (e: EnumType, Some(jsonString(name))) if e.hasValue(name) =>
