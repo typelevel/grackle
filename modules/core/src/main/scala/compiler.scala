@@ -415,6 +415,7 @@ object QueryCompiler {
         case d@Defer(_, child, _)     => transform(child, vars, schema, tpe).map(ec => d.copy(child = ec))
         case s@Skip(_, _, child)      => transform(child, vars, schema, tpe).map(ec => s.copy(child = ec))
         case l@Limit(_, child)        => transform(child, vars, schema, tpe).map(ec => l.copy(child = ec))
+        case o@Offset(_, child)        => transform(child, vars, schema, tpe).map(ec => o.copy(child = ec))
         case o@OrderBy(_, child)      => transform(child, vars, schema, tpe).map(ec => o.copy(child = ec))
         case e@Environment(_, child)  => transform(child, vars, schema, tpe).map(ec => e.copy(child = ec))
         case Skipped                  => Skipped.rightIor
@@ -703,6 +704,7 @@ object QueryCompiler {
           case Filter(_, child) => loop(child, depth, width, false)
           case Introspect(_, _) => (depth, width)
           case Limit(_, child) => loop(child, depth, width, false)
+          case Offset(_, child) => loop(child, depth, width, false)
           case Narrow(_, child) => loop(child, depth, width, true)
           case OrderBy(_, child) => loop(child, depth, width, false)
           case Rename(_, child) => loop(child, depth, width, false)
