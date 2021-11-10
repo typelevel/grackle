@@ -126,6 +126,11 @@ object Query {
     def render = s"<limit: $num ${child.render}>"
   }
 
+  /** Drops the first `num` elements of list-producing continuation `child`. */
+  case class Offset(num: Int, child: Query) extends Query {
+    def render = s"<offset: $num ${child.render}>"
+  }
+
   /** Orders the results of list-producing continuation `child` by fields
    *  specified by `selections`.
    */
@@ -237,22 +242,25 @@ object Query {
 
   /** Extractor for nested Filter/OrderBy/Limit patterns in the query algebra */
   object FilterOrderByLimit {
-    def unapply(q: Query): Option[(Option[Predicate], Option[List[OrderSelection[_]]], Option[Int], Query)] = {
+    def unapply(q: Query): Option[(Option[Predicate], Option[List[OrderSelection[_]]], Option[Int],  Option[Int], Query)] = {
       val (limit, q0) = q match {
         case Limit(lim, child) => (Some(lim), child)
         case child => (None, child)
       }
-      val (order, q1) = q0 match {
+      val (offset, q1) = q0 match {
+        case Offset(off, child) => (Some(off), child)
+        case child => (None, child)
+      }
+      val (order, q2) = q1 match {
         case OrderBy(OrderSelections(oss), child) => (Some(oss), child)
         case child => (None, child)
       }
-      val (filter, q2) = q1 match {
+      val (filter, q3) = q2 match {
         case Filter(pred, child) => (Some(pred), child)
         case child => (None, child)
       }
-
       limit.orElse(order).orElse(filter).map { _ =>
-        (filter, order, limit, q2)
+        (filter, order, offset, limit, q3)
       }
     }
   }
