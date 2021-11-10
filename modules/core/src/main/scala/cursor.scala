@@ -17,7 +17,10 @@ import QueryInterpreter.{ mkErrorResult, mkOneError }
  * of a GraphQL query.
  */
 trait Cursor {
+
+  /** Environment lookups will fall back to the parent environment, if known. */
   def parent: Option[Cursor]
+
   /** The value at the position represented by this `Cursor`. */
   def focus: Any
 

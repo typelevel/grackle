@@ -29,6 +29,9 @@ package object grackle {
     def failure[A](p: Problem): Result[A] =
       Ior.left(NonEmptyChain(p))
 
+    def fromOption[A](op: Option[A], ifEmpty: => String): Result[A] =
+      op.fold(failure[A](ifEmpty))(apply)
+
   }
 
 }
