@@ -28,7 +28,7 @@ object QueryParser {
    */
   def parseText(text: String, name: Option[String] = None): Result[UntypedOperation] = {
     def toResult[T](pr: Either[Parser.Error, T]): Result[T] =
-      Ior.fromEither(pr).leftMap(e => mkOneError(e.expected.toList.mkString(",")))
+      Ior.fromEither(pr).leftMap(_ => mkOneError("Malformed query"))
 
     for {
       doc   <- toResult(GraphQLParser.Document.parseAll(text))

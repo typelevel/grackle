@@ -12,6 +12,7 @@ import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
 import Query._, Path._, Predicate._, Value._, UntypedOperation._
 import QueryCompiler._, ComponentElaborator.TrivialJoin
+import QueryInterpreter.mkOneError
 
 final class CompilerSuite extends CatsSuite {
   test("simple query") {
@@ -346,6 +347,41 @@ final class CompilerSuite extends CatsSuite {
     val res = ComposedMapping.compiler.compile(query)
 
     assert(res.map(_.query) == Ior.Right(expected))
+  }
+
+  test("malformed query (1)") {
+    val query = """
+      query {
+        character(id: "1000" {
+          name
+        }
+      }
+    """
+
+    val res = QueryParser.parseText(query)
+
+    assert(res == Ior.Left(mkOneError("Malformed query")))
+  }
+
+  test("malformed query (2)") {
+    val query = ""
+
+    val res = QueryParser.parseText(query)
+
+    assert(res == Ior.Left(mkOneError("At least one operation required")))
+  }
+
+  test("malformed query (3)") {
+    val query = """
+      query {
+        character(id: "1000" {
+          name
+        }
+    """
+
+    val res = QueryParser.parseText(query)
+
+    assert(res == Ior.Left(mkOneError("Malformed query")))
   }
 }
 
