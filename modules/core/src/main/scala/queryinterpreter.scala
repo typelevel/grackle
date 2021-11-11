@@ -264,6 +264,9 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
         case Limit(num, child) =>
           runList(child, tpe, cursors, f.compose(_.take(num).rightIor))
 
+        case Offset(num, child) =>
+          runList(child, tpe, cursors, f.compose(_.drop(num).rightIor))
+
         case OrderBy(selections, child) =>
           runList(child, tpe, cursors, f.compose(selections.order(_).rightIor))
 

@@ -409,4 +409,82 @@ final class StarWarsSpec extends CatsSuite {
 
     assert(res == expected)
   }
+
+  test("offset/limit (1)") {
+    val query = """
+      query {
+        characters(offset: 0, limit: 5) {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+    {
+      "data" : {
+        "characters" : [
+          {
+            "name" : "Luke Skywalker"
+          },
+          {
+            "name" : "Darth Vader"
+          },
+          {
+            "name" : "Han Solo"
+          },
+          {
+            "name" : "Leia Organa"
+          },
+          {
+            "name" : "Wilhuff Tarkin"
+          }
+        ]
+      }
+    }
+    """
+
+    val res = StarWarsMapping.compileAndRun(query)
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("offset/limit (2)") {
+    val query = """
+      query {
+        characters(offset: 2, limit: 5) {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+    {
+      "data" : {
+        "characters" : [
+          {
+            "name" : "Han Solo"
+          },
+          {
+            "name" : "Leia Organa"
+          },
+          {
+            "name" : "Wilhuff Tarkin"
+          },
+          {
+            "name" : "C-3PO"
+          },
+          {
+            "name" : "R2-D2"
+          }
+        ]
+      }
+    }
+    """
+
+    val res = StarWarsMapping.compileAndRun(query)
+    //println(res)
+
+    assert(res == expected)
+  }
 }

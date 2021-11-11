@@ -160,7 +160,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           case u: UntypedNarrow => u.copy(child = loop(u.child, context))
           case n@Narrow(subtpe, _) => n.copy(child = loop(n.child, context.asType(subtpe)))
           case s: Skip => s.copy(child = loop(s.child, context))
-          case o: Offset => o.copy(child = loop(o.child, context))
+          case o: Offset => loop(o.child, context)
           case l: Limit => l.copy(child = loop(l.child, context))
           case o: OrderBy => o.copy(child = loop(o.child, context))
           case other@(_: Component[_] | _: Defer | Empty | _: Introspect | _: Select | Skipped) => other
@@ -785,7 +785,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         }
       }
 
-      val combinedSelects = selects.groupBy(sel => (sel.context, sel.table, sel.orders, sel.limit, sel.distinct)).values.flatMap(combineSelects).toList
+      val combinedSelects = selects.groupBy(sel => (sel.context, sel.table, sel.orders, sel.offset, sel.limit, sel.distinct)).values.flatMap(combineSelects).toList
       if (combinedSelects.sizeCompare(1) == 0 && unions.isEmpty) Some(combinedSelects.head)
       else {
         val unionSelects = unions.flatMap(_.elems)

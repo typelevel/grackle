@@ -1030,7 +1030,40 @@ trait SqlWorldSpec extends AnyFunSuite {
     """
 
     val res = mapping.compileAndRun(query).unsafeRunSync()
-    //println(res)
+    // println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
+  test("simple query with limit and offset") {
+    val query = """
+      query {
+        countries(limit: 3, offset: 2) {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "countries" : [
+            {
+              "name" : "Angola"
+            },
+            {
+              "name" : "Anguilla"
+            },
+            {
+              "name" : "Albania"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    // println(res)
 
     assertWeaklyEqual(res, expected)
   }
