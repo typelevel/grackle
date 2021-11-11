@@ -243,12 +243,12 @@ object Query {
   /** Extractor for nested Filter/OrderBy/Limit patterns in the query algebra */
   object FilterOrderByLimit {
     def unapply(q: Query): Option[(Option[Predicate], Option[List[OrderSelection[_]]], Option[Int],  Option[Int], Query)] = {
-      val (limit, q0) = q match {
-        case Limit(lim, child) => (Some(lim), child)
+      val (offset, q0) = q match {
+        case Offset(off, child) => (Some(off), child)
         case child => (None, child)
       }
-      val (offset, q1) = q0 match {
-        case Offset(off, child) => (Some(off), child)
+      val (limit, q1) = q0 match {
+        case Limit(lim, child) => (Some(lim), child)
         case child => (None, child)
       }
       val (order, q2) = q1 match {
@@ -259,7 +259,7 @@ object Query {
         case Filter(pred, child) => (Some(pred), child)
         case child => (None, child)
       }
-      limit.orElse(order).orElse(filter).map { _ =>
+      offset.orElse(limit).orElse(order).orElse(filter).map { _ =>
         (filter, order, offset, limit, q3)
       }
     }

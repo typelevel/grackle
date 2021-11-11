@@ -62,7 +62,7 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
         cities(namePattern: String = "%"): [City!]
         city(id: Int): City
         country(code: String): Country
-        countries(limit: Int = -1, minPopulation: Int = 0, byPopulation: Boolean = false): [Country!]
+        countries(limit: Int = -1, offset: Int = 0, minPopulation: Int = 0, byPopulation: Boolean = false): [Country!]
         language(language: String): Language
         search(minPopulation: Int!, indepSince: Int!): [Country!]!
         search2(indep: Boolean!, limit: Int!): [Country!]!
@@ -175,20 +175,21 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
       case Select("city", List(Binding("id", IntValue(id))), child) =>
         Select("city", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
 
-      case Select("countries", List(Binding("limit", IntValue(num)), Binding("minPopulation", IntValue(min)), Binding("byPopulation", BooleanValue(byPop))), child) =>
+      case Select("countries", List(Binding("limit", IntValue(num)), Binding("offset", IntValue(offset)), Binding("minPopulation", IntValue(min)), Binding("byPopulation", BooleanValue(byPop))), child) =>
         def limit(query: Query): Query =
           if (num < 1) query
           else Limit(num, query)
 
-        def order(query: Query): Query =
+        def order(query: Query): Query = {
           if (byPop) OrderBy(OrderSelections(List(OrderSelection(UniquePath[Int](List("population"))))), query)
-          else query
+          else       OrderBy(OrderSelections(List(OrderSelection(UniquePath[String](List("code"))))), query)
+        }
 
         def filter(query: Query): Query =
           if (min == 0) query
           else Filter(GtEql(UniquePath(List("population")), Const(min)), query)
 
-        Select("countries", Nil, limit(order(filter(child)))).rightIor
+        Select("countries", Nil, Offset(offset, limit(order(filter(child))))).rightIor
 
       case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
         Select("cities", Nil, Filter(Like(UniquePath(List("name")), namePattern, true), child)).rightIor
