@@ -43,7 +43,7 @@ trait SqlCursorJsonSpec extends AnyFunSuite {
     """
 
     val res = mapping.compileAndRun(query).unsafeRunSync()
-    println(res)
+    //println(res)
 
     assertWeaklyEqual(res, expected)
   }

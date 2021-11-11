@@ -581,39 +581,41 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
     /** Does the result of `query` in `context` contain lists of subobjects? */
     def containsNonLeafList(query: Query, context: Context): Boolean = {
-      query match {
-
-        case Select(fieldName, _, child) =>
-          nonLeafList(context, fieldName) ||
-            context.forField(fieldName, fieldName).map { fieldContext =>
-              containsNonLeafList(child, fieldContext)
+      def loop(query: Query, context: Context, maybe: Boolean): Boolean = {
+        query match {
+          case Select(fieldName, _, child) =>
+            maybe || context.forField(fieldName, fieldName).map { fieldContext =>
+              loop(child, fieldContext, nonLeafList(context, fieldName))
             }.getOrElse(false)
 
-        case Group(queries)        => queries.exists(q => containsNonLeafList(q, context))
-        case GroupList(queries)    => queries.exists(q => containsNonLeafList(q, context))
+          case Group(queries)        => queries.exists(q => loop(q, context, maybe))
+          case GroupList(queries)    => queries.exists(q => loop(q, context, maybe))
 
-        case Filter(_, child)      => containsNonLeafList(child, context)
-        case Unique(child)         => containsNonLeafList(child, context)
-        case Offset(_, child)      => containsNonLeafList(child, context)
-        case Limit(_, child)       => containsNonLeafList(child, context)
-        case OrderBy(_, child)     => containsNonLeafList(child, context)
+          case Filter(_, child)      => loop(child, context, maybe)
+          case Unique(child)         => loop(child, context, false)
+          case Limit(n, child)       => loop(child, context, maybe && n > 1)
+          case Offset(_, child)      => loop(child, context, maybe)
+          case OrderBy(_, child)     => loop(child, context, maybe)
 
-        case Narrow(_, child)      => containsNonLeafList(child, context)
-        case Wrap(_, child)        => containsNonLeafList(child, context)
-        case Rename(_, child)      => containsNonLeafList(child, context)
-        case _: Count              => false
+          case Narrow(_, child)      => loop(child, context, maybe)
+          case Wrap(_, child)        => loop(child, context, maybe)
+          case Rename(_, child)      => loop(child, context, maybe)
+          case _: Count              => maybe
 
-        case Environment(_, child) => containsNonLeafList(child, context)
+          case Environment(_, child) => loop(child, context, maybe)
 
-        case Query.Component(_, _, _) => false
-        case _: Introspect         => false
-        case _: Defer              => false
+          case Query.Component(_, _, _) => maybe
+          case _: Introspect         => maybe
+          case _: Defer              => maybe
 
-        case _: Skip               => false
-        case _: UntypedNarrow      => false
-        case Skipped               => false
-        case Empty                 => false
+          case _: Skip               => maybe
+          case _: UntypedNarrow      => maybe
+          case Skipped               => maybe
+          case Empty                 => maybe
+        }
       }
+
+      loop(query, context, false)
     }
 
     /** Return the fully aliased column corresponding to the given unaliased columne `cr` in `context` */
