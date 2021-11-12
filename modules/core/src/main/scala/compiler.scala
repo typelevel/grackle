@@ -6,7 +6,7 @@ package edu.gemini.grackle
 import scala.annotation.tailrec
 
 import cats.data.Ior
-import cats.parse.Parser
+import cats.parse.{LocationMap, Parser}
 import cats.implicits._
 import io.circe.Json
 
@@ -28,7 +28,16 @@ object QueryParser {
    */
   def parseText(text: String, name: Option[String] = None): Result[UntypedOperation] = {
     def toResult[T](pr: Either[Parser.Error, T]): Result[T] =
-      Ior.fromEither(pr).leftMap(_ => mkOneError("Malformed query"))
+      Ior.fromEither(pr).leftMap { e =>
+        val lm = LocationMap(text)
+        val (row, col) = lm.toLineCol(e.failedAtOffset).get
+        val line = lm.getLine(row).get
+        val error =
+          s"""Parse error at line $row column $col
+             |$line
+             |${List.fill(col)(" ").mkString}^""".stripMargin
+        mkOneError(error)
+      }
 
     for {
       doc   <- toResult(GraphQLParser.Document.parseAll(text))
