@@ -379,7 +379,7 @@ final class CompilerSuite extends CatsSuite {
   test("malformed query (3)") {
     val query = """
       query {
-        character(id: "1000" {
+        character(id: "1000") {
           name
         }
     """
@@ -387,9 +387,7 @@ final class CompilerSuite extends CatsSuite {
     val res = QueryParser.parseText(query)
 
     val error =
-      """Parse error at line 2 column 29
-        |        character(id: "1000" {
-        |                             ^""".stripMargin
+      "Parse error at EOF"
 
     assert(res == Ior.Left(mkOneError(error)))
   }

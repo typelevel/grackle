@@ -30,12 +30,18 @@ object QueryParser {
     def toResult[T](pr: Either[Parser.Error, T]): Result[T] =
       Ior.fromEither(pr).leftMap { e =>
         val lm = LocationMap(text)
-        val (row, col) = lm.toLineCol(e.failedAtOffset).get
-        val line = lm.getLine(row).get
-        val error =
-          s"""Parse error at line $row column $col
-             |$line
-             |${List.fill(col)(" ").mkString}^""".stripMargin
+        val error = lm.toLineCol(e.failedAtOffset) match {
+          case Some((row, col)) =>
+            lm.getLine(row) match {
+              case Some(line) =>
+                s"""Parse error at line $row column $col
+                   |$line
+                   |${List.fill(col)(" ").mkString}^""".stripMargin
+              case None => "Uh-oh! There seems to be a bug in Cats Parse :("
+            }
+          case None =>
+            "Parse error at EOF"
+        }
         mkOneError(error)
       }
 
