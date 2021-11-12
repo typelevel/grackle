@@ -386,8 +386,7 @@ final class CompilerSuite extends CatsSuite {
 
     val res = QueryParser.parseText(query)
 
-    val error =
-      "Parse error at EOF"
+    val error = "Truncated query"
 
     assert(res == Ior.Left(mkOneError(error)))
   }

@@ -37,10 +37,9 @@ object QueryParser {
                 s"""Parse error at line $row column $col
                    |$line
                    |${List.fill(col)(" ").mkString}^""".stripMargin
-              case None => "Uh-oh! There seems to be a bug in Cats Parse :("
+              case None => "Malformed query" //This is probably a bug in Cats Parse as it has given us the (row, col) index
             }
-          case None =>
-            "Parse error at EOF"
+          case None => "Truncated query"
         }
         mkOneError(error)
       }
