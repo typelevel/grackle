@@ -160,6 +160,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           case u: UntypedNarrow => u.copy(child = loop(u.child, context))
           case n@Narrow(subtpe, _) => n.copy(child = loop(n.child, context.asType(subtpe)))
           case s: Skip => s.copy(child = loop(s.child, context))
+          case o: Offset => loop(o.child, context)
           case l: Limit => l.copy(child = loop(l.child, context))
           case o: OrderBy => o.copy(child = loop(o.child, context))
           case other@(_: Component[_] | _: Defer | Empty | _: Introspect | _: Select | Skipped) => other
@@ -593,6 +594,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           case Filter(_, child)      => loop(child, context, maybe)
           case Unique(child)         => loop(child, context, false)
           case Limit(n, child)       => loop(child, context, maybe && n > 1)
+          case Offset(_, child)      => loop(child, context, maybe)
           case OrderBy(_, child)     => loop(child, context, maybe)
 
           case Narrow(_, child)      => loop(child, context, maybe)
@@ -721,10 +723,11 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       aliasedMappings: AliasedMappings
     ): (SqlQuery, AliasedMappings)
 
-    /** Add WHERE, ORDER BY and LIMIT to this query */
+    /** Add WHERE, ORDER BY, OFFSET and LIMIT to this query */
     def addFilterOrderByLimit(
       pred: Option[Predicate],
       oss: Option[List[OrderSelection[_]]],
+      offset: Option[Int],
       limit: Option[Int],
       folQuery: Option[SqlSelect],
       aliasedMappings: AliasedMappings
@@ -745,16 +748,16 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       def combineSelects(sels: List[SqlSelect]): List[SqlSelect] = {
         if (sels.sizeCompare(1) == 0) sels
         else {
-          val (context, table, orders, limit, distinct) = {
+          val (context, table, orders, offset, limit, distinct) = {
             val first = sels.head
-            (first.context, first.table, first.orders, first.limit, first.distinct)
+            (first.context, first.table, first.orders, first.offset, first.limit, first.distinct)
           }
           val (noJoins, joins) = sels.partition(_.joins.isEmpty)
 
           def combineSameJoins(sels: List[SqlSelect]): SqlSelect = {
             val cols = sels.flatMap(_.cols).distinct
             val wheres = sels.flatMap(_.wheres).distinct
-            SqlSelect(context, table, cols, sels.head.joins, wheres, orders, limit, distinct)
+            SqlSelect(context, table, cols, sels.head.joins, wheres, orders, offset, limit, distinct)
           }
           val sameJoins = joins.groupBy(_.joins).values.map(combineSameJoins).toList
 
@@ -767,7 +770,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             if (cols.isEmpty) {
               assert(joins.isEmpty && wheres.isEmpty)
               None
-            } else Some(SqlSelect(context, table, cols, joins, wheres, orders, limit, distinct))
+            } else Some(SqlSelect(context, table, cols, joins, wheres, orders, offset, limit, distinct))
           }
 
           (combined, pluralJoins) match {
@@ -782,7 +785,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         }
       }
 
-      val combinedSelects = selects.groupBy(sel => (sel.context, sel.table, sel.orders, sel.limit, sel.distinct)).values.flatMap(combineSelects).toList
+      val combinedSelects = selects.groupBy(sel => (sel.context, sel.table, sel.orders, sel.offset, sel.limit, sel.distinct)).values.flatMap(combineSelects).toList
       if (combinedSelects.sizeCompare(1) == 0 && unions.isEmpty) Some(combinedSelects.head)
       else {
         val unionSelects = unions.flatMap(_.elems)
@@ -976,7 +979,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         }
       }.sequence.map { fragsAndCols =>
         val (cols, frags) = fragsAndCols.unzip
-        SqlSelect(context, table, cols, Nil, Nil, frags, None, false, Nil, cols.filter(col => Fragments.needsCollation(col.codec)).toSet)
+        SqlSelect(context, table, cols, Nil, Nil, frags, None, None, false, Nil, cols.filter(col => Fragments.needsCollation(col.codec)).toSet)
       }
     }
 
@@ -988,6 +991,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       joins:    List[SqlJoin],       // joins for predicates/subobjects
       wheres:   List[Where],
       orders:   List[Order],
+      offset:   Option[Int],
       limit:    Option[Int],
       distinct: Boolean,             // DISTINCT or not
       aliases:  List[String] = Nil,  // column aliases if any
@@ -1063,7 +1067,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
                           _, _, _, _
                         )
                       ),
-                      _, _, _, _, _, _) if predName.startsWith("pred_") =>
+                      _, _, _, _, _, _, _) if predName.startsWith("pred_") =>
 
                       val wheres = ij.on.map {
                         case (p, c) =>
@@ -1097,6 +1101,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       def addFilterOrderByLimit(
         pred: Option[Predicate],
         oss: Option[List[OrderSelection[_]]],
+        offset: Option[Int],
         limit: Option[Int],
         folQuery: Option[SqlSelect],
         aliasedMappings: AliasedMappings
@@ -1134,6 +1139,9 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
                 sel.copy(cols = (os.cols ++ sel.cols).distinct, orders = os.orders ++ keyOrder, collate = sel.collate ++ os.collate)
               }
 
+            def doOffset(off: Int, sel: SqlSelect): Option[SqlSelect] =
+              Some(sel.copy(offset = Some(off)))
+
             def doLimit(lim: Int, sel: SqlSelect): Option[SqlSelect] =
               Some(sel.copy(limit = Some(lim)))
 
@@ -1143,16 +1151,17 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             }
 
             for {
-              withKeys    <- combine(folQuery, SqlSelect(context, predTable, keyCols, Nil, Nil, keyOrder, None, true), doInit)
+              withKeys    <- combine(folQuery, SqlSelect(context, predTable, keyCols, Nil, Nil, keyOrder, None, None, true), doInit)
               withWhere   <- combine(pred, withKeys, doWhere)
               withOrderBy <- combine(oss, withWhere, doOrderBy)
-              modifier0   <- combine(limit, withOrderBy, doLimit)
-              modifier    =  modifier0.copy(wheres = nonNullKeys ++ modifier0.wheres)
+              modifier0   <- combine(offset, withOrderBy, doOffset)
+              modifier1   <- combine(limit, modifier0, doLimit)
+              modifier    =  modifier1.copy(wheres = nonNullKeys ++ modifier1.wheres)
             } yield {
               val (am, alias) = aliasedMappings.fresh("pred")
               val on = keyCols.map(key => (key.move(table = predTable.refName), key.move(table = alias)))
               val predJoin = SqlJoin(predTable.refName, SubqueryRef(modifier, alias), on, false, false, true)
-              val selAll = SqlSelect(context, predTable, colsOf(table).filter(_.isRef).map(_.move(table = predTable.refName)), List(predJoin), Nil, Nil, None, false)
+              val selAll = SqlSelect(context, predTable, colsOf(table).filter(_.isRef).map(_.move(table = predTable.refName)), List(predJoin), Nil, Nil, None, None, false)
               val subRef = SubqueryRef(selAll, table.refName)
               (copy(table = subRef), am)
             }
@@ -1181,9 +1190,11 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           if (orders.isEmpty) Fragments.empty
           else Fragments.const(" ORDER BY ") |+| orders.map(_.toFragment).intercalate(Fragments.const(","))
 
+        val off = offset.map(o => Fragments.const(s" OFFSET $o")).getOrElse(Fragments.empty)
+
         val lim = limit.map(l => Fragments.const(s" LIMIT $l")).getOrElse(Fragments.empty)
 
-        select |+| from |+| joins0 |+| where |+| orderBy |+| lim
+        select |+| from |+| joins0 |+| where |+| orderBy |+| off |+| lim
       }
 
       /** The columns of the given table expression that are referred to by this SELECT */
@@ -1288,14 +1299,15 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             join.copy(child = ref, on = newOn)
           }
 
-        val sel = SqlSelect(parentContext, from, cols, joins, Nil, Nil, None, false)
+        val sel = SqlSelect(parentContext, from, cols, joins, Nil, Nil, None, None, false)
         (sel, am1)
       }
 
-      /** Add WHERE, ORDER BY and LIMIT to this query */
+      /** Add WHERE, ORDER BY, OFFSET, and LIMIT to this query */
       def addFilterOrderByLimit(
         pred: Option[Predicate],
         oss: Option[List[OrderSelection[_]]],
+        offset: Option[Int],
         limit: Option[Int],
         folQuery: Option[SqlSelect],
         aliasedMappings: AliasedMappings
@@ -1306,7 +1318,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           case _ =>
             val (elems0, am0) =
               elems.foldLeft((List.empty[SqlSelect], aliasedMappings)) { case ((elems0, am), elem) =>
-                elem.addFilterOrderByLimit(pred, None, None, folQuery, am) match {
+                elem.addFilterOrderByLimit(pred, None, None, None, folQuery, am) match {
                   case Some((elem0, am0)) => ((elem0 :: elems0), am0)
                   case None => ((elem :: elems0), am)
                 }
@@ -1551,7 +1563,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           case PossiblyRenamedSelect(Select(fieldName, _, child), _) if child == Empty || isJsonb(context, fieldName) =>
             val cols = columnsForLeaf(context, fieldName)
             val extraCols = keyColumnsForType(context) ++ discriminatorColumnsForType(context)
-            Some((SqlSelect(context, parentTable, (cols ++ extraCols).distinct, Nil, Nil, Nil, None, false), aliasedMappings.seenTable(parentTable.refName)))
+            Some((SqlSelect(context, parentTable, (cols ++ extraCols).distinct, Nil, Nil, Nil, None, None, false), aliasedMappings.seenTable(parentTable.refName)))
 
           // Non-leaf non-Json elememtn: compile subobject queries
           case PossiblyRenamedSelect(s@Select(fieldName, _, child), resultName) =>
@@ -1576,7 +1588,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
               q match {
                 case PossiblyRenamedSelect(Select(fieldName, _, _), resultName) =>
                   context.forField(fieldName, resultName)
-                case FilterOrderByLimit(_, _, _, child) =>
+                case FilterOrderByLimit(_, _, _, _, child) =>
                   childContext(child)
                 case _ => None
               }
@@ -1593,7 +1605,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
                     val wheres = hd.on.map { case (p, c) => SqlQuery.Where(c.toFragment |+| Fragments.const(" = ") |+| p.toFragment) }
                     val ssq = sq.copy(table = hd.child, cols = List(Column.CountColumn(countCol, keyCols)), joins = tl, wheres = wheres)
                     val ssqCol = Column.SubqueryColumn(countCol, ssq)
-                    Some((SqlSelect(context, parentTable, List(ssqCol) ++ parentCols, Nil, Nil, Nil, None, false), aliasedMappings))
+                    Some((SqlSelect(context, parentTable, List(ssqCol) ++ parentCols, Nil, Nil, Nil, None, None, false), aliasedMappings))
                   case _ => None
                 }
               case _ => None
@@ -1607,7 +1619,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
               case (node, am) => (node.withContext(context), am)
             }
 
-          case FilterOrderByLimit(pred, oss, lim, child) =>
+          case FilterOrderByLimit(pred, oss, offset, lim, child) =>
             val wherePaths = pred.map(SqlQuery.wherePaths).getOrElse(Nil)
             val orderPaths = oss.map(_.map(_.term).collect { case path: Path => path.path }).getOrElse(Nil)
             val allPaths = (wherePaths ++ orderPaths).distinct
@@ -1629,15 +1641,15 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
               folNode    <- folQuery.map(q => loop(q, context, AliasedMappings.empty).map(_._1)).orElse(Some(None))
               folSelect  <- folNode.map(q => q match { case s: SqlSelect => Some(s) ; case _ => None }).orElse(Some(None))
               (node, am) <- loop(mergedChild, context, aliasedMappings)
-              res        <- node.addFilterOrderByLimit(pred, oss, lim, folSelect, am)
+              res        <- node.addFilterOrderByLimit(pred, oss, offset, lim, folSelect, am)
             } yield res
 
-          case fol@(_: Filter | _: OrderBy | _: Limit) =>
-            sys.error(s"Filter/OrderBy/Limit not matched by extractor: $fol")
+          case fol@(_: Filter | _: OrderBy | _: Offset | _: Limit) =>
+            sys.error(s"Filter/OrderBy/Offset/Limit not matched by extractor: $fol")
 
           case _: Introspect =>
             val extraCols = keyColumnsForType(context) ++ discriminatorColumnsForType(context)
-            Some((SqlSelect(context, parentTable, extraCols.distinct, Nil, Nil, Nil, None, false), aliasedMappings))
+            Some((SqlSelect(context, parentTable, extraCols.distinct, Nil, Nil, Nil, None, None, false), aliasedMappings))
 
           case Environment(_, child) =>
             loop(child, context, aliasedMappings)

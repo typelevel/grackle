@@ -120,6 +120,7 @@ object StarWarsMapping extends ValueMapping[Id] {
       type Query {
         hero(episode: Episode!): Character!
         character(id: ID!): Character
+        characters(offset: Int!, limit: Int!): [Character!]!
         human(id: ID!): Human
         droid(id: ID!): Droid
       }
@@ -167,6 +168,7 @@ object StarWarsMapping extends ValueMapping[Id] {
           List(
             ValueRoot("hero", characters),
             ValueRoot("character", characters),
+            ValueRoot("characters", characters),
             ValueRoot("human", characters.collect { case h: Human => h }),
             ValueRoot("droid", characters.collect { case d: Droid => d })
           )
@@ -212,6 +214,8 @@ object StarWarsMapping extends ValueMapping[Id] {
         Select("hero", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(hero(episode).id)), child))).rightIor
       case Select(f@("character" | "human" | "droid"), List(Binding("id", IDValue(id))), child) =>
         Select(f, Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
+      case Select("characters", List(Binding("offset", IntValue(offset)), Binding("limit", IntValue(limit))), child) =>
+        Select("characters", Nil, Limit(limit, Offset(offset, child))).rightIor
     },
     CharacterType -> numberOfFriends,
     HumanType -> numberOfFriends,
