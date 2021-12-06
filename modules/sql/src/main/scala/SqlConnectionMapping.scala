@@ -44,7 +44,7 @@ import org.tpolecat.sourcepos.SourcePos
  *
  * {{{
  *   type CountryConnection {
- *     edges: [WoozleEdge!]!
+ *     edges: [CountryEdge!]!
  *     pageInfo: PageInfo!
  *   }
  *
@@ -60,7 +60,7 @@ import org.tpolecat.sourcepos.SourcePos
  *
  * {{{
  *   type Query {
- *     countries(first: Int, after: Cursor): CountryConnection!
+ *     countries(first: Int!, after: Cursor): CountryConnection!
  *   }
  * }}}
  *
@@ -98,8 +98,10 @@ import org.tpolecat.sourcepos.SourcePos
  * In this example we extract the `first` and `after` arguments for the top-level `Select` using
  * extractor objects (see `WorldConnectionSpec.scala`) and pass them along with the query itself to
  * `SqlConnectionMapping.updateNodeQuery`, which will add corresponding `Offset` and `Limit` nodes
- * to the elaborated query we return, and in turn produce the fully elaborated top-level query,
- * which we return.
+ * to the elaborated query we return, and in turn produce the fully elaborated top-level query.
+ *
+ * We add an `OrderBy` node here (which should always be the case for cursor connections, otherwise
+ * rows may be returned in an unpredictable order).
  *
  * {{{
  *   override val selectElaborator: QueryCompiler.SelectElaborator =
@@ -117,9 +119,6 @@ import org.tpolecat.sourcepos.SourcePos
  *      }
  *    )
  *}}}
- *
- * Note that cursor connection queries must always have an `OrderBy` node, otherwise results may
- * appear in an unpredictable order.
  */
 trait SqlConnectionMapping[F[_]] extends SqlMapping[F] {
   import SqlConnectionMapping.{ cursorToOffset, offsetToCursor, updateNodeQuery, findNodeQuery }
@@ -157,8 +156,8 @@ trait SqlConnectionMapping[F[_]] extends SqlMapping[F] {
         "SqlConnection: Can't find a `node` selection in the provided query."
       )
 
-    // Bit of a hack, but we "just know" that `SqlRoot` hands back a `SqlCursor` that's a list of
-    // other `SqlCursor`s and in order to `.copy` them below we have to narrow the type.
+    // Bit of a hack, but we "just know" that our `SqlRoot` hands back a `SqlCursor` that's a list
+    // of other `SqlCursor`s and in order to `.copy` them below we have to narrow the type.
     private def narrowToSqlCursor(c: Cursor): Result[SqlCursor] =
       c match {
         case sqlc: SqlCursor => Result(sqlc)
@@ -201,7 +200,7 @@ trait SqlConnectionMapping[F[_]] extends SqlMapping[F] {
               .withField("endCursor", offsetToCursor(offset + cs.length - 2))
           )
           .withListField("edges", (p, c) =>
-            // Our `SqlCursor`s show up here, as a list of edges
+            // Our `SqlCursor`s show up here, as a list of edges.
             sqlCs.zip(offset to offset + limit - 1).map { case (sqlCursor, index) =>
               MapCursor(c, Some(p))
                 .withField("cursor", offsetToCursor(index))
