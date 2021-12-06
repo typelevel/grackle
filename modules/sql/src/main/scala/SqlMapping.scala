@@ -161,9 +161,10 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           case n@Narrow(subtpe, _) => n.copy(child = loop(n.child, context.asType(subtpe)))
           case s: Skip => s.copy(child = loop(s.child, context))
           case o: Offset => loop(o.child, context)
-          case l: Limit => l.copy(child = loop(l.child, context))
-          case o: OrderBy => o.copy(child = loop(o.child, context))
-          case other@(_: Component[_] | _: Defer | Empty | _: Introspect | _: Select | Skipped) => other
+          case l: Limit => loop(l.child, context)
+          case o: OrderBy => loop(o.child, context)
+          case s: Select => s.copy(child = loop(s.child, context))
+          case other@(_: Component[_] | _: Defer | Empty | _: Introspect | Skipped) => other
         }
 
       loop(query, context)

@@ -10,8 +10,11 @@ import edu.gemini.grackle._, skunk._, syntax._
 import utils.DatabaseSuite
 import _root_.skunk.codec.all._
 import cats.effect.unsafe.implicits.global
+import edu.gemini.grackle.Query._
+import edu.gemini.grackle.Value._
+import edu.gemini.grackle.sql.SqlConnectionMapping
 
-trait ConnectionStuffMapping[F[_]] extends SkunkMapping[F] with SqlConnectionMapping[F] {
+trait WorldConnectionMapping[F[_]] extends SkunkMapping[F] with SqlConnectionMapping[F] {
 
   object country extends TableDef("country") {
     val code           = col("code", bpchar(3))
@@ -35,7 +38,7 @@ trait ConnectionStuffMapping[F[_]] extends SkunkMapping[F] with SqlConnectionMap
     schema"""
 
       type Query {
-        countries(first: Int, after: Cursor): CountryConnection!
+        countries(first: Int!, after: Cursor): CountryConnection!
       }
 
       type Country {
@@ -109,21 +112,53 @@ trait ConnectionStuffMapping[F[_]] extends SkunkMapping[F] with SqlConnectionMap
       ),
     )
 
+  object First {
+    def unapply(b: Binding): Option[Int] =
+      b match {
+        case Binding("first", IntValue(n)) => Some(n)
+        case _                             => None
+      }
+  }
+
+  object After {
+    def unapply(b: Binding): Option[Option[String]] =
+      b match {
+        case Binding("after", StringValue(s))          => Some(Some(s))
+        case Binding("after", NullValue | AbsentValue) => Some(None)
+        case _                                         => None
+      }
+  }
+
+  override val selectElaborator: QueryCompiler.SelectElaborator =
+    new QueryCompiler.SelectElaborator(
+      Map {
+        QueryType -> {
+          case q @ Query.Select("countries", List(First(first), After(after)), _) =>
+            SqlConnectionMapping.updateNodeQuery(q, first, after) {
+              case Select("node", Nil, child) =>
+                val ord = Query.OrderBy(OrderSelections(List(OrderSelection(Path.UniquePath[String](List("code"))))), child)
+                Result(Select("node", Nil, ord))
+              case o => Result.failure(s"SqlConnectionMapping.updateNodeQuery didn't match $o")
+            }
+        }
+      }
+    )
+
 }
 
-object ConnectionStuffMapping extends SkunkMappingCompanion {
+object WorldConnectionMapping extends SkunkMappingCompanion {
   def mkMapping[F[_]: Sync](pool: Resource[F,Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
-    new SkunkMapping[F](pool, monitor) with ConnectionStuffMapping[F]
+    new SkunkMapping[F](pool, monitor) with WorldConnectionMapping[F]
 }
 
-final class ConnectionStuffSuite extends DatabaseSuite {
-  lazy val mapping = ConnectionStuffMapping.mkMapping(pool)
+final class WorldConnectionSpec extends DatabaseSuite {
+  lazy val mapping = WorldConnectionMapping.mkMapping(pool)
 
   test("connection query with some renames") {
 
     val query = """
       query {
-        countries {
+        countries(first: 5, after: "#<3>") {
           pageInfo {
             hasPreviousPage
             renamedHasNextPage: hasNextPage
@@ -157,10 +192,10 @@ final class ConnectionStuffSuite extends DatabaseSuite {
             "edges" : [
               {
                 "node" : {
-                  "name" : "Netherlands Antilles",
+                  "name" : "Anguilla",
                   "continent" : "North America",
                   "renamedRegion" : "Caribbean",
-                  "population" : 217000
+                  "population" : 8000
                 },
                 "cursor" : "#<3>"
               },
@@ -184,10 +219,10 @@ final class ConnectionStuffSuite extends DatabaseSuite {
               },
               {
                 "node" : {
-                  "name" : "Anguilla",
+                  "name" : "Netherlands Antilles",
                   "continent" : "North America",
                   "renamedRegion" : "Caribbean",
-                  "population" : 8000
+                  "population" : 217000
                 },
                 "cursor" : "#<6>"
               },

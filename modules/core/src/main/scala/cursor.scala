@@ -286,6 +286,8 @@ object Cursor {
     def add[T](items: (String, T)*): Env
     def add(env: Env): Env
     def get[T: ClassTag](name: String): Option[T]
+    def getResult[T](name: String)(implicit ct: ClassTag[T]): Result[T] =
+      Result.fromOption(get[T](name), s"Environment does not contain a key '$name' of type ${ct.runtimeClass.getSimpleName}.")
   }
 
   object Env {

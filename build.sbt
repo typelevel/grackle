@@ -36,6 +36,7 @@ inThisBuild(Seq(
 
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
+  scalacOptions --= Seq("-Vtype-diffs"),
   libraryDependencies ++= Seq(
     "org.typelevel"     %% "cats-testkit"           % catsVersion % "test",
     "org.typelevel"     %% "cats-testkit-scalatest" % catsTestkitScalaTestVersion % "test"

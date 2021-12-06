@@ -681,7 +681,7 @@ case class InputValue(
   defaultValue: Option[Value]
 )
 
-sealed trait Value
+sealed trait Value extends Product with Serializable
 
 object Value {
 

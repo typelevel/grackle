@@ -550,7 +550,8 @@ trait SqlFilterLimitOrderBySpec extends AnyFunSuite {
     assertWeaklyEqual(res, expected)
   }
 
-  test("root limit") {
+  // IGNORED https://github.com/gemini-hlsw/gsp-graphql/issues/184
+  ignore("root limit") {
     val query = """
       query {
         root(limit: 1) {
@@ -737,7 +738,8 @@ trait SqlFilterLimitOrderBySpec extends AnyFunSuite {
     assertWeaklyEqual(res, expected)
   }
 
-  test("nested limit") {
+  // IGNORED https://github.com/gemini-hlsw/gsp-graphql/issues/184
+  ignore("nested limit") {
     val query = """
       query {
         root(limit: 1) {

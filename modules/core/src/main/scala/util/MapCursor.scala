@@ -1,12 +1,10 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package world
+package edu.gemini.grackle
+package util
 
-import edu.gemini.grackle.Cursor
-import edu.gemini.grackle.Result
 import io.circe.Json
-import edu.gemini.grackle.TypeRef
 
 /**
  * A cursor that contains a named map of cursor-constructing functions.

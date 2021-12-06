@@ -110,7 +110,7 @@ abstract class SkunkMapping[F[_]: Sync](
         }
       }
 
-    // Sync[F].delay(println(s"SkunkMapping: ${fragment.fragment.sql}")) *>
+    Sync[F].delay(println(s"SkunkMapping: ${fragment.fragment.sql}")) *>
     pool.use { s =>
       s.prepare(fragment.fragment.query(rowDecoder)).use { ps =>
         ps.stream(fragment.argument, 1024).compile.toList

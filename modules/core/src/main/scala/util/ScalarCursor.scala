@@ -1,9 +1,9 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package world
+package edu.gemini.grackle
+package util
 
-import edu.gemini.grackle._
 import io.circe.{ Json, Encoder }
 
 /** A cursor that contains a single scalar value. */
