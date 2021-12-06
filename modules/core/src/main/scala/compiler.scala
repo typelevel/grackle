@@ -6,7 +6,7 @@ package edu.gemini.grackle
 import scala.annotation.tailrec
 
 import cats.data.Ior
-import cats.parse.Parser
+import cats.parse.{LocationMap, Parser}
 import cats.implicits._
 import io.circe.Json
 
@@ -28,7 +28,21 @@ object QueryParser {
    */
   def parseText(text: String, name: Option[String] = None): Result[UntypedOperation] = {
     def toResult[T](pr: Either[Parser.Error, T]): Result[T] =
-      Ior.fromEither(pr).leftMap(_ => mkOneError("Malformed query"))
+      Ior.fromEither(pr).leftMap { e =>
+        val lm = LocationMap(text)
+        val error = lm.toLineCol(e.failedAtOffset) match {
+          case Some((row, col)) =>
+            lm.getLine(row) match {
+              case Some(line) =>
+                s"""Parse error at line $row column $col
+                   |$line
+                   |${List.fill(col)(" ").mkString}^""".stripMargin
+              case None => "Malformed query" //This is probably a bug in Cats Parse as it has given us the (row, col) index
+            }
+          case None => "Truncated query"
+        }
+        mkOneError(error)
+      }
 
     for {
       doc   <- toResult(GraphQLParser.Document.parseAll(text))
