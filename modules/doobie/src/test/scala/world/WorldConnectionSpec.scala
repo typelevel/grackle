@@ -3,35 +3,38 @@
 
 package world
 
-import cats.effect.{Resource, Sync}
-import skunk.Session
+import cats.effect.Sync
+import cats.implicits._
 
-import edu.gemini.grackle._, skunk._, syntax._
-import utils.DatabaseSuite
-import _root_.skunk.codec.all._
-import edu.gemini.grackle.Query._
-import edu.gemini.grackle.Value._
+import doobie.util.meta.Meta
+import doobie.util.transactor.Transactor
+
+import edu.gemini.grackle._
+import doobie.{DoobieMapping, DoobieMappingCompanion, DoobieMonitor}
+import syntax._
+import Query._, Value._
 import edu.gemini.grackle.sql.SqlConnectionMapping
+import utils.DatabaseSuite
 import grackle.test.SqlWorldConnectiondSpec
 
-trait WorldConnectionMapping[F[_]] extends SkunkMapping[F] with SqlConnectionMapping[F] {
+trait WorldConnectionMapping[F[_]] extends DoobieMapping[F] with SqlConnectionMapping[F] {
 
   object country extends TableDef("country") {
-    val code           = col("code", bpchar(3))
-    val name           = col("name", text)
-    val continent      = col("continent", text)
-    val region         = col("region", text)
-    val surfacearea    = col("surfacearea", varchar)
-    val indepyear      = col("indepyear", int2.imap(_.toInt)(_.toShort).opt)
-    val population     = col("population", int4)
-    val lifeexpectancy = col("lifeexpectancy", varchar.opt)
-    val gnp            = col("gnp", varchar.opt)
-    val gnpold         = col("gnpold", varchar.opt)
-    val localname      = col("localname", varchar)
-    val governmentform = col("governmentform", varchar)
-    val headofstate    = col("headofstate", varchar.opt)
-    val capitalId      = col("capitalId", varchar.opt)
-    val code2          = col("code2", varchar)
+    val code           = col("code", Meta[String])
+    val name           = col("name", Meta[String])
+    val continent      = col("continent", Meta[String])
+    val region         = col("region", Meta[String])
+    val surfacearea    = col("surfacearea", Meta[String])
+    val indepyear      = col("indepyear", Meta[Int], true)
+    val population     = col("population", Meta[Int])
+    val lifeexpectancy = col("lifeexpectancy", Meta[String], true)
+    val gnp            = col("gnp", Meta[String], true)
+    val gnpold         = col("gnpold", Meta[String], true)
+    val localname      = col("localname", Meta[String])
+    val governmentform = col("governmentform", Meta[String])
+    val headofstate    = col("headofstate", Meta[String], true)
+    val capitalId      = col("capitalId", Meta[String], true)
+    val code2          = col("code2", Meta[String])
   }
 
   val schema =
@@ -146,11 +149,11 @@ trait WorldConnectionMapping[F[_]] extends SkunkMapping[F] with SqlConnectionMap
 
 }
 
-object WorldConnectionMapping extends SkunkMappingCompanion {
-  def mkMapping[F[_]: Sync](pool: Resource[F,Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
-    new SkunkMapping[F](pool, monitor) with WorldConnectionMapping[F]
+object WorldConnectionMapping extends DoobieMappingCompanion {
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
+    new DoobieMapping[F](transactor, monitor) with WorldConnectionMapping[F]
 }
 
 final class WorldConnectionSpec extends DatabaseSuite with SqlWorldConnectiondSpec {
-  lazy val mapping = WorldConnectionMapping.mkMapping(pool)
+  lazy val mapping = WorldConnectionMapping.fromTransactor(xa)
 }
