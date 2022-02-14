@@ -10,6 +10,142 @@ import cats.effect.unsafe.implicits.global
 
 import edu.gemini.grackle._
 import syntax._
+import edu.gemini.grackle.sql.SqlConnectionMapping
+import Query._, Value._
+
+trait SqlWorldConnectionMapping[F[_]] extends SqlConnectionMapping[F] {
+
+  trait CountryTable {
+    def code:           Column.ColumnRef
+    def name:           Column.ColumnRef
+    def continent:      Column.ColumnRef
+    def region:         Column.ColumnRef
+    def surfacearea:    Column.ColumnRef
+    def indepyear:      Column.ColumnRef
+    def population:     Column.ColumnRef
+    def lifeexpectancy: Column.ColumnRef
+    def gnp:            Column.ColumnRef
+    def gnpold:         Column.ColumnRef
+    def localname:      Column.ColumnRef
+    def governmentform: Column.ColumnRef
+    def headofstate:    Column.ColumnRef
+    def capitalId:      Column.ColumnRef
+    def code2:          Column.ColumnRef
+  }
+
+  def country: CountryTable
+
+  val schema =
+    schema"""
+
+      type Query {
+        countries(first: Int!, after: Cursor): CountryConnection!
+      }
+
+      type Country {
+        name: String!
+        continent: String!
+        region: String!
+        surfacearea: Float!
+        indepyear: Int
+        population: Int!
+        lifeexpectancy: Float
+        gnp: String
+        gnpold: String
+        localname: String!
+        governmentform: String!
+        headofstate: String
+        capitalId: Int
+        code2: String!
+      }
+
+      scalar Cursor
+
+      type PageInfo {
+        hasPreviousPage: Boolean!
+        hasNextPage: Boolean!
+        startCursor: Cursor!
+        endCursor: Cursor!
+      }
+
+      type CountryConnection {
+        edges: [CountryEdge!]!
+        pageInfo: PageInfo!
+      }
+
+      type CountryEdge {
+        node: Country!
+        cursor: Cursor!
+      }
+
+    """
+
+  val QueryType    = schema.ref("Query")
+  val CountryType  = schema.ref("Country")
+
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings = List(
+          SqlConnection("countries"),
+        )
+      ),
+      ObjectMapping(
+        tpe = CountryType,
+        fieldMappings = List(
+          SqlField("code",           country.code, key = true, hidden = true),
+          SqlField("name",           country.name),
+          SqlField("continent",      country.continent),
+          SqlField("region",         country.region),
+          SqlField("surfacearea",    country.surfacearea),
+          SqlField("indepyear",      country.indepyear),
+          SqlField("population",     country.population),
+          SqlField("lifeexpectancy", country.lifeexpectancy),
+          SqlField("gnp",            country.gnp),
+          SqlField("gnpold",         country.gnpold),
+          SqlField("localname",      country.localname),
+          SqlField("governmentform", country.governmentform),
+          SqlField("headofstate",    country.headofstate),
+          SqlField("capitalId",      country.capitalId),
+          SqlField("code2",          country.code2),
+        ),
+      ),
+    )
+
+  object First {
+    def unapply(b: Binding): Option[Int] =
+      b match {
+        case Binding("first", IntValue(n)) => Some(n)
+        case _                             => None
+      }
+  }
+
+  object After {
+    def unapply(b: Binding): Option[Option[String]] =
+      b match {
+        case Binding("after", StringValue(s))          => Some(Some(s))
+        case Binding("after", NullValue | AbsentValue) => Some(None)
+        case _                                         => None
+      }
+  }
+
+  override val selectElaborator: QueryCompiler.SelectElaborator =
+    new QueryCompiler.SelectElaborator(
+      Map {
+        QueryType -> {
+          case q @ Query.Select("countries", List(First(first), After(after)), _) =>
+            SqlConnectionMapping.updateNodeQuery(q, first, after) {
+              case Select("node", Nil, child) =>
+                val ord = Query.OrderBy(OrderSelections(List(OrderSelection(Path.UniquePath[String](List("code"))))), child)
+                Result(Select("node", Nil, ord))
+              case o => Result.failure(s"SqlConnectionMapping.updateNodeQuery didn't match $o")
+            }
+        }
+      }
+    )
+
+}
 
 trait SqlWorldConnectiondSpec extends AnyFunSuite {
 
