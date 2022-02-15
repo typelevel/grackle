@@ -19,20 +19,27 @@ val typenameVersion             = "1.0.0"
 
 val Scala2 = "2.13.6"
 val Scala3 = "3.0.1"
+ThisBuild / scalaVersion        := Scala2
+ThisBuild / crossScalaVersions  := Seq(Scala2, Scala3)
 
-inThisBuild(Seq(
-  homepage := Some(url("https://github.com/gemini-hlsw/gsp-graphql")),
-  scalaVersion := Scala2,
-  crossScalaVersions := Seq(Scala2, Scala3),
-    organization     := "edu.gemini",
-    organizationName := "Association of Universities for Research in Astronomy, Inc. (AURA)",
-    startYear        := Some(2019),
-    licenses         += (("BSD-3-Clause", new URL("https://opensource.org/licenses/BSD-3-Clause"))),
-    developers := List(
-      Developer("milessabin", "Miles Sabin", "miles@milessabin.com", url("http://milessabin.com/blog")),
-      Developer("tpolecat",   "Rob Norris",  "rnorris@gemini.edu",   url("http://www.tpolecat.org")),
-    )
-))
+ThisBuild / tlBaseVersion    := "0.1"
+ThisBuild / organization     := "edu.gemini"
+ThisBuild / organizationName := "Association of Universities for Research in Astronomy, Inc. (AURA)"
+ThisBuild / startYear        := Some(2019)
+ThisBuild / licenses         += (("BSD-3-Clause", new URL("https://opensource.org/licenses/BSD-3-Clause")))
+ThisBuild / developers       := List(
+  Developer("milessabin", "Miles Sabin", "miles@milessabin.com", url("http://milessabin.com/blog")),
+  Developer("tpolecat",   "Rob Norris",  "rnorris@gemini.edu",   url("http://www.tpolecat.org")),
+)
+
+ThisBuild / tlCiReleaseBranches     := Seq("main")
+ThisBuild / tlSonatypeUseLegacyHost := false
+ThisBuild / githubWorkflowBuild     ~= { steps =>
+  WorkflowStep.Sbt(
+    commands = List("headerCheckAll"),
+    name = Some("Check Headers"),
+  ) +: steps
+}
 
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
@@ -41,17 +48,13 @@ lazy val commonSettings = Seq(
     "org.typelevel"     %% "cats-testkit-scalatest" % catsTestkitScalaTestVersion % "test"
   ) ++ Seq(
     compilerPlugin("org.typelevel" %% "kind-projector" % kindProjectorVersion cross CrossVersion.full),
-  ).filterNot(_ => scalaVersion.value.startsWith("3.")),
+  ).filterNot(_ => tlIsScala3.value),
   headerMappings := headerMappings.value + (HeaderFileType.scala -> HeaderCommentStyle.cppStyleLineComment),
   headerLicense  := Some(HeaderLicense.Custom(
     """|Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
         |For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
         |""".stripMargin
   ))
-)
-
-lazy val noPublishSettings = Seq(
-  publish / skip := true
 )
 
 lazy val modules: List[ProjectReference] = List(
@@ -67,7 +70,7 @@ lazy val modules: List[ProjectReference] = List(
 
 lazy val `gsp-graphql` = project.in(file("."))
   .settings(commonSettings)
-  .settings(noPublishSettings)
+  .enablePlugins(NoPublishPlugin)
   .aggregate(modules:_*)
   .disablePlugins(RevolverPlugin)
   .settings(
