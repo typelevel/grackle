@@ -22,7 +22,7 @@ val Scala3 = "3.0.1"
 ThisBuild / scalaVersion        := Scala2
 ThisBuild / crossScalaVersions  := Seq(Scala2, Scala3)
 
-ThisBuild / tlBaseVersion    := "0.1"
+ThisBuild / tlBaseVersion    := "0.2"
 ThisBuild / organization     := "edu.gemini"
 ThisBuild / organizationName := "Association of Universities for Research in Astronomy, Inc. (AURA)"
 ThisBuild / startYear        := Some(2019)
@@ -172,11 +172,10 @@ lazy val generic = project
 
 lazy val demo = project
   .in(file("demo"))
-  .enablePlugins(AutomateHeaderPlugin)
+  .enablePlugins(NoPublishPlugin, AutomateHeaderPlugin)
   .dependsOn(core, generic)
   .settings(commonSettings)
   .settings(
-    publish / skip := true,
     name := "gsp-graphql-demo",
     libraryDependencies ++= Seq(
       "org.typelevel"     %% "log4cats-slf4j"         % log4catsVersion,
