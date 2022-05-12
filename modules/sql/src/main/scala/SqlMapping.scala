@@ -106,7 +106,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
     /** Update state to reflect a defining occurence of a column */
     def columnDef(column: SqlColumn): (AliasState, (Option[String], String)) = {
-      val (newState0, table0) = column.namedOwner.map(named => tableDef(named).map(Option(_))).getOrElse((this, None))
+      val (newState0, table0) = column.namedOwner.map(named => tableDef(named).fmap(Option(_))).getOrElse((this, None))
       columnAliases.get((column.underlying.owner.context.resultPath, column.underlying.column)) match {
         case Some(name) => (newState0, (table0, name))
         case None =>
@@ -128,14 +128,14 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     /** Yields the possibly aliased name of the supplied column */
     def columnRef(column: SqlColumn): (AliasState, (Option[String], String)) = {
       if (ownerChain.exists(_.directlyOwns(column))) {
-        for {
-          table0 <- column.namedOwner.map(named => tableRef(named).map(Option(_))).getOrElse((this, None))
-        } yield (table0, column.column)
+        column.namedOwner.map(named => tableRef(named).
+          fmap(Option(_))).getOrElse((this, None)).
+          fmap(table0 => (table0, column.column))
       } else {
         val name = columnAliases.get((column.underlying.owner.context.resultPath, column.underlying.column)).getOrElse(column.column)
-        for {
-          table0 <- column.namedOwner.map(named => tableRef(named).map(Option(_))).getOrElse((this, None))
-        } yield (table0, name)
+        column.namedOwner.map(named => tableRef(named).
+          fmap(Option(_))).getOrElse((this, None)).
+          fmap(table0 => (table0, name))
       }
     }
 
@@ -1525,13 +1525,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
        *  from clauses or joins
        */
       def syntheticName(suffix: String): String = {
-        val tn =
-          table match {
-            case named: TableExpr => named.name
-            case _ => parentTableForType(context).map(_.name).getOrElse(sys.error(s"No parent table for type ${context.tpe}"))
-          }
         val joinNames = joins.map(_.child.name)
-        (tn :: joinNames).mkString("_").take(50-suffix.length)+suffix
+        (table.name :: joinNames).mkString("_").take(50-suffix.length)+suffix
       }
 
       /** Yields a copy of this select with all occurences of `from` replaced by `to` */
