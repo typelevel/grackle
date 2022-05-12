@@ -67,7 +67,64 @@ trait SqlWorldSpec extends AnyFunSuite {
     assertWeaklyEqual(res, expected)
   }
 
-  test("simple restricted nested query") {
+  test("simple nested query") {
+    val query = """
+      query {
+        cities {
+          name
+          country {
+            name
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertNoErrors(res)
+  }
+
+  test("simple restricted nested query (1)") {
+    val query = """
+      query {
+        cities(namePattern: "Ame%") {
+          name
+          country {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "cities" : [
+            {
+              "name" : "Amersfoort",
+              "country" : {
+                "name" : "Netherlands"
+              }
+            },
+            {
+              "name" : "Americana",
+              "country" : {
+                "name" : "Brazil"
+              }
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
+  test("simple restricted nested query (2)") {
     val query = """
       query {
         cities(namePattern: "Ame%") {
@@ -1063,7 +1120,7 @@ trait SqlWorldSpec extends AnyFunSuite {
     """
 
     val res = mapping.compileAndRun(query).unsafeRunSync()
-    // println(res)
+    //println(res)
 
     assertWeaklyEqual(res, expected)
   }

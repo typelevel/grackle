@@ -175,6 +175,8 @@ object Query {
           else -ord
       }
     }
+
+    def subst(term: Term[T]): OrderSelection[T] = copy(term = term)
   }
 
   /** Computes the number of top-level elements of `child` as field `name` */
@@ -240,15 +242,25 @@ object Query {
     case _                        => None
   }
 
-  /** Extractor for nested Filter/OrderBy/Limit patterns in the query algebra */
-  object FilterOrderByLimit {
+  /** Constructor/extractor for nested Filter/OrderBy/Limit/Offset patterns
+   *  in the query algebra
+   **/
+  object FilterOrderByOffsetLimit {
+    def apply(pred: Option[Predicate], oss: Option[List[OrderSelection[_]]], offset: Option[Int], limit: Option[Int], child: Query): Query = {
+      val lim    = limit.map(n =>  Limit(n, child)).getOrElse(child)
+      val off    = offset.map(n => Offset(n, lim)).getOrElse(lim)
+      val order  = oss.map(o =>    OrderBy(OrderSelections(o), off)).getOrElse(off)
+      val filter = pred.map(p =>   Filter(p, order)).getOrElse(order)
+      filter
+    }
+
     def unapply(q: Query): Option[(Option[Predicate], Option[List[OrderSelection[_]]], Option[Int],  Option[Int], Query)] = {
-      val (offset, q0) = q match {
-        case Offset(off, child) => (Some(off), child)
+      val (limit, q0) = q match {
+        case Limit(lim, child) => (Some(lim), child)
         case child => (None, child)
       }
-      val (limit, q1) = q0 match {
-        case Limit(lim, child) => (Some(lim), child)
+      val (offset, q1) = q0 match {
+        case Offset(off, child) => (Some(off), child)
         case child => (None, child)
       }
       val (order, q2) = q1 match {
@@ -259,8 +271,43 @@ object Query {
         case Filter(pred, child) => (Some(pred), child)
         case child => (None, child)
       }
-      offset.orElse(limit).orElse(order).orElse(filter).map { _ =>
+      limit.orElse(offset).orElse(order).orElse(filter).map { _ =>
         (filter, order, offset, limit, q3)
+      }
+    }
+  }
+
+  /** Extractor for grouped Narrow patterns in the query algebra */
+  object TypeCase {
+    def unapply(q: Query): Option[(Query, List[Narrow])] = {
+      def loop(q: Query): List[Query] =
+        q match {
+          case Group(children) => children.flatMap(loop)
+          case other => List(other)
+        }
+
+      def branch(q: Query): Option[TypeRef] =
+        q match {
+          case Narrow(subtpe, _) => Some(subtpe)
+          case _ => None
+        }
+
+      val grouped = loop(q).groupBy(branch).toList
+      val (default0, narrows0) = grouped.partition(_._1.isEmpty)
+      if (narrows0.isEmpty) None
+      else {
+        val default = default0.flatMap(_._2) match {
+          case Nil => Empty
+          case children => Group(children)
+        }
+        val narrows = narrows0.collect {
+          case (Some(subtpe), narrows) =>
+            narrows.collect { case Narrow(_, child) => child } match {
+              case List(child) => Narrow(subtpe, child)
+              case children => Narrow(subtpe, Group(children))
+            }
+        }
+        Some((default, narrows))
       }
     }
   }

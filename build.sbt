@@ -1,3 +1,6 @@
+import nl.zolotko.sbt.jfr.{JfrRecording, JfrRecorderOptions}
+import scala.concurrent.duration.DurationInt
+
 val catsVersion                 = "2.6.1"
 val catsParseVersion            = "0.3.4"
 val catsEffectVersion           = "3.1.1"
@@ -65,7 +68,8 @@ lazy val modules: List[ProjectReference] = List(
   skunk,
   generic,
   demo,
-  benchmarks
+  benchmarks,
+  profile
 )
 
 lazy val `gsp-graphql` = project.in(file("."))
@@ -192,7 +196,28 @@ lazy val demo = project
 lazy val benchmarks = project
   .in(file("benchmarks"))
   .dependsOn(core)
-  .enablePlugins(JmhPlugin)
+  .enablePlugins(NoPublishPlugin, JmhPlugin)
+
+lazy val profile = project
+  .in(file("profile"))
+  .enablePlugins(NoPublishPlugin)
+  .dependsOn(core)
+  .dependsOn(doobie)
+  .settings(commonSettings)
+  .settings(
+    jfrRecordings := Seq(
+      JfrRecording(
+        fileName = file("profile.jfr").toPath.some,
+        name = "profile".some,
+        delay = 5.seconds.some,
+        disk = true.some,
+        dumpOnExit = true.some,
+        duration = 30.seconds.some,
+        pathToGcRoots = true.some,
+      )
+    ),
+    fork := true
+  )
 
 lazy val docs = project
   .in(file("docs"))

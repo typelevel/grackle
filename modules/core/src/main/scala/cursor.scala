@@ -230,45 +230,60 @@ object Cursor {
    * 3) the type of the element at the position
    */
   case class Context(
-    path: List[String],
-    resultPath: List[String],
-    tpe: Type
+    rootTpe: Type,
+    path0: List[(String, String, Type)] = Nil
   ) {
-    assert(path.sizeCompare(resultPath) == 0)
+    lazy val path: List[String] = path0.map(_._1)
+    lazy val resultPath: List[String] = path0.map(_._2)
+    lazy val typePath = path0.map(_._3)
+    lazy val tpe: Type = path0.headOption.map(_._3).getOrElse(rootTpe)
 
-    def asType(tpe: Type): Context = copy(tpe = tpe)
+    def asType(tpe: Type): Context = {
+      path0 match {
+        case Nil => copy(rootTpe = tpe)
+        case hd :: tl => copy(path0 = (hd._1, hd._2, tpe) :: tl)
+      }
+    }
 
     def forField(fieldName: String, resultName: String): Option[Context] =
       tpe.underlyingField(fieldName).map { fieldTpe =>
-        Context(fieldName :: path, resultName :: resultPath, fieldTpe)
+        copy(path0 = (fieldName, resultName, fieldTpe) :: path0)
       }
 
     def forField(fieldName: String, resultName: Option[String]): Option[Context] =
       tpe.underlyingField(fieldName).map { fieldTpe =>
-        Context(fieldName :: path, resultName.getOrElse(fieldName) :: resultPath, fieldTpe)
+        copy(path0 = (fieldName, resultName.getOrElse(fieldName), fieldTpe) :: path0)
       }
 
-    def forPath(path0: List[String]): Option[Context] =
-      tpe.underlyingObject.flatMap { obj =>
-        obj.path(path0).map { fieldTpe =>
-          Context(path.reverse_:::(path0), resultPath.reverse_:::(path0), fieldTpe)
-        }
+    def forPath(path1: List[String]): Option[Context] =
+      path1 match {
+        case Nil => Some(this)
+        case hd :: tl => forField(hd, hd).flatMap(_.forPath(tl))
       }
 
     def forFieldOrAttribute(fieldName: String, resultName: Option[String]): Context = {
       val fieldTpe = tpe.underlyingField(fieldName).getOrElse(ScalarType.AttributeType)
-      Context(fieldName :: path, resultName.getOrElse(fieldName) :: resultPath, fieldTpe)
+      copy(path0 = (fieldName, resultName.getOrElse(fieldName), fieldTpe) :: path0)
     }
+
+    override def equals(other: Any): Boolean =
+      other match {
+        case Context(oRootTpe, oPath0) =>
+          rootTpe =:= oRootTpe && path0.corresponds(oPath0)((x, y) => x._1 == y._1 && x._2 == y._2)
+        case _ => false
+      }
+
+    override def hashCode(): Int = resultPath.hashCode
   }
 
   object Context {
-    def apply(fieldName: String, resultName: Option[String], tpe: Type): Context =
-      new Context(List(fieldName), List(resultName.getOrElse(fieldName)), tpe)
+    def apply(rootTpe: Type, fieldName: String, resultName: Option[String]): Option[Context] = {
+      for {
+        tpe <- rootTpe.underlyingField(fieldName)
+      } yield new Context(rootTpe, List((fieldName, resultName.getOrElse(fieldName), tpe)))
+    }
 
-    def apply(fieldName: String, resultName: Option[String]): Context =
-      new Context(List(fieldName), List(resultName.getOrElse(fieldName)), ScalarType.AttributeType)
-
-    val empty = Context(Nil, Nil, ScalarType.AttributeType)
+    def apply(rootTpe: Type): Context = Context(rootTpe, Nil)
   }
 
   def flatten(c: Cursor): Result[List[Cursor]] =

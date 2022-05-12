@@ -147,6 +147,15 @@ object Predicate {
     def children = List(x, y)
   }
 
+  object And {
+    def combineAll(preds: List[Predicate]): Predicate =
+      preds match {
+        case Nil => True
+        case List(pred) => pred
+        case hd :: tail => tail.foldRight(hd)((elem, acc) => And(elem, acc))
+      }
+  }
+
   case class Or(x: Predicate, y: Predicate) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_ || _)
     def children = List(x, y)
@@ -161,36 +170,43 @@ object Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_ === _)
     def eqInstance: Eq[T] = implicitly[Eq[T]]
     def children = List(x, y)
+    def subst(x: Term[T], y: Term[T]): Eql[T] = copy(x = x, y = y)
   }
 
   case class NEql[T: Eq](x: Term[T], y: Term[T]) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_ =!= _)
     def children = List(x, y)
+    def subst(x: Term[T], y: Term[T]): NEql[T] = copy(x = x, y = y)
   }
 
   case class Contains[T: Eq](x: Term[List[T]], y: Term[T]) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))((xs, y0) => xs.exists(_ === y0))
     def children = List(x, y)
+    def subst(x: Term[List[T]], y: Term[T]): Contains[T] = copy(x = x, y = y)
   }
 
   case class Lt[T: Order](x: Term[T], y: Term[T]) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_.compare(_) < 0)
     def children = List(x, y)
+    def subst(x: Term[T], y: Term[T]): Lt[T] = copy(x = x, y = y)
   }
 
   case class LtEql[T: Order](x: Term[T], y: Term[T]) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_.compare(_) <= 0)
     def children = List(x, y)
+    def subst(x: Term[T], y: Term[T]): LtEql[T] = copy(x = x, y = y)
   }
 
   case class Gt[T: Order](x: Term[T], y: Term[T]) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_.compare(_) > 0)
     def children = List(x, y)
+    def subst(x: Term[T], y: Term[T]): Gt[T] = copy(x = x, y = y)
   }
 
   case class GtEql[T: Order](x: Term[T], y: Term[T]) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))(_.compare(_) >= 0)
     def children = List(x, y)
+    def subst(x: Term[T], y: Term[T]): GtEql[T] = copy(x = x, y = y)
   }
 
   case class IsNull[T](x: Term[Option[T]], isNull: Boolean) extends Predicate {
@@ -201,6 +217,7 @@ object Predicate {
   case class In[T: Eq](x: Term[T], y: List[T]) extends Predicate {
     def apply(c: Cursor): Result[Boolean] = x(c).map(y.contains_)
     def children = List(x)
+    def subst(x: Term[T]): In[T] = copy(x = x)
   }
 
   object In {

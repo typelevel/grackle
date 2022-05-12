@@ -24,7 +24,7 @@ final class SqlMappingValidatorSpec extends AnyFunSuite {
         tpe = schema.ref("Foo"),
         fieldMappings =
           List(
-            SqlField("bar", Column.ColumnRef("foo", "bar", (int2, false), implicitly[TypeName[Int]].value, implicitly[SourcePos]))
+            SqlField("bar", ColumnRef("foo", "bar", (int2, false), implicitly[TypeName[Int]].value, implicitly[SourcePos]))
           )
       ),
       LeafMapping[String](schema.ref("Baz")),

@@ -23,13 +23,13 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
     def cursor(query: Query, env: Env, resultName: Option[String]): Stream[F,Result[(Query, Cursor)]] = {
       (for {
         tpe      <- otpe
-        fieldTpe <- tpe.field(fieldName)
+        context0 <- Context(tpe, fieldName, resultName)
       } yield {
-        val cursorTpe = query match {
-          case _: Query.Unique => fieldTpe.nonNull.list
-          case _ => fieldTpe
+        val context = query match {
+          case _: Query.Unique => context0.asType(context0.tpe.nonNull.list)
+          case _ => context0
         }
-        Stream.eval(root).map(r => Result((query, ValueCursor(Context(fieldName, resultName, cursorTpe), r, None, env))))
+        Stream.eval(root).map(r => Result((query, ValueCursor(context, r, None, env))))
       }).getOrElse(mkErrorResult[(Query, Cursor)](s"Type ${otpe.getOrElse("unspecified type")} has no field '$fieldName'").pure[Stream[F,*]])
     }
 

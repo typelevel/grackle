@@ -18,8 +18,15 @@ abstract class GenericMapping[F[_]: Monad] extends Mapping[F] {
     implicit val pos: SourcePos
   ) extends RootMapping {
     lazy val cursorBuilder = cb()
-    def cursor(query: Query, env: Env, resultName: Option[String]): Stream[F,Result[(Query, Cursor)]] =
-      cursorBuilder.build(Context(fieldName, resultName), t, None, env).tupleLeft(query).pure[Stream[F,*]]
+    def cursor(query: Query, env: Env, resultName: Option[String]): Stream[F,Result[(Query, Cursor)]] = {
+      val c =
+        for {
+          tpe0    <- tpe.toRightIor(mkOneError("Undefined root type"))
+          context <- Context(tpe0, fieldName, resultName).toRightIor(mkOneError("Unable to construct root context"))
+          c       <- cursorBuilder.build(context, t, None, env)
+        } yield c
+      c.tupleLeft(query).pure[Stream[F,*]]
+    }
     def withParent(tpe: Type): GenericRoot[T] =
       new GenericRoot(Some(tpe), fieldName, t, cb, mutation)
   }

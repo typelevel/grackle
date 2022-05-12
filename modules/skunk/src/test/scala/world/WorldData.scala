@@ -174,24 +174,34 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
       case Select("city", List(Binding("id", IntValue(id))), child) =>
         Select("city", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
 
-      case Select("countries", List(Binding("limit", IntValue(num)), Binding("offset", IntValue(offset)), Binding("minPopulation", IntValue(min)), Binding("byPopulation", BooleanValue(byPop))), child) =>
+      case Select("countries", List(Binding("limit", IntValue(num)), Binding("offset", IntValue(off)), Binding("minPopulation", IntValue(min)), Binding("byPopulation", BooleanValue(byPop))), child) =>
         def limit(query: Query): Query =
           if (num < 1) query
           else Limit(num, query)
 
+        def offset(query: Query): Query =
+          if (off < 1) query
+          else Offset(off, query)
+
         def order(query: Query): Query = {
-          if (byPop) OrderBy(OrderSelections(List(OrderSelection(UniquePath[Int](List("population"))))), query)
-          else       OrderBy(OrderSelections(List(OrderSelection(UniquePath[String](List("code"))))), query)
+          if (byPop)
+            OrderBy(OrderSelections(List(OrderSelection(UniquePath[Int](List("population"))))), query)
+          else if (num > 0 || off > 0)
+            OrderBy(OrderSelections(List(OrderSelection(UniquePath[String](List("code"))))), query)
+          else query
         }
 
         def filter(query: Query): Query =
           if (min == 0) query
           else Filter(GtEql(UniquePath(List("population")), Const(min)), query)
 
-        Select("countries", Nil, Offset(offset, limit(order(filter(child))))).rightIor
+        Select("countries", Nil, limit(offset(order(filter(child))))).rightIor
 
       case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
-        Select("cities", Nil, Filter(Like(UniquePath(List("name")), namePattern, true), child)).rightIor
+        if (namePattern == "%")
+          Select("cities", Nil, child).rightIor
+        else
+          Select("cities", Nil, Filter(Like(UniquePath(List("name")), namePattern, true), child)).rightIor
 
       case Select("language", List(Binding("language", StringValue(language))), child) =>
         Select("language", Nil, Unique(Filter(Eql(UniquePath(List("language")), Const(language)), child))).rightIor

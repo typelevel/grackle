@@ -22,10 +22,10 @@ abstract class SqlStatsMonitor[F[_]: Applicative, A](
   final def take: F[List[SqlStats]] =
     ref.getAndSet(Nil).map(_.reverse)
 
-  final def queryMapped(query: Query, fragment: A, table: List[Row]): F[Unit] =
+  final def queryMapped(query: Query, fragment: A, rows: Int, cols: Int): F[Unit] =
     ref.update { stats =>
       val (sql, args) = inspect(fragment)
-      SqlStats(query, sql, args, table.size, table.headOption.foldMap(_.elems.length)) :: stats
+      SqlStats(query, sql, args, rows, cols) :: stats
     }
 
   final def resultComputed(result: Result[QueryInterpreter.ProtoJson]): F[Unit] =

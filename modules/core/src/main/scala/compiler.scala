@@ -479,6 +479,7 @@ object QueryCompiler {
               elaboratedArgs  <- args.traverse(elaborateBinding(vars))
             } yield Select(fieldName, elaboratedArgs, elaboratedChild)
           }
+
         case Skip(skip, cond, child) =>
           for {
             c  <- extractCond(vars, cond)

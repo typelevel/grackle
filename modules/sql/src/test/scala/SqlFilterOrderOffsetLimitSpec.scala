@@ -13,7 +13,7 @@ import syntax._
 
 import GraphQLResponseTests.assertWeaklyEqual
 
-trait SqlFilterLimitOrderBySpec extends AnyFunSuite {
+trait SqlFilterOrderOffsetLimitSpec extends AnyFunSuite {
   def mapping: QueryExecutor[IO, Json]
 
   test("base query") {
@@ -963,6 +963,75 @@ trait SqlFilterLimitOrderBySpec extends AnyFunSuite {
                 {
                   "id" : "a2",
                   "elemA" : "baz"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
+  test("root offset") {
+    val query = """
+      query {
+        root(offset: 1) {
+          listA {
+            id
+            elemA
+          }
+          listB {
+            id
+            elemB
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "root" : [
+            {
+              "listA" : [
+                {
+                  "id" : "a4",
+                  "elemA" : "foo1"
+                },
+                {
+                  "id" : "a5",
+                  "elemA" : "bar1"
+                },
+                {
+                  "id" : "a6",
+                  "elemA" : "baz1"
+                },
+                {
+                  "id" : "a7",
+                  "elemA" : "quux1"
+                }
+              ],
+              "listB" : [
+                {
+                  "id" : "b4",
+                  "elemB" : 231
+                },
+                {
+                  "id" : "b5",
+                  "elemB" : 131
+                },
+                {
+                  "id" : "b6",
+                  "elemB" : 171
+                },
+                {
+                  "id" : "b7",
+                  "elemB" : 111
                 }
               ]
             }

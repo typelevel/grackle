@@ -1,48 +1,48 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package filterlimitorderby
+package filterorderoffsetlimit
 
-import cats.effect.{Resource, Sync}
+import cats.effect.Sync
 import cats.implicits._
-import skunk.Session
-import skunk.codec.all._
+import doobie.Transactor
+import doobie.util.meta.Meta
 
-import edu.gemini.grackle._, skunk._, syntax._
+import edu.gemini.grackle._, doobie._, syntax._
 import Path._
 import Predicate.{Const, Eql}
-import Query.{Binding, Filter, Limit, OrderBy, OrderSelection, OrderSelections, Select}
+import Query.{Binding, Filter, Limit, Offset, OrderBy, OrderSelection, OrderSelections, Select}
 import QueryCompiler.SelectElaborator
 import QueryInterpreter.mkErrorResult
 import Value.{AbsentValue, IntValue, NullValue, ObjectValue, StringValue, TypedEnumValue}
 
-trait FilterLimitOrderByMapping[F[_]] extends SkunkMapping[F] {
+trait FilterOrderOffsetLimitMapping[F[_]] extends DoobieMapping[F] {
 
   object root extends TableDef("root") {
-    val id = col("id", varchar)
+    val id = col("id", Meta[String])
   }
 
   object listA extends TableDef("lista") {
-    val id = col("id", varchar)
-    val rootId = col("root_id", varchar.opt)
-    val aElem = col("a_elem", varchar.opt)
+    val id = col("id", Meta[String])
+    val rootId = col("root_id", Meta[String], true)
+    val aElem = col("a_elem", Meta[String], true)
   }
 
   object listB extends TableDef("listb") {
-    val id = col("id", varchar)
-    val rootId = col("root_id", varchar.opt)
-    val bElem = col("b_elem", int4.opt)
+    val id = col("id", Meta[String])
+    val rootId = col("root_id", Meta[String], true)
+    val bElem = col("b_elem", Meta[Int], true)
   }
 
   val schema =
     schema"""
       type Query {
-        root(filter: Filter, limit: Int): [Root!]!
+        root(filter: Filter, offset: Int, limit: Int): [Root!]!
       }
       type Root {
         id: String!
-        listA(filter: Filter, order: Order, limit: Int): [ElemA!]!
-        listB(filter: Filter, order: Order, limit: Int): [ElemB!]!
+        listA(filter: Filter, order: Order, offset: Int, limit: Int): [ElemA!]!
+        listB(filter: Filter, order: Order, offset: Int, limit: Int): [ElemB!]!
       }
       type ElemA {
         id: String!
@@ -134,6 +134,15 @@ trait FilterLimitOrderByMapping[F[_]] extends SkunkMapping[F] {
     }
   }
 
+  def mkOffset(query: Query, limit: Value): Result[Query] =
+    limit match {
+      case AbsentValue|NullValue => query.rightIor
+      case IntValue(num) if num == 0 => query.rightIor
+      case IntValue(num) if num > 0 => Offset(num, query).rightIor
+      case IntValue(num) => mkErrorResult(s"Expected offset >= 0, found $num")
+      case other =>  mkErrorResult(s"Expected offset >= 0, found $other")
+    }
+
   def mkLimit(query: Query, limit: Value): Result[Query] =
     limit match {
       case AbsentValue|NullValue => query.rightIor
@@ -162,26 +171,29 @@ trait FilterLimitOrderByMapping[F[_]] extends SkunkMapping[F] {
 
   override val selectElaborator: SelectElaborator = new SelectElaborator(Map(
     QueryType -> {
-      case Select("root", List(Binding("filter", filter), Binding("limit", limit)), child) =>
+      case Select("root", List(Binding("filter", filter), Binding("offset", offset), Binding("limit", limit)), child) =>
         for {
           fc <- mkFilter(child, filter)
-          lc <- mkLimit(fc, limit)
+          oc <- mkOffset(fc, offset)
+          lc <- mkLimit(oc, limit)
         } yield Select("root", Nil, lc)
 
       case other => other.rightIor
     },
     RootType -> {
-      case Select("listA", List(Binding("filter", filter), Binding("order", order), Binding("limit", limit)), child) =>
+      case Select("listA", List(Binding("filter", filter), Binding("order", order), Binding("offset", offset), Binding("limit", limit)), child) =>
         for {
           fc <- mkFilter(child, filter)
-          oc <- mkOrderBy(fc, order)(o => List(OrderSelection[Option[String]](UniquePath(List("elemA")), ascending = o.ascending)))
+          sc <- mkOrderBy(fc, order)(o => List(OrderSelection[Option[String]](UniquePath(List("elemA")), ascending = o.ascending)))
+          oc <- mkOffset(sc, offset)
           lc <- mkLimit(oc, limit)
         } yield Select("listA", Nil, lc)
 
-      case Select("listB", List(Binding("filter", filter), Binding("order", order), Binding("limit", limit)), child) =>
+      case Select("listB", List(Binding("filter", filter), Binding("order", order), Binding("offset", offset), Binding("limit", limit)), child) =>
         for {
           fc <- mkFilter(child, filter)
-          oc <- mkOrderBy(fc, order)(o => List(OrderSelection[Option[Int]](UniquePath(List("elemB")), ascending = o.ascending)))
+          sc <- mkOrderBy(fc, order)(o => List(OrderSelection[Option[Int]](UniquePath(List("elemB")), ascending = o.ascending)))
+          oc <- mkOffset(sc, offset)
           lc <- mkLimit(oc, limit)
         } yield Select("listB", Nil, lc)
 
@@ -191,7 +203,7 @@ trait FilterLimitOrderByMapping[F[_]] extends SkunkMapping[F] {
   ))
 }
 
-object FilterLimitOrderByMapping extends SkunkMappingCompanion {
-  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): FilterLimitOrderByMapping[F] =
-    new SkunkMapping(pool, monitor) with FilterLimitOrderByMapping[F]
+object FilterOrderOffsetLimitMapping extends DoobieMappingCompanion {
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): FilterOrderOffsetLimitMapping[F] =
+    new DoobieMapping(transactor, monitor) with FilterOrderOffsetLimitMapping[F]
 }

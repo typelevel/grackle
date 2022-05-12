@@ -1,13 +1,15 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package world
+package profile
 
-import cats.effect.Sync
+import scala.concurrent.duration._
+
+import cats.effect.{ExitCode, IO, IOApp, Sync}
 import cats.implicits._
 
-import doobie.util.meta.Meta
-import doobie.util.transactor.Transactor
+import _root_.doobie.util.meta.Meta
+import _root_.doobie.util.transactor.Transactor
 
 import edu.gemini.grackle._
 import doobie.{DoobieMapping, DoobieMappingCompanion, DoobieMonitor}
@@ -232,8 +234,146 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
 }
 
 object WorldMapping extends DoobieMappingCompanion {
-
   def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
     new DoobieMapping[F](transactor, monitor) with WorldMapping[F]
+}
 
+object Bench extends IOApp {
+  val xa =
+    Transactor.fromDriverManager[IO](
+      "org.postgresql.Driver",
+      "jdbc:postgresql://localhost:5432/test?loggerLevel=OFF",
+      "test",
+      "test"
+    )
+
+  val mapping = WorldMapping.fromTransactor(xa)
+
+  def runQuery: IO[Unit] = {
+    val query = """
+      query {
+        cities {
+          name
+          country {
+            name
+          }
+        }
+      }
+    """
+
+    mapping.compileAndRun(query).void
+  }
+
+  def run(args: List[String]) = {
+    for {
+      _   <- IO.println("Warmup ...")
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- IO.sleep(5.seconds)
+      _   <- IO.println("Running query ...")
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+      _   <- runQuery
+    } yield ExitCode.Success
+  }
 }

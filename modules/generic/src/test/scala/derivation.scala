@@ -17,6 +17,7 @@ import Cursor.Context
 import Query._, Path._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.{ mkErrorResult, mkOneError }
+import ScalarType._
 import semiauto._
 
 object StarWarsData {
@@ -226,7 +227,7 @@ final class DerivationSpec extends CatsSuite {
   test("primitive types have leaf cursor builders") {
     val i =
       for {
-        c <- CursorBuilder[Int].build(Context.empty, 23)
+        c <- CursorBuilder[Int].build(Context(IntType), 23)
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -234,7 +235,7 @@ final class DerivationSpec extends CatsSuite {
 
     val s =
       for {
-        c <- CursorBuilder[String].build(Context.empty, "foo")
+        c <- CursorBuilder[String].build(Context(StringType), "foo")
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -242,7 +243,7 @@ final class DerivationSpec extends CatsSuite {
 
     val b =
       for {
-        c <- CursorBuilder[Boolean].build(Context.empty, true)
+        c <- CursorBuilder[Boolean].build(Context(BooleanType), true)
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -250,7 +251,7 @@ final class DerivationSpec extends CatsSuite {
 
     val f =
       for {
-        c <- CursorBuilder[Double].build(Context.empty, 13.0)
+        c <- CursorBuilder[Double].build(Context(FloatType), 13.0)
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -260,7 +261,7 @@ final class DerivationSpec extends CatsSuite {
   test("types with a Circe Encoder instance have leaf cursor builders") {
     val z =
       for {
-        c <- CursorBuilder.leafCursorBuilder[ZonedDateTime].build(Context.empty, ZonedDateTime.parse("2020-03-25T16:24:06.081Z"))
+        c <- CursorBuilder.leafCursorBuilder[ZonedDateTime].build(Context(AttributeType), ZonedDateTime.parse("2020-03-25T16:24:06.081Z"))
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -270,7 +271,7 @@ final class DerivationSpec extends CatsSuite {
   test("Scala Enumeration types have leaf cursor builders") {
     val e =
       for {
-        c <- CursorBuilder.enumerationCursorBuilder[Episode.Value].build(Context.empty, Episode.JEDI)
+        c <- CursorBuilder.enumerationCursorBuilder[Episode.Value].build(Context(EpisodeType), Episode.JEDI)
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
@@ -280,7 +281,7 @@ final class DerivationSpec extends CatsSuite {
   test("product types have cursor builders") {
     val name =
       for {
-        c <- CursorBuilder[Human].build(Context.empty, lukeSkywalker)
+        c <- CursorBuilder[Human].build(Context(HumanType), lukeSkywalker)
         f <- c.field("name", None)
         n <- f.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
         l <- n.asLeaf
@@ -291,7 +292,7 @@ final class DerivationSpec extends CatsSuite {
   test("cursor builders can be resolved for nested types") {
     val appearsIn =
       for {
-        c <- CursorBuilder[Character].build(Context.empty, lukeSkywalker)
+        c <- CursorBuilder[Character].build(Context(CharacterType), lukeSkywalker)
         f <- c.field("appearsIn", None)
         n <- f.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
         l <- n.asList
@@ -303,7 +304,7 @@ final class DerivationSpec extends CatsSuite {
   test("default cursor builders can be customised by mapping fields") {
     val friends =
       for {
-        c <- CursorBuilder[Human].build(Context.empty, lukeSkywalker)
+        c <- CursorBuilder[Human].build(Context(HumanType), lukeSkywalker)
         f <- c.field("friends", None)
         n <- f.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
         l <- n.asList
@@ -317,7 +318,7 @@ final class DerivationSpec extends CatsSuite {
   test("sealed ADTs have narrowable cursor builders") {
     val homePlanets =
       for {
-        c <- CursorBuilder[Character].build(Context.empty, lukeSkywalker)
+        c <- CursorBuilder[Character].build(Context(CharacterType), lukeSkywalker)
         h <- c.narrow(HumanType)
         m <- h.field("homePlanet", None)
         n <- m.asNullable.flatMap(_.toRightIor(mkOneError("missing")))

@@ -11,6 +11,7 @@ import skunk.{Codec, Session}
 import skunk.codec.all._
 
 import edu.gemini.grackle._, skunk._, syntax._
+import Path._, Predicate._
 
 trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
 
@@ -19,7 +20,9 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
     val entityType             = col("entity_type", EntityType.codec)
     val title                  = col("title", text.opt)
     val filmRating             = col("film_rating", text.opt)
+    val filmLabel              = col("film_label", int4.opt)
     val seriesNumberOfEpisodes = col("series_number_of_episodes", int4.opt)
+    val seriesLabel            = col("series_label", text.opt)
     val synopsisShort          = col("synopsis_short", text.opt)
     val synopsisLong           = col("synopsis_long", text.opt)
   }
@@ -49,6 +52,7 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
         title: String
         synopses: Synopses
         rating: String
+        label: Int
       }
       type Series implements Entity {
         id: ID!
@@ -57,6 +61,7 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
         synopses: Synopses
         numberOfEpisodes: Int
         episodes: [Episode!]!
+        label: String
       }
       type Episode {
         id: ID!
@@ -87,7 +92,7 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
         tpe = QueryType,
         fieldMappings =
           List(
-            SqlRoot("entities"),
+            SqlRoot("entities")
           )
       ),
       SqlInterfaceMapping(
@@ -105,7 +110,8 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
         tpe = FilmType,
         fieldMappings =
           List(
-            SqlField("rating", entities.filmRating)
+            SqlField("rating", entities.filmRating),
+            SqlField("label", entities.filmLabel)
           )
       ),
       ObjectMapping(
@@ -114,6 +120,7 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
           List(
             SqlField("numberOfEpisodes", entities.seriesNumberOfEpisodes),
             SqlObject("episodes", Join(entities.id, episodes.seriesId)),
+            SqlField("label", entities.seriesLabel)
           )
       ),
       ObjectMapping(
@@ -135,6 +142,7 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
+                    SqlField("id", entities.id, key = true, hidden = true),
                     SqlField("short", entities.synopsisShort),
                     SqlField("long", entities.synopsisLong)
                   )
@@ -144,6 +152,7 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
+                    SqlField("id", episodes.id, key = true, hidden = true),
                     SqlField("short", episodes.synopsisShort),
                     SqlField("long", episodes.synopsisLong)
                   )
@@ -153,12 +162,25 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
       LeafMapping[EntityType](EntityTypeType)
     )
 
-  def entityTypeDiscriminator(c: Cursor): Result[Type] = {
-    for {
-      et <- c.fieldAs[EntityType]("entityType")
-    } yield et match {
-      case EntityType.Film => FilmType
-      case EntityType.Series => SeriesType
+  object entityTypeDiscriminator extends SqlDiscriminator {
+    def discriminate(c: Cursor): Result[Type] = {
+      for {
+        et <- c.fieldAs[EntityType]("entityType")
+      } yield et match {
+        case EntityType.Film => FilmType
+        case EntityType.Series => SeriesType
+      }
+    }
+
+    def narrowPredicate(subtpe: Type): Option[Predicate] = {
+      def mkPredicate(tpe: EntityType): Option[Predicate] =
+        Some(Eql(UniquePath(List("entityType")), Const(tpe)))
+
+      subtpe match {
+        case FilmType => mkPredicate(EntityType.Film)
+        case SeriesType => mkPredicate(EntityType.Series)
+        case _ => None
+      }
     }
   }
 }

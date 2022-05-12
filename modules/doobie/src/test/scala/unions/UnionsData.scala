@@ -9,6 +9,7 @@ import cats.effect.Sync
 import edu.gemini.grackle._
 import edu.gemini.grackle.doobie._
 import edu.gemini.grackle.syntax._
+import Path._, Predicate._
 
 trait UnionsMapping[F[_]] extends DoobieMapping[F] {
 
@@ -74,13 +75,26 @@ trait UnionsMapping[F[_]] extends DoobieMapping[F] {
       )
     )
 
-  def itemTypeDiscriminator(c: Cursor): Result[Type] =
-    for {
-      it <- c.fieldAs[String]("itemType")
-    } yield it match {
-      case "ItemA" => ItemAType
-      case "ItemB" => ItemBType
+  object itemTypeDiscriminator extends SqlDiscriminator {
+    def discriminate(c: Cursor): Result[Type] =
+      for {
+        it <- c.fieldAs[String]("itemType")
+      } yield it match {
+        case "ItemA" => ItemAType
+        case "ItemB" => ItemBType
+      }
+
+    def narrowPredicate(subtpe: Type): Option[Predicate] = {
+      def mkPredicate(tpe: String): Option[Predicate] =
+        Some(Eql(UniquePath(List("itemType")), Const(tpe)))
+
+      subtpe match {
+        case ItemAType => mkPredicate("ItemA")
+        case ItemBType => mkPredicate("ItemB")
+        case _ => None
+      }
     }
+  }
 }
 
 object UnionsMapping extends DoobieMappingCompanion {

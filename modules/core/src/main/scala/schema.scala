@@ -81,7 +81,9 @@ trait Schema {
    * Yields the type, if defined, `None` otherwise.
    */
   def definition(name: String): Option[NamedType] =
-    types.find(_.name == name).orElse(ScalarType(name)).map(_.dealias)
+    typeIndex.get(name).orElse(ScalarType(name)).map(_.dealias)
+
+  private lazy val typeIndex = types.map(tpe => (tpe.name, tpe)).toMap
 
   def ref(tp: Type): Option[TypeRef] = tp match {
     case nt: NamedType if types.exists(_.name == nt.name) => Some(ref(nt.name))
@@ -104,6 +106,14 @@ trait Schema {
 
   /** The type of subscriptions defined by this `Schema`*/
   def subscriptionType: Option[NamedType] = schemaType.field("subscription").flatMap(_.asNamed)
+
+  /** Are the supplied alternatives exhaustive for `tp` */
+  def exhaustive(tp: Type, branches: List[Type]): Boolean = {
+    types.forall {
+      case o: ObjectType => !(o <:< tp) || branches.exists(b => o <:< b)
+      case _ => true
+    }
+  }
 
   override def toString = SchemaRenderer.renderSchema(this)
 }
@@ -396,6 +406,8 @@ sealed trait Type extends Product {
   def asNamed: Option[NamedType] = None
 
   def isInterface: Boolean = false
+
+  def isUnion: Boolean = false
 }
 
 // Move all below into object Type?
@@ -438,9 +450,9 @@ object JoinType {
  * A by name reference to a type defined in `schema`.
  */
 case class TypeRef(schema: Schema, name: String) extends NamedType {
-  override def dealias: NamedType = schema.definition(name).getOrElse(this)
+  override lazy val dealias: NamedType = schema.definition(name).getOrElse(this)
 
-  override def exists: Boolean = schema.definition(name).isDefined
+  override lazy val exists: Boolean = schema.definition(name).isDefined
 
   def description: Option[String] = dealias.description
 }
@@ -587,6 +599,7 @@ case class UnionType(
   description: Option[String],
   members: List[NamedType]
 ) extends Type with NamedType {
+  override def isUnion: Boolean = true
   override def toString: String = members.mkString("|")
 }
 
