@@ -65,8 +65,8 @@ trait SqlMappingValidator extends MappingValidator {
 
           case NullableType(ofType) =>
             ofType.dealias match {
-              case ScalarType(_, _) =>
-                typeMapping(ofType) match {
+              case s: ScalarType =>
+                typeMapping(s) match {
                   case Some(lm: LeafMapping[_]) =>
                     if (lm.scalaTypeName == columnRef.scalaTypeName) Chain.empty
                     else Chain(InconsistentTypeMapping(owner, field, sf, lm))

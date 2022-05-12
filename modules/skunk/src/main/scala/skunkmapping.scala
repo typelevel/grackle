@@ -35,6 +35,8 @@ abstract class SkunkMapping[F[_]: Sync](
   def doubleEncoder  = float8
   def intEncoder     = int4
 
+  def intCodec       = (int4, false)
+
   class TableDef(name: String) {
     sealed trait IsNullable[T] {
       def isNullable: Boolean
@@ -46,8 +48,8 @@ abstract class SkunkMapping[F[_]: Sync](
       implicit def notNullable[T]: IsNullable[T] = new IsNullable[T] { def isNullable = false }
     }
 
-    def col[T](colName: String, codec: _root_.skunk.Codec[T])(implicit typeName: TypeName[T], isNullable: IsNullable[T], pos: SourcePos): Column.ColumnRef =
-      Column.ColumnRef(name, colName, (codec, isNullable.isNullable), typeName.value, pos)
+    def col[T](colName: String, codec: _root_.skunk.Codec[T])(implicit typeName: TypeName[T], isNullable: IsNullable[T], pos: SourcePos): ColumnRef =
+      ColumnRef(name, colName, (codec, isNullable.isNullable), typeName.value, pos)
   }
 
   // We need to demonstrate that our `Fragment` type has certain compositional properties.
@@ -85,9 +87,9 @@ abstract class SkunkMapping[F[_]: Sync](
     }
 
   // And we need to be able to fetch `Rows` given a `Fragment` and a list of decoders.
-  def fetch(fragment: Fragment, codecs: List[(Boolean, Codec)]): F[Table] = {
-    lazy val rowDecoder: Decoder[Row] =
-      new Decoder[Row] {
+  def fetch(fragment: Fragment, codecs: List[(Boolean, Codec)]): F[Vector[Array[Any]]] = {
+    lazy val rowDecoder: Decoder[Array[Any]] =
+      new Decoder[Array[Any]] {
 
         lazy val types = codecs.flatMap { case (_, (d, _)) => d.types }
 
@@ -97,7 +99,7 @@ abstract class SkunkMapping[F[_]: Sync](
               (offset + decoder.length, (isJoin && !isNullable, decoder, offset) :: accum)
           } ._2.reverse
 
-        def decode(start: Int, ssx: List[Option[String]]): Either[Decoder.Error, Row] = {
+        def decode(start: Int, ssx: List[Option[String]]): Either[Decoder.Error, Array[Any]] = {
           val ss = ssx.drop(start)
           decodersWithOffsets.traverse {
 
@@ -106,13 +108,13 @@ abstract class SkunkMapping[F[_]: Sync](
             // read as normal.
             case (true,  c, offset) => c.opt.decode(0, ss.drop(offset).take(c.length)).map(_.getOrElse(FailedJoin))
             case (false, c, offset) => c    .decode(0, ss.drop(offset).take(c.length))
-          }.map(Row(_))
+          }.map(_.toArray)
         }
       }
 
     pool.use { s =>
       s.prepare(fragment.fragment.query(rowDecoder)).use { ps =>
-        ps.stream(fragment.argument, 1024).compile.toList
+        ps.stream(fragment.argument, 1024).compile.toVector
       }
     } .onError {
       case NonFatal(e) => Sync[F].delay(e.printStackTrace())

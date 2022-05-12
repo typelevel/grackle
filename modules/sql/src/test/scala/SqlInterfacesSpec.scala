@@ -518,4 +518,80 @@ trait SqlInterfacesSpec extends AnyFunSuite {
 
     assertWeaklyEqual(res, expected)
   }
+
+  test("interface query with type variant fields in type conditions") {
+    val query = """
+      query {
+        entities {
+          id
+          entityType
+          title
+          ... on Film {
+            rating
+            label
+          }
+          ... on Series {
+            numberOfEpisodes
+            label
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "entities" : [
+            {
+              "id" : "1",
+              "entityType" : "FILM",
+              "title" : "Film 1",
+              "rating" : "PG",
+              "label" : 1
+            },
+            {
+              "id" : "2",
+              "entityType" : "FILM",
+              "title" : "Film 2",
+              "rating" : "U",
+              "label" : 2
+            },
+            {
+              "id" : "3",
+              "entityType" : "FILM",
+              "title" : "Film 3",
+              "rating" : "15",
+              "label" : 3
+            },
+            {
+              "id" : "4",
+              "entityType" : "SERIES",
+              "title" : "Series 1",
+              "numberOfEpisodes" : 5,
+              "label" : "One"
+            },
+            {
+              "id" : "5",
+              "entityType" : "SERIES",
+              "title" : "Series 2",
+              "numberOfEpisodes" : 6,
+              "label" : "Two"
+            },
+            {
+              "id" : "6",
+              "entityType" : "SERIES",
+              "title" : "Series 3",
+              "numberOfEpisodes" : 7,
+              "label" : "Three"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
 }

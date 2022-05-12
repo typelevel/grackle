@@ -63,8 +63,11 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
         QueryInterpreter.mkInvalidResponse(invalid).pure[Stream[F,*]]
     }
 
-  def typeMapping(tpe: Type): Option[TypeMapping] =
-    typeMappings.find(_.tpe.nominal_=:=(tpe))
+  def typeMapping(tpe: NamedType): Option[TypeMapping] =
+    typeMappingIndex.get(tpe.name)
+
+  private lazy val typeMappingIndex =
+    typeMappings.flatMap(tm => tm.tpe.asNamed.map(tpe => (tpe.name, tm)).toList).toMap
 
   val validator: MappingValidator =
     MappingValidator(this)
@@ -72,7 +75,7 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
   def rootMapping(context: Context, fieldName: String): Option[RootMapping] =
     context.tpe match {
       case JoinType(componentName, _) =>
-        rootMapping(Context(Nil, Nil, schema.queryType), componentName)
+        rootMapping(Context(schema.queryType), componentName)
       case _ =>
         fieldMapping(context, fieldName).collect {
           case rm: RootMapping => rm
@@ -88,22 +91,24 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
     }
 
   def objectMapping(context: Context): Option[ObjectMapping] =
-    typeMapping(context.tpe) match {
-      case Some(om: ObjectMapping) => Some(om)
-      case Some(pm: PrefixedMapping) =>
-        val matching = pm.mappings.filter(m => context.path.startsWith(m._1.reverse))
-        matching.sortBy(m => -m._1.length).headOption.map(_._2)
-      case _ => None
+    context.tpe.underlyingObject.flatMap { obj =>
+      obj.asNamed.flatMap(typeMapping) match {
+        case Some(om: ObjectMapping) => Some(om)
+        case Some(pm: PrefixedMapping) =>
+          val revPath = context.path.reverse
+          pm.mappings.filter(m => revPath.endsWith(m._1)).maxByOption(_._1.length).map(_._2)
+        case _ => None
+      }
     }
 
   def fieldMapping(context: Context, fieldName: String): Option[FieldMapping] =
-    objectMapping(context).flatMap(_.fieldMappings.find(_.fieldName == fieldName).orElse {
-      context.tpe.dealias match {
-        case ot: ObjectType =>
+    objectMapping(context).flatMap(_.fieldMapping(fieldName)).orElse {
+      context.tpe.underlyingObject match {
+        case Some(ot: ObjectType) =>
           ot.interfaces.collectFirstSome(nt => fieldMapping(context.asType(nt), fieldName))
         case _ => None
       }
-    })
+    }
 
   def leafMapping[T](tpe: Type): Option[LeafMapping[T]] =
     typeMappings.collectFirst {
@@ -117,8 +122,11 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
 
   case class PrimitiveMapping(tpe: Type)(implicit val pos: SourcePos) extends TypeMapping
 
-  trait ObjectMapping extends TypeMapping {
+  abstract class ObjectMapping extends TypeMapping {
+    private lazy val fieldMappingIndex = fieldMappings.map(fm => (fm.fieldName, fm)).toMap
+
     def fieldMappings: List[FieldMapping]
+    def fieldMapping(fieldName: String): Option[FieldMapping] = fieldMappingIndex.get(fieldName)
   }
 
   object ObjectMapping {

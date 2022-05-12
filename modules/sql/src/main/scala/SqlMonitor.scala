@@ -8,6 +8,6 @@ import QueryInterpreter.ProtoJson
 
 /** Monitor for a `SqlMapping` in `F` with fragments of type `A`. */
 trait SqlMonitor[F[_], A] {
-  def queryMapped(query: Query, fragment: A, table: List[Row]): F[Unit]
+  def queryMapped(query: Query, fragment: A, rows: Int, cols: Int): F[Unit]
   def resultComputed(result: Result[ProtoJson]): F[Unit]
 }

@@ -21,13 +21,13 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
     def cursor(query: Query, env: Env, resultName: Option[String]): Stream[F,Result[(Query, Cursor)]] = {
       (for {
         tpe      <- otpe
-        fieldTpe <- tpe.field(fieldName)
+        context0 <- Context(tpe, fieldName, resultName)
       } yield {
-        val cursorTpe = query match {
-          case _: Query.Unique => fieldTpe.nonNull.list
-          case _ => fieldTpe
+        val context = query match {
+          case _: Query.Unique => context0.asType(context0.tpe.nonNull.list)
+          case _ => context0
         }
-        (query, CirceCursor(Context(fieldName, resultName, cursorTpe), root, None, env)).rightIor
+        (query, CirceCursor(context, root, None, env)).rightIor
       }).getOrElse(mkErrorResult(s"Type ${otpe.getOrElse("unspecified type")} has no field '$fieldName'")).pure[Stream[F,*]]
     }
 

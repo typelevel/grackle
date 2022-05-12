@@ -25,7 +25,7 @@ object SkunkMonitor {
 
   def noopMonitor[F[_]: Applicative]: SkunkMonitor[F] =
     new SkunkMonitor[F] {
-      def queryMapped(query: Query, fragment: AppliedFragment, table: List[Row]): F[Unit] = ().pure[F]
+      def queryMapped(query: Query, fragment: AppliedFragment, rows: Int, cols: Int): F[Unit] = ().pure[F]
       def resultComputed(result: Result[ProtoJson]): F[Unit] = ().pure[F]
     }
 

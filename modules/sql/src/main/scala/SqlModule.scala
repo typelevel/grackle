@@ -61,5 +61,7 @@ trait SqlModule[F[_]] {
   def booleanEncoder: Encoder
   def doubleEncoder:  Encoder
 
-  def fetch(fragment: Fragment, codecs: List[(Boolean, Codec)]): F[Table]
+  def intCodec: Codec
+
+  def fetch(fragment: Fragment, codecs: List[(Boolean, Codec)]): F[Vector[Array[Any]]]
 }

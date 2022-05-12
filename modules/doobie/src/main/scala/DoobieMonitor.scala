@@ -8,7 +8,6 @@ import _root_.doobie.Fragment
 import cats.Applicative
 import cats.implicits._
 import edu.gemini.grackle.QueryInterpreter.ProtoJson
-import edu.gemini.grackle.sql.Row
 import org.typelevel.log4cats.Logger
 import edu.gemini.grackle.sql.SqlStatsMonitor
 import cats.effect.Ref
@@ -26,19 +25,19 @@ object DoobieMonitor {
 
   def noopMonitor[F[_]: Applicative]: DoobieMonitor[F] =
     new DoobieMonitor[F] {
-      def queryMapped(query: Query, fragment: Fragment, table: List[Row]): F[Unit] = ().pure[F]
+      def queryMapped(query: Query, fragment: Fragment, rows: Int, cols: Int): F[Unit] = ().pure[F]
       def resultComputed(result: Result[ProtoJson]): F[Unit] = ().pure[F]
     }
 
   def loggerMonitor[F[_]](logger: Logger[F]): DoobieMonitor[F] =
     new DoobieMonitor[F] {
 
-      def queryMapped(query: Query, fragment: Fragment, table: List[Row]): F[Unit] =
+      def queryMapped(query: Query, fragment: Fragment, rows: Int, cols: Int): F[Unit] =
         logger.info(
           s"""query: $query
              |sql: ${fragment.internals.sql}
              |args: ${fragment.internals.elements.mkString(", ")}
-             |fetched ${table.size} row(s) of ${table.headOption.map(_.elems.size).getOrElse(0)} column(s)
+             |fetched $rows row(s) of $cols column(s)
            """.stripMargin)
 
       def resultComputed(result: Result[ProtoJson]): F[Unit] =

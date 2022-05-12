@@ -8,6 +8,7 @@ import _root_.skunk.codec.all._
 import edu.gemini.grackle._, skunk._, syntax._
 import cats.effect.Resource
 import _root_.skunk.Session
+import Path._, Predicate._
 
 trait UnionsMapping[F[_]] extends SkunkMapping[F] {
 
@@ -73,13 +74,26 @@ trait UnionsMapping[F[_]] extends SkunkMapping[F] {
       )
     )
 
-  def itemTypeDiscriminator(c: Cursor): Result[Type] =
-    for {
-      it <- c.fieldAs[String]("itemType")
-    } yield it match {
-      case "ItemA" => ItemAType
-      case "ItemB" => ItemBType
+  object itemTypeDiscriminator extends SqlDiscriminator {
+    def discriminate(c: Cursor): Result[Type] =
+      for {
+        it <- c.fieldAs[String]("itemType")
+      } yield it match {
+        case "ItemA" => ItemAType
+        case "ItemB" => ItemBType
+      }
+
+    def narrowPredicate(subtpe: Type): Option[Predicate] = {
+      def mkPredicate(tpe: String): Option[Predicate] =
+        Some(Eql(UniquePath(List("itemType")), Const(tpe)))
+
+      subtpe match {
+        case ItemAType => mkPredicate("ItemA")
+        case ItemBType => mkPredicate("ItemB")
+        case _ => None
+      }
     }
+  }
 }
 
 object UnionsMapping extends SkunkMappingCompanion {

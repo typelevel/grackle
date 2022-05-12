@@ -109,6 +109,7 @@ trait EmbeddingMapping[F[_]] extends DoobieMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
+                    SqlField("title", films.title, key = true, hidden = true),
                     SqlField("short", films.synopsisShort),
                     SqlField("long", films.synopsisLong)
                   )
@@ -118,6 +119,7 @@ trait EmbeddingMapping[F[_]] extends DoobieMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
+                    SqlField("title", series.title, key = true, hidden = true),
                     SqlField("short", series.synopsisShort),
                     SqlField("long", series.synopsisLong)
                   )
@@ -127,6 +129,7 @@ trait EmbeddingMapping[F[_]] extends DoobieMapping[F] {
                 tpe = SynopsesType,
                 fieldMappings =
                   List(
+                    SqlField("title", episodes.title, key = true, hidden = true),
                     SqlField("short", episodes.synopsisShort),
                     SqlField("long", episodes.synopsisLong)
                   )

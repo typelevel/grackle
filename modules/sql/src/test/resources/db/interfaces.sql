@@ -5,7 +5,9 @@ CREATE TABLE entities (
     synopsis_short TEXT,
     synopsis_long TEXT,
     film_rating TEXT,
-    series_number_of_episodes INTEGER
+    film_label INTEGER,
+    series_number_of_episodes INTEGER,
+    series_label TEXT
 );
 
 CREATE TABLE episodes (
@@ -16,13 +18,13 @@ CREATE TABLE episodes (
     synopsis_long TEXT
 );
 
-COPY entities (id, entity_type, title, synopsis_short, synopsis_long, film_rating, series_number_of_episodes) FROM STDIN WITH DELIMITER '|' NULL AS '';
-1|1|Film 1|Short film 1|Long film 1|PG|
-2|1|Film 2|Short film 2|Long film 2|U|
-3|1|Film 3|Short film 3|Long film 3|15|
-4|2|Series 1|Short series 1|Long series 1||5
-5|2|Series 2|Short series 2|Long series 2||6
-6|2|Series 3|Short series 3|Long series 3||7
+COPY entities (id, entity_type, title, synopsis_short, synopsis_long, film_rating, film_label, series_number_of_episodes, series_label) FROM STDIN WITH DELIMITER '|' NULL AS '';
+1|1|Film 1|Short film 1|Long film 1|PG|1||
+2|1|Film 2|Short film 2|Long film 2|U|2||
+3|1|Film 3|Short film 3|Long film 3|15|3||
+4|2|Series 1|Short series 1|Long series 1|||5|One
+5|2|Series 2|Short series 2|Long series 2|||6|Two
+6|2|Series 3|Short series 3|Long series 3|||7|Three
 \.
 
 COPY episodes (id, series_id, title, synopsis_short, synopsis_long) FROM STDIN WITH DELIMITER '|' NULL AS '';

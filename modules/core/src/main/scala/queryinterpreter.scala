@@ -120,7 +120,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
         mkErrorResult(s"Bad root query '${query.render}' in QueryInterpreter").pure[Stream[F,*]]
     }
 
-  def runRootValue(query: Query, rootTpe: Type, env: Env): Stream[F, Result[ProtoJson]] = runRootValue0(query, Context(Nil, Nil, rootTpe), env)
+  def runRootValue(query: Query, rootTpe: Type, env: Env): Stream[F, Result[ProtoJson]] = runRootValue0(query, Context(rootTpe), env)
 
   /** Interpret multiple queries with respect to their expected types.
    *
@@ -542,14 +542,18 @@ object QueryInterpreter {
    * `completeAll`.
    */
   def complete[F[_]](pj: ProtoJson): Stream[F,Result[Json]] =
-    completeAll[F](List(pj)).map {
-      case (errors, List(value)) =>
-        NonEmptyChain.fromChain(errors) match {
-          case Some(errors) => Ior.Both(errors, value)
-          case None => value.rightIor
-        }
+    pj match {
+      case j: Json => j.rightIor.pure[Stream[F, *]]
       case _ =>
-        mkErrorResult("completeAll yielded impossible result")
+        completeAll[F](List(pj)).map {
+          case (errors, List(value)) =>
+            NonEmptyChain.fromChain(errors) match {
+              case Some(errors) => Ior.Both(errors, value)
+              case None => value.rightIor
+            }
+          case _ =>
+            mkErrorResult("completeAll yielded impossible result")
+        }
     }
 
   /** Complete a collection of possibly deferred results.

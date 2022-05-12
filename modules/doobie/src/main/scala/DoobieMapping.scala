@@ -29,14 +29,15 @@ abstract class DoobieMapping[F[_]: Sync](
 
   def toEncoder(c: Codec): Encoder = (c._1.put, c._2)
 
+  def intCodec       = (Meta[Int], false)
   def intEncoder     = (Put[Int], false)
   def stringEncoder  = (Put[String], false)
   def booleanEncoder = (Put[Boolean], false)
   def doubleEncoder  = (Put[Double], false)
 
   class TableDef(name: String) {
-    def col[T](colName: String, codec: Meta[T], nullable: Boolean = false)(implicit typeName: TypeName[T], pos: SourcePos): Column.ColumnRef =
-      Column.ColumnRef(name, colName, (codec, nullable), typeName.value, pos)
+    def col[T](colName: String, codec: Meta[T], nullable: Boolean = false)(implicit typeName: TypeName[T], pos: SourcePos): ColumnRef =
+      ColumnRef(name, colName, (codec, nullable), typeName.value, pos)
   }
 
   implicit def Fragments: SqlFragment[Fragment] =
@@ -120,6 +121,8 @@ abstract class DoobieMapping[F[_]: Sync](
           case VarChar               => Some("VARCHAR")
           case Array | Other         =>
             codec._1.put match {
+              case adv: Put.Advanced[_] if adv.schemaTypes.head == "json" =>
+                Some("JSONB")
               case adv: Put.Advanced[_] =>
                 Some(adv.schemaTypes.head)
               case _ => None
@@ -129,20 +132,31 @@ abstract class DoobieMapping[F[_]: Sync](
         }
     }
 
-  def fetch(fragment: Fragment, codecs: List[(Boolean, Codec)]): F[edu.gemini.grackle.sql.Table] = {
-    def mkRead(codecs: List[(Boolean, Codec)]): Read[Row] = {
-      def unsafeGet(rs: ResultSet, n: Int): Row =
-        Row {
-          codecs.zipWithIndex.map {
-            case ((isJoin, (m, false)),  i) =>
-              if (isJoin) m.get.unsafeGetNullable(rs, n+i).getOrElse(FailedJoin)
-              else m.get.unsafeGetNonNullable(rs, n+i)
-            case ((_, (m, true)), i) => m.get.unsafeGetNullable(rs, n+i)
+  def fetch(fragment: Fragment, codecs: List[(Boolean, Codec)]): F[Vector[Array[Any]]] = {
+    val ncols = codecs.length
+
+    def mkRead(codecs: List[(Boolean, Codec)]): Read[Array[Any]] = {
+      def unsafeGet(rs: ResultSet, n: Int): Array[Any] = {
+        val arr = scala.Array.ofDim[Any](ncols)
+        var i = 0
+        var codecs0 = codecs
+        while(i < ncols) {
+          codecs0.head match {
+            case (isJoin, (m, false)) =>
+              if (isJoin) arr(i) = m.get.unsafeGetNullable(rs, n+i).getOrElse(FailedJoin)
+              else arr(i) = m.get.unsafeGetNonNullable(rs, n+i)
+            case (_, (m, true)) => arr(i) = m.get.unsafeGetNullable(rs, n+i)
           }
+          i = i + 1
+          codecs0 = codecs0.tail
         }
+
+        arr
+      }
+
       new Read(codecs.map { case (_, (m, n)) => (m.get, if(n) Nullable else NoNulls) }, unsafeGet)
     }
 
-    fragment.query[Row](mkRead(codecs)).to[List].transact(transactor)
+    fragment.query[Array[Any]](mkRead(codecs)).to[Vector].transact(transactor)
   }
 }
