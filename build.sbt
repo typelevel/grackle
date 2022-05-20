@@ -1,27 +1,27 @@
 import nl.zolotko.sbt.jfr.{JfrRecording, JfrRecorderOptions}
 import scala.concurrent.duration.DurationInt
 
-val catsVersion                 = "2.6.1"
-val catsParseVersion            = "0.3.4"
+val catsVersion                 = "2.7.0"
+val catsParseVersion            = "0.3.7"
 val catsEffectVersion           = "3.1.1"
 val catsTestkitScalaTestVersion = "2.1.5"
-val circeVersion                = "0.14.1"
-val doobieVersion               = "1.0.0-M5"
+val circeVersion                = "0.14.2"
+val doobieVersion               = "1.0.0-RC2"
 val fs2Version                  = "3.1.1"
-val http4sVersion               = "0.23.1"
-val kindProjectorVersion        = "0.13.0"
+val http4sVersion               = "0.23.11"
+val kindProjectorVersion        = "0.13.2"
 val literallyVersion            = "1.0.2"
-val logbackVersion              = "1.2.5"
-val log4catsVersion             = "2.1.1"
-val skunkVersion                = "0.2.2"
+val logbackVersion              = "1.2.11"
+val log4catsVersion             = "2.3.1"
+val skunkVersion                = "0.3.1"
 val shapeless2Version           = "2.3.7"
 val shapeless3Version           = "3.0.1"
 val sourcePosVersion            = "1.0.1"
-val testContainersVersion       = "0.39.6"
+val testContainersVersion       = "0.39.12"
 val typenameVersion             = "1.0.0"
 
-val Scala2 = "2.13.6"
-val Scala3 = "3.0.1"
+val Scala2 = "2.13.8"
+val Scala3 = "3.1.0"
 ThisBuild / scalaVersion        := Scala2
 ThisBuild / crossScalaVersions  := Seq(Scala2, Scala3)
 

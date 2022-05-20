@@ -4,7 +4,6 @@
 package compiler
 
 import cats.Id
-import cats.catsInstancesForId
 import cats.data.{Chain, Ior}
 import cats.tests.CatsSuite
 

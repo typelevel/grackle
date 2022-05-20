@@ -3,7 +3,7 @@
 
 package composed
 
-import cats.{Id, catsInstancesForId}
+import cats.Id
 import cats.implicits._
 
 import edu.gemini.grackle._

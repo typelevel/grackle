@@ -3,7 +3,7 @@
 
 package compiler
 
-import cats.{Id, catsInstancesForId}
+import cats.Id
 import cats.data.Ior
 import cats.implicits._
 import cats.tests.CatsSuite

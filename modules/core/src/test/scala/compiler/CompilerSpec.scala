@@ -3,7 +3,7 @@
 
 package compiler
 
-import cats.{Id, catsInstancesForId}
+import cats.Id
 import cats.data.{Chain, Ior}
 import cats.implicits._
 import cats.tests.CatsSuite
@@ -386,7 +386,10 @@ final class CompilerSuite extends CatsSuite {
 
     val res = QueryParser.parseText(query)
 
-    val error = "Truncated query"
+    val error =
+      """Parse error at line 5 column 4
+        |    
+        |    ^""".stripMargin
 
     assert(res == Ior.Left(mkOneError(error)))
   }
