@@ -7,7 +7,6 @@ import org.scalatest.funsuite.AnyFunSuite
 import edu.gemini.grackle.Mapping
 import cats.Id
 import cats.syntax.all._
-import cats.catsInstancesForId
 import edu.gemini.grackle.{ ListType, MappingValidator }
 import edu.gemini.grackle.MappingValidator.ValidationException
 import edu.gemini.grackle.syntax._

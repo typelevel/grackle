@@ -6,7 +6,6 @@ package compiler
 import cats.Id
 import cats.data.{Chain, Ior}
 import cats.tests.CatsSuite
-import cats.catsInstancesForId
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._

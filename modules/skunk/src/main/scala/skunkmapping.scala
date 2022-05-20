@@ -6,7 +6,7 @@ package skunk
 
 import scala.util.control.NonFatal
 
-import cats.Reducible
+import cats.{Foldable, Reducible}
 import cats.effect.{ Resource, Sync }
 import cats.implicits._
 import _root_.skunk.{ AppliedFragment, Decoder, Session, Fragment => SFragment }
@@ -54,19 +54,19 @@ abstract class SkunkMapping[F[_]: Sync](
 
   // We need to demonstrate that our `Fragment` type has certain compositional properties.
   implicit def Fragments: SqlFragment[AppliedFragment] =
-    new SqlFragment[AppliedFragment] {
+    new SqlFragment[AppliedFragment] { self =>
       def combine(x: AppliedFragment, y: AppliedFragment) = x |+| y
       def empty = AppliedFragment.empty
 
       // N.B. the casts here are due to a bug in the Scala 3 sql interpreter, caused by something
       // that may or may not be a bug in dotty. https://github.com/lampepfl/dotty/issues/12343
       def bind[A](encoder: Encoder, value: A) = sql"$encoder".asInstanceOf[SFragment[A]].apply(value)
-      def in[G[_]: Reducible, A](f: AppliedFragment, fs: G[A], enc: Encoder): AppliedFragment = fs.toList.map(sql"$enc".asInstanceOf[SFragment[A]].apply).foldSmash(f |+| void" IN (", void", ", void")")
+      def in[G[_]: Reducible, A](f: AppliedFragment, fs: G[A], enc: Encoder): AppliedFragment = fs.toList.map(sql"$enc".asInstanceOf[SFragment[A]].apply).foldSmash(f |+| void" IN (", void", ", void")")(self, Foldable[List])
 
       def const(s: String) = sql"#$s".apply(_root_.skunk.Void)
-      def and(fs: AppliedFragment*): AppliedFragment = fs.toList.map(parentheses).intercalate(void" AND ")
+      def and(fs: AppliedFragment*): AppliedFragment = fs.toList.map(parentheses).intercalate(void" AND ")(self)
       def andOpt(fs: Option[AppliedFragment]*): AppliedFragment = and(fs.toList.unite: _*)
-      def or(fs: AppliedFragment*): AppliedFragment = fs.toList.map(parentheses).intercalate(void" OR ")
+      def or(fs: AppliedFragment*): AppliedFragment = fs.toList.map(parentheses).intercalate(void" OR ")(self)
       def orOpt(fs: Option[AppliedFragment]*): AppliedFragment = or(fs.toList.unite: _*)
       def whereAnd(fs: AppliedFragment*): AppliedFragment = if (fs.isEmpty) AppliedFragment.empty else void"WHERE " |+| and(fs: _*)
       def whereAndOpt(fs: Option[AppliedFragment]*): AppliedFragment = whereAnd(fs.toList.unite: _*)

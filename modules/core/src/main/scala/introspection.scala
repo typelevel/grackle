@@ -4,7 +4,6 @@
 package edu.gemini.grackle
 
 import cats.Id
-import cats.catsInstancesForId
 
 import ScalarType._
 

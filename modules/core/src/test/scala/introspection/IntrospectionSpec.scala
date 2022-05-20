@@ -6,7 +6,6 @@ package introspection
 import cats.Id
 import cats.tests.CatsSuite
 import io.circe.{ ACursor, Json }
-import cats.catsInstancesForId
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._

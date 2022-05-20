@@ -3,8 +3,6 @@
 
 package demo
 
-import scala.concurrent.ExecutionContext.global
-
 import cats.effect.{ Async, ExitCode, IO, IOApp }
 import cats.implicits._
 import fs2.Stream
@@ -36,7 +34,7 @@ object DemoServer {
 
     // Spin up the server ...
     for {
-      exitCode <- BlazeServerBuilder[F](global)
+      exitCode <- BlazeServerBuilder[F]
         .bindHttp(8080, "0.0.0.0")
         .withHttpApp(httpApp)
         .serve
