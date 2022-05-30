@@ -3,19 +3,28 @@
 
 package world
 
+import cats.effect.{IO, Sync}
 import io.circe.Json
-import cats.effect.IO
+import doobie.util.transactor.Transactor
 
-import edu.gemini.grackle.QueryExecutor
-import edu.gemini.grackle.doobie.DoobieMonitor
-import edu.gemini.grackle.sql.{SqlMonitor, SqlStatsMonitor}
+import edu.gemini.grackle._
+import sql.{SqlMonitor, SqlStatsMonitor}
+import doobie.{DoobieMappingCompanion, DoobieMonitor}
+import utils.{DatabaseSuite, DoobieTestMapping}
+import grackle.test.{SqlWorldCompilerSpec, SqlWorldSpec}
 
-import grackle.test.SqlWorldCompilerSpec
-import utils.DatabaseSuite
+object WorldMapping extends DoobieMappingCompanion {
+  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
+    new DoobieTestMapping[F](transactor, monitor) with SqlWorldMapping[F]
+}
+
+final class WorldSpec extends DatabaseSuite with SqlWorldSpec {
+  lazy val mapping = WorldMapping.fromTransactor(xa)
+}
 
 final class WorldCompilerSpec extends DatabaseSuite with SqlWorldCompilerSpec {
 
-  type Fragment = doobie.Fragment
+  type Fragment = _root_.doobie.Fragment
 
   def monitor: IO[SqlStatsMonitor[IO,Fragment]] =
     DoobieMonitor.statsMonitor[IO]

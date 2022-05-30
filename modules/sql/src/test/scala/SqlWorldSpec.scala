@@ -1599,4 +1599,115 @@ trait SqlWorldSpec extends AnyFunSuite {
 
     assert(resTotal == Some(expected))
   }
+
+  test("data types (1)") {
+    val query = """
+      query {
+        country(code: "GBR") {
+          name
+          continent
+          region
+          surfacearea
+          indepyear
+          population
+          lifeexpectancy
+          gnp
+          gnpold
+          localname
+          governmentform
+          headofstate
+          capitalId
+          code2
+          numCities(namePattern: "%")
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "name" : "United Kingdom",
+            "continent" : "Europe",
+            "region" : "British Islands",
+            "surfacearea" : 242900.0,
+            "indepyear" : 1066,
+            "population" : 59623400,
+            "lifeexpectancy" : 77.7,
+            "gnp" : 1378330.00,
+            "gnpold" : 1296830.00,
+            "localname" : "United Kingdom",
+            "governmentform" : "Constitutional Monarchy",
+            "headofstate" : "Elisabeth II",
+            "capitalId" : 456,
+            "code2" : "GB",
+            "numCities" : 81
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
+  test("data types (2)") {
+    val query = """
+      query {
+        city(id: 490) {
+          name
+          district
+          population
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "city" : {
+            "name" : "Brighton",
+            "district" : "England",
+            "population" : 156124
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
+  test("data types (3)") {
+    val query = """
+      query {
+        language(language: "Marma") {
+          language
+          isOfficial
+          percentage
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "language" : {
+            "language" : "Marma",
+            "isOfficial" : false,
+            "percentage" : 0.2
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
 }

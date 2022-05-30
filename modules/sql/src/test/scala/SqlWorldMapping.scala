@@ -3,58 +3,49 @@
 
 package world
 
-import cats.effect.Sync
 import cats.implicits._
 
-import doobie.util.meta.Meta
-import doobie.util.transactor.Transactor
-
 import edu.gemini.grackle._
-import doobie.{DoobieMapping, DoobieMappingCompanion, DoobieMonitor}
 import sql.Like
 import syntax._
 import Query._, Path._, Predicate._, Value._
 import QueryCompiler._
+import utils.SqlTestMapping
 
-trait WorldPostgresSchema[F[_]] extends DoobieMapping[F] {
-
+trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
   object country extends TableDef("country") {
-    val code           = col("code", Meta[String])
-    val name           = col("name", Meta[String])
-    val continent      = col("continent", Meta[String])
-    val region         = col("region", Meta[String])
-    val surfacearea    = col("surfacearea", Meta[String])
-    val indepyear      = col("indepyear", Meta[Int], true)
-    val population     = col("population", Meta[Int])
-    val lifeexpectancy = col("lifeexpectancy", Meta[String], true)
-    val gnp            = col("gnp", Meta[String], true)
-    val gnpold         = col("gnpold", Meta[String], true)
-    val localname      = col("localname", Meta[String])
-    val governmentform = col("governmentform", Meta[String])
-    val headofstate    = col("headofstate", Meta[String], true)
-    val capitalId      = col("capitalId", Meta[String], true)
-    val numCities      = col("num_cities", Meta[Int], false)
-    val code2          = col("code2", Meta[String])
+    val code           = bpcharCol("code", false, 3)
+    val name           = textCol("name", false)
+    val continent      = textCol("continent", false)
+    val region         = textCol("region", false)
+    val surfacearea    = float4Col("surfacearea", false)
+    val indepyear      = int2Col("indepyear", true)
+    val population     = int4Col("population", false)
+    val lifeexpectancy = float4Col("lifeexpectancy", true)
+    val gnp            = numericCol("gnp", true, 10, 2)
+    val gnpold         = numericCol("gnpold", true, 10, 2)
+    val localname      = textCol("localname", false)
+    val governmentform = textCol("governmentform", false)
+    val headofstate    = textCol("headofstate", true)
+    val capitalId      = int4Col("capital", true)
+    val numCities      = int8Col("num_cities", false)
+    val code2          = bpcharCol("code2", false, 2)
   }
 
   object city extends TableDef("city") {
-    val id          = col("id", Meta[Int])
-    val countrycode = col("countrycode", Meta[String])
-    val name        = col("name", Meta[String])
-    val district    = col("district", Meta[String])
-    val population  = col("population", Meta[Int])
+    val id          = int4Col("id", false)
+    val countrycode = bpcharCol("countrycode", false, 3)
+    val name        = textCol("name", false)
+    val district    = textCol("district", false)
+    val population  = int4Col("population", false)
   }
 
   object countrylanguage extends TableDef("countrylanguage") {
-    val countrycode = col("countrycode", Meta[String])
-    val language = col("language", Meta[String])
-    val isOfficial = col("isOfficial", Meta[String])
-    val percentage = col("percentage", Meta[String])
+    val countrycode = bpcharCol("countrycode", false, 3)
+    val language = textCol("language", false)
+    val isOfficial = boolCol("isOfficial", false)
+    val percentage = float4Col("percentage", false)
   }
-
-}
-
-trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
 
   val schema =
     schema"""
@@ -87,8 +78,8 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
         indepyear: Int
         population: Int!
         lifeexpectancy: Float
-        gnp: String
-        gnpold: String
+        gnp: Float
+        gnpold: Float
         localname: String!
         governmentform: String!
         headofstate: String
@@ -229,11 +220,4 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
         Count("numCities", Select("cities", Nil, Filter(Like(UniquePath(List("name")), namePattern, true), Select("name", Nil, Empty)))).rightIor
     }
   ))
-}
-
-object WorldMapping extends DoobieMappingCompanion {
-
-  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
-    new DoobieMapping[F](transactor, monitor) with WorldMapping[F]
-
 }

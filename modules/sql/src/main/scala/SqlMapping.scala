@@ -2983,10 +2983,15 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           case s: String => Json.fromString(s).rightIor
           case i: Int => Json.fromInt(i).rightIor
           case l: Long => Json.fromLong(l).rightIor
+          case f: Float => Json.fromFloat(f) match {
+              case Some(j) => j.rightIor
+              case None => mkErrorResult(s"Unrepresentable float %d")
+            }
           case d: Double => Json.fromDouble(d) match {
               case Some(j) => j.rightIor
               case None => mkErrorResult(s"Unrepresentable double %d")
             }
+          case d: BigDecimal => Json.fromBigDecimal(d).rightIor
           case b: Boolean => Json.fromBoolean(b).rightIor
 
           // This means we are looking at a column with no value because it's the result of a failed

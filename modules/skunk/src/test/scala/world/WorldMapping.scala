@@ -3,16 +3,24 @@
 
 package world
 
-import cats.effect.IO
+import cats.effect.{IO, Resource, Sync}
 import io.circe.Json
-import skunk.AppliedFragment
+import skunk.{AppliedFragment, Session}
 
 import edu.gemini.grackle._
 import sql.{SqlMonitor, SqlStatsMonitor}
-import skunk.SkunkMonitor
+import skunk.{SkunkMappingCompanion, SkunkMonitor}
+import utils.{DatabaseSuite, SkunkTestMapping}
+import grackle.test.{SqlWorldCompilerSpec, SqlWorldSpec}
 
-import grackle.test.SqlWorldCompilerSpec
-import utils.DatabaseSuite
+object WorldMapping extends SkunkMappingCompanion {
+  def mkMapping[F[_]: Sync](pool: Resource[F,Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
+    new SkunkTestMapping[F](pool, monitor) with SqlWorldMapping[F]
+}
+
+final class WorldSpec extends DatabaseSuite with SqlWorldSpec {
+  lazy val mapping = WorldMapping.mkMapping(pool)
+}
 
 final class WorldCompilerSpec extends DatabaseSuite with SqlWorldCompilerSpec {
 
