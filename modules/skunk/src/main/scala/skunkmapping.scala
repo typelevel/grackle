@@ -102,6 +102,7 @@ abstract class SkunkMapping[F[_]: Sync](
 
         def unarr(x: Any): Any = x match {
           case arr: Arr[a] => (arr.foldLeft(List.empty[Any]) { case (acc, elem) => elem :: acc }).reverse
+          case Some(arr: Arr[a]) => Some((arr.foldLeft(List.empty[Any]) { case (acc, elem) => elem :: acc }).reverse)
           case other => other
         }
 

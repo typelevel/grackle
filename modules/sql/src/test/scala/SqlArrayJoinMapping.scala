@@ -3,34 +3,26 @@
 
 package arrayjoin
 
-import cats.effect.Sync
-import doobie.Transactor
-import doobie.postgres.implicits._
-import doobie.util.meta.Meta
-import edu.gemini.grackle.doobie._
 import edu.gemini.grackle.syntax._
 
-import scala.reflect.ClassTag
+import utils.SqlTestMapping
 
-trait ArrayJoinData[F[_]] extends DoobieMapping[F] {
-
-  implicit def listMeta[T: ClassTag](implicit m: Meta[Array[T]]): Meta[List[T]] =
-    m.imap(_.toList)(_.toArray)
+trait SqlArrayJoinMapping[F[_]] extends SqlTestMapping[F] {
 
   object root extends TableDef("array_join_root") {
-    val id = col("id", Meta[String])
+    val id = col("id", varchar)
   }
 
   object listA extends TableDef("array_join_list_a") {
-    val id = col("id", Meta[String])
-    val rootId = col("root_id", Meta[String], true)
-    val aElem = col("a_elem", Meta[List[String]], true)
+    val id = col("id", varchar)
+    val rootId = col("root_id", nullable(varchar))
+    val aElem = col("a_elem", nullable(list(varchar)))
   }
 
   object listB extends TableDef("array_join_list_b") {
-    val id = col("id", Meta[String])
-    val rootId = col("root_id", Meta[String], true)
-    val bElem = col("b_elem", Meta[Int], true)
+    val id = col("id", varchar)
+    val rootId = col("root_id", nullable(varchar))
+    val bElem = col("b_elem", nullable(int4))
   }
 
   val schema =
@@ -95,9 +87,4 @@ trait ArrayJoinData[F[_]] extends DoobieMapping[F] {
           )
       )
     )
-}
-
-object ArrayJoinData extends DoobieMappingCompanion {
-  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): ArrayJoinData[F] =
-    new DoobieMapping(transactor, monitor) with ArrayJoinData[F]
 }
