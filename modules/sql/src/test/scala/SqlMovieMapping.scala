@@ -3,153 +3,81 @@
 
 package scalars
 
-import java.time.{Duration, LocalDate, LocalTime, OffsetDateTime}
+
+import java.time.{Duration, LocalDate, LocalTime, ZonedDateTime}
 import java.util.UUID
 
 import scala.util.Try
 
 import cats.{Eq, Order}
-import cats.effect.{ Unique => _, _ }
-import cats.syntax.all._
+import cats.implicits._
 import io.circe.Encoder
-import skunk.{Codec, Session}
-import skunk.codec.all._
 
-import edu.gemini.grackle._, skunk._
-import edu.gemini.grackle.syntax._
-import Query._, Path._, Predicate._, Value._
+import edu.gemini.grackle._
+import syntax._
+import Query._
+import Path._
+import Predicate._
+import Value._
 import QueryCompiler._
+import utils.SqlTestMapping
 
-object MovieData {
-  sealed trait Genre extends Product with Serializable
-  object Genre {
-    case object Drama extends Genre
-    case object Action extends Genre
-    case object Comedy extends Genre
-
-    implicit val genreEq: Eq[Genre] = Eq.fromUniversalEquals[Genre]
-
-    def fromString(s: String): Option[Genre] =
-      s.trim.toUpperCase match {
-        case "DRAMA"  => Some(Drama)
-        case "ACTION" => Some(Action)
-        case "COMEDY" => Some(Comedy)
-        case _ => None
-      }
-
-    implicit val genreEncoder: Encoder[Genre] =
-      Encoder[String].contramap(_ match {
-        case Drama => "DRAMA"
-        case Action => "ACTION"
-        case Comedy => "COMEDY"
-      })
-
-    // N.B. would be nice to have `eimap` with A => B and B => Either[String, A]
-    val codec: Codec[Genre] =
-      Codec.simple(
-        {
-          case Drama  => "1"
-          case Action => "2"
-          case Comedy => "3"
-        }, {
-          case "1" => Drama.asRight
-          case "2" => Action.asRight
-          case "3" => Comedy.asRight
-          case n    => s"No such Genre: $n".asLeft
-        },
-        _root_.skunk.data.Type.int4
-      )
-
-  }
-
-  sealed trait Feature
-  object Feature {
-    case object HD extends Feature
-    case object HLS extends Feature
-
-    def fromString(s: String): Feature = (s.trim.toUpperCase: @unchecked) match {
-      case "HD" => HD
-      case "HLS" => HLS
-    }
-
-    implicit def featureEncoder: Encoder[Feature] =
-      Encoder[String].contramap(_.toString)
-  }
-
-  // implicit val durationMeta: Meta[Duration] =
-  //   Meta[Long].timap(Duration.ofMillis)(_.toMillis)
-
-  // implicit val zonedDateTimeMeta: Meta[OffsetDateTime] =
-  //   Meta[Instant].timap(i => OffsetDateTime.ofInstant(i, ZoneOffset.UTC))(_.toInstant)
-
-  // implicit val featureListMeta: Meta[List[Feature]] =
-  //   Meta.Advanced.array[String]("VARCHAR", "_VARCHAR").imap(_.toList.map(Feature.fromString))(_.map(_.toString).toArray)
-
-  implicit val localDateOrder: Order[LocalDate] =
-    Order.from(_.compareTo(_))
-
-  implicit val localTimeOrder: Order[LocalTime] =
-    Order.fromComparable[LocalTime]
-
-  implicit val zonedDateTimeOrder: Order[OffsetDateTime] =
-    Order.from(_.compareTo(_))
-
-  implicit val durationOrder: Order[Duration] =
-    Order.fromComparable[Duration]
-}
-
-trait MovieMapping[F[_]] extends SkunkMapping[F] {
-  import MovieData._
+trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
+  
+  def genre: Codec
+  def feature: Codec
 
   object movies extends TableDef("movies") {
     val id = col("id", uuid)
     val title = col("title", text)
-    val genre = col("genre", Genre.codec)
-    val releaseDate = col("releasedate", date)
-    val showTime = col("showtime", time)
-    val nextShowing = col("nextshowing", timestamptz)
-    val duration = col("duration", int8.imap(Duration.ofMillis)(_.toMillis))
+    val genre = col("genre", self.genre)
+    val releaseDate = col("releasedate", localDate)
+    val showTime = col("showtime", localTime)
+    val nextShowing = col("nextshowing", zonedDateTime)
+    val duration = col("duration", self.duration)
+    val categories = col("categories", list(varchar))
+    val features = col("features", list(feature))
   }
 
   val schema =
     schema"""
-      type Query {
-        movieById(id: UUID!): Movie
-        moviesByGenre(genre: Genre!): [Movie!]!
-        moviesByGenres(genres: [Genre!]): [Movie!]!
-        moviesReleasedBetween(from: Date!, to: Date!): [Movie!]!
-        moviesLongerThan(duration: Interval!): [Movie!]!
-        moviesShownLaterThan(time: Time!): [Movie!]!
-        moviesShownBetween(from: DateTime!, to: DateTime!): [Movie!]!
-        longMovies: [Movie!]!
-      }
-      scalar UUID
-      scalar Time
-      scalar Date
-      scalar DateTime
-      scalar Interval
-      enum Genre {
-        DRAMA
-        ACTION
-        COMEDY
-      }
-      enum Feature {
-        HD
-        HLS
-      }
-      type Movie {
-        id: UUID!
-        title: String!
-        genre: Genre!
-        releaseDate: Date!
-        showTime: Time!
-        nextShowing: DateTime!
-        nextEnding: DateTime!
-        duration: Interval!
-        categories: [String!]!
-        features: [Feature!]!
-      }
-    """
+        type Query {
+          movieById(id: UUID!): Movie
+          moviesByGenre(genre: Genre!): [Movie!]!
+          moviesByGenres(genres: [Genre!]): [Movie!]!
+          moviesReleasedBetween(from: Date!, to: Date!): [Movie!]!
+          moviesLongerThan(duration: Interval!): [Movie!]!
+          moviesShownLaterThan(time: Time!): [Movie!]!
+          moviesShownBetween(from: DateTime!, to: DateTime!): [Movie!]!
+          longMovies: [Movie!]!
+        }
+        scalar UUID
+        scalar Time
+        scalar Date
+        scalar DateTime
+        scalar Interval
+        enum Genre {
+          DRAMA
+          ACTION
+          COMEDY
+        }
+        enum Feature {
+          HD
+          HLS
+        }
+        type Movie {
+          id: UUID!
+          title: String!
+          genre: Genre!
+          releaseDate: Date!
+          showTime: Time!
+          nextShowing: DateTime!
+          nextEnding: DateTime!
+          duration: Interval!
+          categories: [String!]!
+          features: [Feature!]!
+        }
+      """
 
   val QueryType = schema.ref("Query")
   val MovieType = schema.ref("Movie")
@@ -190,22 +118,24 @@ trait MovieMapping[F[_]] extends SkunkMapping[F] {
             SqlField("nextShowing", movies.nextShowing),
             CursorField("nextEnding", nextEnding, List("nextShowing", "duration")),
             SqlField("duration", movies.duration),
-            CursorField("isLong", isLong, List("duration"))
+            SqlField("categories", movies.categories),
+            SqlField("features", movies.features),
+            CursorField("isLong", isLong, List("duration"), hidden = true)
           )
       ),
       LeafMapping[UUID](UUIDType),
       LeafMapping[LocalTime](TimeType),
       LeafMapping[LocalDate](DateType),
-      LeafMapping[OffsetDateTime](DateTimeType),
+      LeafMapping[ZonedDateTime](DateTimeType),
       LeafMapping[Duration](IntervalType),
       LeafMapping[Genre](GenreType),
       LeafMapping[Feature](FeatureType),
       LeafMapping[List[Feature]](ListType(FeatureType))
     )
 
-  def nextEnding(c: Cursor): Result[OffsetDateTime] =
+  def nextEnding(c: Cursor): Result[ZonedDateTime] =
     for {
-      nextShowing <- c.fieldAs[OffsetDateTime]("nextShowing")
+      nextShowing <- c.fieldAs[ZonedDateTime]("nextShowing")
       duration    <- c.fieldAs[Duration]("duration")
     } yield nextShowing.plus(duration)
 
@@ -230,8 +160,8 @@ trait MovieMapping[F[_]] extends SkunkMapping[F] {
   }
 
   object DateTimeValue {
-    def unapply(s: StringValue): Option[OffsetDateTime] =
-      Try(OffsetDateTime.parse(s.value)).toOption
+    def unapply(s: StringValue): Option[ZonedDateTime] =
+      Try(ZonedDateTime.parse(s.value)).toOption
   }
 
   object IntervalValue {
@@ -298,11 +228,68 @@ trait MovieMapping[F[_]] extends SkunkMapping[F] {
         Select("longMovies", Nil, Filter(Eql(UniquePath(List("isLong")), Const(true)), child)).rightIor
     }
   ))
-}
 
-object MovieMapping extends SkunkMappingCompanion {
+  sealed trait Genre extends Product with Serializable
+  object Genre {
+    case object Drama extends Genre
+    case object Action extends Genre
+    case object Comedy extends Genre
 
-  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
-    new SkunkMapping[F](pool, monitor) with MovieMapping[F]
+    implicit val genreEq: Eq[Genre] = Eq.fromUniversalEquals[Genre]
 
+    def fromString(s: String): Option[Genre] =
+      s.trim.toUpperCase match {
+        case "DRAMA"  => Some(Drama)
+        case "ACTION" => Some(Action)
+        case "COMEDY" => Some(Comedy)
+        case _ => None
+      }
+
+    implicit val genreEncoder: io.circe.Encoder[Genre] =
+      Encoder[String].contramap(_ match {
+        case Drama => "DRAMA"
+        case Action => "ACTION"
+        case Comedy => "COMEDY"
+      })
+
+    def fromInt(i: Int): Genre =
+      (i: @unchecked) match {
+        case 1 => Drama
+        case 2 => Action
+        case 3 => Comedy
+      }
+
+    def toInt(f: Genre): Int =
+      f match {
+        case Drama  => 1
+        case Action => 2
+        case Comedy => 3
+      }
+  }
+
+  sealed trait Feature
+  object Feature {
+    case object HD extends Feature
+    case object HLS extends Feature
+
+    def fromString(s: String): Feature = (s.trim.toUpperCase: @unchecked) match {
+      case "HD" => HD
+      case "HLS" => HLS
+    }
+
+    implicit def featureEncoder: io.circe.Encoder[Feature] =
+      Encoder[String].contramap(_.toString)
+  }
+
+  implicit val localDateOrder: Order[LocalDate] =
+    Order.from(_.compareTo(_))
+
+  implicit val localTimeOrder: Order[LocalTime] =
+    Order.fromComparable[LocalTime]
+
+  implicit val zonedDateTimeOrder: Order[ZonedDateTime] =
+    Order.from(_.compareTo(_))
+
+  implicit val durationOrder: Order[Duration] =
+    Order.fromComparable[Duration]
 }

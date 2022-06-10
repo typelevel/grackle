@@ -420,4 +420,37 @@ trait SqlMovieSpec extends AnyFunSuite {
 
     assertWeaklyEqual(res, expected)
   }
+
+  test("query with arrays") {
+    val query = """
+      query {
+        movieById(id: "6a7837fc-b463-4d32-b628-0f4b3065cb21") {
+          categories
+          features
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "movieById" : {
+            "categories" : [
+              "drama",
+              "comedy"
+            ],
+            "features" : [
+              "HD",
+              "HLS"
+            ]
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assert(res == expected)
+  }
 }

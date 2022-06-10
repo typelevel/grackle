@@ -10,6 +10,7 @@ import cats.{Foldable, Reducible}
 import cats.effect.{ Resource, Sync }
 import cats.implicits._
 import _root_.skunk.{ AppliedFragment, Decoder, Session, Fragment => SFragment }
+import _root_.skunk.data.Arr
 import _root_.skunk.codec.all.{ bool, varchar, int4, float8 }
 import _root_.skunk.implicits._
 import org.tpolecat.sourcepos.SourcePos
@@ -99,6 +100,11 @@ abstract class SkunkMapping[F[_]: Sync](
               (offset + decoder.length, (isJoin && !isNullable, decoder, offset) :: accum)
           } ._2.reverse
 
+        def unarr(x: Any): Any = x match {
+          case arr: Arr[a] => (arr.foldLeft(List.empty[Any]) { case (acc, elem) => elem :: acc }).reverse
+          case other => other
+        }
+
         def decode(start: Int, ssx: List[Option[String]]): Either[Decoder.Error, Array[Any]] = {
           val ss = ssx.drop(start)
           decodersWithOffsets.traverse {
@@ -108,7 +114,7 @@ abstract class SkunkMapping[F[_]: Sync](
             // read as normal.
             case (true,  c, offset) => c.opt.decode(0, ss.drop(offset).take(c.length)).map(_.getOrElse(FailedJoin))
             case (false, c, offset) => c    .decode(0, ss.drop(offset).take(c.length))
-          }.map(_.toArray)
+          }.map(_.map(unarr).toArray)
         }
       }
 

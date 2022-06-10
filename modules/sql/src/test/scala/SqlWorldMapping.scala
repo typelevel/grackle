@@ -14,37 +14,37 @@ import utils.SqlTestMapping
 
 trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
   object country extends TableDef("country") {
-    val code           = bpcharCol("code", false, 3)
-    val name           = textCol("name", false)
-    val continent      = textCol("continent", false)
-    val region         = textCol("region", false)
-    val surfacearea    = float4Col("surfacearea", false)
-    val indepyear      = int2Col("indepyear", true)
-    val population     = int4Col("population", false)
-    val lifeexpectancy = float4Col("lifeexpectancy", true)
-    val gnp            = numericCol("gnp", true, 10, 2)
-    val gnpold         = numericCol("gnpold", true, 10, 2)
-    val localname      = textCol("localname", false)
-    val governmentform = textCol("governmentform", false)
-    val headofstate    = textCol("headofstate", true)
-    val capitalId      = int4Col("capital", true)
-    val numCities      = int8Col("num_cities", false)
-    val code2          = bpcharCol("code2", false, 2)
+    val code           = col("code", bpchar(3))
+    val name           = col("name", text)
+    val continent      = col("continent", text)
+    val region         = col("region", text)
+    val surfacearea    = col("surfacearea", float4)
+    val indepyear      = col("indepyear", nullable(int2))
+    val population     = col("population", int4)
+    val lifeexpectancy = col("lifeexpectancy", nullable(float4))
+    val gnp            = col("gnp", nullable(numeric(10, 2)))
+    val gnpold         = col("gnpold", nullable(numeric(10, 2)))
+    val localname      = col("localname", text)
+    val governmentform = col("governmentform", text)
+    val headofstate    = col("headofstate", nullable(text))
+    val capitalId      = col("capital", nullable(int4))
+    val numCities      = col("num_cities", int8)
+    val code2          = col("code2", bpchar(2))
   }
 
   object city extends TableDef("city") {
-    val id          = int4Col("id", false)
-    val countrycode = bpcharCol("countrycode", false, 3)
-    val name        = textCol("name", false)
-    val district    = textCol("district", false)
-    val population  = int4Col("population", false)
+    val id          = col("id", int4)
+    val countrycode = col("countrycode", bpchar(3))
+    val name        = col("name", text)
+    val district    = col("district", text)
+    val population  = col("population", int4)
   }
 
   object countrylanguage extends TableDef("countrylanguage") {
-    val countrycode = bpcharCol("countrycode", false, 3)
-    val language = textCol("language", false)
-    val isOfficial = boolCol("isOfficial", false)
-    val percentage = float4Col("percentage", false)
+    val countrycode = col("countrycode", bpchar(3))
+    val language = col("language", text)
+    val isOfficial = col("isOfficial", bool)
+    val percentage = col("percentage", float4)
   }
 
   val schema =

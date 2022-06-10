@@ -7,27 +7,28 @@ import edu.gemini.grackle._
 import sql.SqlMapping
 
 trait SqlTestMapping[F[_]] extends SqlMapping[F] { outer =>
-  def boolCol(table: String, name: String, nullable: Boolean): ColumnRef
-  def textCol(table: String, name: String, nullable: Boolean): ColumnRef
-  def varcharCol(table: String, name: String, nullable: Boolean): ColumnRef
-  def bpcharCol(table: String, name: String, nullable: Boolean, len: Int): ColumnRef
-  def int2Col(table: String, name: String, nullable: Boolean): ColumnRef
-  def int4Col(table: String, name: String, nullable: Boolean): ColumnRef
-  def int8Col(table: String, name: String, nullable: Boolean): ColumnRef
-  def float4Col(table: String, name: String, nullable: Boolean): ColumnRef
-  def float8Col(table: String, name: String, nullable: Boolean): ColumnRef
-  def numericCol(table: String, name: String, nullable: Boolean, precision: Int, scale: Int): ColumnRef
+  def bool: Codec
+  def text: Codec
+  def varchar: Codec
+  def bpchar(len: Int): Codec
+  def int2: Codec
+  def int4: Codec
+  def int8: Codec
+  def float4: Codec
+  def float8: Codec
+  def numeric(precision: Int, scale: Int): Codec
+
+  def uuid: Codec
+  def localDate: Codec
+  def localTime: Codec
+  def zonedDateTime: Codec
+  def duration: Codec
+
+  def nullable(c: Codec): Codec
+  def list(c: Codec): Codec
 
   class TableDef(table: String) {
-    def boolCol(name: String, nullable: Boolean): ColumnRef = outer.boolCol(table, name, nullable)
-    def textCol(name: String, nullable: Boolean): ColumnRef = outer.textCol(table, name, nullable)
-    def varcharCol(name: String, nullable: Boolean): ColumnRef = outer.varcharCol(table, name, nullable)
-    def bpcharCol(name: String, nullable: Boolean, len: Int): ColumnRef = outer.bpcharCol(table, name, nullable, len)
-    def int2Col(name: String, nullable: Boolean): ColumnRef = outer.int2Col(table, name, nullable)
-    def int4Col(name: String, nullable: Boolean): ColumnRef = outer.int4Col(table, name, nullable)
-    def int8Col(name: String, nullable: Boolean): ColumnRef = outer.int8Col(table, name, nullable)
-    def float4Col(name: String, nullable: Boolean): ColumnRef = outer.float4Col(table, name, nullable)
-    def float8Col(name: String, nullable: Boolean): ColumnRef = outer.float8Col(table, name, nullable)
-    def numericCol(name: String, nullable: Boolean, precision: Int, scale: Int): ColumnRef = outer.numericCol(table, name, nullable, precision, scale)
+    def col(name: String, codec: Codec): ColumnRef =
+      ColumnRef(table, name, codec, null, null)
   }
 }

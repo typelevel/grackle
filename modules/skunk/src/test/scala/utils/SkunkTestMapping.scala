@@ -3,6 +3,8 @@
 
 package utils
 
+import java.time.Duration
+
 import cats.effect.{Resource, Sync}
 import skunk.Session
 
@@ -10,29 +12,32 @@ import edu.gemini.grackle._, skunk._
 
 abstract class SkunkTestMapping[F[_]: Sync](pool: Resource[F,Session[F]], monitor: SkunkMonitor[F])
   extends SkunkMapping[F](pool, monitor) with SqlTestMapping[F] {
-  import _root_.skunk.codec.all._
+  import _root_.skunk.codec.{ all => codec }
 
-  def mkCodec[T](c: _root_.skunk.Codec[T], nullable: Boolean): Codec =
-    (if (nullable) c.opt else c, nullable)
+  def bool: Codec = (codec.bool, false)
+  def text: Codec = (codec.text, false)
+  def varchar: Codec = (codec.varchar, false)
+  def bpchar(len: Int): Codec = (codec.bpchar(len), false)
+  def int2: Codec = (codec.int2.imap(_.toInt)(_.toShort), false)
+  def int4: Codec = (codec.int4, false)
+  def int8: Codec = (codec.int8, false)
+  def float4: Codec = (codec.float4, false)
+  def float8: Codec = (codec.float8, false)
+  def numeric(precision: Int, scale: Int): Codec = (codec.numeric(precision, scale), false)
 
-  def boolCol(table: String, name: String, nullable: Boolean): ColumnRef =
-    ColumnRef(table, name, mkCodec(bool, nullable), null, null)
-  def textCol(table: String, name: String, nullable: Boolean): ColumnRef =
-    ColumnRef(table, name, mkCodec(text, nullable), null, null)
-  def varcharCol(table: String, name: String, nullable: Boolean): ColumnRef =
-    ColumnRef(table, name, mkCodec(varchar, nullable), null, null)
-  def bpcharCol(table: String, name: String, nullable: Boolean, len: Int): ColumnRef =
-    ColumnRef(table, name, mkCodec(bpchar(len), nullable), null, null)
-  def int2Col(table: String, name: String, nullable: Boolean): ColumnRef =
-    ColumnRef(table, name, mkCodec(int2.imap(_.toInt)(_.toShort), nullable), null, null)
-  def int4Col(table: String, name: String, nullable: Boolean): ColumnRef =
-    ColumnRef(table, name, mkCodec(int4, nullable), null, null)
-  def int8Col(table: String, name: String, nullable: Boolean): ColumnRef =
-    ColumnRef(table, name, mkCodec(int8, nullable), null, null)
-  def float4Col(table: String, name: String, nullable: Boolean): ColumnRef =
-    ColumnRef(table, name, mkCodec(float4, nullable), null, null)
-  def float8Col(table: String, name: String, nullable: Boolean): ColumnRef =
-    ColumnRef(table, name, mkCodec(float8, nullable), null, null)
-  def numericCol(table: String, name: String, nullable: Boolean, precision: Int, scale: Int): ColumnRef =
-    ColumnRef(table, name, mkCodec(numeric(precision, scale), nullable), null, null)
+  def uuid: Codec = (codec.uuid, false)
+  def localDate: Codec = (codec.date, false)
+  def localTime: Codec = (codec.time, false)
+  def zonedDateTime: Codec = (codec.timestamptz.imap(_.toZonedDateTime)(_.toOffsetDateTime), false)
+  def duration: Codec = (codec.int8.imap(Duration.ofMillis)(_.toMillis), false)
+
+  def nullable(c: Codec): Codec = (c._1.opt, true)
+
+  def list(c: Codec): Codec = {
+    val cc = c._1.asInstanceOf[_root_.skunk.Codec[Any]]
+    val ty = _root_.skunk.data.Type(s"_${cc.types.head.name}", cc.types) 
+    val encode = (elem: Any) => cc.encode(elem).head.get
+    val decode = (str: String) => cc.decode(0, List(Some(str))).left.map(_.message)
+    (_root_.skunk.Codec.array(encode, decode, ty), false)
+  }
 }
