@@ -3,29 +3,26 @@
 
 package coalesce
 
-import _root_.doobie.util.meta.Meta
-import _root_.doobie.util.transactor.Transactor
-import cats.effect.Sync
-import edu.gemini.grackle._
-import edu.gemini.grackle.doobie._
 import edu.gemini.grackle.syntax._
 
-trait CoalesceMapping[F[_]] extends DoobieMapping[F] {
+import utils.SqlTestMapping
+
+trait SqlCoalesceMapping[F[_]] extends SqlTestMapping[F] {
 
   object r extends TableDef("r") {
-    val id = col("id", Meta[String])
+    val id = col("id", text)
   }
 
   object ca extends TableDef("ca") {
-    val id = col("id", Meta[String])
-    val rid = col("rid", Meta[String])
-    val a = col("a", Meta[Int])
+    val id = col("id", text)
+    val rid = col("rid", text)
+    val a = col("a", int4)
   }
 
   object cb extends TableDef("cb") {
-    val id = col("id", Meta[String])
-    val rid = col("rid", Meta[String])
-    val b = col("b", Meta[Boolean])
+    val id = col("id", text)
+    val rid = col("rid", text)
+    val b = col("b", bool)
   }
 
   val schema =
@@ -90,11 +87,4 @@ trait CoalesceMapping[F[_]] extends DoobieMapping[F] {
           )
       )
     )
-}
-
-object CoalesceMapping extends DoobieMappingCompanion {
-
-  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
-    new DoobieMapping[F](transactor, monitor) with CoalesceMapping[F]
-
 }
