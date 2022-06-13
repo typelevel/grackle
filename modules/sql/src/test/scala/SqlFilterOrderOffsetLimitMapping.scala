@@ -3,12 +3,9 @@
 
 package filterorderoffsetlimit
 
-import cats.effect.Sync
 import cats.implicits._
-import doobie.Transactor
-import doobie.util.meta.Meta
 
-import edu.gemini.grackle._, doobie._, syntax._
+import edu.gemini.grackle._, syntax._
 import Path._
 import Predicate.{Const, Eql}
 import Query.{Binding, Filter, Limit, Offset, OrderBy, OrderSelection, OrderSelections, Select}
@@ -16,22 +13,24 @@ import QueryCompiler.SelectElaborator
 import QueryInterpreter.mkErrorResult
 import Value.{AbsentValue, IntValue, NullValue, ObjectValue, StringValue, TypedEnumValue}
 
-trait FilterOrderOffsetLimitMapping[F[_]] extends DoobieMapping[F] {
+import utils.SqlTestMapping
+
+trait SqlFilterOrderOffsetLimitMapping[F[_]] extends SqlTestMapping[F] {
 
   object root extends TableDef("root") {
-    val id = col("id", Meta[String])
+    val id = col("id", varchar)
   }
 
   object listA extends TableDef("lista") {
-    val id = col("id", Meta[String])
-    val rootId = col("root_id", Meta[String], true)
-    val aElem = col("a_elem", Meta[String], true)
+    val id = col("id", varchar)
+    val rootId = col("root_id", nullable(varchar))
+    val aElem = col("a_elem", nullable(varchar))
   }
 
   object listB extends TableDef("listb") {
-    val id = col("id", Meta[String])
-    val rootId = col("root_id", Meta[String], true)
-    val bElem = col("b_elem", Meta[Int], true)
+    val id = col("id", varchar)
+    val rootId = col("root_id", nullable(varchar))
+    val bElem = col("b_elem", nullable(int4))
   }
 
   val schema =
@@ -201,9 +200,4 @@ trait FilterOrderOffsetLimitMapping[F[_]] extends DoobieMapping[F] {
         other.rightIor
     }
   ))
-}
-
-object FilterOrderOffsetLimitMapping extends DoobieMappingCompanion {
-  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): FilterOrderOffsetLimitMapping[F] =
-    new DoobieMapping(transactor, monitor) with FilterOrderOffsetLimitMapping[F]
 }
