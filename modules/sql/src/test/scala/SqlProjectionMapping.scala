@@ -3,33 +3,32 @@
 
 package projection
 
-import cats.effect.Sync
 import cats.implicits._
-import doobie.Transactor
-import doobie.util.meta.Meta
 
-import edu.gemini.grackle._, doobie._, syntax._
+import edu.gemini.grackle._, syntax._
 import Path._
 import Predicate.{Const, Eql}
 import Query.{Binding, Filter, Select}
 import QueryCompiler.SelectElaborator
 import Value.{BooleanValue, ObjectValue}
 
-trait ProjectionMapping[F[_]] extends DoobieMapping[F] {
+import utils.SqlTestMapping
+
+trait SqlProjectionMapping[F[_]] extends SqlTestMapping[F] {
 
   object level0 extends TableDef("level0") {
-    val id = col("id", Meta[String])
+    val id = col("id", varchar)
   }
 
   object level1 extends TableDef("level1") {
-    val id = col("id", Meta[String])
-    val level0Id = col("level0_id", Meta[String], true)
+    val id = col("id", varchar)
+    val level0Id = col("level0_id", nullable(varchar))
   }
 
   object level2 extends TableDef("level2") {
-    val id = col("id", Meta[String])
-    val level1Id = col("level1_id", Meta[String], true)
-    val attr = col("attr", Meta[Boolean], true)
+    val id = col("id", varchar)
+    val level1Id = col("level1_id", nullable(varchar))
+    val attr = col("attr", nullable(bool))
   }
 
   val schema =
@@ -176,9 +175,4 @@ trait ProjectionMapping[F[_]] extends DoobieMapping[F] {
       case other => other.rightIor
     }
   ))
-}
-
-object ProjectionMapping extends DoobieMappingCompanion {
-  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): ProjectionMapping[F] =
-    new DoobieMapping(transactor, monitor) with ProjectionMapping[F]
 }
