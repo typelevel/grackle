@@ -3,31 +3,29 @@
 
 package embedding
 
-import cats.effect.Sync
-import  _root_.skunk.codec.all._
-import edu.gemini.grackle._, skunk._, syntax._
-import cats.effect.Resource
-import _root_.skunk.Session
+import edu.gemini.grackle.syntax._
 
-trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
+import utils.SqlTestMapping
+
+trait SqlEmbeddingMapping[F[_]] extends SqlTestMapping[F] {
 
   object films extends TableDef("films") {
     val title = col("title", text)
-    val synopsisShort = col("synopsis_short", text.opt)
-    val synopsisLong = col("synopsis_long", text.opt)
+    val synopsisShort = col("synopsis_short", nullable(text))
+    val synopsisLong = col("synopsis_long", nullable(text))
   }
 
   object series extends TableDef("series") {
     val title = col("title", text)
-    val synopsisShort = col("synopsis_short", text.opt)
-    val synopsisLong = col("synopsis_long", text.opt)
+    val synopsisShort = col("synopsis_short", nullable(text))
+    val synopsisLong = col("synopsis_long", nullable(text))
   }
 
   object episodes extends TableDef("episodes2") {
     val title = col("title", text)
-    val seriesTitle = col("series_title", text.opt)
-    val synopsisShort = col("synopsis_short", text.opt)
-    val synopsisLong = col("synopsis_long", text.opt)
+    val seriesTitle = col("series_title", text)
+    val synopsisShort = col("synopsis_short", nullable(text))
+    val synopsisLong = col("synopsis_long", nullable(text))
   }
 
   val schema =
@@ -135,11 +133,4 @@ trait EmbeddingMapping[F[_]] extends SkunkMapping[F] {
           )
       )
     )
-}
-
-object EmbeddingMapping extends SkunkMappingCompanion {
-
-  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
-    new SkunkMapping[F](pool, monitor) with EmbeddingMapping[F]
-
 }
