@@ -3,14 +3,10 @@
 
 package composed
 
-import _root_.doobie.util.meta.Meta
-import _root_.doobie.util.transactor.Transactor
 import cats.Monad
 import cats.data.Ior
-import cats.effect.Sync
 import cats.implicits._
 import edu.gemini.grackle._
-import edu.gemini.grackle.doobie._
 import edu.gemini.grackle.sql.Like
 import edu.gemini.grackle.syntax._
 
@@ -20,6 +16,8 @@ import Predicate._
 import Value._
 import QueryCompiler._
 import QueryInterpreter.mkErrorResult
+
+import utils.SqlTestMapping
 
 /* Currency component */
 
@@ -83,39 +81,39 @@ object CurrencyMapping {
 
 /* World component */
 
-trait WorldMapping[F[_]] extends DoobieMapping[F] {
-
+trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
   object country extends TableDef("country") {
-    val code           = col("code", Meta[String])
-    val name           = col("name", Meta[String])
-    val continent      = col("continent", Meta[String])
-    val region         = col("region", Meta[String])
-    val surfacearea    = col("surfacearea", Meta[String])
-    val indepyear      = col("indepyear", Meta[Int], true)
-    val population     = col("population", Meta[Int])
-    val lifeexpectancy = col("lifeexpectancy", Meta[String], true)
-    val gnp            = col("gnp", Meta[String], true)
-    val gnpold         = col("gnpold", Meta[String], true)
-    val localname      = col("localname", Meta[String])
-    val governmentform = col("governmentform", Meta[String])
-    val headofstate    = col("headofstate", Meta[String], true)
-    val capitalId      = col("capitalId", Meta[String], true)
-    val code2          = col("code2", Meta[String])
+    val code           = col("code", bpchar(3))
+    val name           = col("name", text)
+    val continent      = col("continent", text)
+    val region         = col("region", text)
+    val surfacearea    = col("surfacearea", float4)
+    val indepyear      = col("indepyear", nullable(int2))
+    val population     = col("population", int4)
+    val lifeexpectancy = col("lifeexpectancy", nullable(float4))
+    val gnp            = col("gnp", nullable(numeric(10, 2)))
+    val gnpold         = col("gnpold", nullable(numeric(10, 2)))
+    val localname      = col("localname", text)
+    val governmentform = col("governmentform", text)
+    val headofstate    = col("headofstate", nullable(text))
+    val capitalId      = col("capital", nullable(int4))
+    val numCities      = col("num_cities", int8)
+    val code2          = col("code2", bpchar(2))
   }
 
   object city extends TableDef("city") {
-    val id          = col("id", Meta[Int])
-    val countrycode = col("countrycode", Meta[String])
-    val name        = col("name", Meta[String])
-    val district    = col("district", Meta[String])
-    val population  = col("population", Meta[Int])
+    val id          = col("id", int4)
+    val countrycode = col("countrycode", bpchar(3))
+    val name        = col("name", text)
+    val district    = col("district", text)
+    val population  = col("population", int4)
   }
 
   object countrylanguage extends TableDef("countrylanguage") {
-    val countrycode = col("countrycode", Meta[String])
-    val language = col("language", Meta[String])
-    val isOfficial = col("isOfficial", Meta[String])
-    val percentage = col("percentage", Meta[String])
+    val countrycode = col("countrycode", bpchar(3))
+    val language = col("language", text)
+    val isOfficial = col("isOfficial", bool)
+    val percentage = col("percentage", float4)
   }
 
   val schema =
@@ -219,16 +217,9 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
     )
 }
 
-object WorldMapping extends DoobieMappingCompanion {
-
-  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
-    new DoobieMapping[F](transactor, monitor) with WorldMapping[F]
-
-}
-
 /* Composition */
 
-class ComposedMapping[F[_] : Monad]
+class SqlComposedMapping[F[_] : Monad]
   (world: Mapping[F], currency: Mapping[F]) extends Mapping[F] {
   val schema =
     schema"""
@@ -316,10 +307,4 @@ class ComposedMapping[F[_] : Monad]
         Select("cities", Nil, Filter(Like(UniquePath(List("name")), namePattern, true), child)).rightIor
     }
   ))
-}
-
-object ComposedMapping extends DoobieMappingCompanion {
-
-  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
-    new ComposedMapping[F](WorldMapping.mkMapping(transactor, monitor), CurrencyMapping[F])
 }
