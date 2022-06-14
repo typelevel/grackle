@@ -3,26 +3,25 @@
 
 package graph
 
-import cats.effect.Sync
 import cats.implicits._
-import doobie.util.meta.Meta
-import doobie.util.transactor.Transactor
 
-import edu.gemini.grackle._, doobie._
+import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
 import Query._, Path._, Predicate._, Value._
 import QueryCompiler._
 
-trait GraphMapping[F[_]] extends DoobieMapping[F] {
+import utils.SqlTestMapping
+
+trait SqlGraphMapping[F[_]] extends SqlTestMapping[F] {
 
   object graphNode extends TableDef("graph_node") {
-    val id = col("id", Meta[Int])
+    val id = col("id", int4)
   }
 
   object graphEdge extends TableDef("graph_edge") {
-    val id = col("id", Meta[Int])
-    val a = col("a", Meta[Int], nullable = true)
-    val b = col("b", Meta[Int], nullable = true)
+    val id = col("id", int4)
+    val a = col("a", nullable(int4))
+    val b = col("b", nullable(int4))
   }
 
   val schema =
@@ -81,9 +80,4 @@ trait GraphMapping[F[_]] extends DoobieMapping[F] {
       case other => other.rightIor
     }
   ))
-}
-
-object GraphMapping extends DoobieMappingCompanion {
-  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
-    new DoobieMapping[F](transactor, monitor) with GraphMapping[F]
 }
