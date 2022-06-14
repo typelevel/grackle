@@ -3,36 +3,37 @@
 
 package interfaces
 
-import cats.effect.{Resource, Sync}
 import cats.kernel.Eq
-import cats.syntax.all._
 import io.circe.Encoder
-import skunk.{Codec, Session}
-import skunk.codec.all._
 
-import edu.gemini.grackle._, skunk._, syntax._
+import edu.gemini.grackle._
+import syntax._
 import Path._, Predicate._
 
-trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
+import utils.SqlTestMapping
+
+trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
+
+  def entityType: Codec
 
   object entities extends TableDef("entities") {
     val id                     = col("id", text)
-    val entityType             = col("entity_type", EntityType.codec)
-    val title                  = col("title", text.opt)
-    val filmRating             = col("film_rating", text.opt)
-    val filmLabel              = col("film_label", int4.opt)
-    val seriesNumberOfEpisodes = col("series_number_of_episodes", int4.opt)
-    val seriesLabel            = col("series_label", text.opt)
-    val synopsisShort          = col("synopsis_short", text.opt)
-    val synopsisLong           = col("synopsis_long", text.opt)
+    val entityType             = col("entity_type", self.entityType)
+    val title                  = col("title", nullable(text))
+    val filmRating             = col("film_rating", nullable(text))
+    val filmLabel              = col("film_label", nullable(int4))
+    val seriesNumberOfEpisodes = col("series_number_of_episodes", nullable(int4))
+    val seriesLabel            = col("series_label", nullable(text))
+    val synopsisShort          = col("synopsis_short", nullable(text))
+    val synopsisLong           = col("synopsis_long", nullable(text))
   }
 
   object episodes extends TableDef("episodes") {
     val id                     = col("id", text)
-    val title                  = col("title", text.opt)
+    val title                  = col("title", nullable(text))
     val seriesId               = col("series_id", text)
-    val synopsisShort          = col("synopsis_short", text.opt)
-    val synopsisLong           = col("synopsis_long", text.opt)
+    val synopsisShort          = col("synopsis_short", nullable(text))
+    val synopsisLong           = col("synopsis_long", nullable(text))
   }
 
   val schema =
@@ -110,6 +111,7 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
         tpe = FilmType,
         fieldMappings =
           List(
+            SqlField("id", entities.id, key = true),
             SqlField("rating", entities.filmRating),
             SqlField("label", entities.filmLabel)
           )
@@ -118,6 +120,7 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
         tpe = SeriesType,
         fieldMappings =
           List(
+            SqlField("id", entities.id, key = true),
             SqlField("numberOfEpisodes", entities.seriesNumberOfEpisodes),
             SqlObject("episodes", Join(entities.id, episodes.seriesId)),
             SqlField("label", entities.seriesLabel)
@@ -183,47 +186,37 @@ trait InterfacesMapping[F[_]] extends SkunkMapping[F] {
       }
     }
   }
+
+  sealed trait EntityType extends Product with Serializable
+  object EntityType {
+    case object Film extends EntityType
+    case object Series extends EntityType
+
+    implicit val entityTypeEq: Eq[EntityType] = Eq.fromUniversalEquals[EntityType]
+
+    def fromString(s: String): Option[EntityType] =
+      s.trim.toUpperCase match {
+        case "FILM"  => Some(Film)
+        case "SERIES" => Some(Series)
+        case _ => None
+      }
+
+    implicit val entityTypeEncoder: io.circe.Encoder[EntityType] =
+      Encoder[String].contramap(_ match {
+        case Film => "FILM"
+        case Series => "SERIES"
+      })
+
+    def fromInt(i: Int): EntityType =
+      (i: @unchecked) match {
+        case 1 => Film
+        case 2 => Series
+      }
+
+    def toInt(e: EntityType): Int =
+      e match {
+        case Film  => 1
+        case Series => 2
+      }
+  }
 }
-
-object InterfacesMapping extends SkunkMappingCompanion {
-
-  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
-    new SkunkMapping[F](pool, monitor) with InterfacesMapping[F]
-
-}
-
-
-sealed trait EntityType extends Product with Serializable
-object EntityType {
-  case object Film extends EntityType
-  case object Series extends EntityType
-
-  implicit val entityTypeEq: Eq[EntityType] = Eq.fromUniversalEquals[EntityType]
-
-  def fromString(s: String): Option[EntityType] =
-    s.trim.toUpperCase match {
-      case "FILM"  => Some(Film)
-      case "SERIES" => Some(Series)
-      case _ => None
-    }
-
-  implicit val entityTypeEncoder: Encoder[EntityType] =
-    Encoder[String].contramap(_ match {
-      case Film => "FILM"
-      case Series => "SERIES"
-    })
-
-  implicit val codec: Codec[EntityType] =
-    Codec.simple(
-      {
-        case Film   => "1"
-        case Series => "2"
-      }, {
-        case "1" => Film.asRight
-        case "2" => Series.asRight
-        case n   => s"No such entity type: $n".asLeft
-      },
-      _root_.skunk.data.Type.int4
-    )
-
- }

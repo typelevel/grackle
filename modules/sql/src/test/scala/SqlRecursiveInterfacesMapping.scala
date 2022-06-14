@@ -3,27 +3,26 @@
 
 package interfaces
 
-import cats.effect.Sync
 import cats.kernel.Eq
-import doobie.util.meta.Meta
-import doobie.util.transactor.Transactor
 import io.circe.Encoder
 
 import edu.gemini.grackle._
-import doobie._
 import syntax._
 import Path._, Predicate._
 
-trait RecursiveInterfacesMapping[F[_]] extends DoobieMapping[F] {
+import utils.SqlTestMapping
+
+trait SqlRecursiveInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
+  def itemType: Codec
 
   object items extends TableDef("recursive_interface_items") {
-    val id       = col("id", Meta[String])
-    val itemType = col("item_type", Meta[ItemType])
+    val id       = col("id", text)
+    val itemType = col("item_type", self.itemType)
   }
 
   object nextItems extends TableDef("recursive_interface_next_items") {
-    val id       = col("id", Meta[String])
-    val nextItem = col("next_item", Meta[String], nullable = true)
+    val id       = col("id", text)
+    val nextItem = col("next_item", nullable(text))
   }
 
   val schema =
@@ -37,12 +36,12 @@ trait RecursiveInterfacesMapping[F[_]] extends DoobieMapping[F] {
       }
       type ItemA implements Item {
         id: ID!
-        itemType: EntityType!
+        itemType: ItemType!
         nextItem: Item
       }
       type ItemB implements Item {
         id: ID!
-        itemType: EntityType!
+        itemType: ItemType!
         nextItem: Item
       }
       enum ItemType {
@@ -115,41 +114,37 @@ trait RecursiveInterfacesMapping[F[_]] extends DoobieMapping[F] {
       }
     }
   }
+
+  sealed trait ItemType extends Product with Serializable
+  object ItemType {
+    case object ItemA extends ItemType
+    case object ItemB extends ItemType
+
+    implicit val itemTypeEq: Eq[ItemType] = Eq.fromUniversalEquals[ItemType]
+
+    def fromString(s: String): Option[ItemType] =
+      s.trim.toUpperCase match {
+        case "ITEM_A"  => Some(ItemA)
+        case "ITEM_B" => Some(ItemB)
+        case _ => None
+      }
+
+    implicit val itemTypeEncoder: io.circe.Encoder[ItemType] =
+      Encoder[String].contramap(_ match {
+        case ItemA => "FILM"
+        case ItemB => "SERIES"
+      })
+
+    def fromInt(i: Int): ItemType =
+      (i: @unchecked) match {
+        case 1 => ItemA
+        case 2 => ItemB
+      }
+
+    def toInt(i: ItemType): Int =
+      i match {
+        case ItemA  => 1
+        case ItemB => 2
+      }
+  }
 }
-
-object RecursiveInterfacesMapping extends DoobieMappingCompanion {
-
-  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
-    new DoobieMapping[F](transactor, monitor) with RecursiveInterfacesMapping[F]
-
-}
-
-sealed trait ItemType extends Product with Serializable
-object ItemType {
-  case object ItemA extends ItemType
-  case object ItemB extends ItemType
-
-  implicit val entityTypeEq: Eq[ItemType] = Eq.fromUniversalEquals[ItemType]
-
-  def fromString(s: String): Option[ItemType] =
-    s.trim.toUpperCase match {
-      case "ITEM_A"  => Some(ItemA)
-      case "ITEM_B" => Some(ItemB)
-      case _ => None
-    }
-
-  implicit val entityTypeEncoder: Encoder[ItemType] =
-    Encoder[String].contramap(_ match {
-      case ItemA => "FILM"
-      case ItemB => "SERIES"
-    })
-
-  implicit val entityTypeMeta: Meta[ItemType] =
-    Meta[Int].timap {
-      case 1 => ItemA
-      case 2 => ItemB
-    } {
-      case ItemA  => 1
-      case ItemB => 2
-    }
- }
