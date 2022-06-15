@@ -3,21 +3,19 @@
 
 package unions
 
-import _root_.doobie.util.meta.Meta
-import _root_.doobie.util.transactor.Transactor
-import cats.effect.Sync
 import edu.gemini.grackle._
-import edu.gemini.grackle.doobie._
 import edu.gemini.grackle.syntax._
 import Path._, Predicate._
 
-trait UnionsMapping[F[_]] extends DoobieMapping[F] {
+import utils.SqlTestMapping
+
+trait SqlUnionsMapping[F[_]] extends SqlTestMapping[F] {
 
   object collections extends TableDef("collections") {
-    val id = col("id", Meta[String])
-    val itemType = col("item_type", Meta[String])
-    val itemA = col("itema", Meta[String])
-    val itemB = col("itemb", Meta[String])
+    val id = col("id", text)
+    val itemType = col("item_type", text)
+    val itemA = col("itema", text)
+    val itemB = col("itemb", text)
   }
 
   val schema =
@@ -95,11 +93,4 @@ trait UnionsMapping[F[_]] extends DoobieMapping[F] {
       }
     }
   }
-}
-
-object UnionsMapping extends DoobieMappingCompanion {
-
-  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
-    new DoobieMapping[F](transactor, monitor) with UnionsMapping[F]
-
 }
