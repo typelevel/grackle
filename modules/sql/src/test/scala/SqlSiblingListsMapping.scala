@@ -4,37 +4,33 @@
 package siblinglists
 
 import cats.implicits._
-import _root_.doobie.util.meta.Meta
-import _root_.doobie.util.transactor.Transactor
-import cats.effect.Sync
 import edu.gemini.grackle.Path.UniquePath
 import edu.gemini.grackle.Predicate.{Const, Eql}
 import edu.gemini.grackle.Query.{Binding, Filter, Select, Unique}
-import edu.gemini.grackle._
-import edu.gemini.grackle.doobie._
 import edu.gemini.grackle.syntax._
 import edu.gemini.grackle.QueryCompiler.SelectElaborator
 import edu.gemini.grackle.Value.StringValue
 
+import utils.SqlTestMapping
 
-trait SiblingListsData[F[_]] extends DoobieMapping[F] {
+trait SqlSiblingListsData[F[_]] extends SqlTestMapping[F] {
 
   object aTable extends TableDef("seq_scan_a") {
-    val id = col("id", Meta[String])
+    val id = col("id", varchar)
   }
   object bTable extends TableDef("seq_scan_b") {
-    val id = col("id", Meta[String])
-    val aId = col("a_id", Meta[String])
+    val id = col("id", varchar)
+    val aId = col("a_id", varchar)
   }
   object cTable extends TableDef("seq_scan_c") {
-    val id = col("id", Meta[String])
-    val bId = col("b_id", Meta[String])
-    val nameC = col("name_c", Meta[String])
+    val id = col("id", varchar)
+    val bId = col("b_id", varchar)
+    val nameC = col("name_c", varchar)
   }
   object dTable extends TableDef("seq_scan_d") {
-    val id = col("id", Meta[String])
-    val bId = col("b_id", Meta[String])
-    val nameD = col("name_d", Meta[String])
+    val id = col("id", varchar)
+    val bId = col("b_id", varchar)
+    val nameD = col("name_d", varchar)
   }
 
   val schema =
@@ -120,12 +116,5 @@ trait SiblingListsData[F[_]] extends DoobieMapping[F] {
       }
     )
   )
-
-}
-
-object SiblingListsData extends DoobieMappingCompanion {
-
-  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
-    new DoobieMapping[F](transactor, monitor) with SiblingListsData[F]
 
 }
