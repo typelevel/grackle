@@ -13,34 +13,6 @@ import syntax._
 
 import GraphQLResponseTests.assertWeaklyEqual
 
-trait SqlMutationSchema {
-
-  val schema =
-    schema"""
-      type Query {
-        city(id: Int!): City
-      }
-      type Mutation {
-        updatePopulation(id: Int!, population: Int!): City
-        createCity(
-          name: String!
-          countryCode: String!
-          population: Int!
-        ): City
-      }
-      type City {
-        name: String!
-        country: Country!
-        population: Int!
-      }
-      type Country {
-        name: String!
-        cities: [City!]!
-      }
-    """
-
-}
-
 trait SqlMutationSpec extends AnyFunSuite {
 
   def mapping: QueryExecutor[IO, Json]

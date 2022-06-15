@@ -3,43 +3,58 @@
 
 package mutation
 
-import cats.effect.{ MonadCancel, Sync }
 import cats.syntax.all._
-import doobie.{ Meta, Transactor }
-import doobie.implicits._
 import fs2.Stream
 
 import edu.gemini.grackle._
-import doobie.DoobieMapping
-import doobie.DoobieMappingCompanion
-import doobie.DoobieMonitor
+import syntax._
 import Path._
 import Predicate._
 import Query._
 import QueryCompiler._
 import Value._
 
-import grackle.test.SqlMutationSchema
+import utils.SqlTestMapping
 
-trait MutationSchema[F[_]] extends DoobieMapping[F] with SqlMutationSchema {
-
+trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
   object country extends TableDef("country") {
-    val code = col("code", Meta[String])
-    val name = col("name", Meta[String])
+    val code = col("code", bpchar(3))
+    val name = col("name", text)
   }
 
   object city extends TableDef("city") {
-    val id          = col("id", Meta[Int])
-    val countrycode = col("countrycode", Meta[String])
-    val name        = col("name", Meta[String])
-    val population  = col("population", Meta[Int])
+    val id          = col("id", int4)
+    val countrycode = col("countrycode", bpchar(2))
+    val name        = col("name", text)
+    val population  = col("population", int4)
   }
 
-}
+  val schema =
+    schema"""
+      type Query {
+        city(id: Int!): City
+      }
+      type Mutation {
+        updatePopulation(id: Int!, population: Int!): City
+        createCity(
+          name: String!
+          countryCode: String!
+          population: Int!
+        ): City
+      }
+      type City {
+        name: String!
+        country: Country!
+        population: Int!
+      }
+      type Country {
+        name: String!
+        cities: [City!]!
+      }
+    """
 
-trait MutationMapping[F[_]] extends MutationSchema[F] {
-
-  implicit def ev: MonadCancel[F, Throwable]
+  def updatePopulation(id: Int, population: Int): F[Unit]
+  def createCity(name: String, countryCode: String, population: Int): F[Int]
 
   val QueryType    = schema.ref("Query")
   val MutationType = schema.ref("Mutation")
@@ -62,13 +77,7 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
               case None =>
                 QueryInterpreter.mkErrorResult[Unit](s"Implementation error, expected id and population in $e.").pure[Stream[F,*]]
               case Some((id, pop)) =>
-                Stream.eval {
-                  sql"update city set population=$pop where id=$id"
-                    .update
-                    .run
-                    .transact(transactor)
-                    .as(().rightIor)
-                }
+                Stream.eval(updatePopulation(id, pop)).map(_.rightIor)
               }
           }),
           SqlRoot("createCity", mutation = Mutation { (child, e) =>
@@ -76,15 +85,8 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
               case None =>
                 QueryInterpreter.mkErrorResult[(Query, Cursor.Env)](s"Implementation error: expected name, countryCode and population in $e.").pure[Stream[F,*]]
               case Some((name, cc, pop)) =>
-                Stream.eval {
-                  sql"""
-                      INSERT INTO city (id, name, countrycode, district, population)
-                      VALUES (nextval('city_id'), $name, $cc, 'ignored', $pop)
-                      RETURNING id
-                    """.query[Int]
-                      .unique
-                      .transact(transactor)
-                      .map { id => (Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child)), e).rightIor }
+                Stream.eval(createCity(name, cc, pop)).map { id =>
+                  (Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child)), e).rightIor
                 }
             }
           }),
@@ -135,13 +137,4 @@ trait MutationMapping[F[_]] extends MutationSchema[F] {
 
     }
   ))
-}
-
-object MutationMapping extends DoobieMappingCompanion {
-
-  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
-    new DoobieMapping[F](transactor, monitor) with MutationMapping[F] {
-      val ev = Sync[F]
-    }
-
 }
