@@ -3,22 +3,21 @@
 
 package tree
 
-import cats.effect.{Resource, Sync}
 import cats.implicits._
-import skunk.Session
-import skunk.codec.all._
 
-import edu.gemini.grackle._, skunk._
+import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
 import Query._, Path._, Predicate._, Value._
 import QueryCompiler._
 
-trait TreeMapping[F[_]] extends SkunkMapping[F] {
+import utils.SqlTestMapping
+
+trait SqlTreeMapping[F[_]] extends SqlTestMapping[F] {
 
   object bintree extends TableDef("bintree") {
     val id = col("id", int4)
-    val leftChild = col("left_child", int4.opt)
-    val rightChild = col("right_child", int4.opt)
+    val leftChild = col("left_child", nullable(int4))
+    val rightChild = col("right_child", nullable(int4))
   }
 
   val schema =
@@ -64,9 +63,4 @@ trait TreeMapping[F[_]] extends SkunkMapping[F] {
       case other => other.rightIor
     }
   ))
-}
-
-object TreeMapping extends SkunkMappingCompanion {
-  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
-    new SkunkMapping[F](pool, monitor) with TreeMapping[F]
 }
