@@ -7,13 +7,13 @@ import java.time.Duration
 
 import cats.effect.{Resource, Sync}
 import skunk.Session
+import skunk.codec.{ all => codec }
+import skunk.circe.codec.{ all => ccodec }
 
 import edu.gemini.grackle._, skunk._
 
 abstract class SkunkTestMapping[F[_]: Sync](pool: Resource[F,Session[F]], monitor: SkunkMonitor[F])
   extends SkunkMapping[F](pool, monitor) with SqlTestMapping[F] {
-  import _root_.skunk.codec.{ all => codec }
-
   def bool: Codec = (codec.bool, false)
   def text: Codec = (codec.text, false)
   def varchar: Codec = (codec.varchar, false)
@@ -30,6 +30,8 @@ abstract class SkunkTestMapping[F[_]: Sync](pool: Resource[F,Session[F]], monito
   def localTime: Codec = (codec.time, false)
   def zonedDateTime: Codec = (codec.timestamptz.imap(_.toZonedDateTime)(_.toOffsetDateTime), false)
   def duration: Codec = (codec.int8.imap(Duration.ofMillis)(_.toMillis), false)
+
+  def jsonb: Codec = (ccodec.jsonb, false)
 
   def nullable(c: Codec): Codec = (c._1.opt, true)
 

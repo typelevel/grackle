@@ -7,10 +7,11 @@ import java.time.{Duration, LocalDate, LocalTime, ZonedDateTime}
 import java.util.UUID
 
 import cats.effect.Sync
-
 import doobie.postgres.implicits._
-import doobie.util.meta.Meta
+import doobie.postgres.circe.jsonb.implicits._
+import doobie.{Get, Meta, Put}
 import doobie.util.transactor.Transactor
+import io.circe.Json
 
 import edu.gemini.grackle._
 import doobie.{DoobieMapping, DoobieMonitor}
@@ -34,6 +35,8 @@ abstract class DoobieTestMapping[F[_]: Sync](transactor: Transactor[F], monitor:
   def localTime: Codec = (Meta[LocalTime], false)
   def zonedDateTime: Codec = (Meta[ZonedDateTime], false)
   def duration: Codec = (Meta[Long].timap(Duration.ofMillis)(_.toMillis), false)
+
+  def jsonb: Codec = (new Meta(Get[Json], Put[Json]), false)
 
   def nullable(c: Codec): Codec = (c._1, true)
 

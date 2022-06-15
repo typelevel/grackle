@@ -24,6 +24,8 @@ trait SqlTestMapping[F[_]] extends SqlMapping[F] { outer =>
   def zonedDateTime: Codec
   def duration: Codec
 
+  def jsonb: Codec
+
   def nullable(c: Codec): Codec
   def list(c: Codec): Codec
 

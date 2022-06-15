@@ -3,21 +3,24 @@
 
 package jsonb
 
-import cats.effect.{Resource, Sync}
 import cats.implicits._
-import skunk.Session
-import skunk.circe.codec.all._
-import skunk.codec.all._
 
-import edu.gemini.grackle._, skunk._, syntax._
-import Query._, Path._, Predicate._, Value._
+import edu.gemini.grackle._
+import syntax._
+
+import Query._
+import Path._
+import Predicate._
+import Value._
 import QueryCompiler._
 
-trait JsonbMapping[F[_]] extends SkunkMapping[F] {
+import utils.SqlTestMapping
+
+trait SqlJsonbMapping[F[_]] extends SqlTestMapping[F] {
 
   object records extends TableDef("records") {
     val id = col("id", int4)
-    val record = col("record", jsonb.opt)
+    val record = col("record", nullable(jsonb))
   }
 
   val schema =
@@ -90,11 +93,4 @@ trait JsonbMapping[F[_]] extends SkunkMapping[F] {
         Select("record", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
     }
   ))
-}
-
-object JsonbMapping extends SkunkMappingCompanion {
-
-  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
-    new SkunkMapping[F](pool, monitor) with JsonbMapping[F]
-
 }

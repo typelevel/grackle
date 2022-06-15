@@ -3,13 +3,9 @@
 
 package jsonb
 
-import doobie.Meta
-import doobie.util.transactor.Transactor
-import cats.effect.Sync
 import cats.implicits._
 import io.circe.Json
 import edu.gemini.grackle._
-import doobie._
 import syntax._
 import Query._
 import Path._
@@ -18,11 +14,13 @@ import Value._
 import QueryCompiler._
 import io.circe.syntax.EncoderOps
 
-trait CursorJsonMapping[F[_]] extends DoobieMapping[F] {
+import utils.SqlTestMapping
+
+trait SqlCursorJsonMapping[F[_]] extends SqlTestMapping[F] {
 
   object brands extends TableDef("brands") {
-    val id = col("id", Meta[Int])
-    val category = col("categories", Meta[Int])
+    val id = col("id", int4)
+    val category = col("categories", int4)
   }
 
   trait Category {
@@ -100,11 +98,4 @@ trait CursorJsonMapping[F[_]] extends DoobieMapping[F] {
         Select("brands", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
     }
   ))
-}
-
-object CursorJsonMapping extends DoobieMappingCompanion {
-
-  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
-    new DoobieMapping[F](transactor, monitor) with CursorJsonMapping[F]
-
 }
