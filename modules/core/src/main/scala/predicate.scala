@@ -215,7 +215,7 @@ object Predicate {
   }
 
   case class In[T: Eq](x: Term[T], y: List[T]) extends Predicate {
-    def apply(c: Cursor): Result[Boolean] = x(c).map(y.contains_)
+    def apply(c: Cursor): Result[Boolean] = x(c).map(y.contains_(_))
     def children = List(x)
     def subst(x: Term[T]): In[T] = copy(x = x)
   }
