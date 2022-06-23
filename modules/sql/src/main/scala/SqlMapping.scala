@@ -690,33 +690,25 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
   /** Returns the key columns for the context type */
   def keyColumnsForType(context: Context): List[SqlColumn] = {
-    keyColumnsMemo.get(context.resultPath) match {
-      case Some(cols) => cols
-      case None =>
-        val cols =
-          objectMapping(context).map { obj =>
-            val objectKeys = obj.fieldMappings.collect {
-              case cm: SqlField if cm.key => SqlColumn.TableColumn(context, cm.columnRef)
-            }
+    val cols =
+      objectMapping(context).map { obj =>
+        val objectKeys = obj.fieldMappings.collect {
+          case cm: SqlField if cm.key => SqlColumn.TableColumn(context, cm.columnRef)
+        }
 
-            val interfaceKeys = context.tpe.underlyingObject match {
-              case Some(ot: ObjectType) =>
-                ot.interfaces.flatMap(nt => keyColumnsForType(context.asType(nt)))
-              case _ => Nil
-            }
+        val interfaceKeys = context.tpe.underlyingObject match {
+          case Some(ot: ObjectType) =>
+            ot.interfaces.flatMap(nt => keyColumnsForType(context.asType(nt)))
+          case _ => Nil
+        }
 
-            (objectKeys ++ interfaceKeys).distinct
-          }.getOrElse(Nil)
+        (objectKeys ++ interfaceKeys).distinct
+      }.getOrElse(Nil)
 
-        if(cols.nonEmpty) {
-          keyColumnsMemo.put(context.resultPath, cols)
-          cols
-        } else sys.error(s"No key columns for type ${context.tpe}")
-    }
+    assert(cols.nonEmpty, s"No key columns for type ${context.tpe}")
+
+    cols
   }
-
-  private val keyColumnsMemo: collection.mutable.Map[List[String], List[SqlColumn]] =
-    collection.mutable.HashMap.empty[List[String], List[SqlColumn]]
 
   /** Returns the columns for leaf field `fieldName` in `context` */
   def columnsForLeaf(context: Context, fieldName: String): List[SqlColumn] =
