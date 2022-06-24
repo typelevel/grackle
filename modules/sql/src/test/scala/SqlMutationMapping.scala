@@ -1,7 +1,7 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package mutation
+package grackle.test
 
 import cats.syntax.all._
 import fs2.Stream
@@ -13,8 +13,6 @@ import Predicate._
 import Query._
 import QueryCompiler._
 import Value._
-
-import utils.SqlTestMapping
 
 trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
   object country extends TableDef("country") {

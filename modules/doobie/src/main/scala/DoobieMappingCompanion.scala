@@ -17,7 +17,7 @@ trait DoobieMappingCompanion {
     mkMapping(transactor, monitor)
   }
 
-  //@deprecated("Use mkMapping instead", "0.2.0")
+  @deprecated("Use mkMapping instead", "0.2.0")
   def fromTransactor[F[_] : Sync](transactor: Transactor[F]): Mapping[F] =
     mkMapping(transactor)
 }

@@ -3,15 +3,18 @@
 
 package subscription
 
-import utils.DatabaseSuite
-import edu.gemini.grackle.syntax._
-import io.circe.Json
-import cats.effect.IO
-import cats.effect.unsafe.implicits.global
-import skunk.implicits._
 import scala.concurrent.duration._
 
-class SubscriptionSpec extends DatabaseSuite {
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
+import io.circe.Json
+import skunk.implicits._
+
+import edu.gemini.grackle.syntax._
+
+import grackle.test.SkunkDatabaseSuite
+
+class SubscriptionSpec extends SkunkDatabaseSuite {
 
   lazy val mapping = SubscriptionMapping.mkMapping(pool)
 

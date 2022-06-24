@@ -10,17 +10,14 @@ import org.scalatest.funsuite.AnyFunSuite
 import cats.effect.unsafe.implicits.global
 import edu.gemini.grackle._
 import syntax._
-import sql.{SqlMonitor, SqlStatsMonitor}
+import sql.SqlStatsMonitor
 
 import GraphQLResponseTests.assertWeaklyEqual
 
 trait SqlCoalesceSpec extends AnyFunSuite {
 
   type Fragment
-
-  def monitor: IO[SqlStatsMonitor[IO, Fragment]]
-
-  def mapping(monitor: SqlMonitor[IO, Fragment]): QueryExecutor[IO, Json]
+  def mapping: IO[(QueryExecutor[IO, Json], SqlStatsMonitor[IO, Fragment])]
 
   test("simple coalesced query") {
     val query = """
@@ -99,8 +96,8 @@ trait SqlCoalesceSpec extends AnyFunSuite {
 
     val prog: IO[(Json, List[SqlStatsMonitor.SqlStats])] =
       for {
-        mon <- monitor
-        map  = mapping(mon)
+        mm  <- mapping
+        (map, mon) = mm
         res <- map.compileAndRun(query)
         ss  <- mon.take
       } yield (res, ss)

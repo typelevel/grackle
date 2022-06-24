@@ -1,7 +1,7 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package siblinglists
+package grackle.test
 
 import cats.implicits._
 import edu.gemini.grackle.Path.UniquePath
@@ -10,8 +10,6 @@ import edu.gemini.grackle.Query.{Binding, Filter, Select, Unique}
 import edu.gemini.grackle.syntax._
 import edu.gemini.grackle.QueryCompiler.SelectElaborator
 import edu.gemini.grackle.Value.StringValue
-
-import utils.SqlTestMapping
 
 trait SqlSiblingListsData[F[_]] extends SqlTestMapping[F] {
 

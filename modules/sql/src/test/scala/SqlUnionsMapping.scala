@@ -1,13 +1,11 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package unions
+package grackle.test
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
 import Path._, Predicate._
-
-import utils.SqlTestMapping
 
 trait SqlUnionsMapping[F[_]] extends SqlTestMapping[F] {
 

@@ -1,7 +1,7 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package projection
+package grackle.test
 
 import cats.implicits._
 
@@ -11,8 +11,6 @@ import Predicate.{Const, Eql}
 import Query.{Binding, Filter, Select}
 import QueryCompiler.SelectElaborator
 import Value.{BooleanValue, ObjectValue}
-
-import utils.SqlTestMapping
 
 trait SqlProjectionMapping[F[_]] extends SqlTestMapping[F] {
 

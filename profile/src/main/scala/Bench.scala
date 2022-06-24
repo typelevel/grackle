@@ -247,7 +247,7 @@ object Bench extends IOApp {
       "test"
     )
 
-  val mapping = WorldMapping.fromTransactor(xa)
+  val mapping = WorldMapping.mkMapping(xa)
 
   def runQuery: IO[Unit] = {
     val query = """

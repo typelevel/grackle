@@ -1,7 +1,7 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package world
+package grackle.test
 
 import cats.implicits._
 
@@ -10,7 +10,6 @@ import sql.Like
 import syntax._
 import Query._, Path._, Predicate._, Value._
 import QueryCompiler._
-import utils.SqlTestMapping
 
 trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
   object country extends TableDef("country") {

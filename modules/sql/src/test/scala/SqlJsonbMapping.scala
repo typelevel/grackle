@@ -1,7 +1,7 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package jsonb
+package grackle.test
 
 import cats.implicits._
 
@@ -13,8 +13,6 @@ import Path._
 import Predicate._
 import Value._
 import QueryCompiler._
-
-import utils.SqlTestMapping
 
 trait SqlJsonbMapping[F[_]] extends SqlTestMapping[F] {
 

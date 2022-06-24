@@ -11,7 +11,7 @@ import cats.effect.unsafe.implicits.global
 import edu.gemini.grackle._
 import Path._
 import Predicate._
-import sql.{Like, SqlMonitor, SqlStatsMonitor}
+import sql.{Like, SqlStatsMonitor}
 import syntax._
 
 import GraphQLResponseTests.assertWeaklyEqual
@@ -20,8 +20,7 @@ import GraphQLResponseTests.assertWeaklyEqual
 trait SqlWorldCompilerSpec extends AnyFunSuite {
 
   type Fragment
-  def monitor: IO[SqlStatsMonitor[IO, Fragment]]
-  def mapping(monitor: SqlMonitor[IO, Fragment]): QueryExecutor[IO, Json]
+  def mapping: IO[(QueryExecutor[IO, Json], SqlStatsMonitor[IO, Fragment])]
 
   /** Expected SQL string for the simple restricted query test. */
   def simpleRestrictedQuerySql: String
@@ -53,8 +52,8 @@ trait SqlWorldCompilerSpec extends AnyFunSuite {
 
     val prog: IO[(Json, List[SqlStatsMonitor.SqlStats])] =
       for {
-        mon <- monitor
-        map  = mapping(mon)
+        mm  <- mapping
+        (map, mon) = mm
         res <- map.compileAndRun(query)
         ss  <- mon.take
       } yield (res, ss.map(_.normalize))
@@ -111,8 +110,8 @@ trait SqlWorldCompilerSpec extends AnyFunSuite {
 
     val prog: IO[(Json, List[SqlStatsMonitor.SqlStats])] =
       for {
-        mon <- monitor
-        map  = mapping(mon)
+        mm  <- mapping
+        (map, mon) = mm
         res <- map.compileAndRun(query)
         ss  <- mon.take
       } yield (res, ss.map(_.normalize))
