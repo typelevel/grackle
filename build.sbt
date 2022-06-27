@@ -115,7 +115,7 @@ lazy val sql = project
   .in(file("modules/sql"))
   .enablePlugins(AutomateHeaderPlugin)
   .disablePlugins(RevolverPlugin)
-  .dependsOn(circe)
+  .dependsOn(core % "test->test;compile->compile", circe)
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-sql",

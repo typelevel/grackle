@@ -1,7 +1,7 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package grackle.test
+package edu.gemini.grackle.skunk.test
 
 import cats.effect.IO
 import skunk.codec.{all => codec}
@@ -11,6 +11,8 @@ import io.circe.Json
 import edu.gemini.grackle.QueryExecutor
 import edu.gemini.grackle.skunk.SkunkMonitor
 import edu.gemini.grackle.sql.SqlStatsMonitor
+
+import edu.gemini.grackle.sql.test._
 
 final class ArrayJoinSpec extends SkunkDatabaseSuite with SqlArrayJoinSpec {
   lazy val mapping = new SkunkTestMapping(pool) with SqlArrayJoinMapping[IO]

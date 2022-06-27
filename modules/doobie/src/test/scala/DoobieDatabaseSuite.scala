@@ -1,7 +1,7 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package grackle.test
+package edu.gemini.grackle.doobie.test
 
 import java.time.{Duration, LocalDate, LocalTime, ZonedDateTime}
 import java.util.UUID
@@ -16,7 +16,7 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 import edu.gemini.grackle.doobie.{DoobieMapping, DoobieMonitor}
 
-import grackle.test.SqlDatabaseSuite
+import edu.gemini.grackle.sql.test._
 
 trait DoobieDatabaseSuite extends SqlDatabaseSuite {
 

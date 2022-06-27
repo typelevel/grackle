@@ -1,7 +1,7 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package grackle.test
+package edu.gemini.grackle.sql.test
 
 import cats.effect.IO
 import io.circe.Json
@@ -14,7 +14,7 @@ import Predicate._
 import sql.{Like, SqlStatsMonitor}
 import syntax._
 
-import GraphQLResponseTests.assertWeaklyEqual
+import grackle.test.GraphQLResponseTests.assertWeaklyEqual
 
 /** Tests that confirm the compiler is writing the queries we want. */
 trait SqlWorldCompilerSpec extends AnyFunSuite {
