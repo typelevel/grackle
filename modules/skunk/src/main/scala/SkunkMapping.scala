@@ -89,33 +89,46 @@ abstract class SkunkMapping[F[_]: Sync](
 
   // And we need to be able to fetch `Rows` given a `Fragment` and a list of decoders.
   def fetch(fragment: Fragment, codecs: List[(Boolean, Codec)]): F[Vector[Array[Any]]] = {
-    lazy val rowDecoder: Decoder[Array[Any]] =
+    val rowDecoder: Decoder[Array[Any]] =
       new Decoder[Array[Any]] {
+        val types = codecs.flatMap { case (_, (d, _)) => d.types }
 
-        lazy val types = codecs.flatMap { case (_, (d, _)) => d.types }
+        def arrToList(arr: Arr[_]): List[Any] =
+          (arr.foldLeft(List.empty[Any]) { case (acc, elem) => elem :: acc }).reverse
 
-        lazy val decodersWithOffsets: List[(Boolean, Decoder[_], Int)] =
-          codecs.foldLeft((0, List.empty[(Boolean, Decoder[_], Int)])) {
-            case ((offset, accum), (isJoin, (decoder, isNullable))) =>
-              (offset + decoder.length, (isJoin && !isNullable, decoder, offset) :: accum)
-          } ._2.reverse
+        def decode(start: Int, ss: List[Option[String]]): Either[Decoder.Error, Array[Any]] = {
+          val ncols = ss.length-start
+          val arr = scala.Array.ofDim[Any](ncols)
 
-        def unarr(x: Any): Any = x match {
-          case arr: Arr[a] => (arr.foldLeft(List.empty[Any]) { case (acc, elem) => elem :: acc }).reverse
-          case Some(arr: Arr[a]) => Some((arr.foldLeft(List.empty[Any]) { case (acc, elem) => elem :: acc }).reverse)
-          case other => other
-        }
+          var i = 0
+          var ss0 = ss.drop(start)
+          var codecs0 = codecs
+          while(i < ncols) {
+            val (isJoin, (decoder, isNullable)) = codecs0.head
+            val len = decoder.length
+            val (seg, tl) = ss0.splitAt(len)
+            val elem: Either[Decoder.Error, Any] =
+              if(isJoin && !isNullable)
+                decoder.opt.decode(0, seg).map(_.getOrElse(FailedJoin))
+              else
+                decoder.decode(0, seg)
 
-        def decode(start: Int, ssx: List[Option[String]]): Either[Decoder.Error, Array[Any]] = {
-          val ss = ssx.drop(start)
-          decodersWithOffsets.traverse {
+            elem match {
+              case Left(err) => return Left(err)
+              case Right(v) =>
+                v match {
+                  case a: Arr[a] => arr(i) = arrToList(a)
+                  case Some(a: Arr[a]) => arr(i) = Some(arrToList(a))
+                  case other => arr(i) = other
+                }
+            }
 
-            // If the column is the outer part of a join and it's a non-nullable in the schema then
-            // we read it as an option and collapse it, using FailedJoin in the None case. Otherwise
-            // read as normal.
-            case (true,  c, offset) => c.opt.decode(0, ss.drop(offset).take(c.length)).map(_.getOrElse(FailedJoin))
-            case (false, c, offset) => c    .decode(0, ss.drop(offset).take(c.length))
-          }.map(_.map(unarr).toArray)
+            i = i + 1
+            ss0 = tl
+            codecs0 = codecs0.tail
+          }
+
+          Right(arr)
         }
       }
 
@@ -123,10 +136,8 @@ abstract class SkunkMapping[F[_]: Sync](
       s.prepare(fragment.fragment.query(rowDecoder)).use { ps =>
         ps.stream(fragment.argument, 1024).compile.toVector
       }
-    } .onError {
+    }.onError {
       case NonFatal(e) => Sync[F].delay(e.printStackTrace())
     }
-
   }
-
 }
