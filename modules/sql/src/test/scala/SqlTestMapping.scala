@@ -3,6 +3,8 @@
 
 package edu.gemini.grackle.sql.test
 
+import org.tpolecat.sourcepos.SourcePos
+
 import edu.gemini.grackle._
 import sql.SqlMapping
 
@@ -29,8 +31,6 @@ trait SqlTestMapping[F[_]] extends SqlMapping[F] { outer =>
   def nullable(c: Codec): Codec
   def list(c: Codec): Codec
 
-  class TableDef(table: String) {
-    def col(name: String, codec: Codec): ColumnRef =
-      ColumnRef(table, name, codec, null, null)
-  }
+  def col[T](colName: String, codec: Codec)(implicit tableName: TableName, pos: SourcePos): ColumnRef =
+    ColumnRef(tableName.name, colName, codec, null, pos)
 }

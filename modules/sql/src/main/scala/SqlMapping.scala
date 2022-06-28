@@ -28,6 +28,11 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   import SqlQuery.{SqlJoin, SqlSelect, SqlUnion}
   import TableExpr.{DerivedTableRef, SubqueryRef, TableRef, WithRef}
 
+  case class TableName(name: String)
+  class TableDef(name: String) {
+    implicit val tableName: TableName = TableName(name)
+  }
+
   /**
    * Name of a SQL schema column and its associated codec, Scala type an defining
    * source position within an `SqlMapping`.

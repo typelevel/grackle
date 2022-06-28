@@ -35,10 +35,8 @@ abstract class DoobieMapping[F[_]: Sync](
   def booleanEncoder = (Put[Boolean], false)
   def doubleEncoder  = (Put[Double], false)
 
-  class TableDef(name: String) {
-    def col[T](colName: String, codec: Meta[T], nullable: Boolean = false)(implicit typeName: TypeName[T], pos: SourcePos): ColumnRef =
-      ColumnRef(name, colName, (codec, nullable), typeName.value, pos)
-  }
+  def col[T](colName: String, codec: Meta[T], nullable: Boolean = false)(implicit tableName: TableName, typeName: TypeName[T], pos: SourcePos): ColumnRef =
+    ColumnRef(tableName.name, colName, (codec, nullable), typeName.value, pos)
 
   implicit def Fragments: SqlFragment[Fragment] =
     new SqlFragment[Fragment] {

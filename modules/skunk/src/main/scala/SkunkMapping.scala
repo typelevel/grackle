@@ -38,20 +38,18 @@ abstract class SkunkMapping[F[_]: Sync](
 
   def intCodec       = (int4, false)
 
-  class TableDef(name: String) {
-    sealed trait IsNullable[T] {
-      def isNullable: Boolean
-    }
-    object IsNullable extends IsNullable0 {
-      implicit def nullable[T]: IsNullable[Option[T]] = new IsNullable[Option[T]] { def isNullable = true }
-    }
-    trait IsNullable0 {
-      implicit def notNullable[T]: IsNullable[T] = new IsNullable[T] { def isNullable = false }
-    }
-
-    def col[T](colName: String, codec: _root_.skunk.Codec[T])(implicit typeName: TypeName[T], isNullable: IsNullable[T], pos: SourcePos): ColumnRef =
-      ColumnRef(name, colName, (codec, isNullable.isNullable), typeName.value, pos)
+  sealed trait IsNullable[T] {
+    def isNullable: Boolean
   }
+  object IsNullable extends IsNullable0 {
+    implicit def nullable[T]: IsNullable[Option[T]] = new IsNullable[Option[T]] { def isNullable = true }
+  }
+  trait IsNullable0 {
+    implicit def notNullable[T]: IsNullable[T] = new IsNullable[T] { def isNullable = false }
+  }
+
+  def col[T](colName: String, codec: _root_.skunk.Codec[T])(implicit tableName: TableName, typeName: TypeName[T], isNullable: IsNullable[T], pos: SourcePos): ColumnRef =
+    ColumnRef(tableName.name, colName, (codec, isNullable.isNullable), typeName.value, pos)
 
   // We need to demonstrate that our `Fragment` type has certain compositional properties.
   implicit def Fragments: SqlFragment[AppliedFragment] =
