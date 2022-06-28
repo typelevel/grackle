@@ -1,7 +1,7 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package grackle.test
+package edu.gemini.grackle.sql.test
 
 import cats.effect.IO
 import io.circe.Json
@@ -11,7 +11,7 @@ import cats.effect.unsafe.implicits.global
 import edu.gemini.grackle._
 import syntax._
 
-import GraphQLResponseTests.assertWeaklyEqual
+import grackle.test.GraphQLResponseTests.assertWeaklyEqual
 
 trait SqlMovieSpec extends AnyFunSuite {
 
@@ -419,5 +419,38 @@ trait SqlMovieSpec extends AnyFunSuite {
     //println(res)
 
     assertWeaklyEqual(res, expected)
+  }
+
+  test("query with arrays") {
+    val query = """
+      query {
+        movieById(id: "6a7837fc-b463-4d32-b628-0f4b3065cb21") {
+          categories
+          features
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "movieById" : {
+            "categories" : [
+              "drama",
+              "comedy"
+            ],
+            "features" : [
+              "HD",
+              "HLS"
+            ]
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assert(res == expected)
   }
 }

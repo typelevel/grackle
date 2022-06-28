@@ -1,7 +1,7 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package grackle.test
+package edu.gemini.grackle.sql.test
 
 import cats.effect.IO
 import io.circe.Json
@@ -11,17 +11,16 @@ import cats.effect.unsafe.implicits.global
 import edu.gemini.grackle._
 import Path._
 import Predicate._
-import sql.{Like, SqlMonitor, SqlStatsMonitor}
+import sql.{Like, SqlStatsMonitor}
 import syntax._
 
-import GraphQLResponseTests.assertWeaklyEqual
+import grackle.test.GraphQLResponseTests.assertWeaklyEqual
 
 /** Tests that confirm the compiler is writing the queries we want. */
 trait SqlWorldCompilerSpec extends AnyFunSuite {
 
   type Fragment
-  def monitor: IO[SqlStatsMonitor[IO, Fragment]]
-  def mapping(monitor: SqlMonitor[IO, Fragment]): QueryExecutor[IO, Json]
+  def mapping: IO[(QueryExecutor[IO, Json], SqlStatsMonitor[IO, Fragment])]
 
   /** Expected SQL string for the simple restricted query test. */
   def simpleRestrictedQuerySql: String
@@ -53,8 +52,8 @@ trait SqlWorldCompilerSpec extends AnyFunSuite {
 
     val prog: IO[(Json, List[SqlStatsMonitor.SqlStats])] =
       for {
-        mon <- monitor
-        map  = mapping(mon)
+        mm  <- mapping
+        (map, mon) = mm
         res <- map.compileAndRun(query)
         ss  <- mon.take
       } yield (res, ss.map(_.normalize))
@@ -111,8 +110,8 @@ trait SqlWorldCompilerSpec extends AnyFunSuite {
 
     val prog: IO[(Json, List[SqlStatsMonitor.SqlStats])] =
       for {
-        mon <- monitor
-        map  = mapping(mon)
+        mm  <- mapping
+        (map, mon) = mm
         res <- map.compileAndRun(query)
         ss  <- mon.take
       } yield (res, ss.map(_.normalize))

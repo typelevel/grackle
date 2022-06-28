@@ -1,17 +1,20 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package subscription
+package edu.gemini.grackle.skunk.test.subscription
 
-import utils.DatabaseSuite
-import edu.gemini.grackle.syntax._
-import io.circe.Json
-import cats.effect.IO
-import cats.effect.unsafe.implicits.global
-import skunk.implicits._
 import scala.concurrent.duration._
 
-class SubscriptionSpec extends DatabaseSuite {
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
+import io.circe.Json
+import skunk.implicits._
+
+import edu.gemini.grackle.syntax._
+
+import edu.gemini.grackle.skunk.test.SkunkDatabaseSuite
+
+class SubscriptionSpec extends SkunkDatabaseSuite {
 
   lazy val mapping = SubscriptionMapping.mkMapping(pool)
 
