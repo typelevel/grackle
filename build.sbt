@@ -8,7 +8,8 @@ val catsTestkitScalaTestVersion = "2.1.5"
 val circeVersion                = "0.14.2"
 val doobieVersion               = "1.0.0-RC2"
 val fs2Version                  = "3.1.1"
-val http4sVersion               = "0.23.12"
+val http4sVersion               = "0.23.13"
+val http4sBlazeVersion          = "0.23.12"
 val kindProjectorVersion        = "0.13.2"
 val literallyVersion            = "1.0.2"
 val logbackVersion              = "1.2.11"
@@ -186,8 +187,8 @@ lazy val demo = project
       "ch.qos.logback"    %  "logback-classic"        % logbackVersion,
       "org.tpolecat"      %% "doobie-core"            % doobieVersion,
       "org.tpolecat"      %% "doobie-postgres"        % doobieVersion,
-      "org.http4s"        %% "http4s-blaze-server"    % http4sVersion,
-      "org.http4s"        %% "http4s-blaze-client"    % http4sVersion,
+      "org.http4s"        %% "http4s-blaze-server"    % http4sBlazeVersion,
+      "org.http4s"        %% "http4s-blaze-client"    % http4sBlazeVersion,
       "org.http4s"        %% "http4s-circe"           % http4sVersion,
       "org.http4s"        %% "http4s-dsl"             % http4sVersion
     )
