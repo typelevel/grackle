@@ -435,6 +435,165 @@ final class FragmentSuite extends CatsSuite {
     //println(res)
     assert(res == expectedResult)
   }
+
+  test("supertype fragment query (1)") {
+    val query = """
+      query withFragments {
+        user(id: 1) {
+          friends {
+            ...profileFields
+          }
+        }
+      }
+
+      fragment profileFields on Profile {
+        id
+      }
+    """
+
+    val expected =
+      Select("user", Nil,
+        Unique(
+          Filter(Eql(UniquePath(List("id")), Const("1")),
+            Select("friends", Nil,
+              Select("id", Nil, Empty)
+            )
+          )
+        )
+      )
+
+    val expectedResult = json"""
+      {
+        "data" : {
+          "user" : {
+            "friends" : [
+              {
+                "id" : "2"
+              },
+              {
+                "id" : "3"
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val compiled = FragmentMapping.compiler.compile(query)
+
+    assert(compiled.map(_.query) == Ior.Right(expected))
+
+    val res = FragmentMapping.run(compiled.right.get).compile.toList.head
+    //println(res)
+    assert(res == expectedResult)
+  }
+
+  test("supertype fragment query (2)") {
+    val query = """
+      query withFragments {
+        user(id: 1) {
+          friends {
+            ... on Profile {
+              id
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "user" : {
+            "friends" : [
+              {
+                "id" : "2"
+              },
+              {
+                "id" : "3"
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("supertype fragment query (3)") {
+    val query = """
+      query withFragments {
+        user(id: 1) {
+          friends {
+            ... on Profile {
+              id
+              ... on User {
+                name
+              }
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "user" : {
+            "friends" : [
+              {
+                "id" : "2",
+                "name" : "Bob"
+              },
+              {
+                "id" : "3",
+                "name" : "Carol"
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("supertype fragment query (4)") {
+    val query = """
+      query withFragments {
+        user(id: 1) {
+          friends {
+            ... on Profile {
+              id
+              name
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Unknown field 'name' in select"
+          }
+        ]
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+    //println(res)
+
+    assert(res == expected)
+  }
 }
 
 object FragmentData {

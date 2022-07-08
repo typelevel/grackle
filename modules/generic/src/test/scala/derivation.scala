@@ -472,6 +472,35 @@ final class DerivationSpec extends CatsSuite {
     assert(res == expected)
   }
 
+  test("supertype fragment query") {
+    val query = """
+      query {
+        human(id: "1000") {
+          id
+          ... on Character {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "human" : {
+            "id" : "1000",
+            "name" : "Luke Skywalker"
+          }
+        }
+      }
+    """
+
+    val res = StarWarsMapping.compileAndRun(query)
+    //println(res)
+
+    assert(res == expected)
+  }
+
   test("count") {
     val query = """
       query {

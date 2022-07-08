@@ -175,6 +175,39 @@ final class CirceSpec extends CatsSuite {
     assert(res == expected)
   }
 
+  test("supertype fragment") {
+    val query = """
+      query {
+        root {
+          object {
+            ... on Child {
+              id
+            }
+            aField
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "root" : {
+            "object" : {
+              "id" : "obj",
+              "aField" : 27
+            }
+          }
+        }
+      }
+    """
+
+    val res = TestCirceMapping.compileAndRun(query)
+    //println(res)
+
+    assert(res == expected)
+  }
+
   test("introspection") {
     val query = """
       query {
