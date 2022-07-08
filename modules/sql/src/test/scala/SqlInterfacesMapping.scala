@@ -3,12 +3,15 @@
 
 package edu.gemini.grackle.sql.test
 
+import cats.implicits._
 import cats.kernel.Eq
 import io.circe.Encoder
 
 import edu.gemini.grackle._
 import syntax._
 import Path._, Predicate._
+import Query._
+import QueryCompiler._
 
 trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
 
@@ -38,6 +41,7 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
     schema"""
       type Query {
         entities: [Entity!]!
+        films: [Film!]!
       }
       interface Entity {
         id: ID!
@@ -91,7 +95,8 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
         tpe = QueryType,
         fieldMappings =
           List(
-            SqlRoot("entities")
+            SqlRoot("entities"),
+            SqlRoot("films"),
           )
       ),
       SqlInterfaceMapping(
@@ -148,6 +153,16 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
                     SqlField("long", entities.synopsisLong)
                   )
               ),
+            List("films", "synopses") ->
+              ObjectMapping(
+                tpe = SynopsesType,
+                fieldMappings =
+                  List(
+                    SqlField("id", entities.id, key = true, hidden = true),
+                    SqlField("short", entities.synopsisShort),
+                    SqlField("long", entities.synopsisLong)
+                  )
+              ),
             List("entities", "episodes", "synopses") ->
               ObjectMapping(
                 tpe = SynopsesType,
@@ -184,6 +199,13 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
       }
     }
   }
+
+  override val selectElaborator = new SelectElaborator(Map(
+    QueryType -> {
+      case Select("films", Nil, child) =>
+        Select("films", Nil, Filter(Eql[EntityType](UniquePath(List("entityType")), Const(EntityType.Film)), child)).rightIor
+    }
+  ))
 
   sealed trait EntityType extends Product with Serializable
   object EntityType {

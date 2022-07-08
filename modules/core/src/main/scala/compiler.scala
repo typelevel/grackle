@@ -406,7 +406,7 @@ object QueryCompiler {
             subtpe <- schema.definition(tpnme)
           } yield {
             transform(child, vars, schema, subtpe).map { ec =>
-              if (tpe.underlyingObject.map(_ =:= subtpe).getOrElse(false)) ec else Narrow(schema.ref(tpnme), ec)
+              if (tpe.underlyingObject.map(_ <:< subtpe).getOrElse(false)) ec else Narrow(schema.ref(tpnme), ec)
             }
           }).getOrElse(mkErrorResult(s"Unknown type '$tpnme' in type condition"))
 

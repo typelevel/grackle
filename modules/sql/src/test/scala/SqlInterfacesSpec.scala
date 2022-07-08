@@ -594,4 +594,43 @@ trait SqlInterfacesSpec extends AnyFunSuite {
 
     assertWeaklyEqual(res, expected)
   }
+
+  test("interface query with supertype fragment") {
+    val query = """
+      query {
+        films {
+          ... on Entity {
+            id
+          }
+          rating
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "films" : [
+            {
+              "id" : "1",
+              "rating" : "PG"
+            },
+            {
+              "id" : "2",
+              "rating" : "U"
+            },
+            {
+              "id" : "3",
+              "rating" : "15"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
 }
