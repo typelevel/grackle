@@ -196,7 +196,7 @@ final class SDLSuite extends CatsSuite {
   test("parse directive definition") {
     val schema = """
       "A directive"
-      directive @delegateField(name: String!) repeatable on OBJECT | INTERFACE
+      directive @delegateField(name: String!) repeatable on OBJECT | INTERFACE | FIELD | FIELD_DEFINITION | ENUM | ENUM_VALUE
     """
 
     val expected =
@@ -208,7 +208,14 @@ final class SDLSuite extends CatsSuite {
             InputValueDefinition(Name("name"), None, NonNull(Left(Named(Name("String")))), None, Nil)
           ),
           true,
-          List(DirectiveLocation.OBJECT, DirectiveLocation.INTERFACE)
+          List(
+            DirectiveLocation.OBJECT,
+            DirectiveLocation.INTERFACE,
+            DirectiveLocation.FIELD,
+            DirectiveLocation.FIELD_DEFINITION,
+            DirectiveLocation.ENUM,
+            DirectiveLocation.ENUM_VALUE
+          )
         )
       )
 
