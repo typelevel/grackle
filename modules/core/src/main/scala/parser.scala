@@ -128,6 +128,7 @@ object GraphQLParser {
     keyword("QUERY")       .as(Ast.DirectiveLocation.QUERY) |
     keyword("MUTATION")    .as(Ast.DirectiveLocation.MUTATION) |
     keyword("SUBSCRIPTION").as(Ast.DirectiveLocation.SUBSCRIPTION) |
+    keyword("FIELD_DEFINITION").as(Ast.DirectiveLocation.FIELD_DEFINITION) |
     keyword("FIELD").as(Ast.DirectiveLocation.FIELD) |
     keyword("FRAGMENT_DEFINITION").as(Ast.DirectiveLocation.FRAGMENT_DEFINITION) |
     keyword("FRAGMENT_SPREAD").as(Ast.DirectiveLocation.FRAGMENT_SPREAD) |
@@ -136,12 +137,11 @@ object GraphQLParser {
     keyword("SCHEMA").as(Ast.DirectiveLocation.SCHEMA) |
     keyword("SCALAR").as(Ast.DirectiveLocation.SCALAR) |
     keyword("OBJECT").as(Ast.DirectiveLocation.OBJECT) |
-    keyword("FIELD_DEFINITION").as(Ast.DirectiveLocation.FIELD_DEFINITION) |
     keyword("ARGUMENT_DEFINITION").as(Ast.DirectiveLocation.ARGUMENT_DEFINITION) |
     keyword("INTERFACE").as(Ast.DirectiveLocation.INTERFACE) |
     keyword("UNION").as(Ast.DirectiveLocation.UNION) |
-    keyword("ENUM").as(Ast.DirectiveLocation.ENUM) |
     keyword("ENUM_VALUE").as(Ast.DirectiveLocation.ENUM_VALUE) |
+    keyword("ENUM").as(Ast.DirectiveLocation.ENUM) |
     keyword("INPUT_OBJECT").as(Ast.DirectiveLocation.INPUT_OBJECT) |
     keyword("INPUT_FIELD_DEFINITION").as(Ast.DirectiveLocation.INPUT_FIELD_DEFINITION)
 
