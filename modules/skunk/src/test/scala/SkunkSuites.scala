@@ -49,7 +49,7 @@ final class GraphSpec extends SkunkDatabaseSuite with SqlGraphSpec {
 }
 
 final class InterfacesSpec extends SkunkDatabaseSuite with SqlInterfacesSpec {
-  lazy val mapping = 
+  lazy val mapping =
     new SkunkTestMapping(pool) with SqlInterfacesMapping[IO] {
       def entityType: Codec =
         (codec.int4.imap(EntityType.fromInt)(EntityType.toInt), false)
@@ -61,7 +61,7 @@ final class JsonbSpec extends SkunkDatabaseSuite with SqlJsonbSpec {
 }
 
 final class MovieSpec extends SkunkDatabaseSuite with SqlMovieSpec {
-  lazy val mapping = 
+  lazy val mapping =
     new SkunkTestMapping(pool) with SqlMovieMapping[IO] {
       def genre: Codec = (codec.int4.imap(Genre.fromInt)(Genre.toInt), false)
       def feature: Codec = (codec.varchar.imap(Feature.fromString)(_.toString), false)
@@ -69,7 +69,7 @@ final class MovieSpec extends SkunkDatabaseSuite with SqlMovieSpec {
 }
 
 final class MutationSpec extends SkunkDatabaseSuite with SqlMutationSpec {
-  lazy val mapping = 
+  lazy val mapping =
     new SkunkTestMapping(pool) with SqlMutationMapping[IO] {
       def updatePopulation(id: Int, population: Int): IO[Unit] =
         pool.use { s =>
@@ -97,7 +97,7 @@ final class ProjectionSpec extends SkunkDatabaseSuite with SqlProjectionSpec {
 }
 
 final class RecursiveInterfacesSpec extends SkunkDatabaseSuite with SqlRecursiveInterfacesSpec {
-  lazy val mapping = 
+  lazy val mapping =
     new SkunkTestMapping(pool) with SqlRecursiveInterfacesMapping[IO] {
       def itemType: Codec =
         (codec.int4.imap(ItemType.fromInt)(ItemType.toInt), false)
@@ -127,7 +127,7 @@ final class WorldCompilerSpec extends SkunkDatabaseSuite with SqlWorldCompilerSp
     SkunkMonitor.statsMonitor[IO].map(mon => (new SkunkTestMapping(pool, mon) with SqlWorldMapping[IO], mon))
 
   def simpleRestrictedQuerySql: String =
-    "SELECT country.code, country.name FROM country WHERE (country.code = $1)"
+    "SELECT country.code, country.name FROM country WHERE ((country.code = $1))"
 
   def simpleFilteredQuerySql: String =
     "SELECT city.id, city.name FROM city WHERE (city.name ILIKE $1)"
