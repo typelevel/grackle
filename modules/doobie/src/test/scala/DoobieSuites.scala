@@ -49,7 +49,7 @@ final class GraphSpec extends DoobieDatabaseSuite with SqlGraphSpec {
 }
 
 final class InterfacesSpec extends DoobieDatabaseSuite with SqlInterfacesSpec {
-  lazy val mapping = 
+  lazy val mapping =
     new DoobieTestMapping(xa) with SqlInterfacesMapping[IO] {
       def entityType: Codec =
         (Meta[Int].timap(EntityType.fromInt)(EntityType.toInt), false)
@@ -61,7 +61,7 @@ final class JsonbSpec extends DoobieDatabaseSuite with SqlJsonbSpec {
 }
 
 final class MovieSpec extends DoobieDatabaseSuite with SqlMovieSpec {
-  lazy val mapping = 
+  lazy val mapping =
     new DoobieTestMapping(xa) with SqlMovieMapping[IO] {
       def genre: Codec = (Meta[Int].imap(Genre.fromInt)(Genre.toInt), false)
       def feature: Codec = (Meta[String].imap(Feature.fromString)(_.toString), false)
@@ -69,7 +69,7 @@ final class MovieSpec extends DoobieDatabaseSuite with SqlMovieSpec {
 }
 
 final class MutationSpec extends DoobieDatabaseSuite with SqlMutationSpec {
-  lazy val mapping = 
+  lazy val mapping =
     new DoobieTestMapping(xa) with SqlMutationMapping[IO] {
       def updatePopulation(id: Int, population: Int): IO[Unit] =
         sql"update city set population=$population where id=$id"
@@ -94,7 +94,7 @@ final class ProjectionSpec extends DoobieDatabaseSuite with SqlProjectionSpec {
 }
 
 final class RecursiveInterfacesSpec extends DoobieDatabaseSuite with SqlRecursiveInterfacesSpec {
-  lazy val mapping = 
+  lazy val mapping =
     new DoobieTestMapping(xa) with SqlRecursiveInterfacesMapping[IO] {
       def itemType: Codec =
         (Meta[Int].timap(ItemType.fromInt)(ItemType.toInt), false)
@@ -124,7 +124,7 @@ final class WorldCompilerSpec extends DoobieDatabaseSuite with SqlWorldCompilerS
     DoobieMonitor.statsMonitor[IO].map(mon => (new DoobieTestMapping(xa, mon) with SqlWorldMapping[IO], mon))
 
   def simpleRestrictedQuerySql: String =
-    "SELECT country.code , country.name FROM country WHERE (country.code = ?)"
+    "SELECT country.code , country.name FROM country WHERE (( country.code = ?) )"
 
   def simpleFilteredQuerySql: String =
     "SELECT city.id , city.name FROM city WHERE (city.name ILIKE ?)"

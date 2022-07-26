@@ -1281,7 +1281,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           for {
             fx <- loop(x, e)
             fy <- loop(y, e)
-          } yield fx |+| op |+| fy
+          } yield Fragments.const("(") |+| fx |+| op |+| fy |+| Fragments.const(")")
         }
 
         def binaryOp2(x: Term[_])(op: Fragment => Fragment, enc: Option[Encoder] = None): Aliased[Fragment] = {
