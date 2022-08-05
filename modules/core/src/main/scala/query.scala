@@ -139,7 +139,7 @@ object Query {
   }
 
   case class OrderSelections(selections: List[OrderSelection[_]]) {
-    def order(lc: List[Cursor]): List[Cursor] = {
+    def order(lc: Seq[Cursor]): Seq[Cursor] = {
       def cmp(x: Cursor, y: Cursor): Int = {
         @tailrec
         def loop(sels: List[OrderSelection[_]]): Int =

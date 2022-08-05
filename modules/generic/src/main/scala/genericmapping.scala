@@ -4,6 +4,8 @@
 package edu.gemini.grackle
 package generic
 
+import scala.collection.Factory
+
 import cats.Monad
 import cats.implicits._
 import fs2.Stream
@@ -169,8 +171,8 @@ object CursorBuilder {
       def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
       override def isList: Boolean = true
-      override def asList: Result[List[Cursor]] = {
-        focus.traverse(elem => elemBuilder.build(context, elem, Some(this), env))
+      override def asList[C](factory: Factory[Cursor, C]): Result[C] = {
+        focus.traverse(elem => elemBuilder.build(context, elem, Some(this), env)).map(_.to(factory))
       }
     }
 
@@ -207,7 +209,7 @@ abstract class AbstractCursor[T] extends Cursor {
 
   def isList: Boolean = false
 
-  def asList: Result[List[Cursor]] =
+  def asList[C](factory: Factory[Cursor, C]): Result[C] =
     mkErrorResult(s"Expected List type, found $tpe")
 
   def isNullable: Boolean = false

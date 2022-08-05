@@ -5,6 +5,7 @@ package edu.gemini.grackle
 package sql
 
 import scala.annotation.tailrec
+import scala.collection.Factory
 
 import cats.data.{NonEmptyList, State}
 import cats.implicits._
@@ -211,6 +212,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def scalaTypeName: String
     def pos: SourcePos
 
+    def resultPath: Option[List[String]]
+
     /** The named owner of this column, if any */
     def namedOwner: Option[TableExpr] =
       owner.findNamedOwner(this)
@@ -306,7 +309,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     }
 
     /** Representation of a column of a table/view */
-    case class TableColumn(owner: ColumnOwner, cr: ColumnRef) extends SqlColumn {
+    case class TableColumn(owner: ColumnOwner, cr: ColumnRef, resultPath: Option[List[String]]) extends SqlColumn {
       def column: String = cr.column
       def codec: Codec = cr.codec
       def scalaTypeName: String = cr.scalaTypeName
@@ -334,8 +337,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     }
 
     object TableColumn {
-      def apply(context: Context, cr: ColumnRef): TableColumn =
-        TableColumn(TableRef(context, cr.table), cr)
+      def apply(context: Context, cr: ColumnRef, resultPath: Option[List[String]]): TableColumn =
+        TableColumn(TableRef(context, cr.table), cr, resultPath)
     }
 
     /** Representation of a synthetic null column
@@ -347,6 +350,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       def codec: Codec = col.codec
       def scalaTypeName: String = col.scalaTypeName
       def pos: SourcePos = col.pos
+
+      def resultPath: Option[List[String]] = col.resultPath
 
       override def underlying: SqlColumn = col.underlying
 
@@ -378,6 +383,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       def scalaTypeName: String = col.scalaTypeName
       def pos: SourcePos = col.pos
 
+      def resultPath: Option[List[String]] = col.resultPath
+
       def subst(from: ColumnOwner, to: ColumnOwner): SqlColumn = {
         val subquery0 =
           (from, to) match {
@@ -407,6 +414,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       def scalaTypeName: String = col.scalaTypeName
       def pos: SourcePos = col.pos
 
+      def resultPath: Option[List[String]] = col.resultPath
+
       def subst(from: ColumnOwner, to: ColumnOwner): SqlColumn =
         copy(col.subst(from, to), cols.map(_.subst(from, to)))
 
@@ -430,6 +439,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       def codec: Codec = intCodec
       def scalaTypeName: String = "Int"
       def pos: SourcePos = null
+
+      def resultPath: Option[List[String]] = None
 
       def subst(from: ColumnOwner, to: ColumnOwner): SqlColumn =
         copy(owner = if(owner.isSameOwner(from)) to else owner, partitionCols = partitionCols.map(_.subst(from, to)))
@@ -472,6 +483,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       def scalaTypeName: String = col.scalaTypeName
       def pos: SourcePos = col.pos
 
+      def resultPath: Option[List[String]] = col.resultPath
+
       override def underlying: SqlColumn = col.underlying
 
       def subst(from: ColumnOwner, to: ColumnOwner): SqlColumn =
@@ -502,6 +515,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       def codec: Codec = col.codec
       def scalaTypeName: String = col.scalaTypeName
       def pos: SourcePos = col.pos
+
+      def resultPath: Option[List[String]] = col.resultPath
 
       override def underlying: SqlColumn = col.underlying
 
@@ -690,7 +705,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   /** Returns the discriminator columns for the context type */
   def discriminatorColumnsForType(context: Context): List[SqlColumn] =
     objectMapping(context).map(_.fieldMappings.collect {
-      case cm: SqlField if cm.discriminator => SqlColumn.TableColumn(context, cm.columnRef)
+      case cm: SqlField if cm.discriminator => SqlColumn.TableColumn(context, cm.columnRef, mkResultPath(context, cm.fieldName))
     }).getOrElse(Nil)
 
   /** Returns the key columns for the context type */
@@ -698,7 +713,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     val cols =
       objectMapping(context).map { obj =>
         val objectKeys = obj.fieldMappings.collect {
-          case cm: SqlField if cm.key => SqlColumn.TableColumn(context, cm.columnRef)
+          case cm: SqlField if cm.key => SqlColumn.TableColumn(context, cm.columnRef, mkResultPath(context, cm.fieldName))
         }
 
         val interfaceKeys = context.tpe.underlyingObject match {
@@ -715,11 +730,14 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     cols
   }
 
+  def mkResultPath(context: Context, fieldName: String): Option[List[String]] =
+    Some(fieldName :: context.resultPath)
+
   /** Returns the columns for leaf field `fieldName` in `context` */
   def columnsForLeaf(context: Context, fieldName: String): List[SqlColumn] =
     fieldMapping(context, fieldName) match {
-      case Some(SqlField(_, cr, _, _, _, _)) => List(SqlColumn.TableColumn(context, cr))
-      case Some(SqlJson(_, cr)) => List(SqlColumn.TableColumn(context, cr))
+      case Some(SqlField(_, cr, _, _, _, _)) => List(SqlColumn.TableColumn(context, cr, mkResultPath(context, fieldName)))
+      case Some(SqlJson(_, cr)) => List(SqlColumn.TableColumn(context, cr, mkResultPath(context, fieldName)))
       case Some(CursorFieldJson(_, _, _, required, _)) =>
         required.flatMap(r => columnsForLeaf(context, r))
       case Some(CursorField(_, _, _, required, _)) =>
@@ -744,8 +762,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   /** Returns the aliased column corresponding to the atomic field `fieldName` in `context` */
   def columnForAtomicField(context: Context, fieldName: String): Option[SqlColumn] = {
     fieldMapping(context, fieldName) match {
-      case Some(SqlField(_, cr, _, _, _, _)) => Some(SqlColumn.TableColumn(context, cr))
-      case Some(SqlJson(_, cr)) => Some(SqlColumn.TableColumn(context, cr))
+      case Some(SqlField(_, cr, _, _, _, _)) => Some(SqlColumn.TableColumn(context, cr, mkResultPath(context, fieldName)))
+      case Some(SqlJson(_, cr)) => Some(SqlColumn.TableColumn(context, cr, mkResultPath(context, fieldName)))
       case _ => None
     }
   }
@@ -1568,14 +1586,14 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         }
 
         def mkJoins(joins0: List[Join], multiTable: Boolean): SqlSelect = {
-          val base = mkSubquery(multiTable, this, SqlColumn.TableColumn(table, joins0.last.child), "_nested")
+          val base = mkSubquery(multiTable, this, SqlColumn.TableColumn(table, joins0.last.child, None), "_nested")
 
           val initialJoins =
             joins0.init.map { j =>
               val parentTable = TableRef(parentContext, j.parent.table)
-              val parentCol = SqlColumn.TableColumn(parentTable, j.parent)
+              val parentCol = SqlColumn.TableColumn(parentTable, j.parent, None)
               val childTable = TableRef(parentContext, j.child.table)
-              val childCol = SqlColumn.TableColumn(childTable, j.child)
+              val childCol = SqlColumn.TableColumn(childTable, j.child, None)
               SqlJoin(
                 parentTable,
                 childTable,
@@ -1587,10 +1605,10 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           val finalJoins = {
             val lastJoin = joins0.last
             val parentTable = TableRef(parentContext, lastJoin.parent.table)
-            val parentCol = SqlColumn.TableColumn(parentTable, lastJoin.parent)
+            val parentCol = SqlColumn.TableColumn(parentTable, lastJoin.parent, None)
 
             if(!isAssociative(context)) {
-              val childCol = SqlColumn.TableColumn(base.table, lastJoin.child)
+              val childCol = SqlColumn.TableColumn(base.table, lastJoin.child, None)
               val finalJoin =
                 SqlJoin(
                   parentTable,
@@ -1601,7 +1619,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
               finalJoin :: Nil
             } else {
               val assocTable = TableExpr.DerivedTableRef(context, Some(base.table.name+"_assoc"), base.table, true)
-              val childCol = SqlColumn.TableColumn(assocTable, lastJoin.child)
+              val childCol = SqlColumn.TableColumn(assocTable, lastJoin.child, None)
 
               val assocJoin =
                 SqlJoin(
@@ -1669,11 +1687,11 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
             case Some(SqlObject(_, firstJoin :: tail)) =>
               val nested = mkJoins(tail, true)
-              val base = mkSubquery(false, nested, SqlColumn.TableColumn(nested.table, firstJoin.child), "_multi")
+              val base = mkSubquery(false, nested, SqlColumn.TableColumn(nested.table, firstJoin.child, None), "_multi")
 
               val initialJoin = {
-                val parentCol = SqlColumn.TableColumn(parentTable, firstJoin.parent)
-                val childCol = SqlColumn.TableColumn(base.table, firstJoin.child)
+                val parentCol = SqlColumn.TableColumn(parentTable, firstJoin.parent, None)
+                val childCol = SqlColumn.TableColumn(base.table, firstJoin.child, None)
                   SqlJoin(
                     parentTable,
                     base.table,
@@ -2511,11 +2529,16 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   final class MappedQuery(
     query: SqlQuery
   ) {
+    val index: Map[SqlColumn, Int] = query.cols.zipWithIndex.toMap
+
+    val colsByResultPath: Map[List[String], List[(SqlColumn, Int)]] =
+      query.cols.filter(_.resultPath.isDefined).groupMap(_.resultPath.getOrElse(???))(col => (col, index(col)))
+
     /** Execute this query in `F` */
     def fetch: F[Table] = {
       for {
         rows <- self.fetch(fragment, query.codecs)
-      } yield Table(query.cols, rows)
+      } yield Table(rows)
     }
 
     /** The query rendered as a `Fragment` with all table and column aliases applied */
@@ -2523,29 +2546,16 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
     /** Return the value of the field `fieldName` in `context` from `table` */
     def selectAtomicField(context: Context, fieldName: String, table: Table): Result[Any] =
-      columnForAtomicField(context, fieldName) match {
-        case Some(col) =>
-          table.select(col).filterNot(_ == FailedJoin).distinct match {
-            case Nil => FailedJoin.rightIor
-            case value :: Nil => value.rightIor
-            case multi =>
-              val obj = context.tpe.dealias
-              if (obj.variantField(fieldName) || obj.field(fieldName).map(_.isNullable).getOrElse(true))
-                // if the field is a non-schema attribute we won't be able to discover whether
-                // or not it's nullable. Instead we assume that the presense of a None implies
-                // nullability, hence stripping out Nones is justified.
-                multi.filterNot(_ == None) match {
-                  case Nil => None.rightIor
-                  case value :: Nil => value.rightIor
-                  case multi =>
-                    mkErrorResult(s"Expected single value for field '$fieldName' of type $obj at ${context.path}, found $multi")
-                }
-              else
-                mkErrorResult(s"Expected single value for field '$fieldName' of type $obj at ${context.path}, found $multi")
-          }
-        case None =>
+      leafIndex(context, fieldName) match {
+        case -1 =>
           val obj = context.tpe.dealias
           mkErrorResult(s"Expected mapping for field '$fieldName' of type $obj")
+
+        case col =>
+          table.select(col).toRightIor(
+            mkOneError(s"Expected single value for field '$fieldName' of type ${context.tpe.dealias} at ${context.path}, found many")
+          )
+
       }
 
     /** Does `table` contain subobjects of the type of the `narrowedContext` type */
@@ -2570,6 +2580,70 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
      */
     def group(context: Context, table: Table): Iterator[Table] =
       table.group(keyColumnsForType(context))
+
+    def keyColumnsForType(context: Context): List[Int] = {
+      val key = context.resultPath
+      keyColumnsMemo.get(context.resultPath) match {
+        case Some(cols) => cols
+        case None =>
+          val keys = SqlMapping.this.keyColumnsForType(context).map(index)
+          keyColumnsMemo.put(key, keys)
+          keys
+      }
+    }
+
+    val keyColumnsMemo: scala.collection.mutable.HashMap[List[String], List[Int]] =
+      scala.collection.mutable.HashMap.empty[List[String], List[Int]]
+
+    def leafIndex(context: Context, fieldName: String): Int =
+      colsByResultPath.get(fieldName :: context.resultPath) match {
+        case None =>
+          columnForAtomicField(context, fieldName).flatMap(index.get).getOrElse(-1)
+        case Some(Nil) => -1
+        case Some(List((_, i))) => i
+        case Some(cols) =>
+          columnForAtomicField(context, fieldName).flatMap(cursorCol =>
+            cols.find(_._1 == cursorCol).map(_._2)
+          ).getOrElse(-1)
+      }
+
+    def encoderForLeaf(tpe: Type): Option[io.circe.Encoder[Any]] =
+      encoderMemo.get(tpe).orElse {
+        SqlMapping.this.encoderForLeaf(tpe) match {
+          case oe@Some(enc) =>
+            encoderMemo.put(tpe, enc)
+            oe
+          case None => None
+        }
+      }
+
+    val intTypeEncoder: io.circe.Encoder[Any] =
+      new io.circe.Encoder[Any] {
+        def apply(i: Any): Json = i match {
+          case i: Int => Json.fromInt(i)
+          case l: Long => Json.fromLong(l)
+          case other => sys.error(s"Not an Int: $other")
+        }
+      }
+
+    val floatTypeEncoder: io.circe.Encoder[Any] =
+      new io.circe.Encoder[Any] {
+        def apply(f: Any): Json = f match {
+          case f: Float => Json.fromFloat(f).getOrElse(sys.error(s"Unrepresentable float $f"))
+          case d: Double => Json.fromDouble(d).getOrElse(sys.error(s"Unrepresentable double $d"))
+          case d: BigDecimal => Json.fromBigDecimal(d)
+          case other => sys.error(s"Not a Float: $other")
+        }
+      }
+
+    val encoderMemo: scala.collection.mutable.HashMap[Type, io.circe.Encoder[Any]] =
+      scala.collection.mutable.HashMap(
+        ScalarType.StringType -> io.circe.Encoder[String].asInstanceOf[io.circe.Encoder[Any]],
+        ScalarType.IntType -> intTypeEncoder,
+        ScalarType.FloatType -> floatTypeEncoder,
+        ScalarType.BooleanType -> io.circe.Encoder[Boolean].asInstanceOf[io.circe.Encoder[Any]],
+        ScalarType.IDType -> io.circe.Encoder[String].asInstanceOf[io.circe.Encoder[Any]]
+      )
   }
 
   object MappedQuery {
@@ -2604,15 +2678,15 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
                 parentContext.forField(fieldName, resultName).
                   getOrElse(sys.error(s"No field '$fieldName' of type ${context.tpe}"))
 
-              List((SqlColumn.TableColumn(parentContext, join.parent), SqlColumn.TableColumn(childContext, join.child)))
+              List((SqlColumn.TableColumn(parentContext, join.parent, None), SqlColumn.TableColumn(childContext, join.child, None)))
 
             case Some(SqlObject(_, joins)) =>
               val init =
                 joins.init.map { join =>
                   val parentTable = TableRef(parentContext, join.parent.table)
-                  val parentCol = SqlColumn.TableColumn(parentTable, join.parent)
+                  val parentCol = SqlColumn.TableColumn(parentTable, join.parent, None)
                   val childTable = TableRef(parentContext, join.child.table)
-                  val childCol = SqlColumn.TableColumn(childTable, join.child)
+                  val childCol = SqlColumn.TableColumn(childTable, join.child, None)
                   (parentCol, childCol)
                 }
 
@@ -2623,9 +2697,9 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
                 val lastJoin = joins.last
                 val parentTable = TableRef(parentContext, lastJoin.parent.table)
-                val parentCol = SqlColumn.TableColumn(parentTable, lastJoin.parent)
+                val parentCol = SqlColumn.TableColumn(parentTable, lastJoin.parent, None)
                 val childTable = TableRef(childContext, lastJoin.child.table)
-                val childCol = SqlColumn.TableColumn(childTable, lastJoin.child)
+                val childCol = SqlColumn.TableColumn(childTable, lastJoin.child, None)
                 (parentCol, childCol)
               }
 
@@ -2865,26 +2939,26 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def numRows: Int
     def numCols: Int
 
-    /** Yield the values of the given column */
-    def select(col: SqlColumn): List[Any]
+    /** Yield the value of the given column */
+    def select(col: Int): Option[Any]
     /** A copy of this `Table` containing only the rows for which all the given columns are defined */
-    def filterDefined(cols: List[SqlColumn]): Table
+
+    def filterDefined(cols: List[Int]): Table
+
     /** True if all the given columns are defined, false otherwise */
-    def definesAll(cols: List[SqlColumn]): Boolean
+    def definesAll(cols: List[Int]): Boolean
+
     /** Group this `Table` by the values of the given columns */
-    def group(cols: List[SqlColumn]): Iterator[Table]
+    def group(cols: List[Int]): Iterator[Table]
 
     def isEmpty: Boolean = false
   }
 
   object Table {
-    def apply(cols: List[SqlColumn], rows: Vector[Array[Any]]): Table =
-      apply(cols.zipWithIndex.toMap, rows)
-
-    def apply(index: SqlColumn => Int, rows: Vector[Array[Any]]): Table = {
-      if (rows.sizeCompare(1) == 0) OneRowTable(index, rows.head)
+    def apply(rows: Vector[Array[Any]]): Table = {
+      if (rows.sizeCompare(1) == 0) OneRowTable(rows.head)
       else if (rows.isEmpty) EmptyTable
-      else MultiRowTable(index, rows)
+      else MultiRowTable(rows)
     }
 
     /** Specialized representation of an empty table */
@@ -2892,36 +2966,31 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       def numRows: Int = 0
       def numCols: Int = 0
 
-      def select(col: SqlColumn): List[Any] = Nil
-      def filterDefined(cols: List[SqlColumn]): Table = this
-      def definesAll(cols: List[SqlColumn]): Boolean = false
-      def group(cols: List[SqlColumn]): Iterator[Table] = Iterator.empty[Table]
+      def select(col: Int): Option[Any] = Some(FailedJoin)
+      def filterDefined(cols: List[Int]): Table = this
+      def definesAll(cols: List[Int]): Boolean = false
+      def group(cols: List[Int]): Iterator[Table] = Iterator.empty[Table]
 
       override def isEmpty = true
     }
 
     /** Specialized representation of a table with exactly one row */
-    case class OneRowTable(index: SqlColumn => Int, row: Array[Any]) extends Table {
+    case class OneRowTable(row: Array[Any]) extends Table {
       def numRows: Int = 1
       def numCols = row.size
 
-      def select(col: SqlColumn): List[Any] = {
-        val c = index(col)
-        row(c) match {
-          case FailedJoin => Nil
-          case other => other :: Nil
-        }
-      }
+      def select(col: Int): Option[Any] =
+        Some(row(col))
 
-      def filterDefined(cols: List[SqlColumn]): Table =
+      def filterDefined(cols: List[Int]): Table =
         if(definesAll(cols)) this else EmptyTable
 
-      def definesAll(cols: List[SqlColumn]): Boolean = {
-        val cs = cols.map(index)
+      def definesAll(cols: List[Int]): Boolean = {
+        val cs = cols
         cs.forall(c => row(c) != FailedJoin)
       }
 
-      def group(cols: List[SqlColumn]): Iterator[Table] = {
+      def group(cols: List[Int]): Iterator[Table] = {
         cols match {
           case Nil => Iterator.single(this)
           case cols =>
@@ -2931,30 +3000,42 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       }
     }
 
-    case class MultiRowTable(index: SqlColumn => Int, rows: Vector[Array[Any]]) extends Table {
+    case class MultiRowTable(rows: Vector[Array[Any]]) extends Table {
       def numRows = rows.size
       def numCols = rows.headOption.map(_.size).getOrElse(0)
 
-      def select(col: SqlColumn): List[Any] = {
-        val c = index(col)
-        rows.iterator.map(r => r(c)).filterNot(_ == FailedJoin).distinct.toList
+      def select(col: Int): Option[Any] = {
+        val c = col
+        var value: Any = FailedJoin
+        val ir = rows.iterator
+        while(ir.hasNext) {
+          ir.next()(c) match {
+            case FailedJoin =>
+            case v if value == FailedJoin => value = v
+            case v if value == v =>
+            case None =>
+            case v@Some(_) if value == None => value = v
+            case _ => return None
+          }
+        }
+        Some(value)
       }
 
-      def filterDefined(cols: List[SqlColumn]): Table = {
-        val cs = cols.map(index)
-        Table(index, rows.filter(r => cs.forall(c => r(c) != FailedJoin)))
+      def filterDefined(cols: List[Int]): Table = {
+        val cs = cols
+        Table(rows.filter(r => cs.forall(c => r(c) != FailedJoin)))
       }
 
-      def definesAll(cols: List[SqlColumn]): Boolean = {
-        val cs = cols.map(index)
+      def definesAll(cols: List[Int]): Boolean = {
+        val cs = cols
         rows.exists(r => cs.forall(c => r(c) != FailedJoin))
       }
 
-      def group(cols: List[SqlColumn]): Iterator[Table] = {
+      def group(cols: List[Int]): Iterator[Table] = {
         cols match {
-          case Nil => rows.iterator.map(r => OneRowTable(index, r))
+          case Nil => rows.iterator.map(r => OneRowTable(r))
           case cols =>
-            val cs = cols.map(index)
+            val cs = cols
 
             val discrim: Array[Any] => Any =
               cs match {
@@ -2965,7 +3046,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
             val nonNull = rows.filter(r => cs.forall(c => r(c) != FailedJoin))
             val grouped = nonNull.groupBy(discrim)
-            grouped.iterator.map { case (_, rows) => Table(index, rows) }
+            grouped.iterator.map { case (_, rows) => Table(rows) }
         }
       }
     }
@@ -2983,30 +3064,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def isLeaf: Boolean = tpe.isLeaf
 
     def asLeaf: Result[Json] =
-      encoderForLeaf(tpe).map(enc => enc(focus).rightIor).getOrElse(
-        focus match {
-          case s: String => Json.fromString(s).rightIor
-          case i: Int => Json.fromInt(i).rightIor
-          case l: Long => Json.fromLong(l).rightIor
-          case f: Float => Json.fromFloat(f) match {
-              case Some(j) => j.rightIor
-              case None => mkErrorResult(s"Unrepresentable float %d")
-            }
-          case d: Double => Json.fromDouble(d) match {
-              case Some(j) => j.rightIor
-              case None => mkErrorResult(s"Unrepresentable double %d")
-            }
-          case d: BigDecimal => Json.fromBigDecimal(d).rightIor
-          case b: Boolean => Json.fromBoolean(b).rightIor
-
-          // This means we are looking at a column with no value because it's the result of a failed
-          // outer join. This is an implementation error.
-          case FailedJoin => sys.error("Unhandled failed join.")
-
-          case other =>
-            mkErrorResult(s"Not a leaf: $other")
-        }
-      )
+      mapped.encoderForLeaf(tpe).map(enc => enc(focus).rightIor).getOrElse(mkErrorResult(s"Not a leaf: $focus"))
 
     def isList: Boolean =
       tpe match {
@@ -3014,8 +3072,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         case _ => false
       }
 
-    def asList: Result[List[Cursor]] = (tpe, focus) match {
-      case (ListType(tpe), it: List[_]) => it.map(f => mkChild(context.asType(tpe), focus = f)).rightIor
+    def asList[C](factory: Factory[Cursor, C]): Result[C] = (tpe, focus) match {
+      case (ListType(tpe), it: List[_]) => it.view.map(f => mkChild(context.asType(tpe), focus = f)).to(factory).rightIor
       case _ => mkErrorResult(s"Expected List type, found $tpe")
     }
 
@@ -3043,6 +3101,8 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
   /** Cursor positioned at a GraphQL result non-leaf */
   case class SqlCursor(context: Context, focus: Any, mapped: MappedQuery, parent: Option[Cursor], env: Env) extends Cursor {
+    assert(focus != Table.EmptyTable || context.tpe.isNullable || context.tpe.isList)
+
     def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
     def mkChild(context: Context = context, focus: Any = focus): SqlCursor =
@@ -3060,11 +3120,11 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def isList: Boolean =
       tpe.isList
 
-    def asList: Result[List[Cursor]] =
+    def asList[C](factory: Factory[Cursor, C]): Result[C] =
       tpe.item.map(_.dealias).map(itemTpe =>
         asTable.map { table =>
           val itemContext = context.asType(itemTpe)
-          mapped.group(itemContext, table).map(table => mkChild(itemContext, focus = table)).to(List)
+          mapped.group(itemContext, table).map(table => mkChild(itemContext, focus = table)).to(factory)
         }
       ).getOrElse(mkErrorResult(s"Not a list: $tpe"))
 

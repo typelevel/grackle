@@ -295,7 +295,7 @@ final class DerivationSpec extends CatsSuite {
         c <- CursorBuilder[Character].build(Context(CharacterType), lukeSkywalker)
         f <- c.field("appearsIn", None)
         n <- f.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
-        l <- n.asList
+        l <- n.asList(List)
         s <- l.traverse(_.asLeaf)
       } yield s
     assert(appearsIn == Ior.Right(List(Json.fromString("NEWHOPE"), Json.fromString("EMPIRE"), Json.fromString("JEDI"))))
@@ -307,7 +307,7 @@ final class DerivationSpec extends CatsSuite {
         c <- CursorBuilder[Human].build(Context(HumanType), lukeSkywalker)
         f <- c.field("friends", None)
         n <- f.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
-        l <- n.asList
+        l <- n.asList(List)
         m <- l.traverse(_.field("name", None))
         p <- m.traverse(_.asNullable.flatMap(_.toRightIor(mkOneError("missing"))))
         q <- p.traverse(_.asLeaf)

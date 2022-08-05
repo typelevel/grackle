@@ -4,6 +4,8 @@
 package edu.gemini.grackle
 package circe
 
+import scala.collection.Factory
+
 import cats.Monad
 import cats.implicits._
 import fs2.Stream
@@ -78,9 +80,9 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
 
     def isList: Boolean = tpe.isList && focus.isArray
 
-    def asList: Result[List[Cursor]] = tpe match {
+    def asList[C](factory: Factory[Cursor, C]): Result[C] = tpe match {
       case ListType(elemTpe) if focus.isArray =>
-        focus.asArray.map(_.map(e => mkChild(context.asType(elemTpe), e)).toList)
+        focus.asArray.map(_.view.map(e => mkChild(context.asType(elemTpe), e)).to(factory))
           .toRightIor(mkOneError(s"Expected List type, found $tpe for focus ${focus.noSpaces}"))
       case _ =>
         mkErrorResult(s"Expected List type, found $tpe for focus ${focus.noSpaces}")
