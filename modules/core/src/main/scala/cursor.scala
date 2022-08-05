@@ -3,6 +3,7 @@
 
 package edu.gemini.grackle
 
+import scala.collection.Factory
 import scala.reflect.{classTag, ClassTag}
 
 import cats.data.Ior
@@ -61,7 +62,14 @@ trait Cursor {
    * this `Cursor` if it is of a list type, or an error or the left hand side
    * otherwise.
    */
-  def asList: Result[List[Cursor]]
+  final def asList: Result[List[Cursor]] = asList(List)
+
+  /**
+   * Yield a collection of `Cursor`s corresponding to the elements of the value at
+   * this `Cursor` if it is of a list type, or an error or the left hand side
+   * otherwise.
+   */
+  def asList[C](factory: Factory[Cursor, C]): Result[C]
 
   /** Is the value at this `Cursor` of a nullable type? */
   def isNullable: Boolean
@@ -231,28 +239,27 @@ object Cursor {
    */
   case class Context(
     rootTpe: Type,
-    path0: List[(String, String, Type)] = Nil
+    path: List[String],
+    resultPath: List[String],
+    typePath: List[Type]
   ) {
-    lazy val path: List[String] = path0.map(_._1)
-    lazy val resultPath: List[String] = path0.map(_._2)
-    lazy val typePath = path0.map(_._3)
-    lazy val tpe: Type = path0.headOption.map(_._3).getOrElse(rootTpe)
+    lazy val tpe: Type = typePath.headOption.getOrElse(rootTpe)
 
     def asType(tpe: Type): Context = {
-      path0 match {
+      typePath match {
         case Nil => copy(rootTpe = tpe)
-        case hd :: tl => copy(path0 = (hd._1, hd._2, tpe) :: tl)
+        case _ :: tl => copy(typePath = tpe :: tl)
       }
     }
 
     def forField(fieldName: String, resultName: String): Option[Context] =
       tpe.underlyingField(fieldName).map { fieldTpe =>
-        copy(path0 = (fieldName, resultName, fieldTpe) :: path0)
+        copy(path = fieldName :: path, resultPath = resultName :: resultPath, typePath = fieldTpe :: typePath)
       }
 
     def forField(fieldName: String, resultName: Option[String]): Option[Context] =
       tpe.underlyingField(fieldName).map { fieldTpe =>
-        copy(path0 = (fieldName, resultName.getOrElse(fieldName), fieldTpe) :: path0)
+        copy(path = fieldName :: path, resultPath = resultName.getOrElse(fieldName) :: resultPath, typePath = fieldTpe :: typePath)
       }
 
     def forPath(path1: List[String]): Option[Context] =
@@ -263,13 +270,13 @@ object Cursor {
 
     def forFieldOrAttribute(fieldName: String, resultName: Option[String]): Context = {
       val fieldTpe = tpe.underlyingField(fieldName).getOrElse(ScalarType.AttributeType)
-      copy(path0 = (fieldName, resultName.getOrElse(fieldName), fieldTpe) :: path0)
+      copy(path = fieldName :: path, resultPath = resultName.getOrElse(fieldName) :: resultPath, typePath = fieldTpe :: typePath)
     }
 
     override def equals(other: Any): Boolean =
       other match {
-        case Context(oRootTpe, oPath0) =>
-          rootTpe =:= oRootTpe && path0.corresponds(oPath0)((x, y) => x._1 == y._1 && x._2 == y._2)
+        case Context(oRootTpe, oPath, oResultPath, _) =>
+          rootTpe =:= oRootTpe && resultPath == oResultPath && path == oPath
         case _ => false
       }
 
@@ -280,10 +287,10 @@ object Cursor {
     def apply(rootTpe: Type, fieldName: String, resultName: Option[String]): Option[Context] = {
       for {
         tpe <- rootTpe.underlyingField(fieldName)
-      } yield new Context(rootTpe, List((fieldName, resultName.getOrElse(fieldName), tpe)))
+      } yield new Context(rootTpe, List(fieldName), List(resultName.getOrElse(fieldName)), List(tpe))
     }
 
-    def apply(rootTpe: Type): Context = Context(rootTpe, Nil)
+    def apply(rootTpe: Type): Context = Context(rootTpe, Nil, Nil, Nil)
   }
 
   def flatten(c: Cursor): Result[List[Cursor]] =

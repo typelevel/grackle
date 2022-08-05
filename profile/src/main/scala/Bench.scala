@@ -249,28 +249,38 @@ object Bench extends IOApp {
 
   val mapping = WorldMapping.mkMapping(xa)
 
-  def runQuery: IO[Unit] = {
-    val query = """
-      query {
-        cities {
+  val query = """
+    query {
+      cities {
+        name
+        country {
           name
-          country {
+          cities {
             name
           }
         }
       }
-    """
+    }
+  """
 
-    mapping.compileAndRun(query).void
+  def runQuery(show: Boolean, time: Boolean): IO[Unit] = {
+    for {
+      st  <- if(time) IO.realTime else IO.pure(0.millis)
+      res <- mapping.compileAndRun(query)
+      et  <- if(time) IO.realTime else IO.pure(0.millis)
+      _   <- IO.println(s"Execution time: ${et-st}").whenA(time)
+      _   <- IO.println(res).whenA(show)
+    } yield ()
   }
 
   def run(args: List[String]) = {
     for {
+      _   <- IO.println("-----------------")
       _   <- IO.println("Warmup ...")
-      _   <- runQuery.replicateA(5)
-      _   <- IO.sleep(5.seconds)
-      _   <- IO.println("Running query ...")
-      _   <- runQuery.replicateA(100)
+      _   <- runQuery(false, true).replicateA(100)
+      _   <- IO.println("-----------------")
+      _   <- IO.println("Executing query ...")
+      _   <- runQuery(false, true).replicateA(1000)
     } yield ExitCode.Success
   }
 }

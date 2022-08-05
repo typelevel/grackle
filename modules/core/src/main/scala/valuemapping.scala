@@ -3,6 +3,7 @@
 
 package edu.gemini.grackle
 
+import scala.collection.Factory
 import scala.reflect.ClassTag
 
 import cats.Monad
@@ -118,8 +119,8 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
       case _ => false
     }
 
-    def asList: Result[List[Cursor]] = (tpe, focus) match {
-      case (ListType(tpe), it: List[_]) => it.map(f => mkChild(context.asType(tpe), f)).rightIor
+    def asList[C](factory: Factory[Cursor, C]): Result[C] = (tpe, focus) match {
+      case (ListType(tpe), it: List[_]) => it.view.map(f => mkChild(context.asType(tpe), f)).to(factory).rightIor
       case _ => mkErrorResult(s"Expected List type, found $tpe")
     }
 

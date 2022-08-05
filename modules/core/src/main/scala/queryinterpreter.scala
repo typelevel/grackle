@@ -8,7 +8,7 @@ import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 import cats.Monoid
-import cats.data.{ Chain, Ior, IorT, Kleisli, NonEmptyChain }
+import cats.data.{ Chain, Ior, IorT, NonEmptyChain }
 import cats.implicits._
 import fs2.Stream
 import io.circe.Json
@@ -235,10 +235,10 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
               c0.asNullable.flatMap {
                 case None => 0.rightIor
                 case Some(c1) =>
-                  if (c1.isList) c1.asList.map(c2 => c2.size)
+                  if (c1.isList) c1.asList(Iterator).map(_.size)
                   else 1.rightIor
               }
-            else if (c0.isList) c0.asList.map(c2 => c2.size)
+            else if (c0.isList) c0.asList(Iterator).map(_.size)
             else 1.rightIor
           }.map { value => List((fieldName, ProtoJson.fromJson(Json.fromInt(value)))) }
 
@@ -253,29 +253,61 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
       }
     }
 
-  def runList(query: Query, tpe: Type, cursors: List[Cursor], f: Kleisli[Result, List[Cursor], List[Cursor]]): Result[ProtoJson] =
-    if (cursors.exists(cursor => !cursorCompatible(tpe, cursor.tpe)))
-      mkErrorResult(s"Mismatched query and cursor type in runList: $tpe ${cursors.map(_.tpe)}")
-    else {
+  def runList(query: Query, tpe: Type, cursors: Iterator[Cursor], unique: Boolean, nullable: Boolean): Result[ProtoJson] = {
+    val (child, ic) =
       query match {
-        case Filter(pred, child) =>
-          runList(child, tpe, cursors, f.compose(_.filterA(pred(_))))
+        case FilterOrderByOffsetLimit(pred, selections, offset, limit, child) =>
+          val filtered =
+            pred.map { p =>
+              cursors.filter { c =>
+                p(c) match {
+                  case left@Ior.Left(_) => return left
+                  case Ior.Right(c) => c
+                  case Ior.Both(_, c) => c
+                }
+              }
+            }.getOrElse(cursors)
+          val sorted = selections.map(OrderSelections(_).order(filtered.toSeq).iterator).getOrElse(filtered)
+          val sliced = (offset, limit) match {
+            case (None, None) => sorted
+            case (Some(off), None) => sorted.drop(off)
+            case (None, Some(lim)) => sorted.take(lim)
+            case (Some(off), Some(lim)) => sorted.slice(off, off+lim)
+          }
+          (child, sliced)
+        case other => (other, cursors)
+      }
 
-        case Limit(num, child) =>
-          runList(child, tpe, cursors, f.compose(_.take(num).rightIor))
+    val builder = Vector.newBuilder[ProtoJson]
+    var problems = Chain.empty[Problem]
+    builder.sizeHint(ic.knownSize)
+    while(ic.hasNext) {
+      val c = ic.next()
+      if (!cursorCompatible(tpe, c.tpe))
+        return mkErrorResult(s"Mismatched query and cursor type in runList: $tpe ${cursors.map(_.tpe)}")
 
-        case Offset(num, child) =>
-          runList(child, tpe, cursors, f.compose(_.drop(num).rightIor))
-
-        case OrderBy(selections, child) =>
-          runList(child, tpe, cursors, f.compose(selections.order(_).rightIor))
-
-        case _ =>
-          f.run(cursors).flatMap(lc =>
-            lc.traverse(c => runValue(query, tpe, c)).map(ProtoJson.fromValues)
-          )
+      runValue(child, tpe, c) match {
+        case left@Ior.Left(_) => return left
+        case Ior.Right(v) => builder.addOne(v)
+        case Ior.Both(ps, v) =>
+          builder.addOne(v)
+          problems = problems.concat(ps.toChain)
       }
     }
+
+    def mkResult(j: ProtoJson): Result[ProtoJson] =
+      NonEmptyChain.fromChain(problems).map(neps => Ior.Both(neps, j)).getOrElse(j.rightIor)
+
+    if (!unique) mkResult(ProtoJson.fromValues(builder.result()))
+    else {
+      val size = builder.knownSize
+      if (size == 1) mkResult(builder.result()(0))
+      else if (size == 0) {
+        if(nullable) mkResult(ProtoJson.fromJson(Json.Null))
+        else mkErrorResult(s"No match")
+      } else mkErrorResult(s"Multiple matches")
+    }
+  }
 
   /**
    * Interpret `query` against `cursor` with expected type `tpe`.
@@ -298,9 +330,18 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
 
         case (Wrap(_, Component(_, _, _)), ListType(tpe)) =>
           // Keep the wrapper with the component when going under the list
-          cursor.asList.flatMap(lc =>
-            lc.traverse(c => runValue(query, tpe, c)).map(ProtoJson.fromValues)
-          )
+          cursor.asList(Iterator).map { ic =>
+            val builder = Vector.newBuilder[ProtoJson]
+            builder.sizeHint(ic.knownSize)
+            while(ic.hasNext) {
+              val c = ic.next()
+              runValue(query, tpe, c) match {
+                case Ior.Right(v) => builder.addOne(v)
+                case left => return left
+              }
+            }
+            ProtoJson.fromValues(builder.result())
+          }
 
         case (Wrap(_, Defer(_, _, _)), _) if cursor.isNull =>
           ProtoJson.fromJson(Json.Null).rightIor
@@ -346,24 +387,6 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             }
           else stage(cursor)
 
-        case (Unique(Filter(pred, child)), _) =>
-          val cursors =
-            if (cursor.isNullable)
-              cursor.asNullable.flatMap {
-                case None => Nil.rightIor
-                case Some(c) => c.asList
-              }
-            else cursor.asList
-
-          cursors.flatMap(_.filterA(pred(_))).flatMap(lc =>
-            lc match {
-              case List(c) => runValue(child, tpe.nonNull, c)
-              case Nil if tpe.isNullable => ProtoJson.fromJson(Json.Null).rightIor
-              case Nil => mkErrorResult(s"No match")
-              case _ => mkErrorResult(s"Multiple matches")
-            }
-          )
-
         case (Unique(child), _) =>
           val oc =
             if (cursor.isNullable) cursor.asNullable
@@ -371,21 +394,16 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
 
           oc.flatMap {
             case Some(c) =>
-              runValue(child, tpe.nonNull.list, c).flatMap { pj =>
-                ProtoJson.unpackList(pj).map {
-                  case Nil if tpe.isNullable => ProtoJson.fromJson(Json.Null).rightIor
-                  case Nil => mkErrorResult(s"No match")
-                  case List(elem) => elem.rightIor
-                  case _ => mkErrorResult(s"Multiple matches")
-                }.getOrElse(mkErrorResult(s"Unique result of the wrong shape: $pj"))
+              c.asList(Iterator).flatMap { cursors =>
+                runList(child, tpe.nonNull, cursors, true, tpe.isNullable)
               }
             case None =>
               ProtoJson.fromJson(Json.Null).rightIor
           }
 
         case (_, ListType(tpe)) =>
-          cursor.asList.flatMap { cursors =>
-            runList(query, tpe, cursors, Kleisli(_.rightIor))
+          cursor.asList(Iterator).flatMap { cursors =>
+            runList(query, tpe, cursors, false, false)
           }
 
         case (_, NullableType(tpe)) =>
@@ -423,9 +441,9 @@ object QueryInterpreter {
     // A result which is deferred to the next stage or component of this interpreter.
     private[QueryInterpreter] case class StagedJson[F[_]](interpreter: QueryInterpreter[F], query: Query, rootTpe: Type, env: Env) extends DeferredJson
     // A partially constructed object which has at least one deferred subtree.
-    private[QueryInterpreter] case class ProtoObject(fields: List[(String, ProtoJson)])
+    private[QueryInterpreter] case class ProtoObject(fields: Seq[(String, ProtoJson)])
     // A partially constructed array which has at least one deferred element.
-    private[QueryInterpreter] case class ProtoArray(elems: List[ProtoJson])
+    private[QueryInterpreter] case class ProtoArray(elems: Seq[ProtoJson])
     // A result which will yield a selection from its child
     private[QueryInterpreter] case class ProtoSelect(elem: ProtoJson, fieldName: String)
 
@@ -444,9 +462,9 @@ object QueryInterpreter {
      * If all fields are complete then they will be combined as a complete
      * Json object.
      */
-    def fromFields(fields: List[(String, ProtoJson)]): ProtoJson =
+    def fromFields(fields: Seq[(String, ProtoJson)]): ProtoJson =
       if(fields.forall(_._2.isInstanceOf[Json]))
-        wrap(Json.fromFields(fields.asInstanceOf[List[(String, Json)]]))
+        wrap(Json.fromFields(fields.asInstanceOf[Seq[(String, Json)]]))
       else
         wrap(ProtoObject(fields))
 
@@ -456,9 +474,9 @@ object QueryInterpreter {
      * If all values are complete then they will be combined as a complete
      * Json array.
      */
-    def fromValues(elems: List[ProtoJson]): ProtoJson =
+    def fromValues(elems: Seq[ProtoJson]): ProtoJson =
       if(elems.forall(_.isInstanceOf[Json]))
-        wrap(Json.fromValues(elems.asInstanceOf[List[Json]]))
+        wrap(Json.fromValues(elems.asInstanceOf[Seq[Json]]))
       else
         wrap(ProtoArray(elems))
 
@@ -508,29 +526,7 @@ object QueryInterpreter {
       }
     }
 
-    def unpackObject(p: ProtoJson): Option[List[ProtoJson]] =
-      p match {
-        case ProtoObject(List((_, packedElems))) => unpackList(packedElems)
-        case j: Json if j.isObject =>
-          j.asObject.flatMap(jo =>
-            if (jo.size != 1) None
-            else {
-              val List((_, packedElems)) = jo.toList
-              packedElems.asArray.map(v => wrapList(v.toList))
-            }
-          )
-        case _ => None
-      }
-
-    def unpackList(p: ProtoJson): Option[List[ProtoJson]] =
-      p match {
-        case ProtoArray(elems) => Some(elems)
-        case j: Json if j.isArray => j.asArray.map(ja => wrapList(ja.toList))
-        case _ => None
-      }
-
     private def wrap(j: AnyRef): ProtoJson = j.asInstanceOf[ProtoJson]
-    private def wrapList(l: List[AnyRef]): List[ProtoJson] = l.asInstanceOf[List[ProtoJson]]
   }
 
   import ProtoJson._
@@ -600,7 +596,7 @@ object QueryInterpreter {
           case p: Json         => p
           case d: DeferredJson => subst(d)
           case ProtoObject(fields) =>
-            val newFields: List[(String, Json)] =
+            val newFields: Seq[(String, Json)] =
               fields.flatMap { case (label, pvalue) =>
                 val value = loop(pvalue)
                 if (isDeferred(pvalue) && value.isObject) {
