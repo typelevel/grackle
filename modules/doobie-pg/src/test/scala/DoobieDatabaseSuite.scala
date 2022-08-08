@@ -14,7 +14,7 @@ import io.circe.Json
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 
-import edu.gemini.grackle.doobie.{DoobieMapping, DoobieMonitor}
+import edu.gemini.grackle.doobie.postgres.{DoobieMapping, DoobieMonitor}
 
 import edu.gemini.grackle.sql.test._
 

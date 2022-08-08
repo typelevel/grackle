@@ -26,7 +26,7 @@ val Scala3 = "3.1.3"
 ThisBuild / scalaVersion        := Scala2
 ThisBuild / crossScalaVersions  := Seq(Scala2, Scala3)
 
-ThisBuild / tlBaseVersion    := "0.4"
+ThisBuild / tlBaseVersion    := "0.5"
 ThisBuild / organization     := "edu.gemini"
 ThisBuild / organizationName := "Association of Universities for Research in Astronomy, Inc. (AURA)"
 ThisBuild / startYear        := Some(2019)
@@ -129,13 +129,13 @@ lazy val sql = project
   )
 
 lazy val doobie = project
-  .in(file("modules/doobie"))
+  .in(file("modules/doobie-pg"))
   .enablePlugins(AutomateHeaderPlugin)
   .disablePlugins(RevolverPlugin)
   .dependsOn(sql % "test->test;compile->compile", circe)
   .settings(commonSettings)
   .settings(
-    name := "gsp-graphql-doobie",
+    name := "gsp-graphql-doobie-pg",
     Test / fork := true,
     Test / parallelExecution := false,
     libraryDependencies ++= Seq(

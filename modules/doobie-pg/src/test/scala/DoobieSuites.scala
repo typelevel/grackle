@@ -9,7 +9,7 @@ import doobie.Meta
 import io.circe.Json
 
 import edu.gemini.grackle.QueryExecutor
-import edu.gemini.grackle.doobie.DoobieMonitor
+import edu.gemini.grackle.doobie.postgres.DoobieMonitor
 import edu.gemini.grackle.sql.SqlStatsMonitor
 
 import edu.gemini.grackle.sql.test._
