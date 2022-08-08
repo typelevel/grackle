@@ -2,7 +2,7 @@
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
 package edu.gemini.grackle
-package doobie
+package doobie.postgres
 
 import _root_.doobie.util.transactor.Transactor
 import cats.effect.Sync

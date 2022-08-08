@@ -12,7 +12,7 @@ import _root_.doobie.util.meta.Meta
 import _root_.doobie.util.transactor.Transactor
 
 import edu.gemini.grackle._
-import doobie.{DoobieMapping, DoobieMappingCompanion, DoobieMonitor}
+import doobie.postgres.{DoobieMapping, DoobieMappingCompanion, DoobieMonitor}
 import sql.Like
 import syntax._
 import Query._, Path._, Predicate._, Value._
