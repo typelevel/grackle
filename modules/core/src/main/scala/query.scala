@@ -247,11 +247,11 @@ object Query {
    **/
   object FilterOrderByOffsetLimit {
     def apply(pred: Option[Predicate], oss: Option[List[OrderSelection[_]]], offset: Option[Int], limit: Option[Int], child: Query): Query = {
-      val lim    = limit.map(n =>  Limit(n, child)).getOrElse(child)
-      val off    = offset.map(n => Offset(n, lim)).getOrElse(lim)
-      val order  = oss.map(o =>    OrderBy(OrderSelections(o), off)).getOrElse(off)
-      val filter = pred.map(p =>   Filter(p, order)).getOrElse(order)
-      filter
+      val filter = pred.map(p =>   Filter(p, child)).getOrElse(child)
+      val order  = oss.map(o =>    OrderBy(OrderSelections(o), filter)).getOrElse(filter)
+      val off    = offset.map(n => Offset(n, order)).getOrElse(order)
+      val lim    = limit.map(n =>  Limit(n, off)).getOrElse(off)
+      lim
     }
 
     def unapply(q: Query): Option[(Option[Predicate], Option[List[OrderSelection[_]]], Option[Int],  Option[Int], Query)] = {
