@@ -41,11 +41,6 @@ object Query {
     def render = queries.map(_.render).mkString("{", ", ", "}")
   }
 
-  /** A Group of sibling queries as a list */
-  case class GroupList(queries: List[Query]) extends Query {
-    def render = queries.map(_.render).mkString("[", ", ", "]")
-  }
-
   /** Continues with single-element-list-producing `child` and yields the single element */
   case class Unique(child: Query) extends Query {
     def render = s"<unique: ${child.render}>"

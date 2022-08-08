@@ -354,7 +354,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
         case (Component(mapping, join, PossiblyRenamedSelect(child, resultName)), tpe) =>
           val interpreter = mapping.interpreter
           join(cursor, child).flatMap {
-            case GroupList(conts) =>
+            case Group(conts) =>
               conts.traverse { case cont =>
                 for {
                   componentName <- mkResult(rootName(cont))
