@@ -60,6 +60,10 @@ final class JsonbSpec extends DoobieDatabaseSuite with SqlJsonbSpec {
   lazy val mapping = new DoobieTestMapping(xa) with SqlJsonbMapping[IO]
 }
 
+final class LikeSpec extends DoobieDatabaseSuite with SqlLikeSpec {
+  lazy val mapping = new DoobieTestMapping(xa) with SqlLikeMapping[IO]
+}
+
 final class MovieSpec extends DoobieDatabaseSuite with SqlMovieSpec {
   lazy val mapping =
     new DoobieTestMapping(xa) with SqlMovieMapping[IO] {
