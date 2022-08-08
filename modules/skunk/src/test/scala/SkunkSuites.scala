@@ -60,6 +60,10 @@ final class JsonbSpec extends SkunkDatabaseSuite with SqlJsonbSpec {
   lazy val mapping = new SkunkTestMapping(pool) with SqlJsonbMapping[IO]
 }
 
+final class LikeSpec extends SkunkDatabaseSuite with SqlLikeSpec {
+  lazy val mapping = new SkunkTestMapping(pool) with SqlLikeMapping[IO]
+}
+
 final class MovieSpec extends SkunkDatabaseSuite with SqlMovieSpec {
   lazy val mapping =
     new SkunkTestMapping(pool) with SqlMovieMapping[IO] {
