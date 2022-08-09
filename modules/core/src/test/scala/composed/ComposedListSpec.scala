@@ -175,7 +175,7 @@ object ComposedListMapping extends Mapping[Id] {
   def collectionItemJoin(c: Cursor, q: Query): Result[Query] =
     (c.focus, q) match {
       case (c: CollectionData.Collection, Select("items", _, child)) =>
-        GroupList(c.itemIds.map(id => Select("itemById", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))))).rightIor
+        Group(c.itemIds.map(id => Select("itemById", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))))).rightIor
       case _ =>
         mkErrorResult(s"Unexpected cursor focus type in collectionItemJoin")
     }

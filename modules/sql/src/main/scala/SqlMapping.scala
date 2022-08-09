@@ -578,7 +578,6 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           case Count(countName, _) => Select(countName, Nil, Empty)
 
           case Group(queries) => Group(queries.map(q => loop(q, context)))
-          case GroupList(queries) => GroupList(queries.map(q => loop(q, context)))
           case u: Unique => u.copy(child = loop(u.child, context.asType(context.tpe.list)))
           case e: Environment => e.copy(child = loop(e.child, context))
           case w: Wrap => w.copy(child = loop(w.child, context))
@@ -2821,8 +2820,6 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
             sys.error(s"Narrow not matched by extractor: $n")
 
           case Group(queries) => group(queries)
-
-          case GroupList(queries) => group(queries)
 
           case Wrap(_, child) =>
             loop(child, context, parentConstraints, exposeJoins)
