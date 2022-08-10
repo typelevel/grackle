@@ -3064,7 +3064,9 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def isLeaf: Boolean = tpe.isLeaf
 
     def asLeaf: Result[Json] =
-      mapped.encoderForLeaf(tpe).map(enc => enc(focus).rightIor).getOrElse(mkErrorResult(s"Not a leaf: $focus"))
+      mapped.encoderForLeaf(tpe).map(enc => enc(focus).rightIor).getOrElse(mkErrorResult(
+        s"Cannot encode value $focus at ${context.path.reverse.mkString("/")} (of type of type ${context.tpe}). Did you forget a LeafMapping?".stripMargin.trim
+      ))
 
     def isList: Boolean =
       tpe match {
