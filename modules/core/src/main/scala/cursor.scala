@@ -9,6 +9,7 @@ import scala.reflect.{classTag, ClassTag}
 import cats.data.Ior
 import cats.implicits._
 import io.circe.Json
+import org.tpolecat.typename.{ TypeName, typeName }
 
 import Cursor.{ cast, Context, Env }
 import QueryInterpreter.{ mkErrorResult, mkOneError }
@@ -305,6 +306,13 @@ object Cursor {
     def add[T](items: (String, T)*): Env
     def add(env: Env): Env
     def get[T: ClassTag](name: String): Option[T]
+
+    def getR[A: ClassTag: TypeName](name: String): Result[A] =
+      get[A](name) match {
+        case None        => Result.failure(s"Key '$name' of type ${typeName[A]} was not found in $this")
+        case Some(value) => Result(value)
+      }
+
   }
 
   object Env {
