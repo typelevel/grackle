@@ -35,8 +35,17 @@ trait Cursor {
   def tpe: Type = context.tpe
 
   def withEnv(env: Env): Cursor
-  def env: Env
+
+  protected def env: Env
+
   def env[T: ClassTag](nme: String): Option[T] = env.get(nme).orElse(parent.flatMap(_.env(nme)))
+
+  def envR[T: ClassTag: TypeName](nme: String): Result[T] =
+    env.getR(nme)  match {
+      case err @ Ior.Left(_) => parent.fold[Result[T]](err)(_.envR(nme))
+      case ok => ok
+    }
+
   def fullEnv: Env = parent.map(_.fullEnv).getOrElse(Env.empty).add(env)
 
   /**
