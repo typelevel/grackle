@@ -1,18 +1,20 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package starwars
+package demo.starwars
 
 import cats._
 import cats.implicits._
-
+import edu.gemini.grackle.Path._
+import edu.gemini.grackle.Predicate._
+import edu.gemini.grackle.Query._
+import edu.gemini.grackle.QueryCompiler._
+import edu.gemini.grackle.QueryInterpreter.{mkErrorResult, mkOneError}
+import edu.gemini.grackle.Value._
 import edu.gemini.grackle._
+import edu.gemini.grackle.generic._
+import edu.gemini.grackle.generic.semiauto._
 import edu.gemini.grackle.syntax._
-
-import Query._, Path._, Predicate._, Value._
-import QueryCompiler._
-import QueryInterpreter.{ mkErrorResult, mkOneError }
-import generic._, semiauto._
 
 // The types and values for the in-memory Star Wars example.
 object StarWarsData {
@@ -142,7 +144,7 @@ object StarWarsData {
 }
 
 object StarWarsMapping extends GenericMapping[Id] {
-  import StarWarsData.{characters, hero, Droid, Episode, Human}
+  import StarWarsData._
 
   // #schema
   val schema =

@@ -3,31 +3,21 @@
 
 package demo
 
-import cats.effect.{ Async, ExitCode, IO, IOApp }
+import cats.effect.Async
 import cats.implicits._
 import fs2.Stream
-import org.http4s.implicits._
+import org.http4s.HttpRoutes
 import org.http4s.blaze.server.BlazeServerBuilder
 import org.http4s.server.middleware.Logger
-import org.http4s.server.staticcontent._
-
-import starwars.StarWarsService
-
-// #server
-object Main extends IOApp {
-  def run(args: List[String]) =
-    DemoServer.stream[IO].compile.drain.as(ExitCode.Success)
-}
+import org.http4s.server.staticcontent.resourceServiceBuilder
 
 object DemoServer {
-  def stream[F[_]: Async]: Stream[F, Nothing] = {
-    val starWarsService = StarWarsService.service[F]
-
+  def stream[F[_]: Async](graphQLRoutes: HttpRoutes[F]): Stream[F, Nothing] = {
     val httpApp0 = (
-      // Routes for static resources, ie. GraphQL Playground
+      // Routes for static resources, i.e. GraphQL Playground
       resourceServiceBuilder[F]("/assets").toRoutes <+>
-      // Routes for the Star Wars GraphQL service
-      StarWarsService.routes[F](starWarsService)
+      // GraphQL routes
+      graphQLRoutes
     ).orNotFound
 
     val httpApp = Logger.httpApp(true, false)(httpApp0)
@@ -41,4 +31,3 @@ object DemoServer {
     } yield exitCode
   }.drain
 }
-// #server
