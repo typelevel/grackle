@@ -1710,4 +1710,58 @@ trait SqlWorldSpec extends AnyFunSuite {
 
     assertWeaklyEqual(res, expected)
   }
+
+  test("root unique of limit 1") {
+    val query = """
+      query {
+        city(id: 490) {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "city" : {
+            "name" : "Brighton"
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
+  test("nested unique of limit 1") {
+    val query = """
+      query {
+        country(code: "GBR") {
+          city(id: 490) {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "city" : {
+              "name" : "Brighton"
+            }
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
 }

@@ -388,18 +388,9 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
           else stage(cursor)
 
         case (Unique(child), _) =>
-          val oc =
-            if (cursor.isNullable) cursor.asNullable
-            else Some(cursor).rightIor
-
-          oc.flatMap {
-            case Some(c) =>
-              c.asList(Iterator).flatMap { cursors =>
-                runList(child, tpe.nonNull, cursors, true, tpe.isNullable)
-              }
-            case None =>
-              ProtoJson.fromJson(Json.Null).rightIor
-          }
+          cursor.preunique.flatMap(_.asList(Iterator).flatMap { cursors =>
+            runList(child, tpe.nonNull, cursors, true, tpe.isNullable)
+          })
 
         case (_, ListType(tpe)) =>
           cursor.asList(Iterator).flatMap { cursors =>

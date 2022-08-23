@@ -170,6 +170,11 @@ object CursorBuilder {
     case class ListCursor(context: Context, focus: List[T], parent: Option[Cursor], env: Env) extends AbstractCursor[List[T]] {
       def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
+      override def preunique: Result[Cursor] = {
+        val listTpe = tpe.nonNull.list
+        copy(context = context.asType(listTpe)).rightIor
+      }
+
       override def isList: Boolean = true
       override def asList[C](factory: Factory[Cursor, C]): Result[C] = {
         focus.traverse(elem => elemBuilder.build(context, elem, Some(this), env)).map(_.to(factory))
@@ -206,6 +211,9 @@ abstract class AbstractCursor[T] extends Cursor {
 
   def asLeaf: Result[Json] =
     mkErrorResult(s"Expected Scalar type, found $tpe for focus ${focus}")
+
+  def preunique: Result[Cursor] =
+    mkErrorResult(s"Expected List type, found $focus for ${tpe.nonNull.list}")
 
   def isList: Boolean = false
 

@@ -114,6 +114,15 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
           }
       }
 
+    def preunique: Result[Cursor] = {
+      val listTpe = tpe.nonNull.list
+      focus match {
+        case _: List[_] => mkChild(context.asType(listTpe), focus).rightIor
+        case _ =>
+          mkErrorResult(s"Expected List type, found $focus for ${listTpe}")
+      }
+    }
+
     def isList: Boolean = (tpe, focus) match {
       case (_: ListType, _: List[_]) => true
       case _ => false

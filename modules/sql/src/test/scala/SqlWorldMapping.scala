@@ -86,6 +86,7 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
         code2: String!
         numCities(namePattern: String): Int!
         cities: [City!]!
+        city(id: Int): City
         languages: [Language!]!
       }
     """
@@ -129,6 +130,7 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
           SqlField("code2",          country.code2),
           SqlField("numCities",      country.numCities),
           SqlObject("cities",        Join(country.code, city.countrycode)),
+          SqlObject("city",          Join(country.code, city.countrycode)),
           SqlObject("languages",     Join(country.code, countrylanguage.countrycode))
         ),
       ),
@@ -217,6 +219,9 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
 
       case Select("numCities", List(Binding("namePattern", StringValue(namePattern))), Empty) =>
         Count("numCities", Select("cities", Nil, Filter(Like(UniquePath(List("name")), namePattern, true), Select("name", Nil, Empty)))).rightIor
+
+      case Select("city", List(Binding("id", IntValue(id))), child) =>
+        Select("city", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
     }
   ))
 }
