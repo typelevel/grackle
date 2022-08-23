@@ -3065,6 +3065,15 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
         s"Cannot encode value $focus at ${context.path.reverse.mkString("/")} (of GraphQL type ${context.tpe}). Did you forget a LeafMapping?".stripMargin.trim
       ))
 
+    def preunique: Result[Cursor] = {
+      val listTpe = tpe.nonNull.list
+      focus match {
+        case _: List[_] => mkChild(context.asType(listTpe), focus).rightIor
+        case _ =>
+          mkErrorResult(s"Expected List type, found $focus for ${listTpe}")
+      }
+    }
+
     def isList: Boolean =
       tpe match {
         case ListType(_) => true
@@ -3115,6 +3124,11 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def isLeaf: Boolean = false
     def asLeaf: Result[Json] =
       mkErrorResult(s"Not a leaf: $tpe")
+
+    def preunique: Result[Cursor] = {
+      val listTpe = tpe.nonNull.list
+      mkChild(context.asType(listTpe), focus).rightIor
+    }
 
     def isList: Boolean =
       tpe.isList

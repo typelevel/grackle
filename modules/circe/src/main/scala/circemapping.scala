@@ -78,6 +78,14 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
           mkErrorResult(s"Expected Scalar type, found $tpe for focus ${focus.noSpaces}")
       }
 
+    def preunique: Result[Cursor] = {
+      val listTpe = tpe.nonNull.list
+      if(focus.isArray)
+        mkChild(context.asType(listTpe), focus).rightIor
+      else
+        mkErrorResult(s"Expected List type, found $focus for ${listTpe}")
+    }
+
     def isList: Boolean = tpe.isList && focus.isArray
 
     def asList[C](factory: Factory[Cursor, C]): Result[C] = tpe match {

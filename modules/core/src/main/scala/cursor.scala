@@ -64,6 +64,12 @@ trait Cursor {
    */
   def asLeaf: Result[Json]
 
+  /**
+    * Yield a `Cursor` which can be used to evaluate the antecedant of a `Unique`
+    * operation.
+    */
+  def preunique: Result[Cursor]
+
   /** Is the value at this `Cursor` of a list type? */
   def isList: Boolean
 
