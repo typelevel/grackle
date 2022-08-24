@@ -7,6 +7,7 @@ val catsEffectVersion           = "3.1.1"
 val catsTestkitScalaTestVersion = "2.1.5"
 val circeVersion                = "0.14.2"
 val doobieVersion               = "1.0.0-RC2"
+val flywayVersion               = "9.1.6"
 val fs2Version                  = "3.1.1"
 val http4sVersion               = "0.23.14"
 val http4sBlazeVersion          = "0.23.12"
@@ -178,19 +179,22 @@ lazy val generic = project
 lazy val demo = project
   .in(file("demo"))
   .enablePlugins(NoPublishPlugin, AutomateHeaderPlugin)
-  .dependsOn(core, generic)
+  .dependsOn(core, generic, doobie)
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-demo",
     libraryDependencies ++= Seq(
-      "org.typelevel"     %% "log4cats-slf4j"         % log4catsVersion,
-      "ch.qos.logback"    %  "logback-classic"        % logbackVersion,
-      "org.tpolecat"      %% "doobie-core"            % doobieVersion,
-      "org.tpolecat"      %% "doobie-postgres"        % doobieVersion,
-      "org.http4s"        %% "http4s-blaze-server"    % http4sBlazeVersion,
-      "org.http4s"        %% "http4s-blaze-client"    % http4sBlazeVersion,
-      "org.http4s"        %% "http4s-circe"           % http4sVersion,
-      "org.http4s"        %% "http4s-dsl"             % http4sVersion
+      "org.typelevel"     %% "log4cats-slf4j"                  % log4catsVersion,
+      "ch.qos.logback"    %  "logback-classic"                 % logbackVersion,
+      "org.tpolecat"      %% "doobie-core"                     % doobieVersion,
+      "org.tpolecat"      %% "doobie-postgres"                 % doobieVersion,
+      "org.tpolecat"      %% "doobie-hikari"                   % doobieVersion,
+      "org.http4s"        %% "http4s-blaze-server"             % http4sBlazeVersion,
+      "org.http4s"        %% "http4s-blaze-client"             % http4sBlazeVersion,
+      "org.http4s"        %% "http4s-circe"                    % http4sVersion,
+      "org.http4s"        %% "http4s-dsl"                      % http4sVersion,
+      "com.dimafeng"      %% "testcontainers-scala-postgresql" % testContainersVersion,
+      "org.flywaydb"      %  "flyway-core"                     % flywayVersion
     )
   )
 

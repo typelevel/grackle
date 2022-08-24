@@ -527,13 +527,15 @@
       const loadingWrapper = document.getElementById('loading-wrapper');
       loadingWrapper.classList.add('fadeOut');
 
-
       const root = document.getElementById('root');
       root.classList.add('playgroundIn');
 
+      const urlParams = new URLSearchParams(window.location.search);
+      const endpoint = urlParams.get('endpoint');
+
       GraphQLPlayground.init(root, {
         // you can add more options here
-        'endpoint': '/starwars'
+        'endpoint': '/' + (endpoint || 'starwars')
       })
     })
   </script>
