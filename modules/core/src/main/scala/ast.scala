@@ -22,7 +22,12 @@ object Ast {
   sealed trait Definition
 
   sealed trait ExecutableDefinition extends Definition
-  sealed trait TypeSystemDefinition extends Definition
+  sealed trait TypeSystemDefinitionOrExtension extends Definition
+
+  sealed trait TypeSystemDefinition extends TypeSystemDefinitionOrExtension
+  sealed trait TypeSystemExtension extends TypeSystemDefinitionOrExtension
+
+  sealed trait TypeExtension extends TypeSystemExtension
 
   sealed abstract class OperationType(val name: String)
   object OperationType {
@@ -115,6 +120,11 @@ object Ast {
     directives:         List[Directive]
   ) extends TypeSystemDefinition
 
+  case class SchemaExtension(
+    rootOperationTypes: List[RootOperationTypeDefinition],
+    directives:         List[Directive]
+  ) extends TypeSystemExtension
+
   case class RootOperationTypeDefinition(
     operationType: OperationType,
     tpe:           Type.Named,
@@ -199,6 +209,49 @@ object Ast {
     repeatable: Boolean,
     locations: List[DirectiveLocation]
   ) extends TypeSystemDefinition
+
+  case class ScalarTypeExtension(
+    name: Name,
+    description: Option[String],
+    directives: List[Directive]
+  ) extends TypeExtension
+
+  case class ObjectTypeExtension(
+    name: Name,
+    description: Option[String],
+    fields: List[FieldDefinition],
+    interfaces: List[Type.Named],
+    directives: List[Directive]
+  ) extends TypeExtension
+
+  case class InterfaceTypeExtension(
+    name: Name,
+    description: Option[String],
+    fields: List[FieldDefinition],
+    interfaces: List[Type.Named],
+    directives: List[Directive]
+  ) extends TypeExtension
+
+  case class UnionTypeExtension(
+    name: Name,
+    description: Option[String],
+    directives: List[Directive],
+    members: List[Type.Named]
+  ) extends TypeExtension
+
+  case class EnumTypeExtension(
+    name: Name,
+    description: Option[String],
+    directives: List[Directive],
+    values: List[EnumValueDefinition]
+  ) extends TypeExtension
+
+  case class InputObjectTypeExtension(
+    name: Name,
+    description: Option[String],
+    directives: List[Directive],
+    fields: List[InputValueDefinition],
+  ) extends TypeExtension
 
   sealed trait DirectiveLocation
   object DirectiveLocation {
