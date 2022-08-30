@@ -41,6 +41,9 @@ trait Schema {
   /** The directives defined by this `Schema`. */
   def directives: List[DirectiveDef]
 
+  /** */
+  def extensions: List[NamedTypeExtension]
+
   /** A reference by name to a type defined by this `Schema`.
    *
    * `TypeRef`s refer to types defined in this schema by name and hence
@@ -462,6 +465,29 @@ sealed trait NamedType extends Type {
 }
 
 /**
+ * A GraphQL type extension
+ */ 
+sealed trait NamedTypeExtension {
+  def extended: TypeRef
+  def description: Option[String]
+}
+
+/**
+ * A synthetic type representing the join between a component/stage and its
+ * parent object.
+ */
+object JoinType {
+  def apply(fieldName: String, tpe: Type): ObjectType =
+    ObjectType(s"<$fieldName:$tpe>", None, List(Field(fieldName, None, Nil, tpe, false, None)), Nil)
+
+  def unapply(ot: ObjectType): Option[(String, Type)] = ot match {
+    case ObjectType(nme, None, List(Field(fieldName, None, Nil, tpe, false, None)), Nil) if nme == s"<$fieldName:$tpe>" =>
+      Some((fieldName, tpe))
+    case _ => None
+  }
+}
+
+/**
  * A by name reference to a type defined in `schema`.
  */
 case class TypeRef(schema: Schema, name: String) extends NamedType {
@@ -574,16 +600,29 @@ object ScalarType {
 }
 
 /**
- * A type with fields.
+ * A type or extension with fields.
  *
- * This includes object types and inferface types.
+ * This includes object and inferface types and extensions.
  */
-sealed trait TypeWithFields extends NamedType {
+sealed trait WithFields {
   def fields: List[Field]
   def interfaces: List[NamedType]
 
   override def fieldInfo(name: String): Option[Field] = fields.find(_.name == name)
 }
+
+/**
+ * A type with fields.
+ *
+ * This includes object types and inferface types.
+ */
+sealed trait TypeWithFields extends NamedType with WithFields
+
+/**
+  * 
+  *
+  */
+case class ScalarExtension(extended: TypeRef, description: Option[String]) extends NamedTypeExtension 
 
 /**
  * Interfaces are an abstract type where there are common fields declared. Any type that
@@ -600,6 +639,8 @@ case class InterfaceType(
 ) extends Type with TypeWithFields {
   override def isInterface: Boolean = true
 }
+
+case class InterfaceExtension(extended: TypeRef, description: Option[String], fields: List[Field], interfaces: List[NamedType]) extends NamedTypeExtension with WithFields
 
 /**
  * Object types represent concrete instantiations of sets of fields.
@@ -631,6 +672,8 @@ case class UnionType(
   override def toString: String = members.mkString("|")
 }
 
+case class UnionExtension(extended: TypeRef, description: Option[String], members: List[NamedType]) extends NamedTypeExtension
+
 /**
  * Enums are special scalars that can only have a defined set of values.
  *
@@ -647,6 +690,8 @@ case class EnumType(
   def value(name: String): Option[EnumValue] = valueDefinition(name).map(_ => EnumValue(name))
   def valueDefinition(name: String): Option[EnumValueDefinition] = enumValues.find(_.name == name)
 }
+
+case class EnumExtension(extended: TypeRef, description: Option[String], enumValues: List[EnumValue]) extends NamedTypeExtension
 
 /**
  * The `EnumValue` type represents one of possible values of an enum.
@@ -682,6 +727,8 @@ case class InputObjectType(
 ) extends Type with NamedType {
   def inputFieldInfo(name: String): Option[InputValue] = inputFields.find(_.name == name)
 }
+
+case class InputObjectExtension(extended: TypeRef, description: Option[String], inputFields: List[InputValue]) extends NamedTypeExtension
 
 /**
  * Lists represent sequences of values in GraphQL. A List type is a type modifier: it wraps
