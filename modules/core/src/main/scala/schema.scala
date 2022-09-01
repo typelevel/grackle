@@ -35,8 +35,50 @@ trait Schema {
 
   def pos: SourcePos
 
-  /** The types defined by this `Schema`. */
-  def types: List[NamedType]
+  /** The types defined by this `Schema` prior to any extensions. */
+  def unExtendedTypes: List[NamedType]
+
+  /** The types defined by this `Schema` with any extensions applied. */
+  def types: List[NamedType] = {
+    unExtendedTypes.map { tpe =>
+      val exts = extensions.filter(_.extended.dealias =:= tpe)
+      if (exts.length == 0) {tpe} else { extendType(tpe, exts) }
+    }
+  }
+
+  private def extendType(extendee: NamedType, toApply: List[NamedTypeExtension]): NamedType = {
+    extendee match {
+        case TypeRef(_, _) => throw new RuntimeException("Invariant violated")
+        case st: ScalarType => st // Scalar extensions presently do nothing as directives are not supported
+        case InterfaceType(name, description, fields, interfaces) => {
+          val exts = toApply.collect { case ie: InterfaceExtension => ie }
+          val newFields = exts.flatMap(_.fields)
+          val newInterfaces = exts.flatMap(_.interfaces)
+          InterfaceType(name, description, fields ++ newFields, interfaces ++ newInterfaces)
+        }
+        case ObjectType(name, description, fields, interfaces) => {
+          val exts = toApply.collect { case oe: ObjectExtension => oe }
+          val newFields = exts.flatMap(_.fields)
+          val newInterfaces = exts.flatMap(_.interfaces)
+          ObjectType(name, description, fields ++ newFields, interfaces ++ newInterfaces)
+        }
+        case UnionType(name, description, members) => {
+          val exts = toApply.collect { case ue: UnionExtension => ue }
+          val newMembers = exts.flatMap(_.members)
+          UnionType(name, description, members ++ newMembers)
+        }
+        case EnumType(name, description, enumValues) => {
+          val exts = toApply.collect { case ee: EnumExtension => ee }
+          val newValues = exts.flatMap(_.enumValues)
+          EnumType(name, description, enumValues ++ newValues)
+        }
+        case InputObjectType(name, description, inputFields) => {
+          val exts = toApply.collect { case ioe: InputObjectExtension => ioe }
+          val newFields = exts.flatMap(_.inputFields)
+          InputObjectType(name, description, inputFields ++ newFields)
+        }
+      }
+  }
 
   /** The directives defined by this `Schema`. */
   def directives: List[DirectiveDef]
@@ -1217,7 +1259,7 @@ object SchemaParser {
 
   def parseDocument(doc: Document)(implicit sourcePos: SourcePos): Result[Schema] = {
     object schema extends Schema {
-      var types: List[NamedType] = Nil
+      var unExtendedTypes: List[NamedType] = Nil
       var schemaType1: Option[NamedType] = null
       var pos: SourcePos = sourcePos
 
