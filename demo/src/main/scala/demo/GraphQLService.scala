@@ -12,6 +12,7 @@ import org.http4s.circe._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.{HttpRoutes, InvalidMessageBodyFailure, ParseFailure, QueryParamDecoder}
 
+// #service
 trait GraphQLService[F[_]] {
   def runQuery(op: Option[String], vars: Option[Json], query: String): F[Json]
 }
@@ -62,3 +63,4 @@ object GraphQLService {
     }
   }
 }
+// #service

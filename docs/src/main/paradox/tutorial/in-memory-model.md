@@ -4,7 +4,7 @@ The GraphQL reference implementation defines an API over a simple data model rep
 the Star Wars series. Because of its appearance in the the reference implementation it is used as the basis for many
 GraphQL tutorials, and many GraphQL server implementations provide it as an example. Grackle is no exception.
 
-In this tutorial we are going to implement the Star Wars demo using Grackle backed by an in-memory model, ie. a
+In this tutorial we are going to implement the Star Wars demo using Grackle backed by an in-memory model, i.e. a
 simple Scala data structure which captures the information required to service the GraphQL API.
 
 ## Running the demo
@@ -28,9 +28,9 @@ demo              |_|
 demo [ioapp-compute-0] INFO  o.h.s.b.BlazeServerBuilder - [...]
 ```
 
-This application hosts both the demo services and a web-based GraphQL client (GraphQL Playground) which can be used to
-interact with them. You can run the client in your browser at
-[http://localhost:8080/playground.html](http://localhost:8080/playground.html).
+This application hosts the demo services for in-memory and db-backend models, as well as a web-based GraphQL client
+(GraphQL Playground) which can be used to interact with them. You can run the client for in-memory model in your browser
+at [http://localhost:8080/playground.html?endpoint=starwars](http://localhost:8080/playground.html?endpoint=starwars).
 
 ## Query examples
 
@@ -143,15 +143,15 @@ yields the result,
 
 Grackle represents schemas as a Scala value of type `Schema` which can be constructed given a schema text,
 
-@@snip [StarWarsSchema.scala](/demo/src/main/scala/starwars/StarWarsData.scala) { #schema }
+@@snip [StarWarsSchema.scala](/demo/src/main/scala/demo/starwars/StarWarsMapping.scala) { #schema }
 
 ## The Scala model
 
 The API is backed by values of an ordinary Scala data types with no Grackle dependencies,
 
-@@snip [StarWarsData.scala](/demo/src/main/scala/starwars/StarWarsData.scala) { #model_types }
+@@snip [StarWarsData.scala](/demo/src/main/scala/demo/starwars/StarWarsMapping.scala) { #model_types }
 
-The data structure is slightly complicated by the need to support support cycles of friendship, eg.,
+The data structure is slightly complicated by the need to support cycles of friendship, e.g.,
 
 ```json
 query {
@@ -193,7 +193,7 @@ Here the root of the result is "Luke Skywalker" and we loop back to Luke through
 The data type is not itself recursive, instead friend are identified by their ids. When traversing through the list of
 friends the `resolveFriends` method is used to locate the next `Character` value to visit.
 
-@@snip [StarWarsData.scala](/demo/src/main/scala/starwars/StarWarsData.scala) { #model_values }
+@@snip [StarWarsData.scala](/demo/src/main/scala/demo/starwars/StarWarsMapping.scala) { #model_values }
 
 ## The query compiler and elaborator
 
@@ -251,7 +251,7 @@ selection into something executable. Elaboration uses the GraphQL schema and so 
 parsed as an `Int` into a GraphQL `ID`. The semantics associated with this (ie. what an `id` is and how it relates to
 the model) is specific to this model, so we have to provide that semantic via some model-specific code,
 
-@@snip [StarWarsData.scala](/demo/src/main/scala/starwars/StarWarsData.scala) { #elaborator }
+@@snip [StarWarsData.scala](/demo/src/main/scala/demo/starwars/StarWarsMapping.scala) { #elaborator }
 
 Extracting out the case for the `character` selector,
 
@@ -286,7 +286,7 @@ initial `Cursor` for the query being evaluated.
 
 For the Star Wars model the root definitions are of the following form,
 
-@@snip [StarWarsData.scala](/demo/src/main/scala/starwars/StarWarsData.scala) { #root }
+@@snip [StarWarsData.scala](/demo/src/main/scala/demo/starwars/StarWarsMapping.scala) { #root }
 
 The the first argument of the `GenericRoot` constructor correspond to the top-level selection of the query (see the
 schema above) and the second argument is the initial model value for which a `Cursor` will be derived.  When the query
@@ -297,7 +297,7 @@ is executed, navigation will start with that `Cursor` and the corresponding Grap
 What we've seen so far allows us to compile and execute GraphQL queries against our in-memory model. We now need to
 expose that via HTTP. The following shows how we do that for http4s,
 
-@@snip [StarWarsService.scala](/demo/src/main/scala/starwars/StarWarsService.scala) { #service }
+@@snip [StarWarsService.scala](/demo/src/main/scala/demo/GraphQLService.scala) { #service }
 
 The GraphQL specification supports queries both via HTTP GET and POST requests, so we provide routes for both methods.
 For queries via GET the query is embedded in the URI query string in the form `... ?query=<URI encoded GraphQL
@@ -322,4 +322,16 @@ validation, auto completion etc. The demo service provides this as well as norma
 Finally we need to run all of this on top of http4s. Here we have a simple `IOApp` running a `BlazeServer` with the
 `StarWarsService` defined above, and a `ResourceService` to serve the GraphQL Playground web client,
 
-@@snip [main.scala](/demo/src/main/scala/demo/main.scala) { #server }
+```scala
+object Main extends IOApp {
+  def run(args: List[String]) = {
+    val starWarsGraphQLRoutes = GraphQLService.routes[IO](
+      "starwars",
+      GraphQLService.fromGenericIdMapping(StarWarsMapping)
+    )
+    DemoServer.stream[IO](starWarsGraphQLRoutes).compile.drain
+  }
+}
+```
+
+@@snip [main.scala](/demo/src/main/scala/demo/DemoServer.scala) { #server }

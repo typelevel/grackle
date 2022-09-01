@@ -11,6 +11,7 @@ import org.http4s.blaze.server.BlazeServerBuilder
 import org.http4s.server.middleware.Logger
 import org.http4s.server.staticcontent.resourceServiceBuilder
 
+// #server
 object DemoServer {
   def stream[F[_]: Async](graphQLRoutes: HttpRoutes[F]): Stream[F, Nothing] = {
     val httpApp0 = (
@@ -31,3 +32,4 @@ object DemoServer {
     } yield exitCode
   }.drain
 }
+// #server
