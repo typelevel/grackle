@@ -19,6 +19,7 @@ import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 trait WorldMapping[F[_]] extends DoobieMapping[F] {
+  // #db_tables
   object country extends TableDef("country") {
     val code           = col("code", Meta[String])
     val name           = col("name", Meta[String])
@@ -52,6 +53,7 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
     val isOfficial = col("isOfficial", Meta[Boolean])
     val percentage = col("percentage", Meta[Float])
   }
+  // #db_tables
 
   val schema =
     schema"""
@@ -105,6 +107,7 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
 
   val typeMappings =
     List(
+      // #root
       ObjectMapping(
         tpe = QueryType,
         fieldMappings = List(
@@ -117,6 +120,8 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
           SqlRoot("search2")
         )
       ),
+      // #root
+      // #type_mappings
       ObjectMapping(
         tpe = CountryType,
         fieldMappings = List(
@@ -161,8 +166,10 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
           SqlObject("countries", Join(countrylanguage.countrycode, country.code))
         )
       )
+      // #type_mappings
     )
 
+  // #elaborator
   override val selectElaborator = new SelectElaborator(Map(
 
     QueryType -> {
@@ -227,6 +234,7 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
         Count("numCities", Select("cities", Nil, Filter(Like(UniquePath(List("name")), namePattern, true), Select("name", Nil, Empty)))).rightIor
     }
   ))
+  // #elaborator
 }
 
 object WorldMapping extends LoggedDoobieMappingCompanion {
