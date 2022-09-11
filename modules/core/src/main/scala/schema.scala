@@ -46,7 +46,7 @@ trait Schema {
     }
   }
 
-  private def extendType(extendee: NamedType, toApply: List[NamedTypeExtension]): NamedType = {
+  private def extendType(extendee: NamedType, toApply: List[TypeExtension]): NamedType = {
     extendee match {
         case TypeRef(_, _) => throw new RuntimeException("Invariant violated")
         case st: ScalarType => st // Scalar extensions presently do nothing as directives are not supported
@@ -84,7 +84,7 @@ trait Schema {
   def directives: List[DirectiveDef]
 
   /** */
-  def extensions: List[NamedTypeExtension]
+  def extensions: List[TypeExtension]
 
   /** A reference by name to a type defined by this `Schema`.
    *
@@ -509,7 +509,7 @@ sealed trait NamedType extends Type {
 /**
  * A GraphQL type extension
  */ 
-sealed trait NamedTypeExtension {
+sealed trait TypeExtension {
   def extended: TypeRef
   def description: Option[String]
 }
@@ -664,7 +664,7 @@ sealed trait TypeWithFields extends NamedType with WithFields
   * 
   *
   */
-case class ScalarExtension(extended: TypeRef, description: Option[String]) extends NamedTypeExtension 
+case class ScalarExtension(extended: TypeRef, description: Option[String]) extends TypeExtension 
 
 /**
  * Interfaces are an abstract type where there are common fields declared. Any type that
@@ -682,7 +682,7 @@ case class InterfaceType(
   override def isInterface: Boolean = true
 }
 
-case class InterfaceExtension(extended: TypeRef, description: Option[String], fields: List[Field], interfaces: List[NamedType]) extends NamedTypeExtension with WithFields
+case class InterfaceExtension(extended: TypeRef, description: Option[String], fields: List[Field], interfaces: List[NamedType]) extends TypeExtension with WithFields
 
 /**
  * Object types represent concrete instantiations of sets of fields.
@@ -714,7 +714,7 @@ case class UnionType(
   override def toString: String = members.mkString("|")
 }
 
-case class UnionExtension(extended: TypeRef, description: Option[String], members: List[NamedType]) extends NamedTypeExtension
+case class UnionExtension(extended: TypeRef, description: Option[String], members: List[NamedType]) extends TypeExtension
 
 /**
  * Enums are special scalars that can only have a defined set of values.
@@ -733,7 +733,7 @@ case class EnumType(
   def valueDefinition(name: String): Option[EnumValueDefinition] = enumValues.find(_.name == name)
 }
 
-case class EnumExtension(extended: TypeRef, description: Option[String], enumValues: List[EnumValue]) extends NamedTypeExtension
+case class EnumExtension(extended: TypeRef, description: Option[String], enumValues: List[EnumValue]) extends TypeExtension
 
 /**
  * The `EnumValue` type represents one of possible values of an enum.
@@ -770,7 +770,7 @@ case class InputObjectType(
   def inputFieldInfo(name: String): Option[InputValue] = inputFields.find(_.name == name)
 }
 
-case class InputObjectExtension(extended: TypeRef, description: Option[String], inputFields: List[InputValue]) extends NamedTypeExtension
+case class InputObjectExtension(extended: TypeRef, description: Option[String], inputFields: List[InputValue]) extends TypeExtension
 
 /**
  * Lists represent sequences of values in GraphQL. A List type is a type modifier: it wraps
