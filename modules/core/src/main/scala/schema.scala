@@ -39,9 +39,9 @@ trait Schema {
   def unExtendedTypes: List[NamedType]
 
   /** The types defined by this `Schema` with any extensions applied. */
-  def types: List[NamedType] = {
+  lazy val types: List[NamedType] = {
     unExtendedTypes.map { tpe =>
-      val exts = extensions.filter(_.extended.dealias =:= tpe)
+      val exts = extensions.filter(_.extended =:= tpe)
       if (exts.length == 0) {tpe} else { extendType(tpe, exts) }
     }
   }
