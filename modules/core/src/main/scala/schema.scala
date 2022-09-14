@@ -1610,6 +1610,37 @@ object SchemaRenderer {
         s"$nme(${args.map(renderInputValue).mkString(", ")}): ${renderType(tpe)}$dirs"
     }
 
+  def renderExtension(extension: TypeExtension): String = {
+    extension match {
+      case ScalarExtension(extended, _) => s"extend scalar ${extended.dealias.name}"
+      case ObjectExtension(extended, _, fields, ifs0) =>
+        val ifs = if (ifs0.isEmpty) "" else " implements " + ifs0.map(_.name).mkString("&") 
+        s"""|extend type ${extended.dealias.name}$ifs {
+            |  ${fields.map(renderField).mkString("\n  ")}
+            |}""".stripMargin
+
+      case InterfaceExtension(extended, _, fields, ifs0) => 
+        val ifs = if (ifs0.isEmpty) "" else " implements " + ifs0.map(_.name).mkString("&")
+        s"""|extend interface ${extended.dealias.name}$ifs {
+            |  ${fields.map(renderField).mkString("\n  ")}
+            |}""".stripMargin
+
+      case UnionExtension(extended, _, members) => 
+        s"extend union ${extended.dealias.name} = ${members.map(_.name).mkString(" | ")}"
+
+      case EnumExtension(extended, _, enumValues) => 
+        s"""|extend enum ${extended.dealias.name} {
+            |  ${enumValues.map(renderEnumValue).mkString("\n  ")}
+            |}""".stripMargin
+
+      case InputObjectExtension(extended, _, inputFields) => 
+        s"""|extend input ${extended.dealias.name} {
+            |  ${inputFields.map(renderInputValue).mkString("\n  ")}
+            |}""".stripMargin
+    }
+  }
+
+  def renderTypeDefn(tpe: NamedType): String = {
     tpe match {
       case tr: TypeRef => renderTypeDefn(tr.dealias)
 
