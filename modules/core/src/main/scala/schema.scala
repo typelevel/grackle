@@ -41,7 +41,7 @@ trait Schema {
   /** The types defined by this `Schema` with any extensions applied. */
   lazy val types: List[NamedType] = {
     unExtendedTypes.map { tpe =>
-      val exts = extensions.filter(_.extended =:= tpe)
+      val exts = extensions.filter(_.extended == tpe.dealias.name)
       if (exts.isEmpty) {tpe} else { extendType(tpe, exts) }
     }
   }
@@ -510,7 +510,7 @@ sealed trait NamedType extends Type {
  * A GraphQL type extension
  */ 
 sealed trait TypeExtension {
-  def extended: TypeRef
+  def extended: String
   def description: Option[String]
 }
 
@@ -664,7 +664,7 @@ sealed trait TypeWithFields extends NamedType with WithFields
   * 
   *
   */
-case class ScalarExtension(extended: TypeRef, description: Option[String]) extends TypeExtension 
+case class ScalarExtension(extended: String, description: Option[String]) extends TypeExtension
 
 /**
  * Interfaces are an abstract type where there are common fields declared. Any type that
@@ -682,7 +682,7 @@ case class InterfaceType(
   override def isInterface: Boolean = true
 }
 
-case class InterfaceExtension(extended: TypeRef, description: Option[String], fields: List[Field], interfaces: List[NamedType]) extends TypeExtension with WithFields
+case class InterfaceExtension(extended: String, description: Option[String], fields: List[Field], interfaces: List[NamedType]) extends TypeExtension with WithFields
 
 /**
  * Object types represent concrete instantiations of sets of fields.
@@ -714,7 +714,7 @@ case class UnionType(
   override def toString: String = members.mkString("|")
 }
 
-case class UnionExtension(extended: TypeRef, description: Option[String], members: List[NamedType]) extends TypeExtension
+case class UnionExtension(extended: String, description: Option[String], members: List[NamedType]) extends TypeExtension
 
 /**
  * Enums are special scalars that can only have a defined set of values.
@@ -733,7 +733,7 @@ case class EnumType(
   def valueDefinition(name: String): Option[EnumValueDefinition] = enumValues.find(_.name == name)
 }
 
-case class EnumExtension(extended: TypeRef, description: Option[String], enumValues: List[EnumValue]) extends TypeExtension
+case class EnumExtension(extended: String, description: Option[String], enumValues: List[EnumValue]) extends TypeExtension
 
 /**
  * The `EnumValue` type represents one of possible values of an enum.
@@ -770,7 +770,7 @@ case class InputObjectType(
   def inputFieldInfo(name: String): Option[InputValue] = inputFields.find(_.name == name)
 }
 
-case class InputObjectExtension(extended: TypeRef, description: Option[String], inputFields: List[InputValue]) extends TypeExtension
+case class InputObjectExtension(extended: String, description: Option[String], inputFields: List[InputValue]) extends TypeExtension
 
 /**
  * Lists represent sequences of values in GraphQL. A List type is a type modifier: it wraps
@@ -1612,29 +1612,29 @@ object SchemaRenderer {
 
   def renderExtension(extension: TypeExtension): String = {
     extension match {
-      case ScalarExtension(extended, _) => s"extend scalar ${extended.dealias.name}"
+      case ScalarExtension(extended, _) => s"extend scalar ${extended}"
       case ObjectExtension(extended, _, fields, ifs0) =>
         val ifs = if (ifs0.isEmpty) "" else " implements " + ifs0.map(_.name).mkString("&") 
-        s"""|extend type ${extended.dealias.name}$ifs {
+        s"""|extend type ${extended}$ifs {
             |  ${fields.map(renderField).mkString("\n  ")}
             |}""".stripMargin
 
       case InterfaceExtension(extended, _, fields, ifs0) => 
         val ifs = if (ifs0.isEmpty) "" else " implements " + ifs0.map(_.name).mkString("&")
-        s"""|extend interface ${extended.dealias.name}$ifs {
+        s"""|extend interface ${extended}$ifs {
             |  ${fields.map(renderField).mkString("\n  ")}
             |}""".stripMargin
 
       case UnionExtension(extended, _, members) => 
-        s"extend union ${extended.dealias.name} = ${members.map(_.name).mkString(" | ")}"
+        s"extend union ${extended} = ${members.map(_.name).mkString(" | ")}"
 
       case EnumExtension(extended, _, enumValues) => 
-        s"""|extend enum ${extended.dealias.name} {
+        s"""|extend enum ${extended} {
             |  ${enumValues.map(renderEnumValue).mkString("\n  ")}
             |}""".stripMargin
 
       case InputObjectExtension(extended, _, inputFields) => 
-        s"""|extend input ${extended.dealias.name} {
+        s"""|extend input ${extended} {
             |  ${inputFields.map(renderInputValue).mkString("\n  ")}
             |}""".stripMargin
     }
