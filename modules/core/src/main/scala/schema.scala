@@ -661,8 +661,9 @@ sealed trait WithFields {
 sealed trait TypeWithFields extends NamedType with WithFields
 
 /**
+  * Scalar extensions allow additional directives to be applied to a pre-existing Scalar type
   * 
-  *
+  * @see https://spec.graphql.org/draft/#sec-Scalar-Extensions
   */
 case class ScalarExtension(extended: String, description: Option[String]) extends TypeExtension
 
@@ -682,6 +683,11 @@ case class InterfaceType(
   override def isInterface: Boolean = true
 }
 
+/**
+ * Interface extensions allow additional fields to be added to a pre-existing interface type
+ * 
+ * @see https://spec.graphql.org/draft/#sec-Interface-Extensions
+ **/
 case class InterfaceExtension(extended: String, description: Option[String], fields: List[Field], interfaces: List[NamedType]) extends TypeExtension with WithFields
 
 /**
@@ -714,6 +720,11 @@ case class UnionType(
   override def toString: String = members.mkString("|")
 }
 
+/**
+ * Union extensions allow additional members to be added to a pre-existing union type
+ * 
+ * @see https://spec.graphql.org/draft/#sec-Union-Extensions
+ **/
 case class UnionExtension(extended: String, description: Option[String], members: List[NamedType]) extends TypeExtension
 
 /**
@@ -733,6 +744,11 @@ case class EnumType(
   def valueDefinition(name: String): Option[EnumValueDefinition] = enumValues.find(_.name == name)
 }
 
+/**
+ * Enum extensions allow additional values to be added to a pre-existing enum type
+ * 
+ * @see https://spec.graphql.org/draft/#sec-Enum-Extensions
+ **/
 case class EnumExtension(extended: String, description: Option[String], enumValues: List[EnumValue]) extends TypeExtension
 
 /**
@@ -770,6 +786,11 @@ case class InputObjectType(
   def inputFieldInfo(name: String): Option[InputValue] = inputFields.find(_.name == name)
 }
 
+/**
+ * Input Object extensions allow additional fields to be added to a pre-existing Input Object type
+ * 
+ * @see https://spec.graphql.org/draft/#sec-Input-Object-Extensions
+ **/
 case class InputObjectExtension(extended: String, description: Option[String], inputFields: List[InputValue]) extends TypeExtension
 
 /**
