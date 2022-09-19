@@ -342,6 +342,24 @@ final class SchemaSuite extends CatsEffectSuite {
     }
   }
 
+  test("object extension") {
+    val schema = Schema(
+      """
+          type Human {
+            url: String
+          }
+
+        extend type Human {
+                id: ID!
+               }
+        """)
+
+    schema match {
+      case Ior.Right(a) => assert(a.types.head.hasField("id"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
   test("explicit Schema type (complete)") {
 
     val schema =

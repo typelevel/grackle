@@ -42,7 +42,7 @@ trait Schema {
   lazy val types: List[NamedType] = {
     unExtendedTypes.map { tpe =>
       val exts = extensions.filter(_.extended =:= tpe)
-      if (exts.length == 0) {tpe} else { extendType(tpe, exts) }
+      if (exts.isEmpty) {tpe} else { extendType(tpe, exts) }
     }
   }
 
@@ -141,10 +141,10 @@ trait Schema {
   def definition(name: String): Option[NamedType] =
     typeIndex.get(name).orElse(ScalarType.builtIn(name)).map(_.dealias)
 
-  private lazy val typeIndex = types.map(tpe => (tpe.name, tpe)).toMap
+  private lazy val typeIndex = unExtendedTypes.map(tpe => (tpe.name, tpe)).toMap
 
   def ref(tp: Type): Option[TypeRef] = tp match {
-    case nt: NamedType if types.exists(_.name == nt.name) => Some(ref(nt.name))
+    case nt: NamedType if unExtendedTypes.exists(_.name == nt.name) => Some(ref(nt.name))
     case _ => None
   }
 
