@@ -360,6 +360,24 @@ final class SchemaSuite extends CatsEffectSuite {
     }
   }
 
+  test("schema validation: extension on incorrect type") {
+    val schema = Schema(
+      """
+        type Episode {
+           id: String!
+         }
+
+         extend scalar Episode
+      """
+    )
+
+    schema match {
+      case Both(a, _) =>
+        assert(a.map(_.message) == NonEmptyChain("Attempted to apply Scalar extension to Episode but it is not a Scalar"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
   test("explicit Schema type (complete)") {
 
     val schema =
