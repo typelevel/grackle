@@ -8,7 +8,6 @@ import fs2.Stream
 
 import edu.gemini.grackle._
 import syntax._
-import Path._
 import Predicate._
 import Query._
 import QueryCompiler._
@@ -84,7 +83,7 @@ trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
                 QueryInterpreter.mkErrorResult[(Query, Cursor.Env)](s"Implementation error: expected name, countryCode and population in $e.").pure[Stream[F,*]]
               case Some((name, cc, pop)) =>
                 Stream.eval(createCity(name, cc, pop)).map { id =>
-                  (Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child)), e).rightIor
+                  (Unique(Filter(Eql(CityType / "id", Const(id)), child)), e).rightIor
                 }
             }
           }),
@@ -113,7 +112,7 @@ trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("city", List(Binding("id", IntValue(id))), child) =>
-        Select("city", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
+        Select("city", Nil, Unique(Filter(Eql(CityType / "id", Const(id)), child))).rightIor
     },
     MutationType -> {
 
@@ -123,7 +122,7 @@ trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
           Select("updatePopulation", Nil,
             // We could also do this in the SqlRoot's mutation, and in fact would need to do so if
             // the mutation generated a new id. But for now it seems easiest to do it here.
-            Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))
+            Unique(Filter(Eql(CityType / "id", Const(id)), child))
           )
         ).rightIor
 

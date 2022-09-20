@@ -8,7 +8,7 @@ import io.circe.Encoder
 
 import edu.gemini.grackle._
 import syntax._
-import Path._, Predicate._
+import Predicate._
 
 trait SqlRecursiveInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
   def itemType: Codec
@@ -103,7 +103,7 @@ trait SqlRecursiveInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
 
     def narrowPredicate(subtpe: Type): Option[Predicate] = {
       def mkPredicate(tpe: ItemType): Option[Predicate] =
-        Some(Eql(UniquePath(List("itemType")), Const(tpe)))
+        Some(Eql(IType / "itemType", Const(tpe)))
 
       subtpe match {
         case ItemAType => mkPredicate(ItemType.ItemA)

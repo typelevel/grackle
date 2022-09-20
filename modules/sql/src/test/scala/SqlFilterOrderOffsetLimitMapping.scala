@@ -6,7 +6,6 @@ package edu.gemini.grackle.sql.test
 import cats.implicits._
 
 import edu.gemini.grackle._, syntax._
-import Path._
 import Predicate.{Const, Eql}
 import Query.{Binding, Filter, Limit, Offset, OrderBy, OrderSelection, OrderSelections, Select}
 import QueryCompiler.SelectElaborator
@@ -122,10 +121,10 @@ trait SqlFilterOrderOffsetLimitMapping[F[_]] extends SqlTestMapping[F] {
     )
 
   object FilterValue {
-    def unapply(input: ObjectValue): Option[Predicate] = {
+    def unapply(input: ObjectValue): Option[String] = {
       input.fields match {
         case List(("id", StringValue(id))) =>
-          Some(Eql(UniquePath(List("id")), Const(id)))
+          Some(id)
         case _ => None
       }
     }
@@ -148,10 +147,10 @@ trait SqlFilterOrderOffsetLimitMapping[F[_]] extends SqlTestMapping[F] {
       case other =>  mkErrorResult(s"Expected limit > 0, found $other")
     }
 
-  def mkFilter(query: Query, filter: Value): Result[Query] = {
+  def mkFilter(query: Query, tpe: Type, filter: Value): Result[Query] = {
     filter match {
       case AbsentValue|NullValue => query.rightIor
-      case FilterValue(pred) => Filter(pred, query).rightIor
+      case FilterValue(id) => Filter(Eql(tpe / "id", Const(id)), query).rightIor
       case _ => mkErrorResult(s"Expected filter value, found $filter")
     }
   }
@@ -170,7 +169,7 @@ trait SqlFilterOrderOffsetLimitMapping[F[_]] extends SqlTestMapping[F] {
     QueryType -> {
       case Select("root", List(Binding("filter", filter), Binding("offset", offset), Binding("limit", limit)), child) =>
         for {
-          fc <- mkFilter(child, filter)
+          fc <- mkFilter(child, RootType, filter)
           oc <- mkOffset(fc, offset)
           lc <- mkLimit(oc, limit)
         } yield Select("root", Nil, lc)
@@ -180,16 +179,16 @@ trait SqlFilterOrderOffsetLimitMapping[F[_]] extends SqlTestMapping[F] {
     RootType -> {
       case Select("listA", List(Binding("filter", filter), Binding("order", order), Binding("offset", offset), Binding("limit", limit)), child) =>
         for {
-          fc <- mkFilter(child, filter)
-          sc <- mkOrderBy(fc, order)(o => List(OrderSelection[Option[String]](UniquePath(List("elemA")), ascending = o.ascending)))
+          fc <- mkFilter(child, ElemAType, filter)
+          sc <- mkOrderBy(fc, order)(o => List(OrderSelection[Option[String]](ElemAType / "elemA", ascending = o.ascending)))
           oc <- mkOffset(sc, offset)
           lc <- mkLimit(oc, limit)
         } yield Select("listA", Nil, lc)
 
       case Select("listB", List(Binding("filter", filter), Binding("order", order), Binding("offset", offset), Binding("limit", limit)), child) =>
         for {
-          fc <- mkFilter(child, filter)
-          sc <- mkOrderBy(fc, order)(o => List(OrderSelection[Option[Int]](UniquePath(List("elemB")), ascending = o.ascending)))
+          fc <- mkFilter(child, ElemBType, filter)
+          sc <- mkOrderBy(fc, order)(o => List(OrderSelection[Option[Int]](ElemBType / "elemB", ascending = o.ascending)))
           oc <- mkOffset(sc, offset)
           lc <- mkLimit(oc, limit)
         } yield Select("listB", Nil, lc)

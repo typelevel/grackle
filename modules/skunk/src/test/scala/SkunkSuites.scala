@@ -13,6 +13,7 @@ import edu.gemini.grackle.skunk.SkunkMonitor
 import edu.gemini.grackle.sql.SqlStatsMonitor
 
 import edu.gemini.grackle.sql.test._
+import edu.gemini.grackle.Mapping
 
 final class ArrayJoinSpec extends SkunkDatabaseSuite with SqlArrayJoinSpec {
   lazy val mapping = new SkunkTestMapping(pool) with SqlArrayJoinMapping[IO]
@@ -127,7 +128,7 @@ final class WorldSpec extends SkunkDatabaseSuite with SqlWorldSpec {
 final class WorldCompilerSpec extends SkunkDatabaseSuite with SqlWorldCompilerSpec {
   type Fragment = skunk.AppliedFragment
 
-  def mapping: IO[(QueryExecutor[IO, Json], SqlStatsMonitor[IO,Fragment])] =
+  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO,Fragment])] =
     SkunkMonitor.statsMonitor[IO].map(mon => (new SkunkTestMapping(pool, mon) with SqlWorldMapping[IO], mon))
 
   def simpleRestrictedQuerySql: String =

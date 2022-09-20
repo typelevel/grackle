@@ -10,7 +10,7 @@ import cats.tests.CatsSuite
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
-import Query._, Path._, Predicate._, Value._, UntypedOperation._
+import Query._, Predicate._, Value._, UntypedOperation._
 import QueryCompiler._, ComponentElaborator.TrivialJoin
 import QueryInterpreter.mkOneError
 
@@ -201,8 +201,8 @@ final class CompilerSuite extends CatsSuite {
       Select(
         "character", Nil,
         Unique(
-          Filter(Eql(UniquePath(List("id")), Const("1000")),
-            Select("name", Nil) ~
+          Filter(Eql(AtomicMapping.CharacterType / "id", Const("1000")),
+          Select("name", Nil) ~
               Select(
                 "friends", Nil,
                 Select("name", Nil)
@@ -387,9 +387,7 @@ final class CompilerSuite extends CatsSuite {
     val res = QueryParser.parseText(query)
 
     val error =
-      """Parse error at line 5 column 4
-        |    
-        |    ^""".stripMargin
+      "Parse error at line 5 column 4\n    \n    ^"
 
     assert(res == Ior.Left(mkOneError(error)))
   }
@@ -409,13 +407,14 @@ object AtomicMapping extends Mapping[Id] {
     """
 
   val QueryType = schema.ref("Query")
+  val CharacterType = schema.ref("Character")
 
   val typeMappings = Nil
 
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("character", List(Binding("id", StringValue(id))), child) =>
-        Select("character", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
+        Select("character", Nil, Unique(Filter(Eql(CharacterType / "id", Const(id)), child))).rightIor
     }
   ))
 }

@@ -5,7 +5,7 @@ package edu.gemini.grackle.sql.test
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
-import Path._, Predicate._
+import Predicate._
 
 trait SqlUnionsMapping[F[_]] extends SqlTestMapping[F] {
 
@@ -82,7 +82,7 @@ trait SqlUnionsMapping[F[_]] extends SqlTestMapping[F] {
 
     def narrowPredicate(subtpe: Type): Option[Predicate] = {
       def mkPredicate(tpe: String): Option[Predicate] =
-        Some(Eql(UniquePath(List("itemType")), Const(tpe)))
+        Some(Eql(ItemType / "itemType", Const(tpe)))
 
       subtpe match {
         case ItemAType => mkPredicate("ItemA")

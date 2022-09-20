@@ -9,7 +9,7 @@ import cats.implicits._
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle.syntax._
-import Query._, Path._, Predicate._, Value._
+import Query._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.mkOneError
 import semiauto._
@@ -85,7 +85,7 @@ object MutualRecursionMapping extends GenericMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select(f@("programmeById" | "productionById"), List(Binding("id", IDValue(id))), child) =>
-        Select(f, Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
+        Select(f, Nil, Unique(Filter(Eql(ProgrammeType / "id", Const(id)), child))).rightIor
     }
   ))
 }

@@ -9,7 +9,6 @@ import edu.gemini.grackle._
 import syntax._
 
 import Query._
-import Path._
 import Predicate._
 import Value._
 import QueryCompiler._
@@ -88,7 +87,7 @@ trait SqlJsonbMapping[F[_]] extends SqlTestMapping[F] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("record", List(Binding("id", IntValue(id))), child) =>
-        Select("record", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
+        Select("record", Nil, Unique(Filter(Eql(RowType / "id", Const(id)), child))).rightIor
     }
   ))
 }

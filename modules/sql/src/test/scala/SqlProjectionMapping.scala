@@ -6,7 +6,6 @@ package edu.gemini.grackle.sql.test
 import cats.implicits._
 
 import edu.gemini.grackle._, syntax._
-import Path._
 import Predicate.{Const, Eql}
 import Query.{Binding, Filter, Select}
 import QueryCompiler.SelectElaborator
@@ -101,7 +100,7 @@ trait SqlProjectionMapping[F[_]] extends SqlTestMapping[F] {
     def unapply(input: ObjectValue): Option[Predicate] = {
       input.fields match {
         case List(("attr", BooleanValue(attr))) =>
-          Some(Eql(UniquePath(List("level1", "level2", "attr")), Const(Option(attr))))
+          Some(Eql(Level0Type / "level1" / "level2" / "attr", Const(Option(attr))))
         case _ => None
       }
     }
@@ -111,7 +110,7 @@ trait SqlProjectionMapping[F[_]] extends SqlTestMapping[F] {
     def unapply(input: ObjectValue): Option[Predicate] = {
       input.fields match {
         case List(("attr", BooleanValue(attr))) =>
-          Some(Eql(UniquePath(List("level2", "attr")), Const(Option(attr))))
+          Some(Eql(Level1Type / "level2" / "attr", Const(Option(attr))))
         case _ => None
       }
     }
@@ -121,7 +120,7 @@ trait SqlProjectionMapping[F[_]] extends SqlTestMapping[F] {
     def unapply(input: ObjectValue): Option[Predicate] = {
       input.fields match {
         case List(("attr", BooleanValue(attr))) =>
-          Some(Eql(UniquePath(List("attr")), Const(Option(attr))))
+          Some(Eql(Level2Type / "attr", Const(Option(attr))))
         case _ => None
       }
     }

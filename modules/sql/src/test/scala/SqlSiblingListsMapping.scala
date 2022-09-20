@@ -4,7 +4,6 @@
 package edu.gemini.grackle.sql.test
 
 import cats.implicits._
-import edu.gemini.grackle.Path.UniquePath
 import edu.gemini.grackle.Predicate.{Const, Eql}
 import edu.gemini.grackle.Query.{Binding, Filter, Select, Unique}
 import edu.gemini.grackle.syntax._
@@ -109,7 +108,7 @@ trait SqlSiblingListsData[F[_]] extends SqlTestMapping[F] {
     Map(
       QueryType -> {
         case Select("a", List(Binding("id", StringValue(id))), child) =>
-          Select("a", Nil, Unique(Filter(Eql(UniquePath[String](List("id")), Const(id)), child))).rightIor
+          Select("a", Nil, Unique(Filter(Eql(AType / "id", Const(id)), child))).rightIor
         case other => other.rightIor
       }
     )

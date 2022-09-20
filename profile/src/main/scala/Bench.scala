@@ -15,7 +15,7 @@ import edu.gemini.grackle._
 import doobie.postgres.{DoobieMapping, DoobieMappingCompanion, DoobieMonitor}
 import sql.Like
 import syntax._
-import Query._, Path._, Predicate._, Value._
+import Query._, Predicate._, Value._
 import QueryCompiler._
 
 trait WorldPostgresSchema[F[_]] extends DoobieMapping[F] {
@@ -172,10 +172,10 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
     QueryType -> {
 
       case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Filter(Eql(UniquePath(List("code")), Const(code)), child))).rightIor
+        Select("country", Nil, Unique(Filter(Eql(CountryType / "code", Const(code)), child))).rightIor
 
       case Select("city", List(Binding("id", IntValue(id))), child) =>
-        Select("city", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
+        Select("city", Nil, Unique(Filter(Eql(CityType / "id", Const(id)), child))).rightIor
 
       case Select("countries", List(Binding("limit", IntValue(num)), Binding("offset", IntValue(off)), Binding("minPopulation", IntValue(min)), Binding("byPopulation", BooleanValue(byPop))), child) =>
         def limit(query: Query): Query =
@@ -188,15 +188,15 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
 
         def order(query: Query): Query = {
           if (byPop)
-            OrderBy(OrderSelections(List(OrderSelection(UniquePath[Int](List("population"))))), query)
+            OrderBy(OrderSelections(List(OrderSelection[Int](CountryType / "population"))), query)
           else if (num > 0 || off > 0)
-            OrderBy(OrderSelections(List(OrderSelection(UniquePath[String](List("code"))))), query)
+            OrderBy(OrderSelections(List(OrderSelection[String](CountryType / "code"))), query)
           else query
         }
 
         def filter(query: Query): Query =
           if (min == 0) query
-          else Filter(GtEql(UniquePath(List("population")), Const(min)), query)
+          else Filter(GtEql(CountryType / "population", Const(min)), query)
 
         Select("countries", Nil, limit(offset(order(filter(child))))).rightIor
 
@@ -204,31 +204,31 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
         if (namePattern == "%")
           Select("cities", Nil, child).rightIor
         else
-          Select("cities", Nil, Filter(Like(UniquePath(List("name")), namePattern, true), child)).rightIor
+          Select("cities", Nil, Filter(Like(CityType / "name", namePattern, true), child)).rightIor
 
       case Select("language", List(Binding("language", StringValue(language))), child) =>
-        Select("language", Nil, Unique(Filter(Eql(UniquePath(List("language")), Const(language)), child))).rightIor
+        Select("language", Nil, Unique(Filter(Eql(LanguageType / "language", Const(language)), child))).rightIor
 
       case Select("search", List(Binding("minPopulation", IntValue(min)), Binding("indepSince", IntValue(year))), child) =>
         Select("search", Nil,
           Filter(
             And(
-              Not(Lt(UniquePath(List("population")), Const(min))),
-              Not(Lt(UniquePath(List("indepyear")), Const(Option(year))))
+              Not(Lt(CountryType / "population", Const(min))),
+              Not(Lt(CountryType / "indepyear", Const(Option(year))))
             ),
             child
           )
         ).rightIor
 
       case Select("search2", List(Binding("indep", BooleanValue(indep)), Binding("limit", IntValue(num))), child) =>
-        Select("search2", Nil, Limit(num, Filter(IsNull[Int](UniquePath(List("indepyear")), isNull = !indep), child))).rightIor
+        Select("search2", Nil, Limit(num, Filter(IsNull[Int](CountryType / "indepyear", isNull = !indep), child))).rightIor
     },
     CountryType -> {
       case Select("numCities", List(Binding("namePattern", AbsentValue)), Empty) =>
         Count("numCities", Select("cities", Nil, Select("name", Nil, Empty))).rightIor
 
       case Select("numCities", List(Binding("namePattern", StringValue(namePattern))), Empty) =>
-        Count("numCities", Select("cities", Nil, Filter(Like(UniquePath(List("name")), namePattern, true), Select("name", Nil, Empty)))).rightIor
+        Count("numCities", Select("cities", Nil, Filter(Like(CityType / "name", namePattern, true), Select("name", Nil, Empty)))).rightIor
     }
   ))
 }

@@ -9,7 +9,6 @@ import org.scalatest.funsuite.AnyFunSuite
 import cats.effect.unsafe.implicits.global
 
 import edu.gemini.grackle._
-import Path._
 import Predicate._
 import sql.{Like, SqlStatsMonitor}
 import syntax._
@@ -20,7 +19,7 @@ import grackle.test.GraphQLResponseTests.assertWeaklyEqual
 trait SqlWorldCompilerSpec extends AnyFunSuite {
 
   type Fragment
-  def mapping: IO[(QueryExecutor[IO, Json], SqlStatsMonitor[IO, Fragment])]
+  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO, Fragment])]
 
   /** Expected SQL string for the simple restricted query test. */
   def simpleRestrictedQuerySql: String
@@ -50,15 +49,15 @@ trait SqlWorldCompilerSpec extends AnyFunSuite {
         }
       """
 
-    val prog: IO[(Json, List[SqlStatsMonitor.SqlStats])] =
+    val prog: IO[(Json, List[SqlStatsMonitor.SqlStats], Schema)] =
       for {
         mm  <- mapping
         (map, mon) = mm
         res <- map.compileAndRun(query)
         ss  <- mon.take
-      } yield (res, ss.map(_.normalize))
+      } yield (res, ss.map(_.normalize), map.schema)
 
-    val (res, stats) = prog.unsafeRunSync()
+    val (res, stats, schema) = prog.unsafeRunSync()
 
     assertWeaklyEqual(res, expected)
 
@@ -67,7 +66,7 @@ trait SqlWorldCompilerSpec extends AnyFunSuite {
     assert(
       stats == List(
         SqlStatsMonitor.SqlStats(
-          Query.Unique(Query.Filter(Eql(UniquePath(List("code")),Const("GBR")),Query.Select("name",List(),Query.Empty))),
+          Query.Unique(Query.Filter(Eql(schema.ref("Country") / "code", Const("GBR")),Query.Select("name",List(),Query.Empty))),
           simpleRestrictedQuerySql,
           List("GBR"),
           1,
@@ -108,15 +107,15 @@ trait SqlWorldCompilerSpec extends AnyFunSuite {
         }
       """
 
-    val prog: IO[(Json, List[SqlStatsMonitor.SqlStats])] =
+    val prog: IO[(Json, List[SqlStatsMonitor.SqlStats], Schema)] =
       for {
         mm  <- mapping
         (map, mon) = mm
         res <- map.compileAndRun(query)
         ss  <- mon.take
-      } yield (res, ss.map(_.normalize))
+      } yield (res, ss.map(_.normalize), map.schema)
 
-    val (res, stats) = prog.unsafeRunSync()
+    val (res, stats, schema) = prog.unsafeRunSync()
 
     assertWeaklyEqual(res, expected)
 
@@ -125,7 +124,7 @@ trait SqlWorldCompilerSpec extends AnyFunSuite {
     assert(
       stats == List(
         SqlStatsMonitor.SqlStats(
-          Query.Filter(Like(UniquePath(List("name")),"Linh%",true),Query.Select("name",List(),Query.Empty)),
+          Query.Filter(Like(schema.ref("City") / "name","Linh%",true),Query.Select("name",List(),Query.Empty)),
           simpleFilteredQuerySql,
           List("Linh%"),
           3,

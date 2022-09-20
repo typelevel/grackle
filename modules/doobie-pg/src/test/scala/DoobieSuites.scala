@@ -13,6 +13,7 @@ import edu.gemini.grackle.doobie.postgres.DoobieMonitor
 import edu.gemini.grackle.sql.SqlStatsMonitor
 
 import edu.gemini.grackle.sql.test._
+import edu.gemini.grackle.Mapping
 
 final class ArrayJoinSpec extends DoobieDatabaseSuite with SqlArrayJoinSpec {
   lazy val mapping = new DoobieTestMapping(xa) with SqlArrayJoinMapping[IO]
@@ -124,7 +125,7 @@ final class WorldSpec extends DoobieDatabaseSuite with SqlWorldSpec {
 final class WorldCompilerSpec extends DoobieDatabaseSuite with SqlWorldCompilerSpec {
   type Fragment = doobie.Fragment
 
-  def mapping: IO[(QueryExecutor[IO, Json], SqlStatsMonitor[IO,Fragment])] =
+  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO,Fragment])] =
     DoobieMonitor.statsMonitor[IO].map(mon => (new DoobieTestMapping(xa, mon) with SqlWorldMapping[IO], mon))
 
   def simpleRestrictedQuerySql: String =

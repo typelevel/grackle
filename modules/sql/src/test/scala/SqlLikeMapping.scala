@@ -7,7 +7,7 @@ import cats.implicits._
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
-import Query._, Path._, Predicate._, Value._
+import Query._, Predicate._, Value._
 import QueryCompiler._
 import sql.Like
 
@@ -86,13 +86,13 @@ trait SqlLikeMapping[F[_]] extends SqlTestMapping[F] {
   override val selectElaborator: SelectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select(f@"likeNotNullableNotNullable", List(Binding("pattern", NonNullablePattern(pattern))), child) =>
-        Rename(f, Select("likes", Nil, Filter(Like(UniquePath(List("notNullable")), pattern, false), child))).rightIor
+        Rename(f, Select("likes", Nil, Filter(Like(LikeType / "notNullable", pattern, false), child))).rightIor
       case Select(f@"likeNotNullableNullable", List(Binding("pattern", NullablePattern(pattern))), child) =>
-        Rename(f, Select("likes", Nil, Filter(mkPredicate(UniquePath(List("notNullable")), pattern), child))).rightIor
+        Rename(f, Select("likes", Nil, Filter(mkPredicate(LikeType / "notNullable", pattern), child))).rightIor
       case Select(f@"likeNullableNotNullable", List(Binding("pattern", NonNullablePattern(pattern))), child) =>
-        Rename(f, Select("likes", Nil, Filter(Like(UniquePath(List("nullable")), pattern, false), child))).rightIor
+        Rename(f, Select("likes", Nil, Filter(Like(LikeType / "nullable", pattern, false), child))).rightIor
       case Select(f@"likeNullableNullable", List(Binding("pattern", NullablePattern(pattern))), child) =>
-        Rename(f, Select("likes", Nil, Filter(mkPredicate(UniquePath(List("nullable")), pattern), child))).rightIor
+        Rename(f, Select("likes", Nil, Filter(mkPredicate(LikeType / "nullable", pattern), child))).rightIor
 
       case other => other.rightIor
     }
