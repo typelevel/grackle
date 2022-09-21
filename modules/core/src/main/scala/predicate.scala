@@ -45,6 +45,7 @@ trait TermLow {
     p.asTerm[List[A]]
 }
 
+/** A path starting from some root type. */
 case class Path private (root: Type, path: List[String]) {
 
   def asTerm[A]: Term[A] =
@@ -64,6 +65,7 @@ case class Path private (root: Type, path: List[String]) {
 
 object Path {
 
+  /** Construct an empty `Path` rooted at the given type. */
   def from(tpe: Type): Path =
     Path(tpe, Nil)
 
@@ -92,57 +94,6 @@ object PathTerm {
   }
 
 }
-
-
-// sealed trait Path {
-//   def path: List[String]
-//   def prepend(prefix: List[String]): Path
-// }
-
-// object Path {
-//   import Predicate.ScalarFocus
-
-//   /**
-//     * Reifies a traversal from a Cursor to a single, possibly nullable, value.
-//     *
-//     * Typically such a path would use used to identify a field of the object
-//     * or interface at the focus of the cursor, to be tested via a predicate
-//     * such as `Eql`.
-//     */
-//   case class UniquePath[T](val path: List[String]) extends Term[T] with Path {
-//     def apply(c: Cursor): Result[T] =
-//       c.listPath(path) match {
-//         case Ior.Right(List(ScalarFocus(a: T @unchecked))) => a.rightIor
-//         case other => mkErrorResult(s"Expected exactly one element for path $path found $other")
-//       }
-
-//     def prepend(prefix: List[String]): Path =
-//       UniquePath(prefix ++ path)
-
-//     def children = Nil
-//   }
-
-//   /**
-//     * Reifies a traversal from a Cursor to multiple, possibly nullable, values.
-//     *
-//     * Typically such a path would use used to identify the list of values of
-//     * an attribute of the object elements of a list field of the object or
-//     * interface at the focus of the cursor, to be tested via a predicate such
-//     * as `In`.
-//     */
-//   case class ListPath[T](val path: List[String]) extends Term[List[T]] with Path {
-//     def apply(c: Cursor): Result[List[T]] =
-//       c.flatListPath(path).map(_.map {
-//         case ScalarFocus(f: T @unchecked) => f
-//         case _ => sys.error("impossible")
-//       })
-
-//     def prepend(prefix: List[String]): Path =
-//       ListPath(prefix ++ path)
-
-//     def children = Nil
-//   }
-// }
 
 trait Predicate extends Term[Boolean]
 
