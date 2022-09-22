@@ -71,13 +71,13 @@ object Path {
 
 }
 
-sealed trait PathTerm[A] extends Term[A] {
+sealed trait PathTerm {
   def children: List[Term[_]] =  Nil
   def path: List[String]
 }
 object PathTerm {
 
-  case class ListPath[A](path: List[String]) extends PathTerm[A] {
+  case class ListPath[A](path: List[String]) extends Term[A] with PathTerm {
     def apply(c: Cursor): Result[A] =
       c.flatListPath(path).map(_.map {
         case Predicate.ScalarFocus(f) => f
@@ -85,7 +85,7 @@ object PathTerm {
       } .asInstanceOf[A])
   }
 
-  case class UniquePath[A](path: List[String]) extends PathTerm[A] {
+  case class UniquePath[A](path: List[String]) extends Term[A] with PathTerm {
     def apply(c: Cursor): Result[A] =
       c.listPath(path) match {
         case Ior.Right(List(Predicate.ScalarFocus(a: A @unchecked))) => a.rightIor
