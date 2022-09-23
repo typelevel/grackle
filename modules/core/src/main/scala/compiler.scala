@@ -10,7 +10,7 @@ import cats.parse.{LocationMap, Parser}
 import cats.implicits._
 import io.circe.Json
 
-import Query._, Predicate._, Path._, Value._, UntypedOperation._
+import Query._, Predicate._, Value._, UntypedOperation._
 import QueryCompiler._
 import QueryInterpreter.{ mkErrorResult, mkOneError }
 import ScalarType._
@@ -613,18 +613,23 @@ object QueryCompiler {
       }
   }
 
-  val introspectionMapping: Map[TypeRef, PartialFunction[Select, Result[Query]]] = Map(
-    Introspection.schema.ref("Query") -> {
-      case sel@Select("__type", List(Binding("name", StringValue(name))), _) =>
-        sel.eliminateArgs(child => Unique(Filter(Eql(UniquePath(List("name")), Const(Option(name))), child))).rightIor
-    },
-    Introspection.schema.ref("__Type") -> {
-      case sel@Select("fields", List(Binding("includeDeprecated", BooleanValue(include))), _) =>
-        sel.eliminateArgs(child => if (include) child else Filter(Eql(UniquePath(List("isDeprecated")), Const(false)), child)).rightIor
-      case sel@Select("enumValues", List(Binding("includeDeprecated", BooleanValue(include))), _) =>
-        sel.eliminateArgs(child => if (include) child else Filter(Eql(UniquePath(List("isDeprecated")), Const(false)), child)).rightIor
-    }
-  )
+  val introspectionMapping: Map[TypeRef, PartialFunction[Select, Result[Query]]] = {
+    val TypeType = Introspection.schema.ref("__Type")
+    val FieldType = Introspection.schema.ref("__Field")
+    val EnumValueType = Introspection.schema.ref("__EnumValue")
+    Map(
+      Introspection.schema.ref("Query") -> {
+        case sel@Select("__type", List(Binding("name", StringValue(name))), _) =>
+          sel.eliminateArgs(child => Unique(Filter(Eql(TypeType / "name", Const(Option(name))), child))).rightIor
+      },
+      Introspection.schema.ref("__Type") -> {
+        case sel@Select("fields", List(Binding("includeDeprecated", BooleanValue(include))), _) =>
+          sel.eliminateArgs(child => if (include) child else Filter(Eql(FieldType / "isDeprecated", Const(false)), child)).rightIor
+        case sel@Select("enumValues", List(Binding("includeDeprecated", BooleanValue(include))), _) =>
+          sel.eliminateArgs(child => if (include) child else Filter(Eql(EnumValueType / "isDeprecated", Const(false)), child)).rightIor
+      }
+    )
+  }
 
   /**
    * A compiler phase which partitions a query for execution by multiple

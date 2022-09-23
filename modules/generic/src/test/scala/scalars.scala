@@ -14,7 +14,7 @@ import cats.tests.CatsSuite
 import io.circe.Encoder
 
 import edu.gemini.grackle.syntax._
-import Query._, Path._, Predicate._, Value._
+import Query._, Predicate._, Value._
 import QueryCompiler._
 import semiauto._
 
@@ -179,15 +179,15 @@ object MovieMapping extends GenericMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("movieById", List(Binding("id", UUIDValue(id))), child) =>
-        Select("movieById", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
+        Select("movieById", Nil, Unique(Filter(Eql(MovieType / "id", Const(id)), child))).rightIor
       case Select("moviesByGenre", List(Binding("genre", GenreValue(genre))), child) =>
-        Select("moviesByGenre", Nil, Filter(Eql(UniquePath(List("genre")), Const(genre)), child)).rightIor
+        Select("moviesByGenre", Nil, Filter(Eql(MovieType / "genre", Const(genre)), child)).rightIor
       case Select("moviesReleasedBetween", List(Binding("from", DateValue(from)), Binding("to", DateValue(to))), child) =>
         Select("moviesReleasedBetween", Nil,
           Filter(
             And(
-              Not(Lt(UniquePath(List("releaseDate")), Const(from))),
-              Lt(UniquePath(List("releaseDate")), Const(to))
+              Not(Lt(MovieType / "releaseDate", Const(from))),
+              Lt(MovieType / "releaseDate", Const(to))
             ),
             child
           )
@@ -195,14 +195,14 @@ object MovieMapping extends GenericMapping[Id] {
       case Select("moviesLongerThan", List(Binding("duration", IntervalValue(duration))), child) =>
         Select("moviesLongerThan", Nil,
           Filter(
-            Not(Lt(UniquePath(List("duration")), Const(duration))),
+            Not(Lt(MovieType / "duration", Const(duration))),
             child
           )
         ).rightIor
       case Select("moviesShownLaterThan", List(Binding("time", TimeValue(time))), child) =>
         Select("moviesShownLaterThan", Nil,
           Filter(
-            Not(Lt(UniquePath(List("showTime")), Const(time))),
+            Not(Lt(MovieType / "showTime", Const(time))),
             child
           )
         ).rightIor
@@ -210,8 +210,8 @@ object MovieMapping extends GenericMapping[Id] {
         Select("moviesShownBetween", Nil,
           Filter(
             And(
-              Not(Lt(UniquePath(List("nextShowing")), Const(from))),
-              Lt(UniquePath(List("nextShowing")), Const(to))
+              Not(Lt(MovieType / "nextShowing", Const(from))),
+              Lt(MovieType / "nextShowing", Const(to))
             ),
             child
           )

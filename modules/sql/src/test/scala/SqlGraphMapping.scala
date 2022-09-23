@@ -7,7 +7,7 @@ import cats.implicits._
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
-import Query._, Path._, Predicate._, Value._
+import Query._, Predicate._, Value._
 import QueryCompiler._
 
 trait SqlGraphMapping[F[_]] extends SqlTestMapping[F] {
@@ -73,7 +73,7 @@ trait SqlGraphMapping[F[_]] extends SqlTestMapping[F] {
   override val selectElaborator: SelectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("node", List(Binding("id", IntValue(id))), child) =>
-        Select("node", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
+        Select("node", Nil, Unique(Filter(Eql(NodeType / "id", Const(id)), child))).rightIor
 
       case other => other.rightIor
     }

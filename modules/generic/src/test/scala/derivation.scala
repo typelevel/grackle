@@ -14,7 +14,7 @@ import io.circe.Json
 
 import edu.gemini.grackle.syntax._
 import Cursor.Context
-import Query._, Path._, Predicate._, Value._
+import Query._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.{ mkErrorResult, mkOneError }
 import ScalarType._
@@ -209,11 +209,11 @@ object StarWarsMapping extends GenericMapping[Id] {
     QueryType -> {
       case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
         Episode.values.find(_.toString == e.name).map { episode =>
-          Select("hero", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(hero(episode).id)), child))).rightIor
+          Select("hero", Nil, Unique(Filter(Eql(CharacterType / "id", Const(hero(episode).id)), child))).rightIor
         }.getOrElse(mkErrorResult(s"Unknown episode '${e.name}'"))
 
       case Select(f@("character" | "human" | "droid"), List(Binding("id", IDValue(id))), child) =>
-        Select(f, Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
+        Select(f, Nil, Unique(Filter(Eql(CharacterType / "id", Const(id)), child))).rightIor
     },
     CharacterType -> numberOfFriends,
     HumanType -> numberOfFriends,

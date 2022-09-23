@@ -8,7 +8,7 @@ import cats.implicits._
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
-import Query._, Path._, Predicate._, Value._
+import Query._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.mkErrorResult
 
@@ -65,7 +65,7 @@ object CurrencyMapping extends ValueMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("fx", List(Binding("code", StringValue(code))), child) =>
-        Select("fx", Nil, Unique(Filter(Eql(UniquePath(List("code")), Const(code)), child))).rightIor
+        Select("fx", Nil, Unique(Filter(Eql(CurrencyType / "code", Const(code)), child))).rightIor
     }
   ))
 }
@@ -127,7 +127,7 @@ object CountryMapping extends ValueMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Filter(Eql(UniquePath(List("code")), Const(code)), child))).rightIor
+        Select("country", Nil, Unique(Filter(Eql(CurrencyMapping.CurrencyType / "code", Const(code)), child))).rightIor
       case Select("countries", _, child) =>
         Select("countries", Nil, child).rightIor
     }
@@ -157,13 +157,14 @@ object ComposedMapping extends Mapping[Id] {
 
   val QueryType = schema.ref("Query")
   val CountryType = schema.ref("Country")
+  val CurrencyType = schema.ref("Currency")
 
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("fx", List(Binding("code", StringValue(code))), child) =>
-        Select("fx", Nil, Unique(Filter(Eql(UniquePath(List("code")), Const(code)), child))).rightIor
+        Select("fx", Nil, Unique(Filter(Eql(CurrencyType / "code", Const(code)), child))).rightIor
       case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Filter(Eql(UniquePath(List("code")), Const(code)), child))).rightIor
+        Select("country", Nil, Unique(Filter(Eql(CountryType / "code", Const(code)), child))).rightIor
       case Select("countries", _, child) =>
         Select("countries", Nil, child).rightIor
     }
@@ -192,7 +193,7 @@ object ComposedMapping extends Mapping[Id] {
   def countryCurrencyJoin(c: Cursor, q: Query): Result[Query] =
     (c.focus, q) match {
       case (c: CountryData.Country, Select("currency", _, child)) =>
-        Select("fx", Nil, Unique(Filter(Eql(UniquePath(List("code")), Const(c.currencyCode)), child))).rightIor
+        Select("fx", Nil, Unique(Filter(Eql(CurrencyType / "code", Const(c.currencyCode)), child))).rightIor
       case _ =>
         mkErrorResult(s"Unexpected cursor focus type in countryCurrencyJoin")
     }

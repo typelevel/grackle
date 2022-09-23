@@ -7,7 +7,7 @@ import cats.implicits._
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
-import Query._, Path._, Predicate._, Value._
+import Query._, Predicate._, Value._
 import QueryCompiler._
 
 trait SqlTreeMapping[F[_]] extends SqlTestMapping[F] {
@@ -56,7 +56,7 @@ trait SqlTreeMapping[F[_]] extends SqlTestMapping[F] {
   override val selectElaborator: SelectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("bintree", List(Binding("id", IntValue(id))), child) =>
-        Select("bintree", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
+        Select("bintree", Nil, Unique(Filter(Eql(BinTreeType / "id", Const(id)), child))).rightIor
 
       case other => other.rightIor
     }

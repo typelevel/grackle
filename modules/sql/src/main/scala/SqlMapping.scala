@@ -750,7 +750,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   /** Returns the aliased columns corresponding to `term` in `context` */
   def columnForSqlTerm[T](context: Context, term: Term[T]): Option[SqlColumn] =
     term match {
-      case termPath: Path =>
+      case termPath: PathTerm =>
         context.forPath(termPath.path.init).flatMap { parentContext =>
           columnForAtomicField(parentContext, termPath.path.last)
         }
@@ -774,7 +774,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   /** Returns the `Encoder` for the given term in `context` */
   def encoderForTerm(context: Context, term: Term[_]): Option[Encoder] =
     term match {
-      case pathTerm: Path =>
+      case pathTerm: PathTerm =>
         for {
           cr <- columnForSqlTerm(context, pathTerm) // encoder is independent of query aliases
         } yield toEncoder(cr.codec)
@@ -834,7 +834,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
   /** Is `term` in `context`expressible in SQL? */
   def isSqlTerm(context: Context, term: Term[_]): Boolean =
     term.forall {
-      case termPath: Path =>
+      case termPath: PathTerm =>
         context.forPath(termPath.path.init).map { parentContext =>
           !isComputedField(parentContext, termPath.path.last)
         }.getOrElse(true)
@@ -1145,7 +1145,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       def loop(term: Term[_], acc: List[List[String]]): List[List[String]] = {
         term match {
           case Const(_)         => acc
-          case pathTerm: Path   => pathTerm.path :: acc
+          case pathTerm: PathTerm  => pathTerm.path :: acc
           case And(x, y)        => loop(y, loop(x, acc))
           case Or(x, y)         => loop(y, loop(x, acc))
           case Not(x)           => loop(x, acc)
@@ -1178,7 +1178,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def whereCols(f: Term[_] => SqlColumn, pred: Predicate): List[SqlColumn] = {
       def loop[T](term: T): List[SqlColumn] =
         term match {
-          case _: Path          => f(term.asInstanceOf[Term[_]]) :: Nil
+          case _: PathTerm      => f(term.asInstanceOf[Term[_]]) :: Nil
           case _: SqlColumnTerm => f(term.asInstanceOf[Term[_]]) :: Nil
           case Const(_)         => Nil
           case And(x, y)        => loop(x) ++ loop(y)
@@ -1212,7 +1212,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
     def contextualiseWhereTerms(context: Context, owner: ColumnOwner, pred: Predicate): Predicate = {
       def loop[T](term: T): T =
         (term match {
-          case _: Path          => SqlColumnTerm(contextualiseTerm(context, owner, term.asInstanceOf[Term[_]]))
+          case _: PathTerm      => SqlColumnTerm(contextualiseTerm(context, owner, term.asInstanceOf[Term[_]]))
           case _: SqlColumnTerm => SqlColumnTerm(contextualiseTerm(context, owner, term.asInstanceOf[Term[_]]))
           case Const(_)         => term
           case And(x, y)        => And(loop(x), loop(y))
@@ -1247,7 +1247,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
       def loop[T](term: T): T =
         (term match {
           case SqlColumnTerm(col) => SqlColumnTerm(col.subst(from, to))
-          case _: Path            => term
+          case _: PathTerm        => term
           case Const(_)           => term
           case And(x, y)          => And(loop(x), loop(y))
           case Or(x, y)           => Or(loop(x), loop(y))
@@ -1315,7 +1315,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
           case SqlColumnTerm(col) =>
             col.toRefFragment(false)
 
-          case pathTerm: Path =>
+          case pathTerm: PathTerm =>
             sys.error(s"Unresolved term $pathTerm in WHERE clause")
 
           case True =>
@@ -1463,7 +1463,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
       term match {
         case SqlColumnTerm(col) => subst(col)
-        case pathTerm: Path =>
+        case pathTerm: PathTerm =>
           columnForSqlTerm(context, pathTerm).map(subst).getOrElse(sys.error(s"No column for term $pathTerm"))
 
         case other =>
@@ -2865,7 +2865,7 @@ trait SqlMapping[F[_]] extends CirceMapping[F] with SqlModule[F] { self =>
 
           case FilterOrderByOffsetLimit(pred, oss, offset, lim, child) =>
             val filterPaths = pred.map(SqlQuery.wherePaths).getOrElse(Nil).distinct
-            val orderPaths = oss.map(_.map(_.term).collect { case path: Path => path.path }).getOrElse(Nil).distinct
+            val orderPaths = oss.map(_.map(_.term).collect { case path: PathTerm => path.path }).getOrElse(Nil).distinct
             val filterOrderPaths = (filterPaths ++ orderPaths).distinct
 
             if (pred.map(p => !isSqlTerm(context, p)).getOrElse(false)) {

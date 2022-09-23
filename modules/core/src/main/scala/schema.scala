@@ -206,7 +206,7 @@ sealed trait Type extends Product {
    * path passes through at least one field of a List type.
    */
   def pathIsList(fns: List[String]): Boolean = (fns, this) match {
-    case (Nil, _) => false
+    case (Nil, _) => this.isList
     case (_, _: ListType) => true
     case (_, NullableType(tpe)) => tpe.pathIsList(fns)
     case (_, TypeRef(_, _)) => dealias.pathIsList(fns)
@@ -408,6 +408,10 @@ sealed trait Type extends Product {
   def isInterface: Boolean = false
 
   def isUnion: Boolean = false
+
+  def /(pathElement: String): Path =
+    Path.from(this) / pathElement
+
 }
 
 // Move all below into object Type?
@@ -455,6 +459,7 @@ case class TypeRef(schema: Schema, name: String) extends NamedType {
   override lazy val exists: Boolean = schema.definition(name).isDefined
 
   def description: Option[String] = dealias.description
+
 }
 
 /**

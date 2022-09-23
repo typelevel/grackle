@@ -35,54 +35,64 @@ trait Term[T] extends Product with Serializable { // fun fact: making this covar
     f(this) && children.forall(_.forall(f))
 }
 
-sealed trait Path {
-  def path: List[String]
-  def prepend(prefix: List[String]): Path
+object Term extends TermLow {
+  implicit def path2Term[A](p: Path): Term[A] =
+    p.asTerm[A]
+}
+
+trait TermLow {
+  implicit def path2ListTerm[A](p: Path): Term[List[A]] =
+    p.asTerm[List[A]]
+}
+
+/** A path starting from some root type. */
+case class Path private (root: Type, path: List[String]) {
+
+  def asTerm[A]: Term[A] =
+    if (isList) PathTerm.ListPath(path)
+    else PathTerm.UniquePath(path)
+
+  lazy val isList: Boolean = root.pathIsList(path)
+  lazy val tpe: Option[Type] = root.path(path)
+
+  def prepend(prefix: List[String]): Path =
+    copy(path = prefix ++ path)
+
+  def /(elem: String): Path =
+    copy(path = path :+ elem)
+
 }
 
 object Path {
-  import Predicate.ScalarFocus
 
-  /**
-    * Reifies a traversal from a Cursor to a single, possibly nullable, value.
-    *
-    * Typically such a path would use used to identify a field of the object
-    * or interface at the focus of the cursor, to be tested via a predicate
-    * such as `Eql`.
-    */
-  case class UniquePath[T](val path: List[String]) extends Term[T] with Path {
-    def apply(c: Cursor): Result[T] =
+  /** Construct an empty `Path` rooted at the given type. */
+  def from(tpe: Type): Path =
+    Path(tpe, Nil)
+
+}
+
+sealed trait PathTerm {
+  def children: List[Term[_]] =  Nil
+  def path: List[String]
+}
+object PathTerm {
+
+  case class ListPath[A](path: List[String]) extends Term[A] with PathTerm {
+    def apply(c: Cursor): Result[A] =
+      c.flatListPath(path).map(_.map {
+        case Predicate.ScalarFocus(f) => f
+        case _ => sys.error("impossible")
+      } .asInstanceOf[A])
+  }
+
+  case class UniquePath[A](path: List[String]) extends Term[A] with PathTerm {
+    def apply(c: Cursor): Result[A] =
       c.listPath(path) match {
-        case Ior.Right(List(ScalarFocus(a: T @unchecked))) => a.rightIor
+        case Ior.Right(List(Predicate.ScalarFocus(a: A @unchecked))) => a.rightIor
         case other => mkErrorResult(s"Expected exactly one element for path $path found $other")
       }
-
-    def prepend(prefix: List[String]): Path =
-      UniquePath(prefix ++ path)
-
-    def children = Nil
   }
 
-  /**
-    * Reifies a traversal from a Cursor to multiple, possibly nullable, values.
-    *
-    * Typically such a path would use used to identify the list of values of
-    * an attribute of the object elements of a list field of the object or
-    * interface at the focus of the cursor, to be tested via a predicate such
-    * as `In`.
-    */
-  case class ListPath[T](val path: List[String]) extends Term[List[T]] with Path {
-    def apply(c: Cursor): Result[List[T]] =
-      c.flatListPath(path).map(_.map {
-        case ScalarFocus(f: T @unchecked) => f
-        case _ => sys.error("impossible")
-      })
-
-    def prepend(prefix: List[String]): Path =
-      ListPath(prefix ++ path)
-
-    def children = Nil
-  }
 }
 
 trait Predicate extends Term[Boolean]

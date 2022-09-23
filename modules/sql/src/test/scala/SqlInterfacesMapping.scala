@@ -9,7 +9,7 @@ import io.circe.Encoder
 
 import edu.gemini.grackle._
 import syntax._
-import Path._, Predicate._
+import Predicate._
 import Query._
 import QueryCompiler._
 
@@ -190,7 +190,7 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
 
     def narrowPredicate(subtpe: Type): Option[Predicate] = {
       def mkPredicate(tpe: EntityType): Option[Predicate] =
-        Some(Eql(UniquePath(List("entityType")), Const(tpe)))
+        Some(Eql(EType / "entityType", Const(tpe)))
 
       subtpe match {
         case FilmType => mkPredicate(EntityType.Film)
@@ -203,7 +203,7 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("films", Nil, child) =>
-        Select("films", Nil, Filter(Eql[EntityType](UniquePath(List("entityType")), Const(EntityType.Film)), child)).rightIor
+        Select("films", Nil, Filter(Eql[EntityType](FilmType / "entityType", Const(EntityType.Film)), child)).rightIor
     }
   ))
 

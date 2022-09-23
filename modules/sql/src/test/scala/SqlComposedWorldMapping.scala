@@ -11,7 +11,6 @@ import edu.gemini.grackle.sql.Like
 import edu.gemini.grackle.syntax._
 
 import Query._
-import Path._
 import Predicate._
 import Value._
 import QueryCompiler._
@@ -129,6 +128,8 @@ class SqlComposedMapping[F[_] : Monad]
 
   val QueryType = schema.ref("Query")
   val CountryType = schema.ref("Country")
+  val CurrencyType = schema.ref("Currency")
+  val CityType = schema.ref("City")
 
   val typeMappings =
     List(
@@ -153,18 +154,18 @@ class SqlComposedMapping[F[_] : Monad]
   def countryCurrencyJoin(c: Cursor, q: Query): Result[Query] =
     (c.fieldAs[String]("code"), q) match {
       case (Ior.Right(countryCode: String), Select("currencies", _, child)) =>
-        Select("allCurrencies", Nil, Filter(Eql(UniquePath(List("countryCode")), Const(countryCode)), child)).rightIor
+        Select("allCurrencies", Nil, Filter(Eql(CurrencyType / "countryCode", Const(countryCode)), child)).rightIor
       case _ => mkErrorResult(s"Expected 'code' attribute at ${c.tpe}")
     }
 
   override val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {
       case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Filter(Eql(UniquePath(List("code")), Const(code)), child))).rightIor
+        Select("country", Nil, Unique(Filter(Eql(CountryType / "code", Const(code)), child))).rightIor
       case Select("countries", _, child) =>
         Select("countries", Nil, child).rightIor
       case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
-        Select("cities", Nil, Filter(Like(UniquePath(List("name")), namePattern, true), child)).rightIor
+        Select("cities", Nil, Filter(Like(CityType / "name", namePattern, true), child)).rightIor
     }
   ))
 }

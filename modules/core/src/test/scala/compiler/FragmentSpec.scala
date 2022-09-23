@@ -10,7 +10,7 @@ import cats.tests.CatsSuite
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
-import Query._, Path._, Predicate._, Value._
+import Query._, Predicate._, Value._
 import QueryCompiler._
 
 final class FragmentSuite extends CatsSuite {
@@ -37,7 +37,7 @@ final class FragmentSuite extends CatsSuite {
     val expected =
       Select("user", Nil,
         Unique(
-          Filter(Eql(UniquePath(List("id")), Const("1")),
+          Filter(Eql(FragmentMapping.UserType / "id", Const("1")),
             Group(List(
               Select("friends", Nil,
                 Group(List(
@@ -127,7 +127,7 @@ final class FragmentSuite extends CatsSuite {
     val expected =
       Select("user", Nil,
         Unique(
-          Filter(Eql(UniquePath(List("id")), Const("1")),
+          Filter(Eql(FragmentMapping.UserType / "id", Const("1")),
             Group(List(
               Select("friends", Nil,
                 Group(List(
@@ -369,7 +369,7 @@ final class FragmentSuite extends CatsSuite {
       Group(List(
         Select("user", Nil,
           Unique(
-            Filter(Eql(UniquePath(List("id")), Const("1")),
+            Filter(Eql(FragmentMapping.UserType / "id", Const("1")),
               Select("favourite", Nil,
                 Group(List(
                   Introspect(FragmentMapping.schema, Select("__typename", Nil, Empty)),
@@ -387,7 +387,7 @@ final class FragmentSuite extends CatsSuite {
         ),
         Rename("page", Select("user", Nil,
           Unique(
-            Filter(Eql(UniquePath(List("id")), Const("2")),
+            Filter(Eql(FragmentMapping.PageType / "id", Const("2")),
               Select("favourite", Nil,
                 Group(List(
                   Introspect(FragmentMapping.schema, Select("__typename", Nil, Empty)),
@@ -454,7 +454,7 @@ final class FragmentSuite extends CatsSuite {
     val expected =
       Select("user", Nil,
         Unique(
-          Filter(Eql(UniquePath(List("id")), Const("1")),
+          Filter(Eql(FragmentMapping.UserType / "id", Const("1")),
             Select("friends", Nil,
               Select("id", Nil, Empty)
             )
@@ -698,7 +698,7 @@ object FragmentMapping extends ValueMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("user", List(Binding("id", IDValue(id))), child) =>
-        Select("user", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
+        Select("user", Nil, Unique(Filter(Eql(FragmentMapping.UserType / "id", Const(id)), child))).rightIor
       case sel@Select("profiles", _, _) =>
         sel.rightIor
     }

@@ -11,7 +11,6 @@ import skunk.implicits._
 
 import edu.gemini.grackle._
 import syntax._
-import Path._
 import Predicate._
 import Query._
 import QueryCompiler._
@@ -93,7 +92,7 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
               for {
                 s  <- fs2.Stream.resource(pool)
                 id <- s.channel(id"city_channel").listen(256).map(_.value.toInt)
-                qʹ  = Unique(Filter(Eql(UniquePath(List("id")), Const(id)), q))
+                qʹ  = Unique(Filter(Eql(CityType / "id", Const(id)), q))
               } yield Result((qʹ, e))
             }
           ),
@@ -104,7 +103,7 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("city", List(Binding("id", IntValue(id))), child) =>
-        Select("city", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
+        Select("city", Nil, Unique(Filter(Eql(CityType / "id", Const(id)), child))).rightIor
     },
   ))
 }
