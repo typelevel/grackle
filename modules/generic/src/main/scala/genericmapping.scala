@@ -210,7 +210,7 @@ abstract class AbstractCursor[T] extends Cursor {
   def isLeaf: Boolean = false
 
   def asLeaf: Result[Json] =
-    mkErrorResult(s"Expected Scalar type, found $tpe for focus ${focus}")
+    mkErrorResult(s"Expected Scalar type, found $tpe at ${context.path.reverse.mkString("/")}  for focus ${focus}")
 
   def preunique: Result[Cursor] =
     mkErrorResult(s"Expected List type, found $focus for ${tpe.nonNull.list}")
