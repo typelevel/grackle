@@ -75,7 +75,7 @@ abstract class CirceMapping[F[_]: Monad] extends Mapping[F] {
           else mkErrorResult(s"Expected Enum ${e.name}, found ${focus.noSpaces}")
         case _: ScalarType     if !focus.isObject => focus.rightIor // custom Scalar; any non-object type is fine
         case _ =>
-          mkErrorResult(s"Expected Scalar type, found $tpe for focus ${focus.noSpaces}")
+          mkErrorResult(s"Expected Scalar type, found $tpe for focus ${focus.noSpaces} at ${context.path.reverse.mkString("/")} ")
       }
 
     def preunique: Result[Cursor] = {

@@ -110,7 +110,7 @@ abstract class ValueMapping[F[_]: Monad] extends Mapping[F] {
             case (BooleanType, b: Boolean) => Json.fromBoolean(b).rightIor
             case (_: EnumType, e: Enumeration#Value) => Json.fromString(e.toString).rightIor
             case _ =>
-              mkErrorResult(s"Expected Scalar type, found $tpe for focus ${focus}")
+              mkErrorResult(s"Expected Scalar type, found $tpe for focus ${focus} at ${context.path.reverse.mkString("/")}")
           }
       }
 
