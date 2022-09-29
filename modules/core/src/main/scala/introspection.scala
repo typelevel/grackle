@@ -4,6 +4,7 @@
 package edu.gemini.grackle
 
 import cats.Id
+import io.circe.Encoder
 
 import ScalarType._
 
@@ -120,9 +121,11 @@ object Introspection {
   val __InputValueType =  schema.ref("__InputValue")
   val __EnumValueType =  schema.ref("__EnumValue")
   val __DirectiveType =  schema.ref("__Directive")
+  val __TypeKindType =  schema.ref("__TypeKind")
 
   object TypeKind extends Enumeration {
     val SCALAR, OBJECT, INTERFACE, UNION, ENUM, INPUT_OBJECT, LIST, NON_NULL = Value
+    implicit val typeKindEncoder: Encoder[Value] = Encoder[String].contramap(_.toString)
   }
 
   case class NonNullType(tpe: Type)
@@ -146,12 +149,12 @@ object Introspection {
 
     val typeMappings =
       List(
-        ObjectMapping(
+        ValueObjectMapping[Unit](
           tpe = QueryType,
           fieldMappings =
             List(
-              ValueRoot("__schema",  targetSchema),
-              ValueRoot("__type", allTypes.map(_.nullable))
+              ValueField("__schema", _ => targetSchema),
+              ValueField("__type", _ => allTypes.map(_.nullable))
             )
         ),
         ValueObjectMapping[Schema](
@@ -259,7 +262,8 @@ object Introspection {
               ValueField("locations", _.locations),
               ValueField("args", _.args)
             )
-        )
+        ),
+        LeafMapping[TypeKind.Value](__TypeKindType)
     )
   }
 }

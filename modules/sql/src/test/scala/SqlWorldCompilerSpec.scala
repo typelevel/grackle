@@ -66,7 +66,7 @@ trait SqlWorldCompilerSpec extends AnyFunSuite {
     assert(
       stats == List(
         SqlStatsMonitor.SqlStats(
-          Query.Unique(Query.Filter(Eql(schema.ref("Country") / "code", Const("GBR")),Query.Select("name",List(),Query.Empty))),
+          Query.Select("country", Nil, Query.Unique(Query.Filter(Eql(schema.ref("Country") / "code",Const("GBR")),Query.Select("name",List(),Query.Empty)))),
           simpleRestrictedQuerySql,
           List("GBR"),
           1,
@@ -124,7 +124,7 @@ trait SqlWorldCompilerSpec extends AnyFunSuite {
     assert(
       stats == List(
         SqlStatsMonitor.SqlStats(
-          Query.Filter(Like(schema.ref("City") / "name","Linh%",true),Query.Select("name",List(),Query.Empty)),
+          Query.Select("cities", Nil, Query.Filter(Like(schema.ref("City") / "name","Linh%",true),Query.Select("name",List(),Query.Empty))),
           simpleFilteredQuerySql,
           List("Linh%"),
           3,

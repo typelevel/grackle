@@ -19,34 +19,43 @@ import QueryInterpreter.{ mkErrorResult, mkOneError }
  * of a GraphQL query.
  */
 trait Cursor {
+  /** The parent of this `Cursor` */
   def parent: Option[Cursor]
+
   /** The value at the position represented by this `Cursor`. */
   def focus: Any
 
+  /** The `Context` associated with this `Cursor`. */
   def context: Context
 
   /** The selection path from the root */
   def path: List[String] = context.path
 
-  /** The selection path from the root modified by query aliases */
+  /** The selection path from the root modified by query aliases. */
   def resultPath: List[String] = context.resultPath
 
   /** The GraphQL type of the value at the position represented by this `Cursor`. */
   def tpe: Type = context.tpe
 
+  /** Yields a copy of this `Cursor` with the supplied additional environment values. */
   def withEnv(env: Env): Cursor
 
-  protected def env: Env
+  private[grackle] def env: Env
 
+  /** Yields the value of the supplied environment key, if any. */
   def env[T: ClassTag](nme: String): Option[T] = env.get(nme).orElse(parent.flatMap(_.env(nme)))
 
+  /** Yields the value of the supplied environment key, if any, or an error if none. */
   def envR[T: ClassTag: TypeName](nme: String): Result[T] =
     env.getR(nme)  match {
       case err @ Ior.Left(_) => parent.fold[Result[T]](err)(_.envR(nme))
       case ok => ok
     }
 
+  /** Yields the cumulative environment defined at this `Cursor`. */
   def fullEnv: Env = parent.map(_.fullEnv).getOrElse(Env.empty).add(env)
+
+  def envContains(nme: String): Boolean = env.contains(nme) || parent.map(_.envContains(nme)).getOrElse(false)
 
   /**
    * Yield the value at this `Cursor` as a value of type `T` if possible,
@@ -87,6 +96,12 @@ trait Cursor {
    */
   def asList[C](factory: Factory[Cursor, C]): Result[C]
 
+  /**
+    * Yields the number of elements of this `Cursor` if it is of a list type, or an
+    * error otherwise.
+    */
+  def listSize: Result[Int]
+
   /** Is the value at this `Cursor` of a nullable type? */
   def isNullable: Boolean
 
@@ -97,6 +112,12 @@ trait Cursor {
    * model.
    */
   def asNullable: Result[Option[Cursor]]
+
+  /**
+    * Yields whether or not this `Cursor` is defined if it is of a nullable type,
+    * or an error otherwise.
+    */
+  def isDefined: Result[Boolean]
 
   /** Is the value at this `Cursor` narrowable to `subtpe`? */
   def narrowsTo(subtpe: TypeRef): Boolean
@@ -125,6 +146,7 @@ trait Cursor {
   def fieldAs[T: ClassTag](fieldName: String): Result[T] =
     field(fieldName, None).flatMap(_.as[T])
 
+  /** True if this cursor is nullable and null, false otherwise. */
   def isNull: Boolean =
     isNullable && (asNullable match {
       case Ior.Right(None) => true
@@ -320,6 +342,7 @@ object Cursor {
   sealed trait Env {
     def add[T](items: (String, T)*): Env
     def add(env: Env): Env
+    def contains(name: String): Boolean
     def get[T: ClassTag](name: String): Option[T]
 
     def getR[A: ClassTag: TypeName](name: String): Result[A] =
@@ -328,6 +351,12 @@ object Cursor {
         case Some(value) => Result(value)
       }
 
+    def addFromQuery(query: Query): Env =
+      query match {
+        case Query.Environment(childEnv, child) =>
+          add(childEnv).addFromQuery(child)
+        case _ => this
+      }
   }
 
   object Env {
@@ -338,6 +367,7 @@ object Cursor {
     case object EmptyEnv extends Env {
       def add[T](items: (String, T)*): Env = NonEmptyEnv(Map(items: _*))
       def add(env: Env): Env = env
+      def contains(name: String): Boolean = false
       def get[T: ClassTag](name: String): Option[T] = None
     }
 
@@ -347,6 +377,7 @@ object Cursor {
         case EmptyEnv => this
         case NonEmptyEnv(elems0) => NonEmptyEnv(elems++elems0)
       }
+      def contains(name: String): Boolean = elems.contains(name)
       def get[T: ClassTag](name: String): Option[T] =
         elems.get(name).flatMap(cast[T])
     }
@@ -369,5 +400,99 @@ object Cursor {
       Some(x.asInstanceOf[T])
     else
       None
+  }
+
+  /** Abstract `Cursor` providing default implementation of most methods. */
+  abstract class AbstractCursor extends Cursor {
+    def isLeaf: Boolean = false
+
+    def asLeaf: Result[Json] =
+      mkErrorResult(s"Expected Scalar type, found $tpe for focus ${focus} at ${context.path.reverse.mkString("/")}")
+
+    def preunique: Result[Cursor] =
+      mkErrorResult(s"Expected List type, found $focus for ${tpe.nonNull.list}")
+
+    def isList: Boolean = false
+
+    def asList[C](factory: Factory[Cursor, C]): Result[C] =
+      mkErrorResult(s"Expected List type, found $tpe")
+
+    def listSize: Result[Int] =
+      mkErrorResult(s"Expected List type, found $tpe")
+
+    def isNullable: Boolean = false
+
+    def asNullable: Result[Option[Cursor]] =
+      mkErrorResult(s"Expected Nullable type, found $focus for $tpe")
+
+    def isDefined: Result[Boolean] =
+      mkErrorResult(s"Expected Nullable type, found $focus for $tpe")
+
+    def narrowsTo(subtpe: TypeRef): Boolean = false
+
+    def narrow(subtpe: TypeRef): Result[Cursor] =
+      mkErrorResult(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
+
+    def hasField(fieldName: String): Boolean = false
+
+    def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
+      mkErrorResult(s"No field '$fieldName' for type $tpe")
+  }
+
+  /** Proxy `Cursor` which delegates most methods to an underlying `Cursor`.. */
+  class ProxyCursor(underlying: Cursor) extends Cursor {
+    def context: Context = underlying.context
+
+    def env: Env = underlying.env
+
+    def focus: Any = underlying.focus
+
+    def parent: Option[Cursor] = underlying.parent
+
+    def withEnv(env: Env): Cursor = underlying.withEnv(env)
+
+    def isLeaf: Boolean = underlying.isLeaf
+
+    def asLeaf: Result[Json] = underlying.asLeaf
+
+    def preunique: Result[Cursor] = underlying.preunique
+
+    def isList: Boolean = underlying.isList
+
+    def asList[C](factory: Factory[Cursor, C]): Result[C] = underlying.asList(factory)
+
+    def listSize: Result[Int] = underlying.listSize
+
+    def isNullable: Boolean = underlying.isNullable
+
+    def asNullable: Result[Option[Cursor]] = underlying.asNullable
+
+    def isDefined: Result[Boolean] = underlying.isDefined
+
+    def narrowsTo(subtpe: TypeRef): Boolean = underlying.narrowsTo(subtpe)
+
+    def narrow(subtpe: TypeRef): Result[Cursor] = underlying.narrow(subtpe)
+
+    def hasField(fieldName: String): Boolean = underlying.hasField(fieldName)
+
+    def field(fieldName: String, resultName: Option[String]): Result[Cursor] = underlying.field(fieldName, resultName)
+  }
+
+  /** Empty `Cursor` with no content */
+  case class EmptyCursor(context: Context, parent: Option[Cursor], env: Env) extends AbstractCursor {
+    def focus: Any = mkErrorResult(s"Empty cursor has no focus")
+    def withEnv(env0: Env): EmptyCursor = copy(env = env.add(env0))
+  }
+
+  /**
+   * Proxy list cursor which substitutes an alternative set of elements.
+   *
+   * Typically used as the result of a `TransformCursor` operation
+   */
+  case class ListTransformCursor(underlying: Cursor, newSize: Int, newElems: Seq[Cursor]) extends ProxyCursor(underlying) {
+    override def withEnv(env: Env): Cursor = new ListTransformCursor(underlying.withEnv(env), newSize, newElems)
+    override lazy val listSize: Result[Int] = newSize.rightIor
+    override def asList[C](factory: Factory[Cursor, C]): Result[C] =
+      factory.fromSpecific(newElems).rightIor
   }
 }

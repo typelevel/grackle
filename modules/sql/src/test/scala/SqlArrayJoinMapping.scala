@@ -54,7 +54,7 @@ trait SqlArrayJoinMapping[F[_]] extends SqlTestMapping[F] {
         tpe = QueryType,
         fieldMappings =
           List(
-            SqlRoot("root")
+            SqlObject("root")
           )
       ),
       ObjectMapping(

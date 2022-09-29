@@ -64,8 +64,8 @@ trait SqlEmbeddingMapping[F[_]] extends SqlTestMapping[F] {
         tpe = QueryType,
         fieldMappings =
           List(
-            SqlRoot("films"),
-            SqlRoot("series")
+            SqlObject("films"),
+            SqlObject("series")
           )
       ),
       ObjectMapping(

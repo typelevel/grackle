@@ -10,7 +10,7 @@ import org.tpolecat.typename.typeName
 trait SqlMappingValidator extends MappingValidator {
 
   type F[_]
-  type M <: SqlMapping[F]
+  type M <: SqlMappingLike[F]
 
   val mapping: M
 
@@ -89,10 +89,10 @@ trait SqlMappingValidator extends MappingValidator {
 
 object SqlMappingValidator {
 
-  def apply[G[_]](m: SqlMapping[G]): SqlMappingValidator =
+  def apply[G[_]](m: SqlMappingLike[G]): SqlMappingValidator =
     new SqlMappingValidator {
       type F[a] = G[a]
-      type M = SqlMapping[F]
+      type M = SqlMappingLike[F]
       val mapping = m
     }
 

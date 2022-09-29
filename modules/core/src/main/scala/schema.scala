@@ -107,6 +107,10 @@ trait Schema {
   /** The type of subscriptions defined by this `Schema`*/
   def subscriptionType: Option[NamedType] = schemaType.field("subscription").flatMap(_.asNamed)
 
+  /** True if the supplied type is one of the Query, Mutation or Subscription root types, false otherwise */
+  def isRootType(tpe: Type): Boolean =
+    tpe =:= queryType || mutationType.map(_ =:= tpe).getOrElse(false) || subscriptionType.map(_ =:= tpe).getOrElse(false)
+
   /** Are the supplied alternatives exhaustive for `tp` */
   def exhaustive(tp: Type, branches: List[Type]): Boolean = {
     types.forall {
@@ -433,21 +437,6 @@ sealed trait NamedType extends Type {
   def description: Option[String]
 
   override def toString: String = name
-}
-
-/**
- * A synthetic type representing the join between a component/stage and its
- * parent object.
- */
-object JoinType {
-  def apply(fieldName: String, tpe: Type): ObjectType =
-    ObjectType(s"<$fieldName:$tpe>", None, List(Field(fieldName, None, Nil, tpe, false, None)), Nil)
-
-  def unapply(ot: ObjectType): Option[(String, Type)] = ot match {
-    case ObjectType(nme, None, List(Field(fieldName, None, Nil, tpe, false, None)), Nil) if nme == s"<$fieldName:$tpe>" =>
-      Some((fieldName, tpe))
-    case _ => None
-  }
 }
 
 /**

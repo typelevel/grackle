@@ -48,7 +48,7 @@ trait SqlGraphMapping[F[_]] extends SqlTestMapping[F] {
         tpe = QueryType,
         fieldMappings =
           List(
-            SqlRoot("node")
+            SqlObject("node")
           )
       ),
       ObjectMapping(

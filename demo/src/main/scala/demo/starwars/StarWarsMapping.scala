@@ -12,12 +12,12 @@ import edu.gemini.grackle.QueryInterpreter.{mkErrorResult, mkOneError}
 import edu.gemini.grackle.Value._
 import edu.gemini.grackle._
 import edu.gemini.grackle.generic._
-import edu.gemini.grackle.generic.semiauto._
 import edu.gemini.grackle.syntax._
 
 // The types and values for the in-memory Star Wars example.
 object StarWarsData {
-  import StarWarsMapping.{CharacterType, DroidType, HumanType}
+  import StarWarsMapping._
+  import semiauto._
 
   // #model_types
   object Episode extends Enumeration {
@@ -195,10 +195,10 @@ object StarWarsMapping extends GenericMapping[Id] {
         tpe = QueryType,
         fieldMappings =
           List(
-            GenericRoot("hero", characters),
-            GenericRoot("character", characters),
-            GenericRoot("human", characters.collect { case h: Human => h }),
-            GenericRoot("droid", characters.collect { case d: Droid => d })
+            GenericField("hero", characters),
+            GenericField("character", characters),
+            GenericField("human", characters.collect { case h: Human => h }),
+            GenericField("droid", characters.collect { case d: Droid => d })
           )
       )
       // #root

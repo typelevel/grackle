@@ -65,6 +65,10 @@ final class LikeSpec extends SkunkDatabaseSuite with SqlLikeSpec {
   lazy val mapping = new SkunkTestMapping(pool) with SqlLikeMapping[IO]
 }
 
+final class MixedSpec extends SkunkDatabaseSuite with SqlMixedSpec {
+  lazy val mapping = new SkunkTestMapping(pool) with SqlMixedMapping[IO]
+}
+
 final class MovieSpec extends SkunkDatabaseSuite with SqlMovieSpec {
   lazy val mapping =
     new SkunkTestMapping(pool) with SqlMovieMapping[IO] {
@@ -95,6 +99,18 @@ final class MutationSpec extends SkunkDatabaseSuite with SqlMutationSpec {
           }
         }
     }
+}
+
+final class Paging1Spec extends SkunkDatabaseSuite with SqlPaging1Spec {
+  lazy val mapping = new SkunkTestMapping(pool) with SqlPaging1Mapping[IO]
+}
+
+final class Paging2Spec extends SkunkDatabaseSuite with SqlPaging2Spec {
+  lazy val mapping = new SkunkTestMapping(pool) with SqlPaging2Mapping[IO]
+}
+
+final class Paging3Spec extends SkunkDatabaseSuite with SqlPaging3Spec {
+  lazy val mapping = new SkunkTestMapping(pool) with SqlPaging3Mapping[IO]
 }
 
 final class ProjectionSpec extends SkunkDatabaseSuite with SqlProjectionSpec {

@@ -13,19 +13,14 @@ import syntax._
 
 import grackle.test.GraphQLResponseTests.assertWeaklyEqual
 
-trait SqlMutationSpec extends AnyFunSuite {
-
+trait SqlMixedSpec extends AnyFunSuite {
   def mapping: QueryExecutor[IO, Json]
 
-  test("simple read") {
+  test("DB query") {
     val query = """
       query {
-        city(id: 2) {
-          name
-          population
-          country {
-            name
-          }
+        movie(id: "6a7837fc-b463-4d32-b628-0f4b3065cb21") {
+          title
         }
       }
     """
@@ -33,12 +28,8 @@ trait SqlMutationSpec extends AnyFunSuite {
     val expected = json"""
       {
         "data" : {
-          "city" : {
-            "name" : "Qandahar",
-            "population" : 237500,
-            "country" : {
-              "name" : "Afghanistan"
-            }
+          "movie" : {
+            "title" : "Celine et Julie Vont en Bateau"
           }
         }
       }
@@ -50,16 +41,11 @@ trait SqlMutationSpec extends AnyFunSuite {
     assertWeaklyEqual(res, expected)
   }
 
-  // In this test the query is fully elaborated prior to execution.
-  test("simple update") {
+  test("value query") {
     val query = """
-      mutation {
-        updatePopulation(id: 2, population: 12345) {
-          name
-          population
-          country {
-            name
-          }
+      query {
+        foo {
+          value
         }
       }
     """
@@ -67,12 +53,8 @@ trait SqlMutationSpec extends AnyFunSuite {
     val expected = json"""
       {
         "data" : {
-          "updatePopulation" : {
-            "name" : "Qandahar",
-            "population" : 12345,
-            "country" : {
-              "name" : "Afghanistan"
-            }
+          "foo" : {
+            "value" : 23
           }
         }
       }
@@ -84,17 +66,11 @@ trait SqlMutationSpec extends AnyFunSuite {
     assertWeaklyEqual(res, expected)
   }
 
-  // In this test the query must be elaborated *after* execution of the effect because the ID
-  // of the inserted city isn't known until then.
-  test("insert") {
+  test("circe query") {
     val query = """
-      mutation {
-        createCity(name: "Wiggum", countryCode: "USA", population: 789) {
-          name
-          population
-          country {
-            name
-          }
+      query {
+        bar {
+          message
         }
       }
     """
@@ -102,12 +78,45 @@ trait SqlMutationSpec extends AnyFunSuite {
     val expected = json"""
       {
         "data" : {
-          "createCity" : {
-            "name" : "Wiggum",
-            "population" : 789,
-            "country" : {
-              "name" : "United States"
-            }
+          "bar" : {
+            "message" : "Hello world"
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
+  test("mixed query") {
+    val query = """
+      query {
+        movie(id: "6a7837fc-b463-4d32-b628-0f4b3065cb21") {
+          title
+        }
+        foo {
+          value
+        }
+        bar {
+          message
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "movie" : {
+            "title" : "Celine et Julie Vont en Bateau"
+          },
+          "foo" : {
+            "value" : 23
+          },
+          "bar" : {
+            "message" : "Hello world"
           }
         }
       }

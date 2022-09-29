@@ -43,13 +43,13 @@ object CollectionMapping extends ValueMapping[Id] {
 
   val typeMappings =
     List(
-      ObjectMapping(
+      ValueObjectMapping[Unit](
         tpe = QueryType,
         fieldMappings =
           List(
-            ValueRoot("collection", collections.head),
-            ValueRoot("collections", collections),
-            ValueRoot("collectionByName", collections)
+            ValueField("collection", _ => collections.head),
+            ValueField("collections", _ => collections),
+            ValueField("collectionByName", _ => collections)
           )
       ),
       ValueObjectMapping[Collection](
@@ -94,11 +94,11 @@ object ItemMapping extends ValueMapping[Id] {
 
   val typeMappings =
     List(
-      ObjectMapping(
+      ValueObjectMapping[Unit](
         tpe = QueryType,
         fieldMappings =
           List(
-            ValueRoot("itemById", items)
+            ValueField("itemById", _ => items)
           )
       ),
       ValueObjectMapping[Item](
@@ -119,7 +119,7 @@ object ItemMapping extends ValueMapping[Id] {
   ))
 }
 
-object ComposedListMapping extends Mapping[Id] {
+object ComposedListMapping extends ComposedMapping[Id] {
   val schema =
     schema"""
       type Query {

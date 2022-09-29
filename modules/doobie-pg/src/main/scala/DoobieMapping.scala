@@ -18,10 +18,18 @@ import org.tpolecat.typename.TypeName
 
 import edu.gemini.grackle.sql._
 
-abstract class DoobieMapping[F[_]: Sync](
+abstract class DoobieMapping[F[_]](
   val transactor: Transactor[F],
-  val monitor:    DoobieMonitor[F]
-) extends SqlMapping[F] {
+  val monitor:    DoobieMonitor[F],
+)(
+  implicit val M: Sync[F]
+) extends Mapping[F] with DoobieMappingLike[F]
+
+trait DoobieMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] {
+  implicit val M: Sync[F]
+
+  def transactor: Transactor[F]
+  def monitor:    DoobieMonitor[F]
 
   type Codec   = (Meta[_], Boolean)
   type Encoder = (Put[_], Boolean)

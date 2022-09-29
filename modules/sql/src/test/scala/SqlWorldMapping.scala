@@ -12,6 +12,9 @@ import Query._, Predicate._, Value._
 import QueryCompiler._
 
 trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
+  object root extends RootDef {
+    val numCountries = col("num_countries", int8)
+  }
   object country extends TableDef("country") {
     val code           = col("code", bpchar(3))
     val name           = col("name", text)
@@ -54,8 +57,10 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
         country(code: String): Country
         countries(limit: Int = -1, offset: Int = 0, minPopulation: Int = 0, byPopulation: Boolean = false): [Country!]
         language(language: String): Language
+        languages(languages: [String!]!): [Language!]!
         search(minPopulation: Int!, indepSince: Int!): [Country!]!
         search2(indep: Boolean!, limit: Int!): [Country!]!
+        numCountries: Int!
       }
       type City {
         name: String!
@@ -101,13 +106,15 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
       ObjectMapping(
         tpe = QueryType,
         fieldMappings = List(
-          SqlRoot("cities"),
-          SqlRoot("city"),
-          SqlRoot("country"),
-          SqlRoot("countries"),
-          SqlRoot("language"),
-          SqlRoot("search"),
-          SqlRoot("search2")
+          SqlObject("cities"),
+          SqlObject("city"),
+          SqlObject("country"),
+          SqlObject("countries"),
+          SqlObject("language"),
+          SqlObject("languages"),
+          SqlObject("search"),
+          SqlObject("search2"),
+          SqlField("numCountries", root.numCountries)
         )
       ),
       ObjectMapping(
@@ -157,6 +164,17 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
       )
     )
 
+  object StringListValue {
+    def unapply(value: Value): Option[List[String]] =
+      value match {
+        case ListValue(l) => l.traverse {
+          case StringValue(s) => Some(s)
+          case _ => None
+        }
+        case _ => None
+      }
+  }
+
   override val selectElaborator = new SelectElaborator(Map(
 
     QueryType -> {
@@ -199,6 +217,9 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
       case Select("language", List(Binding("language", StringValue(language))), child) =>
         Select("language", Nil, Unique(Filter(Eql(LanguageType / "language", Const(language)), child))).rightIor
 
+      case Select("languages", List(Binding("languages", StringListValue(languages))), child) =>
+        Select("languages", Nil, Filter(In(CityType / "language", languages), child)).rightIor
+
       case Select("search", List(Binding("minPopulation", IntValue(min)), Binding("indepSince", IntValue(year))), child) =>
         Select("search", Nil,
           Filter(
@@ -212,6 +233,9 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
 
       case Select("search2", List(Binding("indep", BooleanValue(indep)), Binding("limit", IntValue(num))), child) =>
         Select("search2", Nil, Limit(num, Filter(IsNull[Int](CountryType / "indepyear", isNull = !indep), child))).rightIor
+
+      case Select("numCountries", Nil, Empty) =>
+        Count("numCountries", Select("countries", Nil, Select("code2", Nil, Empty))).rightIor
     },
     CountryType -> {
       case Select("numCities", List(Binding("namePattern", AbsentValue)), Empty) =>

@@ -5,7 +5,9 @@ package edu.gemini.grackle
 package circetests
 
 import cats.Id
+import cats.data.OptionT
 import cats.implicits._
+import io.circe.Json
 
 import edu.gemini.grackle.circe.CirceMapping
 import edu.gemini.grackle.syntax._
@@ -31,6 +33,7 @@ object TestCirceMapping extends CirceMapping[Id] {
         numChildren: Int
         bigDecimal: BigDecimal
         children: [Child!]!
+        computed: Int
       }
       enum Choice {
         ONE
@@ -79,7 +82,8 @@ object TestCirceMapping extends CirceMapping[Id] {
             "id": "b",
             "bField": "quux"
           }
-        ]
+        ],
+        "hidden": 13
       }
     """
 
@@ -89,11 +93,25 @@ object TestCirceMapping extends CirceMapping[Id] {
         tpe = QueryType,
         fieldMappings =
           List(
-            CirceRoot("root", data),
+            CirceField("root", data),
+          )
+      ),
+      ObjectMapping(
+        tpe = RootType,
+        fieldMappings =
+          List(
+            CursorField("computed", computeField, List("hidden"))
           )
       ),
       LeafMapping[BigDecimal](BigDecimalType)
     )
+
+  def computeField(c: Cursor): Result[Option[Int]] = {
+    (for {
+      n <- OptionT(c.fieldAs[Json]("hidden").map(_.asNumber))
+      i <- OptionT(Result(n.toInt))
+    } yield i+1).value
+  }
 
   override val selectElaborator = new SelectElaborator(Map(
     RootType -> {

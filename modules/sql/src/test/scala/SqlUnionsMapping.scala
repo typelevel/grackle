@@ -41,7 +41,7 @@ trait SqlUnionsMapping[F[_]] extends SqlTestMapping[F] {
         tpe = QueryType,
         fieldMappings =
           List(
-            SqlRoot("collection")
+            SqlObject("collection")
           )
       ),
       SqlUnionMapping(

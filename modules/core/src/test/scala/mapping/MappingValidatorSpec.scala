@@ -4,20 +4,19 @@
 package validator
 
 import org.scalatest.funsuite.AnyFunSuite
-import edu.gemini.grackle.Mapping
-import cats.Id
 import cats.syntax.all._
 import edu.gemini.grackle.{ ListType, MappingValidator }
 import edu.gemini.grackle.MappingValidator.ValidationException
 import edu.gemini.grackle.syntax._
 
+import compiler.TestMapping
+
 final class ValidatorSpec extends AnyFunSuite {
 
   test("missing type mapping") {
 
-    object M extends Mapping[Id] {
+    object M extends TestMapping {
       val schema = schema"type Foo { bar: String }"
-      val typeMappings = Nil
     }
 
     val es = M.validator.validateMapping()
@@ -30,9 +29,9 @@ final class ValidatorSpec extends AnyFunSuite {
 
   test("missing field mapping") {
 
-    object M extends Mapping[Id] {
+    object M extends TestMapping {
       val schema = schema"type Foo { bar: String }"
-      val typeMappings  = List(ObjectMapping(schema.ref("Foo"), Nil))
+      override val typeMappings  = List(ObjectMapping(schema.ref("Foo"), Nil))
     }
 
     val es = M.validator.validateMapping()
@@ -45,9 +44,9 @@ final class ValidatorSpec extends AnyFunSuite {
 
   test("inapplicable type (object mapping for scalar)") {
 
-    object M extends Mapping[Id] {
+    object M extends TestMapping {
       val schema = schema"scalar Foo"
-      val typeMappings = List(ObjectMapping(schema.ref("Foo"), Nil))
+      override val typeMappings = List(ObjectMapping(schema.ref("Foo"), Nil))
     }
 
     val es = M.validator.validateMapping()
@@ -60,9 +59,9 @@ final class ValidatorSpec extends AnyFunSuite {
 
   test("inapplicable type (leaf mapping for object)") {
 
-    object M extends Mapping[Id] {
+    object M extends TestMapping {
       val schema =  schema"type Foo { bar: String }"
-      val typeMappings = List(LeafMapping[String](schema.ref("Foo")))
+      override val typeMappings = List(LeafMapping[String](schema.ref("Foo")))
     }
 
     val es = M.validator.validateMapping()
@@ -75,9 +74,9 @@ final class ValidatorSpec extends AnyFunSuite {
 
   test("enums are valid leaf mappings") {
 
-    object M extends Mapping[Id] {
+    object M extends TestMapping {
       val schema = schema"enum Foo { BAR }"
-      val typeMappings = List(LeafMapping[String](schema.ref("Foo")))
+      override val typeMappings = List(LeafMapping[String](schema.ref("Foo")))
     }
 
     val es = M.validator.validateMapping()
@@ -90,9 +89,9 @@ final class ValidatorSpec extends AnyFunSuite {
 
   test("lists are valid leaf mappings") {
 
-    object M extends Mapping[Id] {
+    object M extends TestMapping {
       val schema = schema"enum Foo { BAR } type Baz { quux: [Foo] }"
-      val typeMappings = List(
+      override val typeMappings = List(
         ObjectMapping(
           schema.ref("Baz"),
           List(
@@ -114,9 +113,8 @@ final class ValidatorSpec extends AnyFunSuite {
 
   test("input object types don't require mappings") {
 
-    object M extends Mapping[Id] {
+    object M extends TestMapping {
       val schema = schema"input Foo { bar: String }"
-      val typeMappings = Nil
     }
 
     val es = M.validator.validateMapping()
@@ -129,9 +127,9 @@ final class ValidatorSpec extends AnyFunSuite {
 
   test("input only enums are valid primitive mappings") {
 
-    object M extends Mapping[Id] {
+    object M extends TestMapping {
       val schema = schema"input Foo { bar: Bar } enum Bar { BAZ }"
-      val typeMappings = List(
+      override val typeMappings = List(
         PrimitiveMapping(schema.ref("Bar"))
       )
     }
@@ -147,9 +145,9 @@ final class ValidatorSpec extends AnyFunSuite {
 
   test("nonexistent type (type mapping)") {
 
-    object M extends Mapping[Id] {
+    object M extends TestMapping {
       val schema = schema""
-      val typeMappings  = List(ObjectMapping(schema.ref("Foo"), Nil))
+      override val typeMappings  = List(ObjectMapping(schema.ref("Foo"), Nil))
     }
 
     val es = M.validator.validateMapping()
@@ -162,9 +160,9 @@ final class ValidatorSpec extends AnyFunSuite {
 
   test("unknown field") {
 
-    object M extends Mapping[Id] {
+    object M extends TestMapping {
       val schema = schema"type Foo { bar: String }"
-      val typeMappings = List(
+      override val typeMappings = List(
         ObjectMapping(
           schema.ref("Foo"),
           List(
@@ -185,9 +183,9 @@ final class ValidatorSpec extends AnyFunSuite {
 
   test("non-field attributes are valid") {
 
-    object M extends Mapping[Id] {
+    object M extends TestMapping {
       val schema = schema"type Foo { bar: String }"
-      val typeMappings = List(
+      override val typeMappings = List(
         ObjectMapping(
           schema.ref("Foo"),
           List(
@@ -207,9 +205,9 @@ final class ValidatorSpec extends AnyFunSuite {
   }
 
   test("unsafeValidate") {
-    object M extends Mapping[Id] {
+    object M extends TestMapping {
       val schema = schema"scalar Bar"
-      val typeMappings = List(ObjectMapping(schema.ref("Foo"), Nil))
+      override val typeMappings = List(ObjectMapping(schema.ref("Foo"), Nil))
     }
     intercept[ValidationException] {
       MappingValidator(M).unsafeValidate()

@@ -54,7 +54,7 @@ trait SqlCoalesceMapping[F[_]] extends SqlTestMapping[F] {
         tpe = QueryType,
         fieldMappings =
           List(
-            SqlRoot("r")
+            SqlObject("r")
           )
       ),
       ObjectMapping(

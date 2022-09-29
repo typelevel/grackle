@@ -3,8 +3,10 @@
 
 package edu.gemini.grackle
 
+import scala.collection.Factory
+
 import cats.Monad
-import cats.data.{ Ior, IorT }
+import cats.data.{Ior, IorT}
 import cats.implicits._
 import fs2.{ Stream, Compiler }
 import io.circe.{Encoder, Json}
@@ -12,17 +14,13 @@ import io.circe.syntax._
 import org.tpolecat.sourcepos.SourcePos
 import org.tpolecat.typename._
 
-import Cursor.{Context, Env}
+import Cursor.{AbstractCursor, Context, Env}
 import Query.Select
 import QueryCompiler.{ComponentElaborator, SelectElaborator, IntrospectionLevel}
 import QueryInterpreter.mkErrorResult
 import IntrospectionLevel._
 
 trait QueryExecutor[F[_], T] { outer =>
-
-  def run(query: Query, rootTpe: Type, env: Env): Stream[F,T]
-
-  // TODO: deprecate
   def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty)(
     implicit sc: Compiler[F,F]
   ): F[T] =
@@ -33,10 +31,10 @@ trait QueryExecutor[F[_], T] { outer =>
   def compileAndRunOne(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty)(
     implicit sc: Compiler[F,F]
   ): F[T]
-
 }
 
-abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, Json] {
+abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
+  implicit val M: Monad[F]
   val schema: Schema
   val typeMappings: List[TypeMapping]
 
@@ -63,6 +61,51 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
         QueryInterpreter.mkInvalidResponse(invalid).pure[Stream[F,*]]
     }
 
+  /** Yields a `Cursor` focused on the top level operation type of the query */
+  def defaultRootCursor(query: Query, tpe: Type, env: Env): F[Result[(Query, Cursor)]] =
+    Result((query, RootCursor(Context(tpe), None, env))).pure[F].widen
+
+  /**
+   * Root `Cursor` focussed on the top level operation of a query
+   *
+   * Construction of mapping-specific cursors is handled by delegation to
+   * `mkCursorForField which is typically overridden in `Mapping` subtypes.
+   */
+  case class RootCursor(context: Context, parent: Option[Cursor], env: Env) extends AbstractCursor {
+    def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
+
+    def focus: Any = ()
+
+    override def hasField(fieldName: String): Boolean =
+      fieldMapping(context, fieldName).isDefined
+
+    override def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
+      mkCursorForField(this, fieldName, resultName)
+  }
+
+  /**
+    * Yields a `Cursor` suitable for traversing the query result corresponding to
+    * the `fieldName` child of `parent`.
+    *
+    * This method is typically overridden in and delegated to by `Mapping` subtypes.
+    */
+  def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
+    val context = parent.context
+    val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
+
+    def mkLeafCursor(focus: Any): Result[Cursor] =
+      LeafCursor(fieldContext, focus, Some(parent), parent.env).rightIor
+
+    fieldMapping(context, fieldName) match {
+      case Some(_ : RootEffect) =>
+        mkLeafCursor(parent.focus)
+      case Some(CursorField(_, f, _, _, _)) =>
+        f(parent).flatMap(res => mkLeafCursor(res))
+      case _ =>
+        mkErrorResult(s"No field '$fieldName' for type ${parent.tpe}")
+    }
+  }
+
   def typeMapping(tpe: NamedType): Option[TypeMapping] =
     typeMappingIndex.get(tpe.name)
 
@@ -71,24 +114,6 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
 
   val validator: MappingValidator =
     MappingValidator(this)
-
-  def rootMapping(context: Context, fieldName: String): Option[RootMapping] =
-    context.tpe match {
-      case JoinType(componentName, _) =>
-        rootMapping(Context(schema.queryType), componentName)
-      case _ =>
-        fieldMapping(context, fieldName).collect {
-          case rm: RootMapping => rm
-        }
-    }
-
-  def rootCursor(context: Context, fieldName: String, resultName: Option[String], child: Query, env: Env): Stream[F,Result[(Query, Cursor)]] =
-    rootMapping(context, fieldName) match {
-      case Some(root) =>
-        root.run(child, env, resultName)
-      case None =>
-        mkErrorResult[(Query, Cursor)](s"No root field '$fieldName' in ${context.tpe}").pure[Stream[F,*]]
-    }
 
   def objectMapping(context: Context): Option[ObjectMapping] =
     context.tpe.underlyingObject.flatMap { obj =>
@@ -110,10 +135,63 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
       }
     }
 
+  /** Yields the `RootEffect`, if any, associated with `fieldName`. */
+  def rootEffect(context: Context, fieldName: String): Option[RootEffect] =
+    fieldMapping(context, fieldName).collect {
+      case re: RootEffect => re
+    }
+
   def leafMapping[T](tpe: Type): Option[LeafMapping[T]] =
     typeMappings.collectFirst {
       case lm@LeafMapping(tpe0, _) if tpe0 =:= tpe => lm.asInstanceOf[LeafMapping[T]]
     }
+
+  /**
+   * True if the supplied type is a leaf with respect to the GraphQL schema
+   * or mapping, false otherwise.
+   */
+  def isLeaf(tpe: Type): Boolean = tpe.underlying match {
+    case (_: ScalarType)|(_: EnumType) => true
+    case tpe => leafMapping(tpe).isDefined
+  }
+
+  def encoderForLeaf(tpe: Type): Option[Encoder[Any]] =
+    encoderMemo.get(tpe.dealias)
+
+  private lazy val encoderMemo: scala.collection.immutable.Map[Type, Encoder[Any]] = {
+    val intTypeEncoder: Encoder[Any] =
+      new Encoder[Any] {
+        def apply(i: Any): Json = i match {
+          case i: Int => Json.fromInt(i)
+          case l: Long => Json.fromLong(l)
+          case other => sys.error(s"Not an Int: $other")
+        }
+      }
+
+    val floatTypeEncoder: Encoder[Any] =
+      new Encoder[Any] {
+        def apply(f: Any): Json = f match {
+          case f: Float => Json.fromFloat(f).getOrElse(sys.error(s"Unrepresentable float $f"))
+          case d: Double => Json.fromDouble(d).getOrElse(sys.error(s"Unrepresentable double $d"))
+          case d: BigDecimal => Json.fromBigDecimal(d)
+          case other => sys.error(s"Not a Float: $other")
+        }
+      }
+
+    val definedEncoders: List[(Type, Encoder[Any])] =
+      typeMappings.collect { case lm: LeafMapping[_] => (lm.tpe.dealias -> lm.encoder.asInstanceOf[Encoder[Any]]) }
+
+    val defaultEncoders: List[(Type, Encoder[Any])] =
+      List(
+        ScalarType.StringType -> Encoder[String].asInstanceOf[Encoder[Any]],
+        ScalarType.IntType -> intTypeEncoder,
+        ScalarType.FloatType -> floatTypeEncoder,
+        ScalarType.BooleanType -> Encoder[Boolean].asInstanceOf[Encoder[Any]],
+        ScalarType.IDType -> Encoder[String].asInstanceOf[Encoder[Any]]
+      )
+
+    (definedEncoders ++ defaultEncoders).toMap
+  }
 
   trait TypeMapping extends Product with Serializable {
     def tpe: Type
@@ -157,39 +235,90 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
   }
 
   /**
-   * Root mappings can perform a mutation prior to constructing the result `Cursor`. A `Mutation`
-   * may perform a Unit effect and simply return the passed arguments; or it may refine the passed
-   * `Query` and/or `Env` that will be used to interpret the resulting `Cursor`.
+   * Root effects can perform an intial effect prior to computing the resulting
+   * `Cursor` and effective `Query`.
+   *
+   * Convenience methods are provided to cover the cases where only one of the
+   * query or the cursor are computed, and for where the computation is one-shot
+   * or a Stream. One-shot effects are used to perform initial effectful setup
+   * for a query or to perform the effect associated with a GraphQL mutation.
+   * Stream effects are used for GraphQL subscriptions.
+   *
+   * If only the query is computed the default root cursor for the mapping will
+   * be used. If only the cursor is computed the client query (after elaboration)
+   * is used unmodified ... in this case results of the performed effect can only
+   * be passed to the result construction stage via the environment associated
+   * with the returned cursor.
    */
-  case class Mutation(run: (Query, Env) => Stream[F,Result[(Query, Env)]])
-  object Mutation {
-
-    /** The no-op mutation. */
-    val None: Mutation =
-      Mutation((q, e) => Result((q, e)).pure[Stream[F,*]])
-
-    /** A mutation that peforms a Unit effect and yields its arguments unchanged. */
-    def unit(f: (Query, Env) => Stream[F, Result[Unit]]): Mutation =
-      Mutation((q, e) => f(q, e).map(_.as((q, e))))
-
+  case class RootEffect private (fieldName: String, effect: (Query, Type, Env) => Stream[F, Result[(Query, Cursor)]])(implicit val pos: SourcePos) extends FieldMapping {
+    def hidden = false
+    def withParent(tpe: Type): RootEffect = this
   }
 
-
-  trait RootMapping extends FieldMapping {
-    def mutation: Mutation
+  object RootEffect {
+    /**
+     * Yields a `RootEffect` which performs both an initial effect and yields an effect-specific query and
+     * corresponding root cursor.
+     */
+    def apply(fieldName: String)(effect: (Query, Type, Env) => Stream[F, Result[(Query, Cursor)]])(implicit pos: SourcePos, di: DummyImplicit): RootEffect =
+      new RootEffect(fieldName, effect)
 
     /**
-     * Run this `RootMapping`'s mutation, if any, then construct and return the result cursor along
-     * with the [possibly updated] query.
-     */
-    final def run(query: Query, env: Env, resultName: Option[String]): Stream[F, Result[(Query, Cursor)]] =
-      IorT(mutation.run(query, env)).flatMap { case (q, e) =>
-        IorT(cursor(q, e, resultName))
-      } .value
+      * Yields a `RootEffect` which performs an initial effect and yields an effect-specific root cursor.
+      */
+    def computeCursor(fieldName: String)(effect: (Query, Type, Env) => F[Result[Cursor]])(implicit pos: SourcePos): RootEffect =
+      new RootEffect(
+        fieldName,
+        (query, tpe, env) => Stream.eval(effect(query, tpe, env).map(_.map(c => (query, c))))
+      )
 
-    def hidden = false
-    def cursor(query: Query, env: Env, resultName: Option[String]): Stream[F, Result[(Query, Cursor)]]
-    def withParent(tpe: Type): RootMapping
+    /**
+      * Yields a `RootEffect` which yields a stream of effect-specific root cursors.
+      *
+      * This form of effect is typically used to implement GraphQL subscriptions.
+      */
+    def computeCursorStream(fieldName: String)(effect: (Query, Type, Env) => Stream[F, Result[Cursor]])(implicit pos: SourcePos): RootEffect =
+      new RootEffect(
+        fieldName,
+        (query, tpe, env) => effect(query, tpe, env).map(_.map(c => (query, c)))
+      )
+
+    /**
+      * Yields a `RootEffect` which performs an initial effect and yields an effect-specific query
+      * which is executed with respect to the default root cursor for the corresponding `Mapping`.
+      */
+    def computeQuery(fieldName: String)(effect: (Query, Type, Env) => F[Result[Query]])(implicit pos: SourcePos): RootEffect =
+      new RootEffect(
+        fieldName,
+        (query, tpe, env) =>
+          Stream.eval(
+            (for {
+              q  <- IorT(effect(query, tpe, env))
+              qc <- IorT(defaultRootCursor(q, tpe, env))
+            } yield qc).value
+          )
+      )
+
+    /**
+      * Yields a `RootEffect` which yields a stream of effect-specific queries
+      * which are executed with respect to the default root cursor for the
+      * corresponding `Mapping`.
+      *
+      * This form of effect is typically used to implement GraphQL subscriptions.
+      */
+    def computeQueryStream(fieldName: String)(effect: (Query, Type, Env) => Stream[F, Result[Query]])(implicit pos: SourcePos): RootEffect =
+      new RootEffect(
+        fieldName,
+        (query, tpe, env) =>
+          effect(query, tpe, env).flatMap(rq =>
+            Stream.eval(
+              (for {
+                q  <- IorT(rq.pure[F])
+                qc <- IorT(defaultRootCursor(q, tpe, env))
+              } yield qc).value
+            )
+          )
+      )
   }
 
   trait LeafMapping[T] extends TypeMapping {
@@ -219,16 +348,6 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
   object CursorField {
     def apply[T](fieldName: String, f: Cursor => Result[T], required: List[String] = Nil, hidden: Boolean = false)(implicit encoder: Encoder[T], di: DummyImplicit): CursorField[T] =
       new CursorField(fieldName, f, encoder, required, hidden)
-  }
-
-  case class CursorFieldJson(fieldName: String, f: Cursor => Result[Json], encoder: Encoder[Json], required: List[String], hidden: Boolean)(
-    implicit val pos: SourcePos
-  ) extends FieldMapping {
-    def withParent(tpe: Type): CursorFieldJson = this
-  }
-  object CursorFieldJson {
-    def apply(fieldName: String, f: Cursor => Result[Json], required: List[String] = Nil, hidden: Boolean = false)(implicit encoder: Encoder[Json], di: DummyImplicit): CursorFieldJson =
-      new CursorFieldJson(fieldName, f, encoder, required, hidden)
   }
 
   case class Delegate(
@@ -261,4 +380,97 @@ abstract class Mapping[F[_]](implicit val M: Monad[F]) extends QueryExecutor[F, 
   lazy val compiler = new QueryCompiler(schema, compilerPhases)
 
   val interpreter: QueryInterpreter[F] = new QueryInterpreter(this)
+
+  /** Cursor positioned at a GraphQL result leaf */
+  case class LeafCursor(context: Context, focus: Any, parent: Option[Cursor], env: Env) extends Cursor {
+    def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
+
+    def mkChild(context: Context = context, focus: Any = focus): LeafCursor =
+      LeafCursor(context, focus, Some(this), Env.empty)
+
+    def isLeaf: Boolean = tpe.isLeaf
+
+    def asLeaf: Result[Json] =
+      encoderForLeaf(tpe).map(enc => enc(focus).rightIor).getOrElse(mkErrorResult(
+        s"Cannot encode value $focus at ${context.path.reverse.mkString("/")} (of GraphQL type ${context.tpe}). Did you forget a LeafMapping?".stripMargin.trim
+      ))
+
+    def preunique: Result[Cursor] = {
+      val listTpe = tpe.nonNull.list
+      focus match {
+        case _: List[_] => mkChild(context.asType(listTpe), focus).rightIor
+        case _ =>
+          mkErrorResult(s"Expected List type, found $focus for ${listTpe}")
+      }
+    }
+
+    def isList: Boolean =
+      tpe match {
+        case ListType(_) => true
+        case _ => false
+      }
+
+    def asList[C](factory: Factory[Cursor, C]): Result[C] = (tpe, focus) match {
+      case (ListType(tpe), it: List[_]) => it.view.map(f => mkChild(context.asType(tpe), focus = f)).to(factory).rightIor
+      case _ => mkErrorResult(s"Expected List type, found $tpe")
+    }
+
+    def listSize: Result[Int] = (tpe, focus) match {
+      case (ListType(_), it: List[_]) => it.size.rightIor
+      case _ => mkErrorResult(s"Expected List type, found $tpe")
+    }
+
+    def isNullable: Boolean =
+      tpe match {
+        case NullableType(_) => true
+        case _ => false
+      }
+
+    def asNullable: Result[Option[Cursor]] =
+      (tpe, focus) match {
+        case (NullableType(_), None) => None.rightIor
+        case (NullableType(tpe), Some(v)) => Some(mkChild(context.asType(tpe), focus = v)).rightIor
+        case _ => mkErrorResult(s"Not nullable at ${context.path}")
+      }
+
+    def isDefined: Result[Boolean] =
+      (tpe, focus) match {
+        case (NullableType(_), opt: Option[_]) => opt.isDefined.rightIor
+        case _ => mkErrorResult(s"Not nullable at ${context.path}")
+      }
+
+    def narrowsTo(subtpe: TypeRef): Boolean = false
+    def narrow(subtpe: TypeRef): Result[Cursor] =
+      mkErrorResult(s"Cannot narrow $tpe to $subtpe")
+
+    def hasField(fieldName: String): Boolean = false
+    def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
+      mkErrorResult(s"Cannot select field '$fieldName' from leaf type $tpe")
+  }
+}
+
+abstract class ComposedMapping[F[_]](implicit val M: Monad[F]) extends Mapping[F] {
+  override def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
+    val context = parent.context
+    val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
+    fieldMapping(context, fieldName) match {
+      case Some(_) =>
+        ComposedCursor(fieldContext, parent.env).rightIor
+      case _ =>
+        super.mkCursorForField(parent, fieldName, resultName)
+    }
+  }
+
+  case class ComposedCursor(context: Context, env: Env) extends AbstractCursor {
+    val focus = null
+    val parent = None
+
+    def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
+
+    override def hasField(fieldName: String): Boolean =
+      fieldMapping(context, fieldName).isDefined
+
+    override def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
+      mkCursorForField(this, fieldName, resultName)
+  }
 }

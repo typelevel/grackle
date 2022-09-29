@@ -206,21 +206,25 @@ Grackle's query algebra consists of the following elements,
 
 ```scala
 sealed trait Query {
-
-object Query {
   case class Select(name: String, args: List[Binding], child: Query = Empty) extends Query
   case class Group(queries: List[Query]) extends Query
-  case class GroupList(queries: List[Query]) extends Query
-  case class Unique(pred: Predicate, child: Query) extends Query
+  case class Unique(child: Query) extends Query
   case class Filter(pred: Predicate, child: Query) extends Query
-  case class Component(mapping: Mapping[F], join: (Cursor, Query) => Result[Query], child: Query) extends Query
+  case class Component[F[_]](mapping: Mapping[F], join: (Cursor, Query) => Result[Query], child: Query) extends Query
   case class Introspect(schema: Schema, child: Query) extends Query
-  case class Defer(join: (Cursor, Query) => Result[Query], child: Query) extends Query
+  case class Defer(join: (Cursor, Query) => Result[Query], child: Query, rootTpe: Type) extends Query
+  case class Environment(env: Env, child: Query) extends Query
   case class Wrap(name: String, child: Query) extends Query
   case class Rename(name: String, child: Query) extends Query
   case class UntypedNarrow(tpnme: String, child: Query) extends Query
   case class Narrow(subtpe: TypeRef, child: Query) extends Query
   case class Skip(sense: Boolean, cond: Value, child: Query) extends Query
+  case class Limit(num: Int, child: Query) extends Query
+  case class Offset(num: Int, child: Query) extends Query
+  case class OrderBy(selections: OrderSelections, child: Query) extends Query
+  case class Count(name: String, child: Query) extends Query
+  case class TransformCursor(f: Cursor => Result[Cursor], child: Query) extends Query
+  case object Skipped extends Query
   case object Empty extends Query
 }
 ```
@@ -256,15 +260,16 @@ the model) is specific to this model, so we have to provide that semantic via so
 Extracting out the case for the `character` selector,
 
 ```scala
-case Select("character", List(Binding("id", IDValue(id))), child) =>
-  Select("character", Nil, Unique(Filter(Eql(UniquePath(List("id")), Const(id)), child))).rightIor
+case Select(f@("character"), List(Binding("id", IDValue(id))), child) =>
+  Select(f, Nil, Unique(Filter(Eql(CharacterType / "id", Const(id)), child))).rightIor
+
 ```
 
 we can see that this transforms the previous term as follows,
 
 ```scala
 Select("character", Nil,
-  Unique(Eql(FieldPath(List("id")), Const("1000")), Select("name", Nil))
+  Unique(Eql(CharacterType / "id"), Const("1000")), Select("name", Nil))
 )
 ```
 

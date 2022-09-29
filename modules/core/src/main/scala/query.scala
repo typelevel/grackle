@@ -5,6 +5,7 @@ package edu.gemini.grackle
 
 import scala.annotation.tailrec
 
+import cats.implicits._
 import cats.kernel.Order
 
 import Cursor.Env
@@ -83,7 +84,7 @@ object Query {
   case class Wrap(name: String, child: Query) extends Query {
     def render = {
       val rchild = if(child == Empty) "" else s" { ${child.render} }"
-      s"$name$rchild"
+      s"[$name]$rchild"
     }
   }
 
@@ -177,7 +178,15 @@ object Query {
   /** Computes the number of top-level elements of `child` as field `name` */
   case class Count(name: String, child: Query) extends Query {
     def render = s"$name:count { ${child.render} }"
-   }
+  }
+
+  /**
+   * Uses the supplied function to compute a continuation `Cursor` from the
+   * current `Cursor`.
+   */
+  case class TransformCursor(f: Cursor => Result[Cursor], child: Query) extends Query {
+    def render = s"<transform-cursor ${child.render}>"
+  }
 
   /** A placeholder for a skipped node */
   case object Skipped extends Query {
@@ -227,14 +236,106 @@ object Query {
     case sel: Select                             => Some(Rename(rootName, sel))
     case w@Wrap(`rootName`, _)                   => Some(w)
     case w: Wrap                                 => Some(w.copy(name = rootName))
+    case e@Environment(_, child)                 => renameRoot(child, rootName).map(rc => e.copy(child = rc))
+    case t@TransformCursor(_, child)             => renameRoot(child, rootName).map(rc => t.copy(child = rc))
     case _ => None
   }
 
-  def rootName(q: Query): Option[String] = q match {
-    case Select(name, _, _)       => Some(name)
-    case Wrap(name, _)            => Some(name)
-    case Rename(name, _)          => Some(name)
-    case _                        => None
+  /**
+    * Computes the root name and optional alias of the supplied query
+    * if it is unique, `None` otherwise.
+    */
+  def rootName(q: Query): Option[(String, Option[String])] = {
+    def loop(q: Query, alias: Option[String]): Option[(String, Option[String])] =
+      q match {
+        case Select(name, _, _)        => Some((name, alias))
+        case Wrap(name, _)             => Some((name, alias))
+        case Count(name, _)            => Some((name, alias))
+        case Rename(name, child)       => loop(child, alias.orElse(Some(name)))
+        case Environment(_, child)     => loop(child, alias)
+        case TransformCursor(_, child) => loop(child, alias)
+        case _                         => None
+      }
+    loop(q, None)
+  }
+
+  /**
+   * Yields a list of the top level queries of the supplied, possibly
+   * grouped query.
+   */
+  def ungroup(query: Query): List[Query] =
+    query match {
+      case Group(queries) => queries.flatMap(ungroup)
+      case query => List(query)
+    }
+
+  /**
+   * Returns the top-level field selections of the supplied query.
+   */
+  def children(q: Query): List[Query] = {
+    def loop(q: Query): List[Query] =
+      q match {
+        case Select(_, _, child)       => ungroup(child)
+        case Wrap(_, child)            => ungroup(child)
+        case Count(_, child)           => ungroup(child)
+        case Rename(_, child)          => loop(child)
+        case Environment(_, child)     => loop(child)
+        case TransformCursor(_, child) => loop(child)
+        case _                         => Nil
+      }
+    loop(q)
+  }
+
+  /**
+   * True if `fieldName` is a top-level selection of the supplied query,
+   * false otherwise.
+   */
+  def hasField(query: Query, fieldName: String): Boolean = {
+    def loop(q: Query): Boolean =
+      ungroup(q).exists {
+        case Select(`fieldName`, _, _) => true
+        case Rename(_, child)          => loop(child)
+        case Environment(_, child)     => loop(child)
+        case TransformCursor(_, child) => loop(child)
+        case _                         => false
+      }
+    loop(query)
+  }
+
+  /**
+   * Returns the alias, if any, of the top-level field `fieldName` in
+   * the supplied query.
+   */
+  def fieldAlias(query: Query, fieldName: String): Option[String] = {
+    def loop(q: Query, alias: Option[String]): Option[String] =
+      ungroup(q).collectFirstSome {
+        case Select(`fieldName`, _, _) => alias
+        case Wrap(`fieldName`, _)      => alias
+        case Count(`fieldName`, _)     => alias
+        case Rename(alias, child)      => loop(child, Some(alias))
+        case Environment(_, child)     => loop(child, alias)
+        case TransformCursor(_, child) => loop(child, alias)
+        case _                         => None
+      }
+    loop(query, None)
+  }
+
+  /**
+   * Tranform the children of `query` using the supplied function.
+   */
+  def mapFields(query: Query)(f: Query => Result[Query]): Result[Query] = {
+    def loop(q: Query): Result[Query] =
+      q match {
+        case Group(qs) => qs.traverse(loop).map(Group(_))
+        case s: Select => f(s)
+        case w: Wrap => f(w)
+        case c: Count => f(c)
+        case r@Rename(_, child) => loop(child).map(ec => r.copy(child = ec))
+        case e@Environment(_, child) => loop(child).map(ec => e.copy(child = ec))
+        case t@TransformCursor(_, child) => loop(child).map(ec => t.copy(child = ec))
+        case other => other.rightIor
+      }
+    loop(query)
   }
 
   /** Constructor/extractor for nested Filter/OrderBy/Limit/Offset patterns

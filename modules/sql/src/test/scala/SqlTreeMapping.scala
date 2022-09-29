@@ -39,7 +39,7 @@ trait SqlTreeMapping[F[_]] extends SqlTestMapping[F] {
         tpe = QueryType,
         fieldMappings =
           List(
-            SqlRoot("bintree")
+            SqlObject("bintree")
           )
       ),
       ObjectMapping(

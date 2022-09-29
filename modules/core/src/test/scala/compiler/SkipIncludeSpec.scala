@@ -3,7 +3,6 @@
 
 package compiler
 
-import cats.Id
 import cats.data.Ior
 import cats.tests.CatsSuite
 
@@ -245,7 +244,7 @@ final class SkipIncludeSuite extends CatsSuite {
   }
 }
 
-object SkipIncludeMapping extends Mapping[Id] {
+object SkipIncludeMapping extends TestMapping {
   val schema =
     schema"""
       type Query {
@@ -256,6 +255,4 @@ object SkipIncludeMapping extends Mapping[Id] {
         subfieldB: String
       }
     """
-
-  val typeMappings = Nil
 }

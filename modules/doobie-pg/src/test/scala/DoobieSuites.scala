@@ -65,6 +65,10 @@ final class LikeSpec extends DoobieDatabaseSuite with SqlLikeSpec {
   lazy val mapping = new DoobieTestMapping(xa) with SqlLikeMapping[IO]
 }
 
+final class MixedSpec extends DoobieDatabaseSuite with SqlMixedSpec {
+  lazy val mapping = new DoobieTestMapping(xa) with SqlMixedMapping[IO]
+}
+
 final class MovieSpec extends DoobieDatabaseSuite with SqlMovieSpec {
   lazy val mapping =
     new DoobieTestMapping(xa) with SqlMovieMapping[IO] {
@@ -92,6 +96,18 @@ final class MutationSpec extends DoobieDatabaseSuite with SqlMutationSpec {
             .unique
             .transact(transactor)
     }
+}
+
+final class Paging1Spec extends DoobieDatabaseSuite with SqlPaging1Spec {
+  lazy val mapping = new DoobieTestMapping(xa) with SqlPaging1Mapping[IO]
+}
+
+final class Paging2Spec extends DoobieDatabaseSuite with SqlPaging2Spec {
+  lazy val mapping = new DoobieTestMapping(xa) with SqlPaging2Mapping[IO]
+}
+
+final class Paging3Spec extends DoobieDatabaseSuite with SqlPaging3Spec {
+  lazy val mapping = new DoobieTestMapping(xa) with SqlPaging3Mapping[IO]
 }
 
 final class ProjectionSpec extends DoobieDatabaseSuite with SqlProjectionSpec {

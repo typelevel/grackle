@@ -16,10 +16,10 @@ import io.circe.Encoder
 import edu.gemini.grackle.syntax._
 import Query._, Predicate._, Value._
 import QueryCompiler._
-import semiauto._
 
 object MovieData {
   import MovieMapping._
+  import semiauto._
 
   sealed trait Genre extends Product with Serializable
   object Genre {
@@ -136,12 +136,12 @@ object MovieMapping extends GenericMapping[Id] {
         tpe = QueryType,
         fieldMappings =
           List(
-            GenericRoot("movieById", movies),
-            GenericRoot("moviesByGenre", movies),
-            GenericRoot("moviesReleasedBetween", movies),
-            GenericRoot("moviesLongerThan", movies),
-            GenericRoot("moviesShownLaterThan", movies),
-            GenericRoot("moviesShownBetween", movies)
+            GenericField("movieById", movies),
+            GenericField("moviesByGenre", movies),
+            GenericField("moviesReleasedBetween", movies),
+            GenericField("moviesLongerThan", movies),
+            GenericField("moviesShownLaterThan", movies),
+            GenericField("moviesShownBetween", movies)
           )
       )
     )

@@ -42,14 +42,14 @@ object ItemMapping extends ValueMapping[Id] {
 
   val typeMappings =
     List(
-      ObjectMapping(
+      ValueObjectMapping[Unit](
         tpe = QueryType,
         fieldMappings =
           List(
-            ValueRoot("itemByTag", items),
-            ValueRoot("itemByTagCount", items),
-            ValueRoot("itemByTagCountVA", items),
-            ValueRoot("itemByTagCountCA", items)
+            ValueField("itemByTag", _ => items),
+            ValueField("itemByTagCount", _ => items),
+            ValueField("itemByTagCountVA", _ => items),
+            ValueField("itemByTagCountCA", _ => items)
           )
       ),
       ValueObjectMapping[Item](

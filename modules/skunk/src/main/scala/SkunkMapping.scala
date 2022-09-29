@@ -18,10 +18,18 @@ import org.tpolecat.typename.TypeName
 
 import edu.gemini.grackle.sql._
 
-abstract class SkunkMapping[F[_]: Sync](
+abstract class SkunkMapping[F[_]](
   val pool:    Resource[F, Session[F]],
   val monitor: SkunkMonitor[F]
-) extends SqlMapping[F] { outer =>
+)(
+  implicit val M: Sync[F]
+) extends Mapping[F] with SkunkMappingLike[F]
+
+trait SkunkMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] { outer =>
+  implicit val M: Sync[F]
+
+  val pool:    Resource[F, Session[F]]
+  val monitor: SkunkMonitor[F]
 
   // Grackle needs to know about codecs, encoders, and fragments.
   type Codec    = (_root_.skunk.Codec[_], Boolean)

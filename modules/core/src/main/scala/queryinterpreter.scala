@@ -14,9 +14,11 @@ import fs2.Stream
 import io.circe.Json
 import io.circe.syntax._
 
-import Cursor.{Context, Env}
+import Cursor.{Context, Env, ListTransformCursor}
 import Query._
 import QueryInterpreter.{ mkErrorResult, ProtoJson }
+import ProtoJson._
+import edu.gemini.grackle.Result
 
 class QueryInterpreter[F[_]](mapping: Mapping[F]) {
 
@@ -39,55 +41,74 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
    *  Errors are accumulated on the `Left` of the result.
    */
   def runRoot(query: Query, rootTpe: Type, env: Env): Stream[F,Result[Json]] = {
-    val rootQueries =
-      query match {
-        case Group(queries) => queries
-        case query => List(query)
-      }
+    import mapping.RootEffect
 
-    val introQueries = rootQueries.collect { case i: Introspect => i }
-    val introResults =
-      introQueries.map {
-        case Introspect(schema, query) =>
-          val interp = Introspection.interpreter(schema)
-          interp.runRootValue(query, Introspection.schema.queryType, env)
-      } .flatMap(_.compile.toList) // this is Stream[Id, *] so we can toList it
+    case class PureQuery(query: Query)
+    case class EffectfulQuery(query: Query, rootEffect: RootEffect)
 
-    val nonIntroQueries = rootQueries.filter { case _: Introspect => false ; case _ => true }
-    val nonIntroResults = runRootValues(nonIntroQueries.map(q => (q, rootTpe, env)))
+    val rootContext = Context(rootTpe)
+
+    val (effectfulQueries, pureQueries) = ungroup(query).partitionMap { query =>
+      (for {
+        rootName <- Query.rootName(query)
+        re       <- mapping.rootEffect(rootContext, rootName._1)
+      } yield Left(EffectfulQuery(query, re))).getOrElse(Right(PureQuery(query)))
+    }
 
     val mergedResults: Stream[F,Result[ProtoJson]] =
-      nonIntroResults.map {
-        case (nonIntroErrors, nonIntroValues) =>
+      if(mapping.schema.subscriptionType.map(_ =:= rootTpe).getOrElse(false)) {
+        (effectfulQueries, pureQueries) match {
+          case (List(EffectfulQuery(query, RootEffect(_, effect))), Nil) =>
+            effect(query, rootTpe, env.addFromQuery(query)).map(_.flatMap {
+              case (q, c) => runValue(q, rootTpe, c)
+            })
+          case _ =>
+            Result.failure("Only one root field permitted for subscriptions").pure[Stream[F, *]]
+        }
+      } else {
+        val pureResults: Stream[F,Result[ProtoJson]] =
+          if(pureQueries.isEmpty) Stream.empty
+          else {
+            val (introQueries, nonIntroQueries) = pureQueries.partitionMap {
+              case PureQuery(i: Introspect) => Left(i)
+              case PureQuery(other) => Right(other)
+            }
 
-          val mergedErrors = introResults.foldLeft(nonIntroErrors) {
-            case (acc, res) => res.left match {
-              case Some(errs) => acc ++ errs.toChain
-              case None => acc
+            val introResults =
+              Stream.emits[F, Result[ProtoJson]](
+                introQueries.flatMap {
+                  case Introspect(schema, query) =>
+                    val interp = Introspection.interpreter(schema)
+                    interp.runRootValue(query, Introspection.schema.queryType, env).compile.toList // this is Stream[Id, *] so we can toList it
+                })
+
+            val nonIntroResults =
+              nonIntroQueries match {
+                case Nil => Stream.empty
+                case List(q) => runRootValue(q, rootTpe, env)
+                case qs => runRootValue(Group(qs), rootTpe, env)
+              }
+
+            introResults ++ nonIntroResults
+          }
+
+        val effectfulResults: Stream[F,Result[ProtoJson]] =
+          if(effectfulQueries.isEmpty) Stream.empty
+          else {
+            effectfulQueries.foldMap {
+              case EffectfulQuery(query, RootEffect(_, effect)) =>
+                effect(query, rootTpe, env.addFromQuery(query)).map(_.flatMap {
+                  case (q, c) => runValue(q, rootTpe, c)
+                })
             }
           }
 
-          @tailrec
-          def merge(qs: List[Query], is: List[Result[ProtoJson]], nis: List[ProtoJson], acc: List[ProtoJson]): List[ProtoJson] =
-            ((qs, is, nis): @unchecked) match {
-              case (Nil, _, _) => acc
-              case ((_: Introspect) :: qs, i :: is, nis) =>
-                val acc0 = i.right match {
-                  case Some(r) => r :: acc
-                  case None => acc
-                }
-                merge(qs, is, nis, acc0)
-              case (_ :: qs, is, ni :: nis) =>
-                merge(qs, is, nis, ni :: acc)
-            }
-
-          val mergedValues = ProtoJson.mergeObjects(merge(rootQueries, introResults, nonIntroValues, Nil).reverse)
-
-          NonEmptyChain.fromChain(mergedErrors) match {
-            case Some(errs) => Ior.Both(errs, mergedValues)
-            case None => Ior.Right(mergedValues)
-          }
+        (pureResults ++ effectfulResults).reduceSemigroup.map {
+          case Ior.Left(errs) => Ior.Both(errs, ProtoJson.fromJson(Json.Null))
+          case other => other
+        }
       }
+
     (for {
       pvalue <- IorT(mergedResults)
       value  <- IorT(QueryInterpreter.complete[F](pvalue))
@@ -101,26 +122,11 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
    *
    *  Errors are accumulated on the `Left` of the result.
    */
-  def runRootValue0(query: Query, context: Context, env: Env): Stream[F,Result[ProtoJson]] =
-    query match {
-      case Environment(childEnv: Env, child: Query) =>
-        runRootValue0(child, context, env.add(childEnv))
-
-      case PossiblyRenamedSelect(Select(fieldName, _, child), resultName) =>
-        (for {
-          fieldTpe <- IorT.fromOption[Stream[F,*]](context.tpe.field(fieldName), QueryInterpreter.mkOneError(s"Root type ${context.tpe} has no field '$fieldName'"))
-          qc       <- IorT(mapping.rootCursor(context, fieldName, Some(resultName), child, env))
-          value    <- IorT(runValue(Wrap(resultName, qc._1), fieldTpe, qc._2).pure[Stream[F,*]])
-        } yield value).value
-
-      case Wrap(_, Component(mapping, _, child)) =>
-        mapping.asInstanceOf[Mapping[F]].interpreter.runRootValue(child, context.tpe, env)
-
-      case _ =>
-        mkErrorResult(s"Bad root query '${query.render}' in QueryInterpreter").pure[Stream[F,*]]
-    }
-
-  def runRootValue(query: Query, rootTpe: Type, env: Env): Stream[F, Result[ProtoJson]] = runRootValue0(query, Context(rootTpe), env)
+  def runRootValue(query: Query, rootTpe: Type, env: Env): Stream[F, Result[ProtoJson]] =
+    (for {
+      qc       <- IorT(Stream.eval(mapping.defaultRootCursor(query, rootTpe, env)))
+      value    <- IorT(runValue(qc._1, rootTpe, qc._2).pure[Stream[F,*]])
+    } yield value).value
 
   /** Interpret multiple queries with respect to their expected types.
    *
@@ -211,9 +217,9 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             } yield fields
           }.getOrElse(List((resultName, ProtoJson.fromJson(Json.Null))).rightIor)
 
-        case (PossiblyRenamedSelect(Select(fieldName, _, child), resultName), tpe) =>
+        case (PossiblyRenamedSelect(Select(fieldName, _, child), resultName), _) =>
+          val fieldTpe = tpe.field(fieldName).getOrElse(ScalarType.AttributeType)
           for {
-            fieldTpe <- tpe.field(fieldName).toRightIor(QueryInterpreter.mkOneError(s"Type $tpe has no field '$fieldName'"))
             c        <- cursor.field(fieldName, Some(resultName))
             value    <- runValue(child, fieldTpe, c)
           } yield List((resultName, value))
@@ -248,14 +254,35 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
         case (Environment(childEnv: Env, child: Query), tpe) =>
           runFields(child, tpe, cursor.withEnv(childEnv))
 
+        case (TransformCursor(f, child), _) =>
+          for {
+            ct     <- f(cursor)
+            fields <- runFields(child, tpe, ct)
+          } yield fields
+
         case _ =>
           mkErrorResult(s"runFields failed: { ${query.render} } $tpe")
       }
     }
 
-  def runList(query: Query, tpe: Type, cursors: Iterator[Cursor], unique: Boolean, nullable: Boolean): Result[ProtoJson] = {
-    val (child, ic) =
+  def runList(query: Query, tpe: Type, parent: Cursor, unique: Boolean, nullable: Boolean): Result[ProtoJson] = {
+    val (query0, f) =
       query match {
+        case TransformCursor(f, child) => (child, Some(f))
+        case _ => (query, None)
+      }
+
+    def transformElems(cs: Iterator[Cursor]): Result[Iterator[Cursor]] =
+      f match {
+        case None => cs.rightIor
+        case Some(f) =>
+          val cs0 = cs.toSeq
+          val tc = ListTransformCursor(parent, cs0.size, cs0)
+          f(tc).flatMap(_.asList(Iterator))
+      }
+
+    def applyOps(cursors: Iterator[Cursor]): Result[(Query, Iterator[Cursor])] = {
+      query0 match {
         case FilterOrderByOffsetLimit(pred, selections, offset, limit, child) =>
           val filtered =
             pred.map { p =>
@@ -274,39 +301,50 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             case (None, Some(lim)) => sorted.take(lim)
             case (Some(off), Some(lim)) => sorted.slice(off, off+lim)
           }
-          (child, sliced)
-        case other => (other, cursors)
-      }
-
-    val builder = Vector.newBuilder[ProtoJson]
-    var problems = Chain.empty[Problem]
-    builder.sizeHint(ic.knownSize)
-    while(ic.hasNext) {
-      val c = ic.next()
-      if (!cursorCompatible(tpe, c.tpe))
-        return mkErrorResult(s"Mismatched query and cursor type in runList: $tpe ${cursors.map(_.tpe)}")
-
-      runValue(child, tpe, c) match {
-        case left@Ior.Left(_) => return left
-        case Ior.Right(v) => builder.addOne(v)
-        case Ior.Both(ps, v) =>
-          builder.addOne(v)
-          problems = problems.concat(ps.toChain)
+          transformElems(sliced).map(cs => (child, cs))
+        case other =>
+          transformElems(cursors).map(cs => (other, cs))
       }
     }
 
-    def mkResult(j: ProtoJson): Result[ProtoJson] =
-      NonEmptyChain.fromChain(problems).map(neps => Ior.Both(neps, j)).getOrElse(j.rightIor)
+    def mkResult(child: Query, ic: Iterator[Cursor]): Result[ProtoJson] = {
+      val builder = Vector.newBuilder[ProtoJson]
+      var problems = Chain.empty[Problem]
+      builder.sizeHint(ic.knownSize)
+      while(ic.hasNext) {
+        val c = ic.next()
+        if (!cursorCompatible(tpe, c.tpe))
+          return mkErrorResult(s"Mismatched query and cursor type in runList: $tpe ${c.tpe}")
 
-    if (!unique) mkResult(ProtoJson.fromValues(builder.result()))
-    else {
-      val size = builder.knownSize
-      if (size == 1) mkResult(builder.result()(0))
-      else if (size == 0) {
-        if(nullable) mkResult(ProtoJson.fromJson(Json.Null))
-        else mkErrorResult(s"No match")
-      } else mkErrorResult(s"Multiple matches")
+        runValue(child, tpe, c) match {
+          case left@Ior.Left(_) => return left
+          case Ior.Right(v) => builder.addOne(v)
+          case Ior.Both(ps, v) =>
+            builder.addOne(v)
+            problems = problems.concat(ps.toChain)
+        }
+      }
+
+      def mkResult(j: ProtoJson): Result[ProtoJson] =
+        NonEmptyChain.fromChain(problems).map(neps => Ior.Both(neps, j)).getOrElse(j.rightIor)
+
+      if (!unique) mkResult(ProtoJson.fromValues(builder.result()))
+      else {
+        val size = builder.knownSize
+        if (size == 1) mkResult(builder.result()(0))
+        else if (size == 0) {
+          if(nullable) mkResult(ProtoJson.fromJson(Json.Null))
+          else mkErrorResult(s"No match")
+        } else mkErrorResult(s"Multiple matches")
+      }
     }
+
+    for {
+      cursors     <- parent.asList(Iterator)
+      ccs         <- applyOps(cursors)
+      (child, cs) =  ccs
+      res         <- mkResult(child, cs)
+    } yield res
   }
 
   /**
@@ -315,7 +353,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
    * If the query is invalid errors will be returned on the left hand side
    * of the result.
    */
-  def runValue(query: Query, tpe: Type, cursor: Cursor): Result[ProtoJson] =
+  def runValue(query: Query, tpe: Type, cursor: Cursor): Result[ProtoJson] = {
     if (!cursorCompatible(tpe, cursor.tpe))
       mkErrorResult(s"Mismatched query and cursor type in runValue: $tpe ${cursor.tpe}")
     else {
@@ -351,27 +389,24 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             pvalue <- runValue(child, tpe, cursor)
           } yield ProtoJson.fromFields(List((fieldName, pvalue)))
 
-        case (Component(mapping, join, PossiblyRenamedSelect(child, resultName)), tpe) =>
+        case (Component(mapping, join, PossiblyRenamedSelect(child, resultName)), _) =>
           val interpreter = mapping.interpreter
           join(cursor, child).flatMap {
             case Group(conts) =>
               conts.traverse { case cont =>
                 for {
-                  componentName <- mkResult(rootName(cont))
-                  itemTpe       <- tpe.field(child.name).flatMap(_.item).toRightIor(QueryInterpreter.mkOneError(s"Type $tpe has no list field '${child.name}'"))
+                  componentName <- mkResult(rootName(cont).map(nme => nme._2.getOrElse(nme._1)))
                 } yield
                   ProtoJson.select(
-                    ProtoJson.staged(interpreter, cont, JoinType(componentName, itemTpe), cursor.fullEnv),
+                    ProtoJson.staged(interpreter, cont, mapping.schema.queryType, cursor.fullEnv),
                     componentName
                   )
               }.map(ProtoJson.fromValues)
 
             case cont =>
               for {
-                componentName <- mkResult(rootName(cont))
-                renamedCont   <- mkResult(renameRoot(cont, resultName))
-                fieldTpe      <- tpe.field(child.name).toRightIor(QueryInterpreter.mkOneError(s"Type $tpe has no field '${child.name}'"))
-              } yield ProtoJson.staged(interpreter, renamedCont, JoinType(componentName, fieldTpe), cursor.fullEnv)
+                renamedCont <- mkResult(renameRoot(cont, resultName))
+              } yield ProtoJson.staged(interpreter, renamedCont, mapping.schema.queryType, cursor.fullEnv)
           }
 
         case (Defer(join, child, rootTpe), _) =>
@@ -388,14 +423,18 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
           else stage(cursor)
 
         case (Unique(child), _) =>
-          cursor.preunique.flatMap(_.asList(Iterator).flatMap { cursors =>
-            runList(child, tpe.nonNull, cursors, true, tpe.isNullable)
-          })
+          cursor.preunique.flatMap(c =>
+            runList(child, tpe.nonNull, c, true, tpe.isNullable)
+          )
 
         case (_, ListType(tpe)) =>
-          cursor.asList(Iterator).flatMap { cursors =>
-            runList(query, tpe, cursors, false, false)
-          }
+          runList(query, tpe, cursor, false, false)
+
+        case (TransformCursor(f, child), _) =>
+          for {
+            ct    <- f(cursor)
+            value <- runValue(child, tpe, ct)
+          } yield value
 
         case (_, NullableType(tpe)) =>
           cursor.asNullable.sequence.map { rc =>
@@ -415,6 +454,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
           mkErrorResult(s"Stuck at type $tpe for ${query.render}")
       }
     }
+  }
 }
 
 object QueryInterpreter {
@@ -437,6 +477,12 @@ object QueryInterpreter {
     private[QueryInterpreter] case class ProtoArray(elems: Seq[ProtoJson])
     // A result which will yield a selection from its child
     private[QueryInterpreter] case class ProtoSelect(elem: ProtoJson, fieldName: String)
+
+    implicit val monoidInstance: Monoid[ProtoJson] =
+      new Monoid[ProtoJson] {
+        val empty: ProtoJson = fromJson(Json.Null)
+        def combine(x: ProtoJson, y: ProtoJson): ProtoJson = ProtoJson.mergeObjects(List(x, y))
+      }
 
     /**
      * Delegate `query` to the interpreter `interpreter`. When evaluated by
@@ -530,7 +576,7 @@ object QueryInterpreter {
    */
   def complete[F[_]](pj: ProtoJson): Stream[F,Result[Json]] =
     pj match {
-      case j: Json => j.rightIor.pure[Stream[F, *]]
+      case j: Json => Result(j).pure[Stream[F, *]]
       case _ =>
         completeAll[F](List(pj)).map {
           case (errors, List(value)) =>

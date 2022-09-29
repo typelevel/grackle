@@ -74,7 +74,7 @@ trait SqlCursorJsonMapping[F[_]] extends SqlTestMapping[F] {
         tpe = QueryType,
         fieldMappings =
           List(
-            SqlRoot("brands")
+            SqlObject("brands")
           )
       ),
       ObjectMapping(

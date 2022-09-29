@@ -6,9 +6,9 @@ package edu.gemini.grackle.sql.test
 import org.tpolecat.sourcepos.SourcePos
 
 import edu.gemini.grackle._
-import sql.SqlMapping
+import sql.SqlMappingLike
 
-trait SqlTestMapping[F[_]] extends SqlMapping[F] { outer =>
+trait SqlTestMapping[F[_]] extends SqlMappingLike[F] { outer =>
   def bool: Codec
   def text: Codec
   def varchar: Codec

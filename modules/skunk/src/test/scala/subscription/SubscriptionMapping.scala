@@ -3,7 +3,7 @@
 
 package edu.gemini.grackle.skunk.test.subscription
 
-import cats.effect.{ MonadCancel, Resource, Sync }
+import cats.effect.{ Resource, Sync }
 import cats.syntax.all._
 import skunk.Session
 import skunk.codec.all._
@@ -50,8 +50,6 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
     val population  = col("population", int4)
   }
 
-  implicit def ev: MonadCancel[F, Throwable]
-
   val QueryType        = schema.ref("Query")
   val SubscriptionType = schema.ref("Subscription")
   val CountryType      = schema.ref("Country")
@@ -62,7 +60,7 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
       ObjectMapping(
         tpe = QueryType,
         fieldMappings = List(
-          SqlRoot("city"),
+          SqlObject("city"),
         ),
       ),
       ObjectMapping(
@@ -86,18 +84,19 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
       ObjectMapping(
         tpe = SubscriptionType,
         fieldMappings = List(
-          SqlRoot(
-            fieldName = "channel",
-            mutation  = Mutation { (q, e) =>
-              for {
-                s  <- fs2.Stream.resource(pool)
-                id <- s.channel(id"city_channel").listen(256).map(_.value.toInt)
-                qʹ  = Unique(Filter(Eql(CityType / "id", Const(id)), q))
-              } yield Result((qʹ, e))
-            }
-          ),
-        ),
-      ),
+          RootEffect.computeQueryStream("channel")((query, _, _) =>
+            for {
+              s  <- fs2.Stream.resource(pool)
+              id <- s.channel(id"city_channel").listen(256).map(_.value.toInt)
+            } yield
+              query match {
+                case s@Select(_, _, child0) =>
+                  Result(s.copy(child = Unique(Filter(Eql(CityType / "id", Const(id)), child0))))
+                case _ => sys.error("Implementation error: expected Select")
+              }
+          )
+        )
+      )
     )
 
   override val selectElaborator = new SelectElaborator(Map(
@@ -110,8 +109,5 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
 
 object SubscriptionMapping extends SkunkMappingCompanion {
   def mkMapping[F[_]: Sync](pool: Resource[F,Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
-    new SkunkMapping[F](pool, monitor) with SubscriptionMapping[F] {
-      val ev = Sync[F]
-    }
-
+    new SkunkMapping[F](pool, monitor) with SubscriptionMapping[F]
 }
