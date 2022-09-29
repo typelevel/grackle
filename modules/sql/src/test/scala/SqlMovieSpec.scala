@@ -453,4 +453,30 @@ trait SqlMovieSpec extends AnyFunSuite {
 
     assert(res == expected)
   }
+
+  test("query with bogus hidden attribute") {
+    val query = """
+      query {
+        moviesByGenre(genre: COMEDY) {
+          title
+          isLong
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Unknown field 'isLong' in select"
+          }
+        ]
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
 }

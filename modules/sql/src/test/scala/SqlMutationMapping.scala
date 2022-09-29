@@ -4,7 +4,6 @@
 package edu.gemini.grackle.sql.test
 
 import cats.syntax.all._
-import fs2.Stream
 
 import edu.gemini.grackle._
 import syntax._
@@ -63,33 +62,36 @@ trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
       ObjectMapping(
         tpe = QueryType,
         fieldMappings = List(
-          SqlRoot("city"),
+          SqlObject("city"),
         ),
       ),
       ObjectMapping(
         tpe = MutationType,
         fieldMappings = List(
-          SqlRoot("updatePopulation", mutation = Mutation.unit { (_, e) =>
-            (e.get[Int]("id"), e.get[Int]("population")).tupled match {
-              case None =>
-                QueryInterpreter.mkErrorResult[Unit](s"Implementation error, expected id and population in $e.").pure[Stream[F,*]]
+          RootEffect.computeQuery("updatePopulation")((query, _, env) =>
+            (env.get[Int]("id"), env.get[Int]("population")).tupled match {
               case Some((id, pop)) =>
-                Stream.eval(updatePopulation(id, pop)).map(_.rightIor)
-              }
-          }),
-          SqlRoot("createCity", mutation = Mutation { (child, e) =>
-            (e.get[String]("name"), e.get[String]("countryCode"), e.get[Int]("population")).tupled match {
+                updatePopulation(id, pop).as(Result(query))
               case None =>
-                QueryInterpreter.mkErrorResult[(Query, Cursor.Env)](s"Implementation error: expected name, countryCode and population in $e.").pure[Stream[F,*]]
-              case Some((name, cc, pop)) =>
-                Stream.eval(createCity(name, cc, pop)).map { id =>
-                  (Unique(Filter(Eql(CityType / "id", Const(id)), child)), e).rightIor
-                }
+                sys.error(s"Implementation error, expected id and population in $env.")
             }
-          }),
-        ),
+          ),
+          RootEffect.computeQuery("createCity")((query, _, env) =>
+            (env.get[String]("name"), env.get[String]("countryCode"), env.get[Int]("population")).tupled match {
+              case Some((name, cc, pop)) =>
+                query match {
+                  case en@Environment(_, s@Select(_, _, child)) =>
+                    createCity(name, cc, pop).map { id =>
+                      Result(en.copy(child = s.copy(child = (Unique(Filter(Eql(CityType / "id", Const(id)), child))))))
+                    }
+                  case _ => sys.error(s"Implementation error: expected Environment node.")
+                }
+              case None => sys.error(s"Implementation error: expected name, countryCode and population in $env.")
+            }
+          )
+        )
       ),
-       ObjectMapping(
+      ObjectMapping(
         tpe = CountryType,
         fieldMappings = List(
           SqlField("code", country.code, key = true, hidden = true),

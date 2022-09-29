@@ -288,4 +288,54 @@ final class CirceSpec extends CatsSuite {
 
     assert(res == expected)
   }
+
+  test("hidden") {
+    val query = """
+      query {
+        root {
+          hidden
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Unknown field 'hidden' in select"
+          }
+        ]
+      }
+    """
+
+    val res = TestCirceMapping.compileAndRun(query)
+    //println(res)
+
+    assert(res == expected)
+  }
+
+  test("computed") {
+    val query = """
+      query {
+        root {
+          computed
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "root" : {
+            "computed" : 14
+          }
+        }
+      }
+    """
+
+    val res = TestCirceMapping.compileAndRun(query)
+    //println(res)
+
+    assert(res == expected)
+  }
 }

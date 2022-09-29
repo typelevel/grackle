@@ -127,16 +127,16 @@ object MovieMapping extends ValueMapping[Id] {
 
   val typeMappings =
     List(
-      ObjectMapping(
+      ValueObjectMapping[Unit](
         tpe = QueryType,
         fieldMappings =
           List(
-            ValueRoot("movieById", movies),
-            ValueRoot("moviesByGenre", movies),
-            ValueRoot("moviesReleasedBetween", movies),
-            ValueRoot("moviesLongerThan", movies),
-            ValueRoot("moviesShownLaterThan", movies),
-            ValueRoot("moviesShownBetween", movies)
+            ValueField("movieById", _ => movies),
+            ValueField("moviesByGenre", _ => movies),
+            ValueField("moviesReleasedBetween", _ => movies),
+            ValueField("moviesLongerThan", _ => movies),
+            ValueField("moviesShownLaterThan", _ => movies),
+            ValueField("moviesShownBetween", _ => movies)
           )
       ),
       ValueObjectMapping[Movie](

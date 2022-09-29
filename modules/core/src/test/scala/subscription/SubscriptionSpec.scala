@@ -3,22 +3,16 @@
 
 package subscription
 
-import cats.effect._
-import cats.tests.CatsSuite
-import cats.effect.unsafe.implicits.global
-import edu.gemini.grackle.Mapping
-import edu.gemini.grackle.Result
-import edu.gemini.grackle.Schema
-import edu.gemini.grackle.ValueMapping
-import fs2.concurrent.SignallingRef
-import fs2.Stream
-import edu.gemini.grackle.Query
-import io.circe.Json
-import edu.gemini.grackle.QueryCompiler
-import edu.gemini.grackle.Value
-import edu.gemini.grackle.Cursor
-import edu.gemini.grackle.syntax._
 import scala.concurrent.duration._
+
+import cats.effect._
+import cats.effect.unsafe.implicits.global
+import cats.tests.CatsSuite
+import fs2.concurrent.SignallingRef
+import io.circe.Json
+
+import edu.gemini.grackle.{Cursor, Query, QueryCompiler, Mapping, Result, Schema, Value, ValueMapping}
+import edu.gemini.grackle.syntax._
 
 final class SubscriptionSpec extends CatsSuite {
 
@@ -45,21 +39,20 @@ final class SubscriptionSpec extends CatsSuite {
       val typeMappings: List[TypeMapping] =
         List(
           ObjectMapping(QueryType, List(
-            ValueRoot.liftF("get", ref.get)
+            RootEffect.computeCursor("get")((_, tpe, env) => ref.get.map(n => Result(valueCursor(tpe, env, n))))
           )),
           ObjectMapping(MutationType, List(
-            ValueRoot.liftF("put", ref.get, Mutation.unit { case (_, e) =>
-              e.get[Int]("n") match {
-                case None    => Result.failure(s"Implementation error: `n: Int` not found in $e").pure[Stream[IO,*]]
-                case Some(n) => Stream.eval(ref.set(n).as(Result.unit))
+            RootEffect.computeCursor("put")( (_, tpe, env) =>
+              env.get[Int]("n") match {
+                case None    => Result.failure(s"Implementation error: `n: Int` not found in $env").pure[IO]
+                case Some(n) => ref.set(n).map(_ => Result(valueCursor(tpe, env, n)))
               }
-            })
+            )
           )),
           ObjectMapping(SubscriptionType, List(
-            ValueRoot.liftF("watch", ref.get, Mutation { case (q, e) =>
-              ref.discrete.as(Result((q,e)))
-            })
-          )),
+            RootEffect.computeCursorStream("watch")((_, tpe, env) =>
+              ref.discrete.map(n => Result(valueCursor(tpe, env, n))))
+          ))
         )
 
       override val selectElaborator: QueryCompiler.SelectElaborator =
@@ -69,8 +62,45 @@ final class SubscriptionSpec extends CatsSuite {
               Result(Query.Environment(Cursor.Env("n" -> n), Query.Select("put", Nil, child)))
           }
         ))
-
     }
+
+  test("sanity check get") {
+    val prog: IO[Json] =
+      for {
+        ref <- SignallingRef[IO, Int](0)
+        map  = mapping(ref)
+        r1  <- map.compileAndRunOne("query { get }")
+      } yield r1
+
+    assert(prog.unsafeRunSync() ==
+      json"""
+        {
+          "data" : {
+            "get" : 0
+          }
+        }
+      """
+    )
+  }
+
+  test("sanity check put") {
+    val prog: IO[Json] =
+      for {
+        ref <- SignallingRef[IO, Int](0)
+        map  = mapping(ref)
+        r1  <- map.compileAndRunOne("mutation { put(n: 42) }")
+      } yield r1
+
+    assert(prog.unsafeRunSync() ==
+      json"""
+        {
+          "data" : {
+            "put" : 42
+          }
+        }
+      """
+    )
+  }
 
   test("sanity check (get, put, get)") {
 

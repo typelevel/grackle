@@ -42,8 +42,8 @@ object EnvironmentMapping extends ValueMapping[Id] {
         tpe = QueryType,
         fieldMappings =
           List(
-            ValueRoot("nested", ()),
-            ValueRoot("nestedSum", ())
+            ValueField[Unit]("nested", _ => ()),
+            ValueField[Unit]("nestedSum", _ => ())
           )
       ),
       ObjectMapping(

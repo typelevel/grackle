@@ -53,11 +53,11 @@ class CurrencyMapping[F[_] : Monad] extends ValueMapping[F] {
 
   val typeMappings =
     List(
-      ObjectMapping(
+      ValueObjectMapping[Unit](
         tpe = QueryType,
         fieldMappings =
           List(
-            ValueRoot("allCurrencies", currencies)
+            ValueField("allCurrencies", _ => currencies)
           )
       ),
       ValueObjectMapping[Currency](
@@ -79,7 +79,7 @@ object CurrencyMapping {
 /* Composition */
 
 class SqlComposedMapping[F[_] : Monad]
-  (world: Mapping[F], currency: Mapping[F]) extends Mapping[F] {
+  (world: Mapping[F], currency: Mapping[F]) extends ComposedMapping[F] {
   val schema =
     schema"""
       type Query {

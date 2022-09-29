@@ -60,7 +60,7 @@ trait SqlRecursiveInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
         tpe = QueryType,
         fieldMappings =
           List(
-            SqlRoot("items")
+            SqlObject("items")
           )
       ),
       SqlInterfaceMapping(

@@ -3,7 +3,6 @@
 
 package compiler
 
-import cats.Id
 import cats.data.{Chain, Ior}
 import cats.tests.CatsSuite
 
@@ -359,7 +358,7 @@ final class VariablesSuite extends CatsSuite {
   }
 }
 
-object VariablesMapping extends Mapping[Id] {
+object VariablesMapping extends TestMapping {
   val schema =
     schema"""
       type Query {
@@ -389,8 +388,6 @@ object VariablesMapping extends Mapping[Id] {
       scalar Date
       scalar BigDecimal
     """
-
-  val typeMappings = Nil
 
   val QueryType = schema.ref("Query")
 

@@ -44,7 +44,7 @@ trait SqlLikeMapping[F[_]] extends SqlTestMapping[F] {
         tpe = QueryType,
         fieldMappings =
           List(
-            SqlRoot("likes"),
+            SqlObject("likes"),
           )
       ),
       ObjectMapping(

@@ -3,7 +3,6 @@
 
 package compiler
 
-import cats.Id
 import cats.data.{Chain, Ior}
 import cats.tests.CatsSuite
 
@@ -112,7 +111,7 @@ final class InputValuesSuite extends CatsSuite {
   }
 }
 
-object InputValuesMapping extends Mapping[Id] {
+object InputValuesMapping extends TestMapping {
   val schema =
     schema"""
       type Query {
@@ -133,8 +132,6 @@ object InputValuesMapping extends Mapping[Id] {
     """
 
   val QueryType = schema.ref("Query")
-
-  val typeMappings = Nil
 
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> PartialFunction.empty

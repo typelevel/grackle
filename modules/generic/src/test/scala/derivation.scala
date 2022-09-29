@@ -18,10 +18,10 @@ import Query._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.{ mkErrorResult, mkOneError }
 import ScalarType._
-import semiauto._
 
 object StarWarsData {
-  import StarWarsMapping.{CharacterType, DroidType, HumanType}
+  import StarWarsMapping._
+  import semiauto._
 
   object Episode extends Enumeration {
     val NEWHOPE, EMPIRE, JEDI = Value
@@ -192,10 +192,10 @@ object StarWarsMapping extends GenericMapping[Id] {
         tpe = QueryType,
         fieldMappings =
           List(
-            GenericRoot("hero", characters),
-            GenericRoot("character", characters),
-            GenericRoot("human", characters.collect { case h: Human => h }),
-            GenericRoot("droid", characters.collect { case d: Droid => d })
+            GenericField("hero", characters),
+            GenericField("character", characters),
+            GenericField("human", characters.collect { case h: Human => h }),
+            GenericField("droid", characters.collect { case d: Droid => d })
           )
       )
     )

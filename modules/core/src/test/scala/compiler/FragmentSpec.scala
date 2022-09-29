@@ -659,12 +659,12 @@ object FragmentMapping extends ValueMapping[Id] {
 
   val typeMappings =
     List(
-      ObjectMapping(
+      ValueObjectMapping[Unit](
         tpe = QueryType,
         fieldMappings =
           List(
-            ValueRoot("user", profiles.collect { case u: User => u }),
-            ValueRoot("profiles", profiles)
+            ValueField("user", _ => profiles.collect { case u: User => u }),
+            ValueField("profiles", _ => profiles)
           )
       ),
       ValueObjectMapping[Profile](

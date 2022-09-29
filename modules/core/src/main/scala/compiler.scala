@@ -431,6 +431,7 @@ object QueryCompiler {
         case o@Offset(_, child)        => transform(child, vars, schema, tpe).map(ec => o.copy(child = ec))
         case o@OrderBy(_, child)      => transform(child, vars, schema, tpe).map(ec => o.copy(child = ec))
         case e@Environment(_, child)  => transform(child, vars, schema, tpe).map(ec => e.copy(child = ec))
+        case t@TransformCursor(_, child) => transform(child, vars, schema, tpe).map(ec => t.copy(child = ec))
         case Skipped                  => Skipped.rightIor
         case Empty                    => Empty.rightIor
       }
@@ -583,9 +584,18 @@ object QueryCompiler {
               } yield elaborated
           }
 
-        case _: Rename =>
+        case r: Rename =>
           super.transform(query, vars, schema, tpe).map(_ match {
             case Rename(nme, Environment(e, child)) => Environment(e, Rename(nme, child))
+            case Rename(nme, Group(queries)) =>
+              val Some((baseName, _)) = Query.rootName(r)
+              val renamed =
+                queries.map {
+                  case s@Select(`baseName`, _, _) => Rename(nme, s)
+                  case c@Count(`baseName`, _) => Rename(nme, c)
+                  case other => other
+                }
+              Group(renamed)
             case q => q
           })
 
@@ -663,7 +673,7 @@ object QueryCompiler {
         case PossiblyRenamedSelect(Select(fieldName, args, child), resultName) =>
           (for {
             obj      <- tpe.underlyingObject
-            childTpe <- obj.field(fieldName)
+            childTpe =  obj.field(fieldName).getOrElse(ScalarType.AttributeType)
           } yield {
             transform(child, vars, schema, childTpe).map { elaboratedChild =>
               schema.ref(obj).flatMap(ref => cmapping.get((ref, fieldName))) match {
@@ -728,6 +738,7 @@ object QueryCompiler {
           case Rename(_, child) => loop(child, depth, width, false)
           case Skip(_, _, child) => loop(child, depth, width, false)
           case Skipped => (depth, width)
+          case TransformCursor(_, child) => loop(child, depth, width, false)
           case Unique(child) => loop(child, depth, width, false)
           case UntypedNarrow(_, child) => loop(child, depth, width, false)
           case Wrap(_, child) => loop(child, depth, width, false)

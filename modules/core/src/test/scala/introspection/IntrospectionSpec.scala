@@ -1369,7 +1369,7 @@ final class IntrospectionSuite extends CatsSuite {
   }
 }
 
-object TestMapping extends Mapping[Id] {
+object TestMapping extends compiler.TestMapping {
   val schema =
     schema"""
       type Query {
@@ -1430,8 +1430,6 @@ object TestMapping extends Mapping[Id] {
         flags: Flags
       }
     """
-
-  val typeMappings = Nil
 }
 
 object SmallData {
@@ -1477,12 +1475,12 @@ object SmallMapping extends ValueMapping[Id] {
 
   val typeMappings =
     List(
-      ObjectMapping(
+      ValueObjectMapping[Unit](
         tpe = QueryType,
         fieldMappings =
           List(
-            ValueRoot("users", users),
-            ValueRoot("profiles", users)
+            ValueField("users", _ => users),
+            ValueField("profiles", _ => users)
           )
       ),
       ValueObjectMapping[User](

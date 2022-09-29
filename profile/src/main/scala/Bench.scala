@@ -112,13 +112,13 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
       ObjectMapping(
         tpe = QueryType,
         fieldMappings = List(
-          SqlRoot("cities"),
-          SqlRoot("city"),
-          SqlRoot("country"),
-          SqlRoot("countries"),
-          SqlRoot("language"),
-          SqlRoot("search"),
-          SqlRoot("search2")
+          SqlObject("cities"),
+          SqlObject("city"),
+          SqlObject("country"),
+          SqlObject("countries"),
+          SqlObject("language"),
+          SqlObject("search"),
+          SqlObject("search2")
         )
       ),
       ObjectMapping(

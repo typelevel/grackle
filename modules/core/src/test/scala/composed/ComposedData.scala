@@ -45,11 +45,11 @@ object CurrencyMapping extends ValueMapping[Id] {
 
   val typeMappings =
     List(
-      ObjectMapping(
+      ValueObjectMapping[Unit](
         tpe = QueryType,
         fieldMappings =
           List(
-            ValueRoot("fx", currencies)
+            ValueField("fx", _ => currencies)
           )
       ),
       ValueObjectMapping[Currency](
@@ -106,12 +106,12 @@ object CountryMapping extends ValueMapping[Id] {
 
   val typeMappings =
     List(
-      ObjectMapping(
+      ValueObjectMapping[Unit](
         tpe = QueryType,
         fieldMappings =
           List(
-            ValueRoot("country", countries),
-            ValueRoot("countries", countries)
+            ValueField("country", _ => countries),
+            ValueField("countries", _ => countries)
           )
       ),
       ValueObjectMapping[Country](
@@ -136,7 +136,7 @@ object CountryMapping extends ValueMapping[Id] {
 
 /* Composition */
 
-object ComposedMapping extends Mapping[Id] {
+object ComposedMapping extends ComposedMapping[Id] {
   val schema =
     schema"""
       type Query {

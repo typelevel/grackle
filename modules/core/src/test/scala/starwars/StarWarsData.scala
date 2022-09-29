@@ -5,6 +5,7 @@ package starwars
 
 import cats.Id
 import cats.implicits._
+import io.circe.Encoder
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
@@ -15,6 +16,7 @@ import QueryCompiler._
 object StarWarsData {
   object Episode extends Enumeration {
     val NEWHOPE, EMPIRE, JEDI = Value
+    implicit val episodeEncoder: Encoder[Value] = Encoder[String].contramap(_.toString)
   }
 
   trait Character {
@@ -161,15 +163,15 @@ object StarWarsMapping extends ValueMapping[Id] {
 
   val typeMappings =
     List(
-      ObjectMapping(
+      ValueObjectMapping[Unit](
         tpe = QueryType,
         fieldMappings =
           List(
-            ValueRoot("hero", characters),
-            ValueRoot("character", characters),
-            ValueRoot("characters", characters),
-            ValueRoot("human", characters.collect { case h: Human => h }),
-            ValueRoot("droid", characters.collect { case d: Droid => d })
+            ValueField("hero", _ => characters),
+            ValueField("character", _ => characters),
+            ValueField("characters", _ => characters),
+            ValueField("human", _ => characters.collect { case h: Human => h }),
+            ValueField("droid", _ => characters.collect { case d: Droid => d })
           )
       ),
       ValueObjectMapping[Character](
@@ -197,7 +199,7 @@ object StarWarsMapping extends ValueMapping[Id] {
             ValueField("primaryFunction", _.primaryFunction)
           )
       ),
-      PrimitiveMapping(EpisodeType)
+      LeafMapping[Episode.Value](EpisodeType)
     )
 
   val numberOfFriends: PartialFunction[Query, Result[Query]] = {

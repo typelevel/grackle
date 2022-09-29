@@ -1764,4 +1764,133 @@ trait SqlWorldSpec extends AnyFunSuite {
 
     assertWeaklyEqual(res, expected)
   }
+
+  test("set inclusion") {
+    val query = """
+      query {
+        languages(languages: ["French", "German"]) {
+          language
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "languages" : [
+            {
+              "language" : "German"
+            },
+            {
+              "language" : "French"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
+  test("empty set inclusion") {
+    val query = """
+      query {
+        languages(languages: []) {
+          language
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "languages" : [
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
+  test("top-level count (1)") {
+    val query = """
+      query {
+        numCountries
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "numCountries" : 239
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
+  test("top-level count (2)") {
+    val query = """
+      query {
+        numCountries
+        city(id: 490) {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "numCountries" : 239,
+          "city" : {
+            "name" : "Brighton"
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
+  test("top-level count (3)") {
+    val query = """
+      query {
+        numCountries
+        country(code: "GBR") {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "numCountries" : 239,
+          "country" : {
+            "name" : "United Kingdom"
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
 }

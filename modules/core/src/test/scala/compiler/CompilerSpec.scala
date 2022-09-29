@@ -3,7 +3,6 @@
 
 package compiler
 
-import cats.Id
 import cats.data.{Chain, Ior}
 import cats.implicits._
 import cats.tests.CatsSuite
@@ -393,7 +392,7 @@ final class CompilerSuite extends CatsSuite {
   }
 }
 
-object AtomicMapping extends Mapping[Id] {
+object AtomicMapping extends TestMapping {
   val schema =
     schema"""
       type Query {
@@ -409,8 +408,6 @@ object AtomicMapping extends Mapping[Id] {
   val QueryType = schema.ref("Query")
   val CharacterType = schema.ref("Character")
 
-  val typeMappings = Nil
-
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("character", List(Binding("id", StringValue(id))), child) =>
@@ -418,17 +415,15 @@ object AtomicMapping extends Mapping[Id] {
     }
   ))
 }
-
-trait DummyComponent extends Mapping[Id] {
+trait DummyComponent extends TestMapping {
   val schema = schema"type Query { dummy: Int }"
-  val typeMappings = Nil
 }
 
 object ComponentA extends DummyComponent
 object ComponentB extends DummyComponent
 object ComponentC extends DummyComponent
 
-object ComposedMapping extends Mapping[Id] {
+object ComposedMapping extends TestMapping {
   val schema =
     schema"""
       type Query {
@@ -457,7 +452,7 @@ object ComposedMapping extends Mapping[Id] {
   val FieldA2Type = schema.ref("FieldA2")
   val FieldB2Type = schema.ref("FieldB2")
 
-  val typeMappings =
+  override val typeMappings =
     List(
       ObjectMapping(
         tpe = QueryType,

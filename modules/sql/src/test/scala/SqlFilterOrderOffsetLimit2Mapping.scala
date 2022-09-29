@@ -69,8 +69,8 @@ trait SqlFilterOrderOffsetLimit2Mapping[F[_]] extends SqlTestMapping[F] {
         tpe = QueryType,
         fieldMappings =
           List(
-            SqlRoot("root"),
-            SqlRoot("containers")
+            SqlObject("root"),
+            SqlObject("containers")
           )
       ),
       ObjectMapping(

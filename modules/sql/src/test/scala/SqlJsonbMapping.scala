@@ -70,8 +70,8 @@ trait SqlJsonbMapping[F[_]] extends SqlTestMapping[F] {
         tpe = QueryType,
         fieldMappings =
           List(
-            SqlRoot("record"),
-            SqlRoot("records")
+            SqlObject("record"),
+            SqlObject("records")
           )
       ),
       ObjectMapping(

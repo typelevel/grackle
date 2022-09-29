@@ -63,9 +63,9 @@ trait SqlProjectionMapping[F[_]] extends SqlTestMapping[F] {
         tpe = QueryType,
         fieldMappings =
           List(
-            SqlRoot("level0"),
-            SqlRoot("level1"),
-            SqlRoot("level2")
+            SqlObject("level0"),
+            SqlObject("level1"),
+            SqlObject("level2")
           )
       ),
       ObjectMapping(

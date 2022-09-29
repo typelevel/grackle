@@ -12,10 +12,10 @@ import edu.gemini.grackle.syntax._
 import Query._, Predicate._, Value._
 import QueryCompiler._
 import QueryInterpreter.mkOneError
-import semiauto._
 
 object MutualRecursionData {
   import MutualRecursionMapping._
+  import semiauto._
 
   case class Programme(id: String, productions: Option[List[String]])
   object Programme {
@@ -76,8 +76,8 @@ object MutualRecursionMapping extends GenericMapping[Id] {
         tpe = QueryType,
         fieldMappings =
           List(
-            GenericRoot("programmeById", programmes),
-            GenericRoot("productionById", productions)
+            GenericField("programmeById", programmes),
+            GenericField("productionById", productions)
           )
       )
     )

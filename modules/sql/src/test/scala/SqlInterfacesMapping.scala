@@ -95,8 +95,8 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
         tpe = QueryType,
         fieldMappings =
           List(
-            SqlRoot("entities"),
-            SqlRoot("films"),
+            SqlObject("entities"),
+            SqlObject("films"),
           )
       ),
       SqlInterfaceMapping(

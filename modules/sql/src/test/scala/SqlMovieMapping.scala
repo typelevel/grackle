@@ -94,14 +94,14 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
         tpe = QueryType,
         fieldMappings =
           List(
-            SqlRoot("movieById"),
-            SqlRoot("moviesByGenre"),
-            SqlRoot("moviesByGenres"),
-            SqlRoot("moviesReleasedBetween"),
-            SqlRoot("moviesLongerThan"),
-            SqlRoot("moviesShownLaterThan"),
-            SqlRoot("moviesShownBetween"),
-            SqlRoot("longMovies")
+            SqlObject("movieById"),
+            SqlObject("moviesByGenre"),
+            SqlObject("moviesByGenres"),
+            SqlObject("moviesReleasedBetween"),
+            SqlObject("moviesLongerThan"),
+            SqlObject("moviesShownLaterThan"),
+            SqlObject("moviesShownBetween"),
+            SqlObject("longMovies")
           )
       ),
       ObjectMapping(
