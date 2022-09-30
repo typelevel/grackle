@@ -54,6 +54,7 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
   }
   // #db_tables
 
+  // #schema
   val schema =
     schema"""
       type Query {
@@ -98,6 +99,7 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
         languages: [Language!]!
       }
     """
+  // #schema
 
   val QueryType    = schema.ref("Query")
   val CountryType  = schema.ref("Country")

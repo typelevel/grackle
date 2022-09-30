@@ -16,6 +16,7 @@ import org.testcontainers.utility.DockerImageName
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
 
+// #main
 object Main extends IOApp {
 
   def run(args: List[String]): IO[ExitCode] = {
@@ -71,3 +72,4 @@ object Main extends IOApp {
     flyway.load().migrate()
   }.void
 }
+// #main
