@@ -2715,7 +2715,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             if(schema.isRootType(context.tpe)) loop(child, fieldContext, Nil, false)
             else {
               val parentConstraints0 = parentConstraintsFromJoins(context, fieldName, resultName)
-              val keyCols = if(parentConstraints0.nonEmpty) keyColumnsForType(context) else Nil
+              val keyCols = keyColumnsForType(context)
               val constraintCol = if(exposeJoins) parentConstraints.lastOption.map(_._2).toList else Nil
               val extraCols = keyCols ++ constraintCol
               val extraJoins = parentConstraintsToSqlJoins(parentConstraints)
