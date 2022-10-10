@@ -396,4 +396,33 @@ final class SchemaSpec extends CatsSuite {
     schema"scalar Foo".queryType
   }
 
+  test("schema validation: fields implementing interfaces can be subtypes") {
+    val schema = Schema("""
+      type Query {
+        foo: Int
+      }
+
+      interface Edge {
+        node: String
+      }
+
+      interface Connection {
+        edges: [Edge!]!
+      }
+
+      type MyEdge implements Edge {
+        node: String
+      }
+
+      type MyConnection implements Connection {
+        edges: [MyEdge!]!
+      }
+    """)
+
+    schema match {
+      case Ior.Right(a) => assert(a.types.map(_.name) == List("MyEdge", "MyCinnection"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
 }
