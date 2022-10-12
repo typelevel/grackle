@@ -1056,6 +1056,112 @@ object SchemaValidator {
     errors.map(undefinedResults.addLeft(_)).getOrElse(undefinedResults)
   }
 
+  def validateImplementations(namedTypes: Result[List[NamedType]]): Result[List[NamedType]] = {
+    namedTypes.flatMap { definitions: List[NamedType] =>
+      val objects = definitions.collect {//FIXME also do for interfaces
+        case a: ObjectType => a
+      }
+
+      val problems = objects.flatMap { obj =>
+        val implemented = obj.interfaces.collect {
+          case a: InterfaceType => a
+        }
+        implemented.flatMap(interface => isValidImplementation(obj, interface))
+      }
+
+      NonEmptyChain.fromSeq(problems).fold(Result(definitions)){ probs =>
+        Ior.both(probs, definitions)
+      }
+
+    }
+
+  }
+
+  //FIXME introduce abstraction over object, interface types
+  //https://spec.graphql.org/October2021/#IsValidImplementation()
+  def isValidImplementation(implementingType: ObjectType, implementedType: InterfaceType): List[Problem] = {
+    val problems = implementsTransitiveInterfaces(implementingType, implementedType)
+    problems
+  }
+
+  def implementsTransitiveInterfaces(implementingType: ObjectType, implementedType: InterfaceType): List[Problem] = {
+    implementedType.interfaces.forall(interface => implementingType.interfaces.contains(interface)) //FIXME add test for this
+    val umimplemented = implementedType.interfaces.toSet.diff(implementingType.interfaces.toSet)
+    umimplemented.toList.map(missing => mkError(s"${implementingType.name} implements ${implementedType.name}, which in turn implements ${missing.name}, however ${implementingType.name} does not implement ${missing.name}"))
+  }
+
+  def fieldsMatchImplementation(implementingType: ObjectType, implementedType: InterfaceType): List[Problem] = {
+    val (missing, matches) = implementedType.fields.partitionMap { implementedField =>
+      implementingType.fields.find(_.name == implementedField.name).fold(Either.left[Field, (Field, Field)](implementedField)) { matched =>
+        Either.right((matched, implementedField))
+      }
+    }
+
+    val missingFields = missing.map { missed =>
+      mkError(s"type ${implementingType.name} implements interface ${implementedType.name} but is missing field ${missed.name}")
+    }
+
+    val fieldProblems  = matches.flatMap((fieldMatchesImplementation _).tupled)
+
+    missingFields ++ fieldProblems
+  }
+
+  def fieldMatchesImplementation(field: Field, implemented: Field): List[Problem] = {
+    val (missing, matching) = implemented.args.partitionMap { value =>
+      field.args.find(_.name == value.name).fold(value.asLeft[(InputValue, InputValue)]) { matched =>
+        (matched, value).asRight[InputValue]
+      }
+    }
+
+    val missingArgs = missing.map { absent =>
+      mkError(s"argument ${absent.name} is required by implemented interface, however it is absent from field ${field.name}")
+    }
+  
+    val typeMismatches = matching.mapFilter { case (arg, implementedArg) =>
+      if (arg.tpe =:= implementedArg.tpe) {
+        None
+      } else {
+        Some(mkError(s"field ${field.name} has an argument ${arg.name} who's type of does not match that specified by implemented interface"))
+      }
+    }
+
+    val additional = field.args.filter(arg => !implemented.args.exists(_.name == arg.name))
+
+    val additionalRequired = additional.filter(!_.tpe.isNullable).map { arg =>
+      mkError(s"field ${field.name} has an argument ${arg.name} not specified by implemented interface that is marked as required")
+    }
+
+    val problems = missingArgs ++ typeMismatches ++ additionalRequired
+
+    if (isValidImplementationFieldType(field.tpe, implemented.tpe)) {
+      problems
+    } else {
+      problems :+ mkError(s"field ${field.name} does not conform to the type required by implemented interface")
+    }
+  }
+
+  //https://spec.graphql.org/October2021/#IsValidImplementationFieldType()
+  def isValidImplementationFieldType(fieldType: Type, implementedFieldType: Type): Boolean = {
+    //if its non nullable, make nullable, also make implemented nullable if it isnt already, call func <-- everything unwrapped
+    //if its nullable, dont care if implemented is nullable or not, do naive comparisson <-- no unwrapping, fails when implmeted non nullable, field is nullable
+
+    //nullable = wrapped
+    //nonnull = unwrapped
+    if (fieldType.isNullable) {
+      if (!implementedFieldType.isNullable) {
+        false
+      } else {
+        isValidImplementationFieldType(fieldType.nonNull, implementedFieldType)
+      }
+    } else {
+      (fieldType, implementedFieldType) match {
+        case (ListType(t1), ListType(t2)) => isValidImplementationFieldType(t1, t2)
+        case _ => fieldType <:< implementedFieldType
+      }
+    }
+
+  }
+
   def validateImpls(definitions: List[TypeDefinition]): List[Problem] = {
     val interfaces = definitions.collect {
       case a: InterfaceTypeDefinition => a
