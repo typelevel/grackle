@@ -14,6 +14,7 @@ import edu.gemini.grackle.sql.SqlStatsMonitor
 
 import edu.gemini.grackle.sql.test._
 import edu.gemini.grackle.Mapping
+import skunk.AppliedFragment
 
 final class ArrayJoinSpec extends SkunkDatabaseSuite with SqlArrayJoinSpec {
   lazy val mapping = new SkunkTestMapping(pool) with SqlArrayJoinMapping[IO]
@@ -152,4 +153,11 @@ final class WorldCompilerSpec extends SkunkDatabaseSuite with SqlWorldCompilerSp
 
   def simpleFilteredQuerySql: String =
     "SELECT city.id, city.name FROM city WHERE (city.name ILIKE $1)"
+}
+
+final class RobSpec extends SkunkDatabaseSuite with SqlRobSpec {
+  lazy val mapping = new SkunkTestMapping(pool) with SqlRobMapping[IO] {
+    override def fetch(fragment: AppliedFragment, codecs: List[(Boolean, (skunk.Codec[_], Boolean))]): IO[Vector[Array[Any]]] =
+      IO.println(fragment.fragment.sql) >> super.fetch(fragment, codecs)
+  }
 }

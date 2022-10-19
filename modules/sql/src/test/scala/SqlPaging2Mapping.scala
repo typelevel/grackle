@@ -18,6 +18,7 @@ import Value.IntValue
 // This implmentation will only ever fetch up to the requested number
 // of items, and will include an SQL COUNT if the query includes `hasMore`.
 trait SqlPaging2Mapping[F[_]] extends SqlTestMapping[F] {
+  
   object root extends RootDef {
     val numCountries = col("num_countries", int8)
   }
