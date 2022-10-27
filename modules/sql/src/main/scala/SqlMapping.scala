@@ -936,6 +936,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
     /** Is the supplied column an immediate component of this `TableExpr`? */
     def directlyOwns(col: SqlColumn): Boolean = this == col.owner
+
     /** Find the innermost owner of the supplied column within this `TableExpr` */
     def findNamedOwner(col: SqlColumn): Option[TableExpr]
 
@@ -1289,6 +1290,40 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       loop(pred)
     }
 
+    /** Embed all terms in the given `Predicate` in the given table and parent table */
+    def embedWhereTerms(table: TableExpr, parentTable: TableRef, pred: Predicate): Predicate = {
+      def loop[T](term: T): T =
+        (term match {
+          case _: PathTerm      => SqlColumnTerm(embedTerm(table, parentTable, term.asInstanceOf[Term[_]]))
+          case _: SqlColumnTerm => SqlColumnTerm(embedTerm(table, parentTable, term.asInstanceOf[Term[_]]))
+          case Const(_)         => term
+          case And(x, y)        => And(loop(x), loop(y))
+          case Or(x, y)         => Or(loop(x), loop(y))
+          case Not(x)           => Not(loop(x))
+          case e@Eql(x, y)      => e.subst(loop(x), loop(y))
+          case n@NEql(x, y)     => n.subst(loop(x), loop(y))
+          case c@Contains(x, y) => c.subst(loop(x), loop(y))
+          case l@Lt(x, y)       => l.subst(loop(x), loop(y))
+          case l@LtEql(x, y)    => l.subst(loop(x), loop(y))
+          case g@Gt(x, y)       => g.subst(loop(x), loop(y))
+          case g@GtEql(x, y)    => g.subst(loop(x), loop(y))
+          case IsNull(x, y)     => IsNull(loop(x), y)
+          case i@In(x, _)       => i.subst(loop(x))
+          case AndB(x, y)       => AndB(loop(x), loop(y))
+          case OrB(x, y)        => OrB(loop(x), loop(y))
+          case XorB(x, y)       => XorB(loop(x), loop(y))
+          case NotB(x)          => NotB(loop(x))
+          case Matches(x, y)    => Matches(loop(x), y)
+          case StartsWith(x, y) => StartsWith(loop(x), y)
+          case ToUpperCase(x)   => ToUpperCase(loop(x))
+          case ToLowerCase(x)   => ToLowerCase(loop(x))
+          case Like(x, y, z)    => Like(loop(x), y, z)
+          case _                => term
+        }).asInstanceOf[T]
+
+      loop(pred)
+    }
+
     /** Yields a copy of the given `Predicate` with all occurences of `from` replaced by `to` */
     def substWhereTables(from: TableExpr, to: TableExpr, pred: Predicate): Predicate = {
       def loop[T](term: T): T =
@@ -1479,6 +1514,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     def contextualiseOrderTerms[T](context: Context, owner: ColumnOwner, os: OrderSelection[T]): OrderSelection[T] =
       os.subst(SqlColumnTerm(contextualiseTerm(context, owner, os.term)).asInstanceOf[Term[T]])
 
+    def embedOrderTerms[T](table: TableExpr, parentTable: TableRef, os: OrderSelection[T]): OrderSelection[T] =
+      os.subst(SqlColumnTerm(embedTerm(table, parentTable, os.term)).asInstanceOf[Term[T]])
+
     /** Yields a copy of the given `OrderSelection` with all occurences of `from` replaced by `to` */
     def substOrderTables[T](from: TableExpr, to: TableExpr, os: OrderSelection[T]): OrderSelection[T] =
       os.term match {
@@ -1519,6 +1557,21 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
         case other =>
           sys.error(s"Expected contextualisable term but found $other")
+      }
+    }
+
+    def embedColumn(table: TableExpr, parentTable: TableRef, col: SqlColumn): SqlColumn =
+      if(table.owns(col)) SqlColumn.EmbeddedColumn(parentTable, col)
+      else col
+
+    def embedTerm(table: TableExpr, parentTable: TableRef, term: Term[_]): SqlColumn = {
+      term match {
+        case SqlColumnTerm(col) => embedColumn(table, parentTable, col)
+        case pathTerm: PathTerm =>
+          columnForSqlTerm(table.context, pathTerm).map(embedColumn(table, parentTable, _)).getOrElse(sys.error(s"No column for term $pathTerm"))
+
+        case other =>
+          sys.error(s"Expected embeddable term but found $other")
       }
     }
 
@@ -1725,10 +1778,15 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                   join.copy(parent = parentTable, on = newOn)
                 } else join
               }
+              val embeddedWheres = wheres.map(pred => embedWhereTerms(table, parentTable, pred))
+              val embeddedOrders = orders.map(os => embedOrderTerms(table, parentTable, os))
+
               copy(
                 context = parentContext,
                 table = parentTable,
                 cols = embeddedCols,
+                wheres = embeddedWheres,
+                orders = embeddedOrders,
                 joins = embeddedJoins
               )
 
@@ -2643,8 +2701,29 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           }
         }
 
+        def isEmbedded(context: Context, fieldName: String): Boolean =
+          fieldMapping(context, fieldName) match {
+            case Some(_: CursorFieldJson) | Some(SqlObject(_, Nil)) => true
+            case _ => false
+          }
+
+        def unembed(context: Context): Context = {
+          if(context.path.sizeCompare(1) <= 0) context
+          else {
+            val parentContext = context.copy(path = context.path.tail, resultPath = context.resultPath.tail, typePath = context.typePath.tail)
+            val fieldName = context.path.head
+
+            if(isEmbedded(parentContext, fieldName))
+              unembed(parentContext)
+            else
+              context
+          }
+        }
+
         /* Compute the set of parent constraints to be inherited by the query for the value for `fieldName` */
         def parentConstraintsFromJoins(parentContext: Context, fieldName: String, resultName: String): List[(SqlColumn, SqlColumn)] = {
+          val tableContext = unembed(parentContext)
+
           fieldMapping(parentContext, fieldName) match {
             case Some(SqlObject(_, Nil)) => Nil
 
@@ -2653,14 +2732,14 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 parentContext.forField(fieldName, resultName).
                   getOrElse(sys.error(s"No field '$fieldName' of type ${context.tpe}"))
 
-              List((SqlColumn.TableColumn(parentContext, join.parent, Nil), SqlColumn.TableColumn(childContext, join.child, Nil)))
+              List((SqlColumn.TableColumn(tableContext, join.parent, Nil), SqlColumn.TableColumn(childContext, join.child, Nil)))
 
             case Some(SqlObject(_, joins)) =>
               val init =
                 joins.init.map { join =>
-                  val parentTable = TableRef(parentContext, join.parent.table)
+                  val parentTable = TableRef(tableContext, join.parent.table)
                   val parentCol = SqlColumn.TableColumn(parentTable, join.parent, Nil)
-                  val childTable = TableRef(parentContext, join.child.table)
+                  val childTable = TableRef(tableContext, join.child.table)
                   val childCol = SqlColumn.TableColumn(childTable, join.child, Nil)
                   (parentCol, childCol)
                 }
@@ -2671,7 +2750,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                     getOrElse(sys.error(s"No field '$fieldName' of type ${context.tpe}"))
 
                 val lastJoin = joins.last
-                val parentTable = TableRef(parentContext, lastJoin.parent.table)
+                val parentTable = TableRef(tableContext, lastJoin.parent.table)
                 val parentCol = SqlColumn.TableColumn(parentTable, lastJoin.parent, Nil)
                 val childTable = TableRef(childContext, lastJoin.child.table)
                 val childCol = SqlColumn.TableColumn(childTable, lastJoin.child, Nil)
