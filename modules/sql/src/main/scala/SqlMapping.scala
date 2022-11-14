@@ -8,7 +8,7 @@ import scala.annotation.tailrec
 import scala.collection.Factory
 
 import cats.Monad
-import cats.data.{NonEmptyList, State}
+import cats.data.{Chain, Ior, NonEmptyChain, NonEmptyList, State}
 import cats.implicits._
 import io.circe.Json
 import org.tpolecat.sourcepos.SourcePos
@@ -669,18 +669,48 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         case _ => false
       }
 
+    def mkGroup(queries: List[Query]): Query =
+      if(queries.isEmpty) Empty
+      else if(queries.sizeCompare(1) == 0) queries.head
+      else Group(queries)
+
+    def mkCursor(query: Query): F[Result[(Query, SqlCursor)]] =
+      MappedQuery(query, context).traverse { mapped =>
+        for {
+          table <- mapped.fetch
+          _     <- monitor.queryMapped(query, mapped.fragment, table.numRows, table.numCols)
+        } yield {
+          val stripped: Query = stripCompiled(query, context)
+          val cursor: SqlCursor = SqlCursor(context, table, mapped, None, env)
+          (stripped, cursor)
+        }
+      }
+
+    def combineAll(results: List[Result[(Query, SqlCursor)]]): (Chain[Problem], List[Query], List[SqlCursor]) =
+      results.foldLeft((Chain.empty[Problem], List.empty[Query], List.empty[SqlCursor])) {
+        case ((ps, qs, cs), elem) =>
+          elem match {
+            case Ior.Left(ps0) => (ps0.toChain ++ ps, qs, cs)
+            case Ior.Right((q, c)) => (ps, q :: qs, c :: cs)
+            case Ior.Both(ps0, (q, c)) => (ps0.toChain ++ ps, q :: qs, c :: cs)
+          }
+      }
+
     val (sqlRoots, otherRoots) = rootQueries.partition(isLocallyMapped(context, _))
 
-    val sqlQuery = Group(sqlRoots)
+    if(sqlRoots.sizeCompare(1) <= 0)
+      mkCursor(mkGroup(sqlRoots)).map(_.map {
+        case (sq, sc) => (mergeQueries(sq :: otherRoots), sc: Cursor)
+      })
+    else {
+      sqlRoots.traverse(mkCursor).map { qcs =>
+        val (problems, queries, cursors) = combineAll(qcs)
 
-    MappedQuery(sqlQuery, context).traverse { mapped =>
-      for {
-        table <- mapped.fetch
-        _     <- monitor.queryMapped(query, mapped.fragment, table.numRows, table.numCols)
-      } yield {
-        val stripped: Query = stripCompiled(query, context)
-        val cursor: Cursor = SqlCursor(context, table, mapped, None, env)
-        (mergeQueries(stripped :: otherRoots), cursor)
+        val mergedQuery = mergeQueries(queries ++ otherRoots)
+        val cursor = MultiRootCursor(cursors)
+        NonEmptyChain.fromChain(problems).map(problems0 =>
+          Ior.Both(problems0, (mergedQuery, cursor))
+        ).getOrElse(Result((mergedQuery, cursor)))
       }
     }
   }
@@ -2663,6 +2693,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
     /** Return the number of subobjects of the context type contained in `table`. */
     def count(context: Context, table: Table): Int
+
+    /** Does this query contain a root with the given possibly aliased name */
+    def containsRoot(fieldName: String, resultName: Option[String]): Boolean
   }
 
   object MappedQuery {
@@ -3053,6 +3086,11 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       def count(context: Context, table: Table): Int =
         table.count(keyColumnsForType(context))
 
+      def containsRoot(fieldName: String, resultName: Option[String]): Boolean = {
+        val name = resultName.orElse(Some(fieldName))
+        query.cols.exists(_.resultPath.lastOption == name)
+      }
+
       def keyColumnsForType(context: Context): List[Int] = {
         val key = context.resultPath
         keyColumnsMemo.get(context.resultPath) match {
@@ -3096,6 +3134,8 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       def group(context: Context, table: Table): Iterator[Table] = Iterator.empty
 
       def count(context: Context, table: Table): Int = 0
+
+      def containsRoot(fieldName: String, resultName: Option[String]): Boolean = false
     }
   }
 
@@ -3251,7 +3291,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
   case class SqlCursor(context: Context, focus: Any, mapped: MappedQuery, parent: Option[Cursor], env: Env) extends Cursor {
     assert(focus != Table.EmptyTable || context.tpe.isNullable || context.tpe.isList || schema.isRootType(context.tpe) || parentTableForType(context).map(_.isRoot).getOrElse(false))
 
-    def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
+    def withEnv(env0: Env): SqlCursor = copy(env = env.add(env0))
 
     def mkChild(context: Context = context, focus: Any = focus): SqlCursor =
       SqlCursor(context, focus, mapped, Some(this), Env.empty)
@@ -3330,5 +3370,19 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
       mkCursorForField(this, fieldName, resultName)
+  }
+
+  case class MultiRootCursor(roots: List[SqlCursor]) extends Cursor.AbstractCursor {
+    def parent: Option[Cursor] = None
+    def env: Env = Env.EmptyEnv
+    def focus: Any = mkErrorResult(s"MultiRootCursor cursor has no focus")
+    def withEnv(env0: Env): MultiRootCursor = copy(roots = roots.map(_.withEnv(env0)))
+    def context: Context = roots.head.context
+
+    override def hasField(fieldName: String): Boolean = roots.exists(_.hasField(fieldName))
+    override def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
+      roots.find(_.mapped.containsRoot(fieldName, resultName)).map(_.field(fieldName, resultName)).
+        getOrElse(mkErrorResult(s"No field '$fieldName' for type ${context.tpe}"))
+    }
   }
 }
