@@ -18,7 +18,7 @@ val log4catsVersion             = "2.4.0"
 val skunkVersion                = "0.3.1"
 val shapeless2Version           = "2.3.10"
 val shapeless3Version           = "3.1.0"
-val sourcePosVersion            = "1.0.1"
+val sourcePosVersion            = "1.1.0"
 val testContainersVersion       = "0.40.10"
 val typenameVersion             = "1.0.0"
 
