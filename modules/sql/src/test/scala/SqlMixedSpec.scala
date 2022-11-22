@@ -127,4 +127,35 @@ trait SqlMixedSpec extends AnyFunSuite {
 
     assertWeaklyEqual(res, expected)
   }
+
+  test("mixed query 2") {
+    val query = """
+      query {
+        movie(id: "6a7837fc-b463-4d32-b628-0f4b3065cb21") {
+          title
+          bar2 {
+            message
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "movie" : {
+            "title" : "Celine et Julie Vont en Bateau",
+            "bar2" : {
+               "message": "Hello movie world"
+            }
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    println(res.spaces2)
+
+    assertWeaklyEqual(res, expected)
+  }
 }
