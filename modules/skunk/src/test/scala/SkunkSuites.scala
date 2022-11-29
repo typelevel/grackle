@@ -29,6 +29,10 @@ final class ComposedWorldSpec extends SkunkDatabaseSuite with SqlComposedWorldSp
   lazy val mapping = new SqlComposedMapping(new SkunkTestMapping(pool) with SqlWorldMapping[IO], CurrencyMapping[IO])
 }
 
+final class CompositeKeySpec extends SkunkDatabaseSuite with SqlCompositeKeySpec {
+  lazy val mapping = new SkunkTestMapping(pool) with SqlCompositeKeyMapping[IO]
+}
+
 final class CursorJsonSpec extends SkunkDatabaseSuite with SqlCursorJsonSpec {
   lazy val mapping = new SkunkTestMapping(pool) with SqlCursorJsonMapping[IO]
 }

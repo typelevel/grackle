@@ -560,7 +560,45 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
   }
 
   /** A pair of `ColumnRef`s, representing a SQL join. */
-  case class Join(parent: ColumnRef, child: ColumnRef)
+  case class Join(conditions: List[(ColumnRef, ColumnRef)]) {
+    def parentTable(parentContext: Context): TableRef =
+      TableRef(parentContext, conditions.head._1.table)
+
+    def childTable(parentContext: Context): TableRef =
+      TableRef(parentContext, conditions.head._2.table)
+
+    def parentCols(parentTable0: TableExpr): List[SqlColumn] =
+      toSqlColumns(parentTable0, conditions.map(_._1))
+
+    def childCols(childTable0: TableExpr): List[SqlColumn] =
+      toSqlColumns(childTable0, conditions.map(_._2))
+
+    def toSqlColumns(parentTable0: TableExpr, childTable0: TableExpr): List[(SqlColumn, SqlColumn)] = {
+      parentCols(parentTable0).zip(childCols(childTable0))
+    }
+
+    def toSqlColumns(parentContext: Context, childContext: Context): List[(SqlColumn, SqlColumn)] =
+      toSqlColumns(parentTable(parentContext), childTable(childContext))
+
+    def toSqlJoin(parentTable0: TableExpr, childTable0: TableExpr, inner: Boolean): SqlJoin = {
+      val on = toSqlColumns(parentTable0, childTable0)
+      SqlJoin(parentTable0, childTable0, on, inner)
+    }
+
+    def toSqlJoin(parentContext: Context, childContext: Context, inner: Boolean): SqlJoin =
+      toSqlJoin(parentTable(parentContext), childTable(childContext), inner)
+
+    def toConstraints(parentContext: Context, childContext: Context): List[(SqlColumn, SqlColumn)] =
+      parentCols(parentTable(parentContext)).zip(childCols(childTable(childContext)))
+
+    def toSqlColumns(table: TableExpr, cols: List[ColumnRef]): List[SqlColumn] =
+      cols.map(col => SqlColumn.TableColumn(table, col, Nil))
+  }
+
+  object Join {
+    def apply(parent: ColumnRef, child: ColumnRef): Join =
+      new Join(List((parent, child)))
+  }
 
   /**
     * Operators which can be compiled to SQL are eliminated here, partly to avoid duplicating
@@ -1113,7 +1151,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       offset: Option[Int],
       limit: Option[Int],
       predIsOneToOne: Boolean,
-      parentConstraints: List[(SqlColumn, SqlColumn)]
+      parentConstraints: List[List[(SqlColumn, SqlColumn)]]
     ): Option[SqlQuery]
 
     /** Yields an equivalent query encapsulating this query as a subquery */
@@ -1673,64 +1711,37 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
         val inner = !context.tpe.isNullable && !context.tpe.isList
 
-        def mkSubquery(multiTable: Boolean, nested: SqlSelect, joinCol: SqlColumn, suffix: String): SqlSelect = {
+        def mkSubquery(multiTable: Boolean, nested: SqlSelect, joinCols: List[SqlColumn], suffix: String): SqlSelect = {
           def isMergeable: Boolean =
             !multiTable && !nested.joins.exists(_.isPredicate) && nested.wheres.isEmpty && nested.orders.isEmpty && nested.offset.isEmpty && nested.limit.isEmpty && !nested.isDistinct
 
           if(isMergeable) nested
           else {
-            val exposeCol = nested.table match {
-              case _: TableRef => joinCol :: Nil
+            val exposeCols = nested.table match {
+              case _: TableRef => joinCols
               case _ => Nil
             }
-            val base0 = nested.copy(cols = (exposeCol ++ nested.cols).distinct).toSubquery(syntheticName(suffix), lateral)
+            val base0 = nested.copy(cols = (exposeCols ++ nested.cols).distinct).toSubquery(syntheticName(suffix), lateral)
             base0.copy(cols = nested.cols.map(_.derive(base0.table)))
           }
         }
 
         def mkJoins(joins0: List[Join], multiTable: Boolean): SqlSelect = {
-          val base = mkSubquery(multiTable, this, SqlColumn.TableColumn(table, joins0.last.child, Nil), "_nested")
+          val lastJoin = joins0.last
+          val base = mkSubquery(multiTable, this, lastJoin.childCols(table), "_nested")
 
           val initialJoins =
-            joins0.init.map { j =>
-              val parentTable = TableRef(parentContext, j.parent.table)
-              val parentCol = SqlColumn.TableColumn(parentTable, j.parent, Nil)
-              val childTable = TableRef(parentContext, j.child.table)
-              val childCol = SqlColumn.TableColumn(childTable, j.child, Nil)
-              SqlJoin(
-                parentTable,
-                childTable,
-                List((parentCol, childCol)),
-                inner
-              )
-            }
+            joins0.init.map(_.toSqlJoin(parentContext, parentContext, inner))
 
           val finalJoins = {
-            val lastJoin = joins0.last
-            val parentTable = TableRef(parentContext, lastJoin.parent.table)
-            val parentCol = SqlColumn.TableColumn(parentTable, lastJoin.parent, Nil)
+            val parentTable = lastJoin.parentTable(parentContext)
 
             if(!isAssociative(context)) {
-              val childCol = SqlColumn.TableColumn(base.table, lastJoin.child, Nil)
-              val finalJoin =
-                SqlJoin(
-                  parentTable,
-                  base.table,
-                  List((parentCol, childCol)),
-                  inner
-                )
+              val finalJoin = lastJoin.toSqlJoin(parentTable, base.table, inner)
               finalJoin :: Nil
             } else {
               val assocTable = TableExpr.DerivedTableRef(context, Some(base.table.name+"_assoc"), base.table, true)
-              val childCol = SqlColumn.TableColumn(assocTable, lastJoin.child, Nil)
-
-              val assocJoin =
-                SqlJoin(
-                  parentTable,
-                  assocTable,
-                  List((parentCol, childCol)),
-                  inner
-                )
+              val assocJoin = lastJoin.toSqlJoin(parentTable, assocTable, inner)
 
               val finalJoin =
                 SqlJoin(
@@ -1795,18 +1806,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
             case Some(SqlObject(_, firstJoin :: tail)) =>
               val nested = mkJoins(tail, true)
-              val base = mkSubquery(false, nested, SqlColumn.TableColumn(nested.table, firstJoin.child, Nil), "_multi")
+              val base = mkSubquery(false, nested, firstJoin.childCols(nested.table), "_multi")
 
-              val initialJoin = {
-                val parentCol = SqlColumn.TableColumn(parentTable, firstJoin.parent, Nil)
-                val childCol = SqlColumn.TableColumn(base.table, firstJoin.child, Nil)
-                  SqlJoin(
-                    parentTable,
-                    base.table,
-                    List((parentCol, childCol)),
-                    inner
-                  )
-              }
+              val initialJoin = firstJoin.toSqlJoin(parentTable, base.table, inner)
 
               SqlSelect(
                 context = parentContext,
@@ -1838,7 +1840,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         offset0: Option[Int],
         limit0: Option[Int],
         predIsOneToOne: Boolean,
-        parentConstraints: List[(SqlColumn, SqlColumn)]
+        parentConstraints: List[List[(SqlColumn, SqlColumn)]]
       ): Option[SqlSelect] = {
         assert(orders.isEmpty && offset.isEmpty && limit.isEmpty && !isDistinct)
         assert(filter.isDefined || orderBy.isDefined || offset0.isDefined || limit0.isDefined)
@@ -1850,9 +1852,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         val orderCols0 = oss.map(os => columnForSqlTerm(context, os.term).getOrElse(sys.error(s"No column for term ${os.term}")))
         val orderCols = orderCols0.map(col => orderJoins.collectFirstSome(_.findNamedOwner(col)).map(owner => col.in(owner)).getOrElse(col.in(table)))
 
-        val pred0 = parentConstraints.map {
+        val pred0 = parentConstraints.flatMap(_.map {
           case (p, c) => Eql(p.toTerm, c.toTerm)
-        } ++ pred
+        }) ++ pred
 
         val useWindow = parentConstraints.nonEmpty && (offset0.isDefined || limit0.isDefined)
         val useFlattenedWindow = true
@@ -1871,7 +1873,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               case (None, None) => True
             }
 
-          val (_, partitionBy) = parentConstraints.head
+          val partitionBy = parentConstraints.head.map(_._2)
 
           if(oneToOne && predIsOneToOne) {
             // Case 1) one row is one object in this context
@@ -1882,17 +1884,17 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             val orders = oss0 ++ keyCols.diff(orderCols).map(col => OrderSelection(col.toTerm, true, true))
 
             // We could use row_number in this case
-            val partitionCol = SqlColumn.PartitionColumn(table, "row_item", partitionBy :: Nil, orders)
-            val exposeCol = parentConstraints.lastOption.map {
+            val partitionCol = SqlColumn.PartitionColumn(table, "row_item", partitionBy, orders)
+            val exposeCols = parentConstraints.lastOption.getOrElse(Nil).map {
               case (_, col) => findNamedOwner(col).map(owner => col.derive(owner)).getOrElse(col.derive(table))
-            }.toList
+            }
 
             val selWithRowItem =
               SqlSelect(
                 context = context,
                 withs = withs,
                 table = table,
-                cols = (partitionCol :: exposeCol ++ cols ++ orderCols).distinct,
+                cols = (partitionCol :: exposeCols ++ cols ++ orderCols).distinct,
                 joins = (filterJoins ++ orderJoins ++ joins).distinct,
                 wheres = (pred1 ++ nonNullKeys ++ wheres).distinct,
                 orders = Nil,
@@ -1934,17 +1936,17 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             val oss0 = oss.map(os => contextualiseOrderTerms(context, table, os))
             val orders = oss0 ++ keyCols.diff(orderCols).map(col => OrderSelection(col.toTerm, true, true))
 
-            val partitionCol = SqlColumn.PartitionColumn(table, "row_item", partitionBy :: Nil, orders)
-            val exposeCol = parentConstraints.lastOption.map {
+            val partitionCol = SqlColumn.PartitionColumn(table, "row_item", partitionBy, orders)
+            val exposeCols = parentConstraints.lastOption.getOrElse(Nil).map {
               case (_, col) => findNamedOwner(col).map(owner => col.derive(owner)).getOrElse(col.derive(table))
-            }.toList
+            }
 
             val selWithRowItem =
               SqlSelect(
                 context = context,
                 withs = withs,
                 table = table,
-                cols = (partitionCol :: exposeCol ++ cols ++ orderCols).distinct,
+                cols = (partitionCol :: exposeCols ++ cols ++ orderCols).distinct,
                 joins = joins,
                 wheres = (pred1 ++ nonNullKeys ++ wheres).distinct,
                 orders = Nil,
@@ -1990,17 +1992,17 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             val oss0 = oss.map(os => contextualiseOrderTerms(context, baseRef, os))
             val orders = oss0 ++ keyCols.diff(orderCols).map(col => OrderSelection(col.derive(baseRef).toTerm, true, true))
 
-            val partitionCol = SqlColumn.PartitionColumn(table, "row_item", partitionBy :: Nil, orders)
-            val exposeCol = parentConstraints.lastOption.map {
+            val partitionCol = SqlColumn.PartitionColumn(table, "row_item", partitionBy, orders)
+            val exposeCols = parentConstraints.lastOption.getOrElse(Nil).map {
               case (_, col) => baseRef.findNamedOwner(col).map(owner => col.derive(owner)).getOrElse(col.derive(baseRef))
-            }.toList
+            }
 
             val selWithRowItem =
               SqlSelect(
                 context = context,
                 withs = Nil,
                 table = baseRef,
-                cols = partitionCol :: exposeCol ++ predCols,
+                cols = partitionCol :: exposeCols ++ predCols,
                 joins = (filterJoins ++ orderJoins).distinct,
                 wheres = (pred1 ++ nonNullKeys ++ wheres).distinct,
                 orders = Nil,
@@ -2063,18 +2065,18 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               keyCols.map(col => OrderSelection(col.toTerm, true, true)) ++
               oss0.filterNot(os => keyCols.contains(columnForSqlTerm(context, os.term).getOrElse(sys.error(s"No column for term ${os.term}"))))
 
-            val partitionCol = SqlColumn.PartitionColumn(table, "row_item", partitionBy :: Nil, orders)
-            val distPartitionCol = SqlColumn.PartitionColumn(table, "row_item_dist", partitionBy :: keyCols, distOrders)
-            val exposeCol = parentConstraints.lastOption.map {
+            val partitionCol = SqlColumn.PartitionColumn(table, "row_item", partitionBy, orders)
+            val distPartitionCol = SqlColumn.PartitionColumn(table, "row_item_dist", partitionBy ++ keyCols, distOrders)
+            val exposeCols = parentConstraints.lastOption.getOrElse(Nil).map {
               case (_, col) => findNamedOwner(col).map(owner => col.derive(owner)).getOrElse(col.derive(table))
-            }.toList
+            }
 
             val selWithRowItem =
               SqlSelect(
                 context = context,
                 withs = withs,
                 table = table,
-                cols = (partitionCol :: distPartitionCol :: exposeCol ++ cols ++ orderCols).distinct,
+                cols = (partitionCol :: distPartitionCol :: exposeCols ++ cols ++ orderCols).distinct,
                 joins = joins,
                 wheres = (pred1 ++ nonNullKeys ++ wheres).distinct,
                 orders = Nil,
@@ -2125,19 +2127,19 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               keyCols.map(col => OrderSelection(col.derive(baseRef).toTerm, true, true)) ++
               oss0.filterNot(os => keyCols.contains(columnForSqlTerm(context, os.term).getOrElse(sys.error(s"No column for term ${os.term}"))))
 
-            val partitionCol = SqlColumn.PartitionColumn(table, "row_item", partitionBy :: Nil, orders)
-            val distPartitionCol = SqlColumn.PartitionColumn(table, "row_item_dist", partitionBy :: predCols, distOrders)
+            val partitionCol = SqlColumn.PartitionColumn(table, "row_item", partitionBy, orders)
+            val distPartitionCol = SqlColumn.PartitionColumn(table, "row_item_dist", partitionBy ++ predCols, distOrders)
 
-            val exposeCol = parentConstraints.lastOption.map {
+            val exposeCols = parentConstraints.lastOption.getOrElse(Nil).map {
               case (_, col) => baseRef.findNamedOwner(col).map(owner => col.derive(owner)).getOrElse(col.derive(baseRef))
-            }.toList
+            }
 
             val selWithRowItem =
               SqlSelect(
                 context = context,
                 withs = Nil,
                 table = baseRef,
-                cols = partitionCol :: distPartitionCol :: exposeCol ++ predCols,
+                cols = partitionCol :: distPartitionCol :: exposeCols ++ predCols,
                 joins = (filterJoins ++ orderJoins).distinct,
                 wheres = (pred1 ++ nonNullKeys ++ wheres).distinct,
                 orders = Nil,
@@ -2493,7 +2495,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         offset: Option[Int],
         limit: Option[Int],
         predIsOneToOne: Boolean,
-        parentConstraints: List[(SqlColumn, SqlColumn)]
+        parentConstraints: List[List[(SqlColumn, SqlColumn)]]
       ): Option[SqlQuery] = {
         val withFilter =
           (filter, limit) match {
@@ -2666,7 +2668,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
   object MappedQuery {
     /** Compile the given GraphQL query to SQL in the given `Context` */
     def apply(q: Query, context: Context): Result[MappedQuery] = {
-      def loop(q: Query, context: Context, parentConstraints: List[(SqlColumn, SqlColumn)], exposeJoins: Boolean): Option[SqlQuery] = {
+      def loop(q: Query, context: Context, parentConstraints: List[List[(SqlColumn, SqlColumn)]], exposeJoins: Boolean): Option[SqlQuery] = {
         lazy val parentTable: TableRef =
           parentTableForType(context).getOrElse(sys.error(s"No parent table for type ${context.tpe}"))
 
@@ -2721,57 +2723,42 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         }
 
         /* Compute the set of parent constraints to be inherited by the query for the value for `fieldName` */
-        def parentConstraintsFromJoins(parentContext: Context, fieldName: String, resultName: String): List[(SqlColumn, SqlColumn)] = {
+        // Either return List[List[(SqlColumn, SqlColumn)]] or maybe List[SqlJoin]?
+        def parentConstraintsFromJoins(parentContext: Context, fieldName: String, resultName: String): List[List[(SqlColumn, SqlColumn)]] = {
           val tableContext = unembed(parentContext)
+          def childContext =
+            parentContext.forField(fieldName, resultName).
+              getOrElse(sys.error(s"No field '$fieldName' of type ${context.tpe}"))
 
           fieldMapping(parentContext, fieldName) match {
             case Some(SqlObject(_, Nil)) => Nil
 
             case Some(SqlObject(_, join :: Nil)) =>
-              val childContext =
-                parentContext.forField(fieldName, resultName).
-                  getOrElse(sys.error(s"No field '$fieldName' of type ${context.tpe}"))
-
-              List((SqlColumn.TableColumn(tableContext, join.parent, Nil), SqlColumn.TableColumn(childContext, join.child, Nil)))
+              List(join.toConstraints(tableContext, childContext))
 
             case Some(SqlObject(_, joins)) =>
-              val init =
-                joins.init.map { join =>
-                  val parentTable = TableRef(tableContext, join.parent.table)
-                  val parentCol = SqlColumn.TableColumn(parentTable, join.parent, Nil)
-                  val childTable = TableRef(tableContext, join.child.table)
-                  val childCol = SqlColumn.TableColumn(childTable, join.child, Nil)
-                  (parentCol, childCol)
-                }
-
-              val last = {
-                val childContext =
-                  parentContext.forField(fieldName, resultName).
-                    getOrElse(sys.error(s"No field '$fieldName' of type ${context.tpe}"))
-
-                val lastJoin = joins.last
-                val parentTable = TableRef(tableContext, lastJoin.parent.table)
-                val parentCol = SqlColumn.TableColumn(parentTable, lastJoin.parent, Nil)
-                val childTable = TableRef(childContext, lastJoin.child.table)
-                val childCol = SqlColumn.TableColumn(childTable, lastJoin.child, Nil)
-                (parentCol, childCol)
-              }
-
+              val init = joins.init.map(_.toConstraints(tableContext, tableContext))
+              val last = joins.last.toConstraints(tableContext, childContext)
               init ++ (last :: Nil)
 
             case _ => Nil
           }
         }
 
-        def parentConstraintsToSqlJoins(parentConstraints: List[(SqlColumn, SqlColumn)]): List[SqlJoin] =
+        def parentConstraintsToSqlJoins(parentConstraints: List[List[(SqlColumn, SqlColumn)]]): List[SqlJoin] =
           if (parentConstraints.sizeCompare(1) <= 0) Nil
           else {
-            val (p, c) = parentConstraints.last
+            val constraints = parentConstraints.last
+            val (p, c) = constraints.head
             (p.owner, c.owner) match {
               case (pt: TableExpr, _) =>
-                // Intentionally reversed
-                val fc = c.in(parentTable)
-                List(SqlJoin(parentTable, pt, List((fc, p)), true))
+                val on = constraints.map {
+                  case (p, c) =>
+                    // Intentionally reversed
+                    val fc = c.in(parentTable)
+                    (fc, p)
+                }
+                List(SqlJoin(parentTable, pt, on, true))
               case _ => sys.error(s"Unnamed owner(s) for parent constraint ($p, $c)")
             }
           }
@@ -2782,8 +2769,8 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             columnsForLeaf(context, fieldName) match {
               case Nil => None
               case cols =>
-                val constraintCol = if(exposeJoins) parentConstraints.lastOption.map(_._2).toList else Nil
-                val extraCols = keyColumnsForType(context) ++ constraintCol
+                val constraintCols = if(exposeJoins) parentConstraints.lastOption.getOrElse(Nil).map(_._2) else Nil
+                val extraCols = keyColumnsForType(context) ++ constraintCols
                 val extraJoins = parentConstraintsToSqlJoins(parentConstraints)
                 Some(SqlSelect(context, Nil, parentTable, (cols ++ extraCols).distinct, extraJoins, Nil, Nil, None, None, Nil, true, false))
               }
@@ -2795,8 +2782,8 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             else {
               val parentConstraints0 = parentConstraintsFromJoins(context, fieldName, resultName)
               val keyCols = keyColumnsForType(context)
-              val constraintCol = if(exposeJoins) parentConstraints.lastOption.map(_._2).toList else Nil
-              val extraCols = keyCols ++ constraintCol
+              val constraintCols = if(exposeJoins) parentConstraints.lastOption.getOrElse(Nil).map(_._2) else Nil
+              val extraCols = keyCols ++ constraintCols
               val extraJoins = parentConstraintsToSqlJoins(parentConstraints)
               loop(child, fieldContext, parentConstraints0, false).map { sq =>
                 if(parentTable.isRoot) {
