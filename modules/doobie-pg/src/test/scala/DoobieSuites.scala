@@ -29,6 +29,10 @@ final class ComposedWorldSpec extends DoobieDatabaseSuite with SqlComposedWorldS
   lazy val mapping = new SqlComposedMapping(new DoobieTestMapping(xa) with SqlWorldMapping[IO], CurrencyMapping[IO])
 }
 
+final class CompositeKeySpec extends DoobieDatabaseSuite with SqlCompositeKeySpec {
+  lazy val mapping = new DoobieTestMapping(xa) with SqlCompositeKeyMapping[IO]
+}
+
 final class CursorJsonSpec extends DoobieDatabaseSuite with SqlCursorJsonSpec {
   lazy val mapping = new DoobieTestMapping(xa) with SqlCursorJsonMapping[IO]
 }
