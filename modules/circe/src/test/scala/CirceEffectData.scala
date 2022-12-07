@@ -53,7 +53,7 @@ class TestCirceEffectMapping[F[_]: Sync] extends CirceMapping[F] {
             )
           ),
 
-          // Compute a Json, let the implemenation handle the cursor
+          // Compute a Json, let the implementation handle the cursor
           RootEffect.computeJson("bar")((_, _, _) =>
             Sync[F].delay(println(s"!!! a side effect! (2) !!!")).as(
               Result(Json.obj(
@@ -63,7 +63,7 @@ class TestCirceEffectMapping[F[_]: Sync] extends CirceMapping[F] {
             )
           ),
 
-          // Compute an encodable value, let the implemenation handle json and the cursor
+          // Compute an encodable value, let the implementation handle json and the cursor
           RootEffect.computeEncodable("baz")((_, _, _) =>
             Sync[F].delay(println(s"!!! a side effect! (3) !!!")).as(
               Result(Struct(44, "hee"))
