@@ -38,6 +38,9 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
           case _ =>
             mkErrorResult(s"No field '$fieldName' for type ${context.tpe}")
         }
+      case (Some(RootEffect(_, _)), json: Json) =>
+        val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
+        CirceCursor(fieldContext, json, Some(parent), parent.env).rightIor
       case _ =>
         super.mkCursorForField(parent, fieldName, resultName)
     }
