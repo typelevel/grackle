@@ -6,6 +6,7 @@ package circetests
 
 import cats.implicits._
 import cats.effect.Sync
+import io.circe.Encoder
 import io.circe.Json
 
 import edu.gemini.grackle.circe.CirceMapping
@@ -16,6 +17,8 @@ class TestCirceEffectMapping[F[_]: Sync] extends CirceMapping[F] {
     schema"""
       type Query { 
         foo: Struct!
+        bar: Struct!
+        baz: Struct!
       }
       type Struct {
         n: Int!
@@ -26,10 +29,19 @@ class TestCirceEffectMapping[F[_]: Sync] extends CirceMapping[F] {
   val QueryType = schema.ref("Query")
   val StructType = schema.ref("Struct")
 
+  case class Struct(n: Int, s: String)
+  implicit val EncodeStruct: Encoder[Struct] = s => 
+    Json.obj(
+      "n" -> Json.fromInt(s.n), 
+      "s" -> Json.fromString(s.s)
+    )
+  
   val typeMappings = List(
     ObjectMapping(
       schema.ref("Query"), 
         List(
+
+          // Compute a CirceCursor
           RootEffect.computeCursor("foo")((_, t, e) =>
             Sync[F].delay(println(s"!!! a side effect! !!!")).as(
               Result(circeCursor(t, e, 
@@ -39,7 +51,25 @@ class TestCirceEffectMapping[F[_]: Sync] extends CirceMapping[F] {
                 )
               ))
             )
-          )           
+          ),
+
+          // Compute a Json, let the implementation handle the cursor
+          RootEffect.computeJson("bar")((_, _, _) =>
+            Sync[F].delay(println(s"!!! a side effect! (2) !!!")).as(
+              Result(Json.obj(
+                "n" -> Json.fromInt(42), 
+                "s" -> Json.fromString("ho")
+              ))
+            )
+          ),
+
+          // Compute an encodable value, let the implementation handle json and the cursor
+          RootEffect.computeEncodable("baz")((_, _, _) =>
+            Sync[F].delay(println(s"!!! a side effect! (3) !!!")).as(
+              Result(Struct(44, "hee"))
+            )
+          ),
+
         )
     ),
   )

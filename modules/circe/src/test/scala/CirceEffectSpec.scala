@@ -10,10 +10,19 @@ import cats.tests.CatsSuite
 import edu.gemini.grackle.syntax._
 
 final class CirceEffectSpec extends CatsSuite {
+
   test("circe effect") {
     val query = """
       query {
         foo {
+          s,
+          n
+        }
+        bar {
+          s,
+          n
+        },
+        baz {
           s,
           n
         }
@@ -26,6 +35,14 @@ final class CirceEffectSpec extends CatsSuite {
           "foo" : {
             "s" : "hi",
             "n" : 42
+          },
+          "bar" : {
+            "s" : "ho",
+            "n" : 42
+          },
+          "baz" : {
+            "s" : "hee",
+            "n" : 44
           }
         }
       }
@@ -36,4 +53,5 @@ final class CirceEffectSpec extends CatsSuite {
 
     assert(res == expected)
   }
+  
 }
