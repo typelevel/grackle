@@ -7,11 +7,161 @@ package circetests
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.tests.CatsSuite
+import fs2.concurrent.SignallingRef
+import io.circe.Json
+
 import edu.gemini.grackle.syntax._
 
 final class CirceEffectSpec extends CatsSuite {
+  test("circe effect (nested)") {
+    val query = """
+      query {
+        foo {
+          s,
+          n
+        }
+      }
+    """
 
-  test("circe effect") {
+    val expected = json"""
+      {
+        "data" : {
+          "foo" : {
+            "s" : "hi",
+            "n" : 42
+          }
+        }
+      }
+    """
+
+    val prg: IO[(Json, Int)] =
+      for {
+        ref  <- SignallingRef[IO, Int](0)
+        map  =  new TestCirceEffectMapping(ref)
+        res  <- map.compileAndRun(query)
+        eff  <- ref.get
+      } yield (res, eff)
+
+    val (res, eff) = prg.unsafeRunSync()
+    //println(res)
+    //println(eff)
+
+    assert(res == expected)
+    assert(eff == 1)
+  }
+
+  test("circe effect (nested, aliased)") {
+    val query = """
+      query {
+        quux:foo {
+          s,
+          n
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "quux" : {
+            "s" : "hi",
+            "n" : 42
+          }
+        }
+      }
+    """
+
+    val prg: IO[(Json, Int)] =
+      for {
+        ref  <- SignallingRef[IO, Int](0)
+        map  =  new TestCirceEffectMapping(ref)
+        res  <- map.compileAndRun(query)
+        eff  <- ref.get
+      } yield (res, eff)
+
+    val (res, eff) = prg.unsafeRunSync()
+    //println(res)
+    //println(eff)
+
+    assert(res == expected)
+    assert(eff == 1)
+  }
+
+  test("circe effect (rooted)") {
+    val query = """
+      query {
+        qux {
+          s,
+          n
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "qux" : {
+            "s" : "hi",
+            "n" : 42
+          }
+        }
+      }
+    """
+
+    val prg: IO[(Json, Int)] =
+      for {
+        ref  <- SignallingRef[IO, Int](0)
+        map  =  new TestCirceEffectMapping(ref)
+        res  <- map.compileAndRun(query)
+        eff  <- ref.get
+      } yield (res, eff)
+
+    val (res, eff) = prg.unsafeRunSync()
+    //println(res)
+    //println(eff)
+
+    assert(res == expected)
+    assert(eff == 1)
+  }
+
+  test("circe effect (rooted, aliased)") {
+    val query = """
+      query {
+        quux:qux {
+          s,
+          n
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "quux" : {
+            "s" : "hi",
+            "n" : 42
+          }
+        }
+      }
+    """
+
+    val prg: IO[(Json, Int)] =
+      for {
+        ref  <- SignallingRef[IO, Int](0)
+        map  =  new TestCirceEffectMapping(ref)
+        res  <- map.compileAndRun(query)
+        eff  <- ref.get
+      } yield (res, eff)
+
+    val (res, eff) = prg.unsafeRunSync()
+    //println(res)
+    //println(eff)
+
+    assert(res == expected)
+    assert(eff == 1)
+  }
+
+  test("circe effect (multiple)") {
     val query = """
       query {
         foo {
@@ -48,10 +198,19 @@ final class CirceEffectSpec extends CatsSuite {
       }
     """
 
-    val res = new TestCirceEffectMapping[IO].compileAndRun(query).unsafeRunSync()
+    val prg: IO[(Json, Int)] =
+      for {
+        ref  <- SignallingRef[IO, Int](0)
+        map  =  new TestCirceEffectMapping(ref)
+        res  <- map.compileAndRun(query)
+        eff  <- ref.get
+      } yield (res, eff)
+
+    val (res, eff) = prg.unsafeRunSync()
     //println(res)
+    //println(eff)
 
     assert(res == expected)
+    assert(eff == 3)
   }
-  
 }

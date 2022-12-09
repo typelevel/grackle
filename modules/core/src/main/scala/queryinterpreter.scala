@@ -58,8 +58,8 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
     val mergedResults: Stream[F,Result[ProtoJson]] =
       if(mapping.schema.subscriptionType.map(_ =:= rootTpe).getOrElse(false)) {
         (effectfulQueries, pureQueries) match {
-          case (List(EffectfulQuery(query, RootEffect(_, effect))), Nil) =>
-            effect(query, rootTpe, env.addFromQuery(query)).map(_.flatMap {
+          case (List(EffectfulQuery(query, RootEffect(fieldName, effect))), Nil) =>
+            effect(query, rootTpe / fieldName, env.addFromQuery(query)).map(_.flatMap {
               case (q, c) => runValue(q, rootTpe, c)
             })
           case _ =>
@@ -96,8 +96,8 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
           if(effectfulQueries.isEmpty) Stream.empty
           else {
             effectfulQueries.foldMap {
-              case EffectfulQuery(query, RootEffect(_, effect)) =>
-                effect(query, rootTpe, env.addFromQuery(query)).map(_.flatMap {
+              case EffectfulQuery(query, RootEffect(fieldName, effect)) =>
+                effect(query, rootTpe / fieldName, env.addFromQuery(query)).map(_.flatMap {
                   case (q, c) => runValue(q, rootTpe, c)
                 })
             }

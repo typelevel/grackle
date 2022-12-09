@@ -39,19 +39,19 @@ final class SubscriptionSpec extends CatsSuite {
       val typeMappings: List[TypeMapping] =
         List(
           ObjectMapping(QueryType, List(
-            RootEffect.computeCursor("get")((_, tpe, env) => ref.get.map(n => Result(valueCursor(tpe, env, n))))
+            RootEffect.computeCursor("get")((_, path, env) => ref.get.map(n => Result(valueCursor(path, env, n))))
           )),
           ObjectMapping(MutationType, List(
-            RootEffect.computeCursor("put")( (_, tpe, env) =>
+            RootEffect.computeCursor("put")( (_, path, env) =>
               env.get[Int]("n") match {
                 case None    => Result.failure(s"Implementation error: `n: Int` not found in $env").pure[IO]
-                case Some(n) => ref.set(n).map(_ => Result(valueCursor(tpe, env, n)))
+                case Some(n) => ref.set(n).map(_ => Result(valueCursor(path, env, n)))
               }
             )
           )),
           ObjectMapping(SubscriptionType, List(
-            RootEffect.computeCursorStream("watch")((_, tpe, env) =>
-              ref.discrete.map(n => Result(valueCursor(tpe, env, n))))
+            RootEffect.computeCursorStream("watch")((_, path, env) =>
+              ref.discrete.map(n => Result(valueCursor(path, env, n))))
           ))
         )
 
@@ -189,5 +189,4 @@ final class SubscriptionSpec extends CatsSuite {
     ))
 
   }
-
 }
