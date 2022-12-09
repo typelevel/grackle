@@ -46,21 +46,22 @@ trait TermLow {
 }
 
 /** A path starting from some root type. */
-case class Path private (root: Type, path: List[String]) {
+case class Path(rootTpe: Type, path: List[String] = Nil) {
+
+  def isRoot = path.isEmpty
 
   def asTerm[A]: Term[A] =
     if (isList) PathTerm.ListPath(path)
     else PathTerm.UniquePath(path)
 
-  lazy val isList: Boolean = root.pathIsList(path)
-  lazy val tpe: Option[Type] = root.path(path)
+  lazy val isList: Boolean = rootTpe.pathIsList(path)
+  lazy val tpe: Option[Type] = rootTpe.path(path)
 
   def prepend(prefix: List[String]): Path =
     copy(path = prefix ++ path)
 
   def /(elem: String): Path =
     copy(path = path :+ elem)
-
 }
 
 object Path {

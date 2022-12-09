@@ -11,14 +11,24 @@ import cats.implicits._
 import io.circe.Json
 import org.tpolecat.sourcepos.SourcePos
 
-import Cursor.{Context, Env}
+import Cursor.{Context, DeferredCursor, Env}
 import QueryInterpreter.mkErrorResult
 
 abstract class ValueMapping[F[_]](implicit val M: Monad[F]) extends Mapping[F] with ValueMappingLike[F]
 
 trait ValueMappingLike[F[_]] extends Mapping[F] {
-  def valueCursor[T](tpe: Type, env: Env, t: T): Cursor =
-    ValueCursor(Context(tpe), t, None, env)
+  def mkCursor(context: Context, focus: Any, parent: Option[Cursor], env: Env): Cursor =
+    if(isLeaf(context.tpe))
+      LeafCursor(context, focus, parent, env)
+    else
+      ValueCursor(context, focus, parent, env)
+
+  def valueCursor[T](path: Path, env: Env, t: T): Cursor =
+    if(path.path.isEmpty)
+      mkCursor(Context(path.rootTpe), t, None, env)
+    else {
+      DeferredCursor(path, (context, parent) => mkCursor(context, t, Some(parent), env).rightIor)
+    }
 
   override def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
     val context = parent.context
@@ -30,10 +40,7 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
           case _ => ()
         }
         val childFocus = f.asInstanceOf[Any => Any](parentFocus)
-        if(isLeaf(fieldContext.tpe))
-          LeafCursor(fieldContext, childFocus, Some(parent), parent.env).rightIor
-        else
-          ValueCursor(fieldContext, childFocus, Some(parent), parent.env).rightIor
+        mkCursor(fieldContext, childFocus, Some(parent), Env.empty).rightIor
 
       case _ =>
         super.mkCursorForField(parent, fieldName, resultName)

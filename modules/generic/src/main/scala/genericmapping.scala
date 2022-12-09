@@ -11,14 +11,17 @@ import cats.implicits._
 import io.circe.{Encoder, Json}
 import org.tpolecat.sourcepos.SourcePos
 
-import Cursor.{AbstractCursor, Context, Env}
+import Cursor.{AbstractCursor, Context, DeferredCursor, Env}
 import QueryInterpreter.mkOneError
 
 abstract class GenericMapping[F[_]](implicit val M: Monad[F]) extends Mapping[F] with GenericMappingLike[F]
 
 trait GenericMappingLike[F[_]] extends ScalaVersionSpecificGenericMappingLike[F] {
-  def genericCursor[T](tpe: Type, env: Env, t: T)(implicit cb: => CursorBuilder[T]): Result[Cursor] =
-    cb.build(Context(tpe), t, None, env)
+  def genericCursor[T](path: Path, env: Env, t: T)(implicit cb: => CursorBuilder[T]): Result[Cursor] =
+    if(path.isRoot)
+      cb.build(Context(path.rootTpe), t, None, env)
+    else
+      DeferredCursor(path, (context, parent) => cb.build(context, t, Some(parent), env)).rightIor
 
   override def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
     val context = parent.context

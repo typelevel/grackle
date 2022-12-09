@@ -13,7 +13,7 @@ import io.circe.Json
 import io.circe.Encoder
 import org.tpolecat.sourcepos.SourcePos
 
-import Cursor.{Context, Env}
+import Cursor.{Context, DeferredCursor, Env}
 import QueryInterpreter.{mkErrorResult, mkOneError}
 import ScalarType._
 
@@ -24,22 +24,25 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
   // Syntax to allow Circe-specific root effects
   implicit class CirceMappingRootEffectSyntax(self: RootEffect.type) {
 
-    def computeJson(fieldName: String)(effect: (Query, Type, Env) => F[Result[Json]])(implicit pos: SourcePos): RootEffect =
-      self.computeCursor(fieldName)((q, t, e) => effect(q, t, e).map(_.map(circeCursor(t, e, _))))
+    def computeJson(fieldName: String)(effect: (Query, Path, Env) => F[Result[Json]])(implicit pos: SourcePos): RootEffect =
+      self.computeCursor(fieldName)((q, p, e) => effect(q, p, e).map(_.map(circeCursor(p, e, _))))
     
-    def computeJsonStream(fieldName: String)(effect: (Query, Type, Env) => Stream[F, Result[Json]])(implicit pos: SourcePos): RootEffect =
-      self.computeCursorStream(fieldName)((q, t, e) => effect(q, t, e).map(_.map(circeCursor(t, e, _))))
+    def computeJsonStream(fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[Json]])(implicit pos: SourcePos): RootEffect =
+      self.computeCursorStream(fieldName)((q, p, e) => effect(q, p, e).map(_.map(circeCursor(p, e, _))))
 
-    def computeEncodable[A](fieldName: String)(effect: (Query, Type, Env) => F[Result[A]])(implicit pos: SourcePos, enc: Encoder[A]): RootEffect =
-      computeJson(fieldName)((q, t, e) => effect(q, t, e).map(_.map(enc(_))))
+    def computeEncodable[A](fieldName: String)(effect: (Query, Path, Env) => F[Result[A]])(implicit pos: SourcePos, enc: Encoder[A]): RootEffect =
+      computeJson(fieldName)((q, p, e) => effect(q, p, e).map(_.map(enc(_))))
 
-    def computeEncodableStream[A](fieldName: String)(effect: (Query, Type, Env) => Stream[F, Result[A]])(implicit pos: SourcePos, enc: Encoder[A]): RootEffect =
-      computeJsonStream(fieldName)((q, t, e) => effect(q, t, e).map(_.map(enc(_))))
+    def computeEncodableStream[A](fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[A]])(implicit pos: SourcePos, enc: Encoder[A]): RootEffect =
+      computeJsonStream(fieldName)((q, p, e) => effect(q, p, e).map(_.map(enc(_))))
 
   }
 
-  def circeCursor(tpe: Type, env: Env, value: Json): Cursor =
-    CirceCursor(Context(tpe), value, None, env)
+  def circeCursor(path: Path, env: Env, value: Json): Cursor =
+    if(path.isRoot)
+      CirceCursor(Context(path.rootTpe), value, None, env)
+    else
+      DeferredCursor(path, (context, parent) => CirceCursor(context, value, Some(parent), env).rightIor)
 
   override def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
     val context = parent.context
@@ -49,18 +52,14 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
         CirceCursor(fieldContext, json, Some(parent), parent.env).rightIor
       case (Some(CursorFieldJson(_, f, _, _)), _) =>
         f(parent).map(res => CirceCursor(fieldContext, focus = res, parent = Some(parent), env = parent.env))
-      case (None, json: Json) =>
+      case (None|Some(RootEffect(_, _)), json: Json) =>
         val f = json.asObject.flatMap(_(fieldName))
-        val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
         f match {
           case None if fieldContext.tpe.isNullable => CirceCursor(fieldContext, Json.Null, Some(parent), parent.env).rightIor
           case Some(json) => CirceCursor(fieldContext, json, Some(parent), parent.env).rightIor
           case _ =>
             mkErrorResult(s"No field '$fieldName' for type ${context.tpe}")
         }
-      case (Some(RootEffect(_, _)), json: Json) =>
-        val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
-        CirceCursor(fieldContext, json, Some(parent), parent.env).rightIor
       case _ =>
         super.mkCursorForField(parent, fieldName, resultName)
     }

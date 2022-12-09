@@ -290,6 +290,12 @@ object Cursor {
       }
     }
 
+    def isRoot: Boolean = path.isEmpty
+
+    def parent: Option[Context] =
+      if(path.isEmpty) None
+      else Some(copy(path = path.tail, resultPath = resultPath.tail, typePath = typePath.tail))
+
     def forField(fieldName: String, resultName: String): Option[Context] =
       tpe.underlyingField(fieldName).map { fieldTpe =>
         copy(path = fieldName :: path, resultPath = resultName :: resultPath, typePath = fieldTpe :: typePath)
@@ -329,6 +335,11 @@ object Cursor {
     }
 
     def apply(rootTpe: Type): Context = Context(rootTpe, Nil, Nil, Nil)
+
+    def apply(path: Path): Option[Context] =
+      path.path.foldLeftM(Context(path.rootTpe, Nil, Nil, Nil)) { case (acc, elem) =>
+        acc.forField(elem, None)
+      }
   }
 
   def flatten(c: Cursor): Result[List[Cursor]] =
@@ -494,5 +505,26 @@ object Cursor {
     override lazy val listSize: Result[Int] = newSize.rightIor
     override def asList[C](factory: Factory[Cursor, C]): Result[C] =
       factory.fromSpecific(newElems).rightIor
+  }
+
+  case class DeferredCursor(context: Context, parent: Option[Cursor], env: Env, deferredPath: List[String], mkCursor: (Context, Cursor) => Result[Cursor]) extends AbstractCursor {
+    def focus: Any = mkErrorResult(s"Empty cursor has no focus")
+    def withEnv(env0: Env): DeferredCursor = copy(env = env.add(env0))
+
+    override def hasField(fieldName: String): Boolean = fieldName == deferredPath.head
+
+    override def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
+      if(fieldName != deferredPath.head) mkErrorResult(s"No field '$fieldName' for type $tpe")
+      else
+        for {
+          fieldContext <- Result.fromOption(context.forField(fieldName, resultName), s"No field '$fieldName' for type $tpe")
+          cursor       <- if(path.sizeCompare(1) > 0) DeferredCursor(fieldContext, Some(this), env, deferredPath.tail, mkCursor).rightIor
+                          else mkCursor(fieldContext, this)
+        } yield cursor
+  }
+
+  object DeferredCursor {
+    def apply(path: Path, mkCursor: (Context, Cursor) => Result[Cursor]): Cursor =
+      DeferredCursor(Context(path.rootTpe), None, Env.empty, path.path, mkCursor)
   }
 }

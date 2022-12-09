@@ -4,21 +4,22 @@
 package edu.gemini.grackle
 package circetests
 
-import cats.implicits._
 import cats.effect.Sync
-import io.circe.Encoder
-import io.circe.Json
+import cats.implicits._
+import fs2.concurrent.SignallingRef
+import io.circe.{Encoder, Json}
 
 import edu.gemini.grackle.circe.CirceMapping
 import edu.gemini.grackle.syntax._
 
-class TestCirceEffectMapping[F[_]: Sync] extends CirceMapping[F] {
+class TestCirceEffectMapping[F[_]: Sync](ref: SignallingRef[F, Int]) extends CirceMapping[F] {
   val schema =
     schema"""
-      type Query { 
+      type Query {
         foo: Struct!
         bar: Struct!
         baz: Struct!
+        qux: Struct!
       }
       type Struct {
         n: Int!
@@ -30,23 +31,24 @@ class TestCirceEffectMapping[F[_]: Sync] extends CirceMapping[F] {
   val StructType = schema.ref("Struct")
 
   case class Struct(n: Int, s: String)
-  implicit val EncodeStruct: Encoder[Struct] = s => 
+  implicit val EncodeStruct: Encoder[Struct] = s =>
     Json.obj(
-      "n" -> Json.fromInt(s.n), 
+      "n" -> Json.fromInt(s.n),
       "s" -> Json.fromString(s.s)
     )
-  
+
   val typeMappings = List(
     ObjectMapping(
-      schema.ref("Query"), 
+      tpe = QueryType,
+      fieldMappings =
         List(
 
           // Compute a CirceCursor
-          RootEffect.computeCursor("foo")((_, t, e) =>
-            Sync[F].delay(println(s"!!! a side effect! !!!")).as(
-              Result(circeCursor(t, e, 
+          RootEffect.computeCursor("foo")((_, p, e) =>
+            ref.update(_+1).as(
+              Result(circeCursor(p, e,
                 Json.obj(
-                  "n" -> Json.fromInt(42), 
+                  "n" -> Json.fromInt(42),
                   "s" -> Json.fromString("hi")
                 )
               ))
@@ -55,9 +57,9 @@ class TestCirceEffectMapping[F[_]: Sync] extends CirceMapping[F] {
 
           // Compute a Json, let the implementation handle the cursor
           RootEffect.computeJson("bar")((_, _, _) =>
-            Sync[F].delay(println(s"!!! a side effect! (2) !!!")).as(
+            ref.update(_+1).as(
               Result(Json.obj(
-                "n" -> Json.fromInt(42), 
+                "n" -> Json.fromInt(42),
                 "s" -> Json.fromString("ho")
               ))
             )
@@ -65,12 +67,26 @@ class TestCirceEffectMapping[F[_]: Sync] extends CirceMapping[F] {
 
           // Compute an encodable value, let the implementation handle json and the cursor
           RootEffect.computeEncodable("baz")((_, _, _) =>
-            Sync[F].delay(println(s"!!! a side effect! (3) !!!")).as(
+            ref.update(_+1).as(
               Result(Struct(44, "hee"))
             )
           ),
 
+          // Compute a CirceCursor focussed on the root
+          RootEffect.computeCursor("qux")((_, p, e) =>
+            ref.update(_+1).as(
+              Result(circeCursor(Path(p.rootTpe), e,
+                Json.obj(
+                  "qux" ->
+                    Json.obj(
+                      "n" -> Json.fromInt(42),
+                      "s" -> Json.fromString("hi")
+                    )
+                )
+              ))
+            )
+          )
         )
-    ),
+    )
   )
 }
