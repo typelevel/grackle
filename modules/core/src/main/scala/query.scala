@@ -445,7 +445,7 @@ object Query {
 
         val mergedSelects =
           selects.groupBy { case PossiblyRenamedSelect(Select(fieldName, _, _), resultName) => (fieldName, resultName) ; case _ => sys.error("Impossible") }.values.map { rsels =>
-            val PossiblyRenamedSelect(Select(fieldName, _, _), resultName) = rsels.head
+            val PossiblyRenamedSelect(Select(fieldName, _, _), resultName) = rsels.head : @unchecked
             val sels = rsels.map { case PossiblyRenamedSelect(sel, _) => sel ; case _ => sys.error("Impossible") }
             val children = sels.map(_.child)
             val merged = mergeQueries(children)

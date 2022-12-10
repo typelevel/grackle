@@ -1,29 +1,29 @@
 import nl.zolotko.sbt.jfr.{JfrRecording, JfrRecorderOptions}
 import scala.concurrent.duration.DurationInt
 
-val catsVersion                 = "2.8.0"
+val catsVersion                 = "2.9.0"
 val catsParseVersion            = "0.3.8"
 val catsEffectVersion           = "3.1.1"
 val catsTestkitScalaTestVersion = "2.1.5"
-val circeVersion                = "0.14.2"
+val circeVersion                = "0.14.3"
 val doobieVersion               = "1.0.0-RC2"
-val flywayVersion               = "9.3.0"
-val fs2Version                  = "3.1.1"
-val http4sVersion               = "0.23.15"
+val flywayVersion               = "9.10.0"
+val fs2Version                  = "3.4.0"
+val http4sVersion               = "0.23.16"
 val http4sBlazeVersion          = "0.23.12"
 val kindProjectorVersion        = "0.13.2"
 val literallyVersion            = "1.1.0"
-val logbackVersion              = "1.2.11"
-val log4catsVersion             = "2.4.0"
-val skunkVersion                = "0.3.1"
+val logbackVersion              = "1.4.5"
+val log4catsVersion             = "2.5.0"
+val skunkVersion                = "0.3.2"
 val shapeless2Version           = "2.3.10"
 val shapeless3Version           = "3.1.0"
-val sourcePosVersion            = "1.0.1"
-val testContainersVersion       = "0.40.10"
+val sourcePosVersion            = "1.1.0"
+val testContainersVersion       = "0.40.12"
 val typenameVersion             = "1.0.0"
 
-val Scala2 = "2.13.8"
-val Scala3 = "3.1.3"
+val Scala2 = "2.13.10"
+val Scala3 = "3.2.1"
 ThisBuild / scalaVersion        := Scala2
 ThisBuild / crossScalaVersions  := Seq(Scala2, Scala3)
 
@@ -45,6 +45,7 @@ ThisBuild / githubWorkflowBuild     ~= { steps =>
     name = Some("Check Headers"),
   ) +: steps
 }
+ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),

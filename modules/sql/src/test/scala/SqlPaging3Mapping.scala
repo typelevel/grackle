@@ -181,7 +181,7 @@ trait SqlPaging3Mapping[F[_]] extends SqlTestMapping[F] {
         if(hasItems) {
           val itemAlias = Query.fieldAlias(child, "items")
           transformChild[String](child, "country", CountryType / "code", off, lim, hasHasMore).map { child0 =>
-            Select("countries", Nil, Environment(Env("countryLimit" -> lim, "countryAlias" -> itemAlias), child0))
+            Select("countries", Nil, Environment(Env[Any]("countryLimit" -> lim, "countryAlias" -> itemAlias), child0))
           }
         } else
           Select("countries", Nil,
@@ -201,7 +201,7 @@ trait SqlPaging3Mapping[F[_]] extends SqlTestMapping[F] {
         if(hasItems) {
           val itemAlias = Query.fieldAlias(child, "items")
           transformChild[String](child, "city", CityType / "name", off, lim, hasHasMore).map { child0 =>
-            Select("cities", Nil, Environment(Env("cityLimit" -> lim, "cityAlias" -> itemAlias), child0))
+            Select("cities", Nil, Environment(Env[Any]("cityLimit" -> lim, "cityAlias" -> itemAlias), child0))
           }
         } else
           Select("cities", Nil,

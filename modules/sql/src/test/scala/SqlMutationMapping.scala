@@ -130,7 +130,7 @@ trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
 
       case Select("createCity", List(Binding("name", StringValue(name)), Binding("countryCode", StringValue(code)), Binding("population", IntValue(pop))), child) =>
           Environment(
-            Cursor.Env("name" -> name, "countryCode" -> code, "population" -> pop),
+            Cursor.Env[Any]("name" -> name, "countryCode" -> code, "population" -> pop),
             Select("createCity", Nil, child)
           ).rightIor
 
