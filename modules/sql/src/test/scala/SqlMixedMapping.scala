@@ -34,6 +34,7 @@ trait SqlMixedMapping[F[_]] extends SqlTestMapping[F] with ValueMappingLike[F] {
         type Movie {
           id: UUID!
           title: String!
+          nested: Bar
         }
         type Foo {
           value: Int!
@@ -69,6 +70,7 @@ trait SqlMixedMapping[F[_]] extends SqlTestMapping[F] with ValueMappingLike[F] {
           List(
             SqlField("id", movies.id, key = true),
             SqlField("title", movies.title),
+            CirceField("nested", json"""{ "message": "Hello world nested" }""")
           )
       ),
       ValueObjectMapping[Foo](

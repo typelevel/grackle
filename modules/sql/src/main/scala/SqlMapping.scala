@@ -647,28 +647,6 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
     val rootQueries = ungroup(query)
 
-    def rootFieldMapping(context: Context, query: Query): Option[FieldMapping] =
-      for {
-        rn <- Query.rootName(query)
-        fm <- fieldMapping(context, rn._1)
-      } yield fm
-
-    def isLocallyMapped(context: Context, query: Query): Boolean =
-      rootFieldMapping(context, query) match {
-        //case Some(_: SqlFieldMapping) => true // Scala 3 thinks this is unreachable
-        case Some(fm) if fm.isInstanceOf[SqlFieldMapping] => true
-        case Some(re: RootEffect) =>
-          val fieldContext = context.forFieldOrAttribute(re.fieldName, None)
-          objectMapping(fieldContext).map { om =>
-            om.fieldMappings.exists {
-              //case _: SqlFieldMapping => true // Scala 3 thinks this is unreachable
-              case fm if fm.isInstanceOf[SqlFieldMapping] => true
-              case _ => false
-            }
-          }.getOrElse(false)
-        case _ => false
-      }
-
     def mkGroup(queries: List[Query]): Query =
       if(queries.isEmpty) Empty
       else if(queries.sizeCompare(1) == 0) queries.head
@@ -714,6 +692,28 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       }
     }
   }
+
+  def rootFieldMapping(context: Context, query: Query): Option[FieldMapping] =
+    for {
+      rn <- Query.rootName(query)
+      fm <- fieldMapping(context, rn._1)
+    } yield fm
+
+  def isLocallyMapped(context: Context, query: Query): Boolean =
+    rootFieldMapping(context, query) match {
+      //case Some(_: SqlFieldMapping) => true // Scala 3 thinks this is unreachable
+      case Some(fm) if fm.isInstanceOf[SqlFieldMapping] => true
+      case Some(re: RootEffect) =>
+        val fieldContext = context.forFieldOrAttribute(re.fieldName, None)
+        objectMapping(fieldContext).map { om =>
+          om.fieldMappings.exists {
+            //case _: SqlFieldMapping => true // Scala 3 thinks this is unreachable
+      case fm if fm.isInstanceOf[SqlFieldMapping] => true
+      case _ => false
+          }
+        }.getOrElse(false)
+      case _ => false
+    }
 
   override def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
     val context = parent.context
@@ -2812,6 +2812,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           case PossiblyRenamedSelect(Select(fieldName, _, child), resultName) =>
             val fieldContext = context.forField(fieldName, resultName).getOrElse(sys.error(s"No field '$fieldName' of type ${context.tpe}"))
             if(schema.isRootType(context.tpe)) loop(child, fieldContext, Nil, false)
+            else if(!isLocallyMapped(context, q)) None
             else {
               val parentConstraints0 = parentConstraintsFromJoins(context, fieldName, resultName)
               val keyCols = keyColumnsForType(context)
