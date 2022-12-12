@@ -284,17 +284,22 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
     def applyOps(cursors: Iterator[Cursor]): Result[(Query, Iterator[Cursor])] = {
       query0 match {
         case FilterOrderByOffsetLimit(pred, selections, offset, limit, child) =>
-          val filtered =
-            pred.map { p =>
-              cursors.filter { c =>
-                p(c) match {
-                  case left@Ior.Left(_) => return left
-                  case Ior.Right(c) => c
-                  case Ior.Both(_, c) => c
+          val sorted =
+            if(pred.isEmpty && selections.isEmpty) cursors
+            else {
+              val cs = cursors.toSeq
+              val filtered =
+                pred match {
+                  case Some(p) =>
+                    cs.filterA(p(_)) match {
+                      case left@Ior.Left(_) => return left
+                      case Ior.Right(cs) => cs
+                      case Ior.Both(_, cs) => cs
+                    }
+                  case _ => cs
                 }
-              }
-            }.getOrElse(cursors)
-          val sorted = selections.map(OrderSelections(_).order(filtered.toSeq).iterator).getOrElse(filtered)
+              selections.map(OrderSelections(_).order(filtered)).getOrElse(filtered).iterator
+            }
           val sliced = (offset, limit) match {
             case (None, None) => sorted
             case (Some(off), None) => sorted.drop(off)
@@ -368,17 +373,20 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
 
         case (Wrap(_, Component(_, _, _)), ListType(tpe)) =>
           // Keep the wrapper with the component when going under the list
-          cursor.asList(Iterator).map { ic =>
-            val builder = Vector.newBuilder[ProtoJson]
-            builder.sizeHint(ic.knownSize)
-            while(ic.hasNext) {
-              val c = ic.next()
-              runValue(query, tpe, c) match {
-                case Ior.Right(v) => builder.addOne(v)
-                case left => return left
+          cursor.asList(Iterator) match {
+            case Ior.Right(ic) =>
+              val builder = Vector.newBuilder[ProtoJson]
+              builder.sizeHint(ic.knownSize)
+              while(ic.hasNext) {
+                val c = ic.next()
+                runValue(query, tpe, c) match {
+                  case Ior.Right(v) => builder.addOne(v)
+                  case notRight => return notRight
+                }
               }
-            }
-            ProtoJson.fromValues(builder.result())
+              ProtoJson.fromValues(builder.result()).rightIor
+            case left@Ior.Left(_) => left
+            case Ior.Both(left, _) => Ior.left(left)
           }
 
         case (Wrap(_, Defer(_, _, _)), _) if cursor.isNull =>

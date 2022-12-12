@@ -588,7 +588,7 @@ object QueryCompiler {
           super.transform(query, vars, schema, tpe).map(_ match {
             case Rename(nme, Environment(e, child)) => Environment(e, Rename(nme, child))
             case Rename(nme, Group(queries)) =>
-              val Some((baseName, _)) = Query.rootName(r)
+              val Some((baseName, _)) = Query.rootName(r): @unchecked
               val renamed =
                 queries.map {
                   case s@Select(`baseName`, _, _) => Rename(nme, s)

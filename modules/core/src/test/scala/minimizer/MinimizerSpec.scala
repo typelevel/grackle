@@ -10,14 +10,14 @@ import edu.gemini.grackle.{ GraphQLParser, QueryMinimizer }
 
 final class MinimizerSuite extends CatsSuite {
   def run(query: String, expected: String, echo: Boolean = false): Assertion = {
-    val Right(minimized) = QueryMinimizer.minimizeText(query)
+    val Right(minimized) = QueryMinimizer.minimizeText(query) : @unchecked
     if (echo)
       println(minimized)
 
     assert(minimized == expected)
 
-    val Some(parsed0) = GraphQLParser.Document.parseAll(query).toOption
-    val Some(parsed1) = GraphQLParser.Document.parseAll(minimized).toOption
+    val Some(parsed0) = GraphQLParser.Document.parseAll(query).toOption : @unchecked
+    val Some(parsed1) = GraphQLParser.Document.parseAll(minimized).toOption : @unchecked
 
     assert(parsed0 == parsed1)
   }

@@ -103,8 +103,8 @@ object StarWarsData {
 
   import Episode._
 
-  val Some(lukeSkywalker) = characters.find(_.id == "1000")
-  val Some(r2d2) = characters.find(_.id == "2001")
+  val Some(lukeSkywalker) = characters.find(_.id == "1000") : @unchecked
+  val Some(r2d2) = characters.find(_.id == "2001") : @unchecked
 
   val hero: Map[Value, Character] = Map(
     NEWHOPE -> r2d2,
