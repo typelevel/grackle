@@ -49,6 +49,10 @@ final class Embedding3Spec extends SkunkDatabaseSuite with SqlEmbedding3Spec {
   lazy val mapping = new SkunkTestMapping(pool) with SqlEmbedding3Mapping[IO]
 }
 
+final class FilterJoinAliasSpec extends SkunkDatabaseSuite with SqlFilterJoinAliasSpec {
+  lazy val mapping = new SkunkTestMapping(pool) with SqlFilterJoinAliasMapping[IO]
+}
+
 final class FilterOrderOffsetLimitSpec extends SkunkDatabaseSuite with SqlFilterOrderOffsetLimitSpec {
   lazy val mapping = new SkunkTestMapping(pool) with SqlFilterOrderOffsetLimitMapping[IO]
 }

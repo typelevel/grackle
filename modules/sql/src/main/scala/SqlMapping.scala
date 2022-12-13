@@ -1611,6 +1611,26 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             }
         }.map(forders => Fragments.const(" ORDER BY ") |+| forders.intercalate(Fragments.const(",")))
 
+    def isEmbeddedIn(inner: Context, outer: Context): Boolean = {
+      def directlyEmbedded(child: Context, parent: Context): Boolean =
+        fieldMapping(parent, child.path.head) match {
+          case Some(_: CursorFieldJson) | Some(SqlObject(_, Nil)) => true
+          case _ => false
+        }
+
+      @tailrec
+      def loop(inner: Context, outer: Context): Boolean =
+        if(inner.path.tail == outer.path) directlyEmbedded(inner, outer)
+        else
+          inner.parent match {
+            case Some(parent) => directlyEmbedded(inner, parent) && loop(parent, outer)
+            case _ => false
+          }
+
+      if(!inner.path.endsWith(outer.path) || inner.path.sizeCompare(outer.path) == 0) false
+      else loop(inner, outer)
+    }
+
     /** Yield a copy of the given `Term` with all referenced `SqlColumns` relativised to the given
      *  context and owned by by the given owner */
     def contextualiseTerm(context: Context, owner: ColumnOwner, term: Term[_]): SqlColumn = {
@@ -1621,7 +1641,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       term match {
         case SqlColumnTerm(col) => subst(col)
         case pathTerm: PathTerm =>
-          columnForSqlTerm(context, pathTerm).map(subst).getOrElse(sys.error(s"No column for term $pathTerm"))
+          val col = columnForSqlTerm(context, pathTerm).map(subst).getOrElse(sys.error(s"No column for term $pathTerm"))
+          if(isEmbeddedIn(col.owner.context, owner.context)) SqlColumn.EmbeddedColumn(owner, col)
+          else col
 
         case other =>
           sys.error(s"Expected contextualisable term but found $other")
