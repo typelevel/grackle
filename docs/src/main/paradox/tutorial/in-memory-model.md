@@ -1,7 +1,7 @@
 # In-Memory Model
 
 The GraphQL reference implementation defines an API over a simple data model representing characters and films from
-the Star Wars series. Because of its appearance in the the reference implementation it is used as the basis for many
+the Star Wars series. Because of its appearance in the reference implementation it is used as the basis for many
 GraphQL tutorials, and many GraphQL server implementations provide it as an example. Grackle is no exception.
 
 In this tutorial we are going to implement the Star Wars demo using Grackle backed by an in-memory model, i.e. a
@@ -9,7 +9,7 @@ simple Scala data structure which captures the information required to service t
 
 ## Running the demo
 
-The demo is packaged as submodule `demo` in the Grackle project. It is an http4s-based application which can be run
+The demo is packaged as submodule `demo` in the Grackle project. It is a http4s-based application which can be run
 from the SBT REPL using `sbt-revolver`,
 
 ```
@@ -36,7 +36,7 @@ at [http://localhost:8080/playground.html?endpoint=starwars](http://localhost:80
 
 You can use the Playground to run queries against the model. Paste the following into the query field on left,
 
-```json
+```graphql
 query {
   hero(episode: EMPIRE) {
     name
@@ -66,7 +66,7 @@ Click the play button in the centre and you should see the following response on
 
 The Star Wars API is described by a GraphQL schema,
 
-```json
+```graphql
 type Query {
   hero(episode: Episode!): Character
   character(id: ID!): Character
@@ -108,7 +108,7 @@ Any one of the parametrized fields in the `Query` type may be used as the top le
 fields of the result type. The structure of the query follows the schema, and the structure of the result follows the
 structure of the query. For example,
 
-```
+```graphql
 query {
   character(id: 1002) {
     name
@@ -153,7 +153,7 @@ The API is backed by values of an ordinary Scala data types with no Grackle depe
 
 The data structure is slightly complicated by the need to support cycles of friendship, e.g.,
 
-```json
+```graphql
 query {
   character(id: 1000) {
     name
@@ -197,7 +197,7 @@ friends the `resolveFriends` method is used to locate the next `Character` value
 
 ## The query compiler and elaborator
 
-GraphQL queries are compiled into values of a Scala ADT which represents a query algebra. These query algebra terms
+The GraphQL queries are compiled into values of a Scala ADT which represents a query algebra. These query algebra terms
 are then transformed in a variety of ways, resulting in a program which can be interpreted against the model to
 produce the query result. The process of transforming these values is called _elaboration_, and each elaboration step
 simplifies or expands the term to bring it into a form which can be executed directly by the query interpreter.
@@ -231,7 +231,7 @@ sealed trait Query {
 
 A simple query like this,
 
-```json
+```graphql
 query {
   character(id: 1000) {
     name
@@ -252,7 +252,7 @@ be of GraphQL type `Int`.
 
 Following this initial translation the Star Wars example has a single elaboration step whose role is to translate the
 selection into something executable. Elaboration uses the GraphQL schema and so is able to translate an input value
-parsed as an `Int` into a GraphQL `ID`. The semantics associated with this (ie. what an `id` is and how it relates to
+parsed as an `Int` into a GraphQL `ID`. The semantics associated with this (i.e. what an `id` is and how it relates to
 the model) is specific to this model, so we have to provide that semantic via some model-specific code,
 
 @@snip [StarWarsData.scala](/demo/src/main/scala/demo/starwars/StarWarsMapping.scala) { #elaborator }
@@ -274,7 +274,7 @@ Select("character", Nil,
 ```
 
 Here the argument to the `character` selector has been translated into a predicate which refines the root data of the
-model to the single element which satisifies it via `Unique`. The remainder of the query (`Select("name", Nil)`) is
+model to the single element which satisfies it via `Unique`. The remainder of the query (`Select("name", Nil)`) is
 then within the scope of that constraint. We have eliminated something with model-specific semantics (`character(id:
 1000)`) in favour of something universal which can be interpreted directly against the model.
 
@@ -282,7 +282,7 @@ then within the scope of that constraint. We have eliminated something with mode
 
 The data required to construct the response to a query is determined by the structure of the query and gives rise to a
 more or less arbitrary traversal of the model. To support this Grackle provides a functional `Cursor` abstraction
-which points into the model and can nativigate through GraphQL fields, arrays and values as required by a given query.
+which points into the model and can navigate through GraphQL fields, arrays and values as required by a given query.
 
 For in-memory models where the structure of the model ADT closely matches the GraphQL schema a `Cursor` can be derived
 automatically by a `GenericMapping` which only needs to be supplemented with a specification of the root mappings for
@@ -293,7 +293,7 @@ For the Star Wars model the root definitions are of the following form,
 
 @@snip [StarWarsData.scala](/demo/src/main/scala/demo/starwars/StarWarsMapping.scala) { #root }
 
-The the first argument of the `GenericRoot` constructor correspond to the top-level selection of the query (see the
+The first argument of the `GenericRoot` constructor correspond to the top-level selection of the query (see the
 schema above) and the second argument is the initial model value for which a `Cursor` will be derived.  When the query
 is executed, navigation will start with that `Cursor` and the corresponding GraphQL type.
 
