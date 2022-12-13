@@ -49,6 +49,10 @@ final class Embedding3Spec extends DoobieDatabaseSuite with SqlEmbedding3Spec {
   lazy val mapping = new DoobieTestMapping(xa) with SqlEmbedding3Mapping[IO]
 }
 
+final class FilterJoinAliasSpec extends DoobieDatabaseSuite with SqlFilterJoinAliasSpec {
+  lazy val mapping = new DoobieTestMapping(xa) with SqlFilterJoinAliasMapping[IO]
+}
+
 final class FilterOrderOffsetLimitSpec extends DoobieDatabaseSuite with SqlFilterOrderOffsetLimitSpec {
   lazy val mapping = new DoobieTestMapping(xa) with SqlFilterOrderOffsetLimitMapping[IO]
 }
