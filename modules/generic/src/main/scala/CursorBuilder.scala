@@ -15,6 +15,11 @@ import QueryInterpreter.mkOneError
 trait CursorBuilder[T] {
   def tpe: Type
   def build(context: Context, focus: T, parent: Option[Cursor] = None, env: Env = Env.empty): Result[Cursor]
+
+  /**
+   *  Apply a pre-processing function while fixing the `Type` of this `CursorBuilder`.
+   */
+  final def contramap[A](f: A => T): CursorBuilder[A] = CursorBuilder.contramap(f, this)
 }
 
 object CursorBuilder {
@@ -172,6 +177,13 @@ object CursorBuilder {
 
   implicit def leafCursorBuilder[T](implicit encoder: Encoder[T]): CursorBuilder[T] =
     deriveLeafCursorBuilder(StringType)
+
+  def contramap[A, B](f: A => B, cb: CursorBuilder[B]): CursorBuilder[A] =
+    new CursorBuilder[A] {
+      def tpe: Type = cb.tpe
+      def build(context: Context, focus: A, parent: Option[Cursor] = None, env: Env = Env.empty): Result[Cursor] =
+        cb.build(context, f(focus), parent, env)
+    }
 }
 
 abstract class PrimitiveCursor[T] extends AbstractCursor {
