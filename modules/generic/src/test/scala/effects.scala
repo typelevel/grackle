@@ -27,14 +27,13 @@ class GenericEffectMapping[F[_]: Sync](ref: SignallingRef[F, Int]) extends Gener
       }
     """
 
-  val QueryType  = schema.ref("Query")
+  val QueryType = schema.ref("Query")
   val StructType = schema.ref("Struct")
 
-  case class Wrapper(value: Int)
-  case class Struct(n: Wrapper, s: String)
+  case class Struct(n: Int, s: String)
   object Struct {
-    implicit val wrappedCb: CursorBuilder[Wrapper]    = CursorBuilder[Int].contramap(_.value)
-    implicit val cursorBuilder: CursorBuilder[Struct] = deriveObjectCursorBuilder[Struct](StructType)
+    implicit val cursorBuilder: CursorBuilder[Struct] =
+      deriveObjectCursorBuilder[Struct](StructType)
   }
 
   val typeMappings = List(
@@ -45,7 +44,7 @@ class GenericEffectMapping[F[_]: Sync](ref: SignallingRef[F, Int]) extends Gener
           // Compute a ValueCursor
           RootEffect.computeCursor("foo")((_, p, e) =>
             ref.update(_+1).as(
-              genericCursor(p, e, Struct(Wrapper(42), "hi"))
+              genericCursor(p, e, Struct(42, "hi"))
             )
           )
         )
@@ -77,13 +76,15 @@ final class GenericEffectSpec extends CatsSuite {
 
     val prg: IO[(Json, Int)] =
       for {
-        ref <- SignallingRef[IO, Int](0)
-        map = new GenericEffectMapping(ref)
-        res <- map.compileAndRun(query)
-        eff <- ref.get
+        ref  <- SignallingRef[IO, Int](0)
+        map  =  new GenericEffectMapping(ref)
+        res  <- map.compileAndRun(query)
+        eff  <- ref.get
       } yield (res, eff)
 
     val (res, eff) = prg.unsafeRunSync()
+    //println(res)
+    //println(eff)
 
     assert(res == expected)
     assert(eff == 1)
@@ -112,13 +113,15 @@ final class GenericEffectSpec extends CatsSuite {
 
     val prg: IO[(Json, Int)] =
       for {
-        ref <- SignallingRef[IO, Int](0)
-        map = new GenericEffectMapping(ref)
-        res <- map.compileAndRun(query)
-        eff <- ref.get
+        ref  <- SignallingRef[IO, Int](0)
+        map  =  new GenericEffectMapping(ref)
+        res  <- map.compileAndRun(query)
+        eff  <- ref.get
       } yield (res, eff)
 
     val (res, eff) = prg.unsafeRunSync()
+    //println(res)
+    //println(eff)
 
     assert(res == expected)
     assert(eff == 1)

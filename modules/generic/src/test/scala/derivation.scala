@@ -46,15 +46,19 @@ object StarWarsData {
         ids.traverse(id => characters.find(_.id == id).toRightIor(mkOneError(s"Bad id '$id'"))).map(_.some)
     }
 
+  case class Planet(value: String)
+
   case class Human(
     id: String,
     name: Option[String],
     appearsIn: Option[List[Episode.Value]],
     friends: Option[List[String]],
-    homePlanet: Option[String]
+    homePlanet: Option[Planet]
   ) extends Character
 
   object Human {
+    implicit val planetCursorBuilder: CursorBuilder[Planet] =
+      CursorBuilder[String].contramap(_.value)
     implicit val cursorBuilder: CursorBuilder[Human] =
       deriveObjectCursorBuilder[Human](HumanType)
         .transformField("friends")(resolveFriends)
@@ -80,14 +84,14 @@ object StarWarsData {
       name = Some("Luke Skywalker"),
       friends = Some(List("1002", "1003", "2000", "2001")),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
-      homePlanet = Some("Tatooine")
+      homePlanet = Some(Planet("Tatooine"))
     ),
     Human(
       id = "1001",
       name = Some("Darth Vader"),
       friends = Some(List("1004")),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
-      homePlanet = Some("Tatooine")
+      homePlanet = Some(Planet("Tatooine"))
     ),
     Human(
       id = "1002",
@@ -101,7 +105,7 @@ object StarWarsData {
       name = Some("Leia Organa"),
       friends = Some(List("1000", "1002", "2000", "2001")),
       appearsIn = Some(List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI)),
-      homePlanet = Some("Alderaan")
+      homePlanet = Some(Planet("Alderaan"))
     ),
     Human(
       id = "1004",
