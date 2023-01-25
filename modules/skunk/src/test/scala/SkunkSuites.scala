@@ -98,7 +98,7 @@ final class MutationSpec extends SkunkDatabaseSuite with SqlMutationSpec {
     new SkunkTestMapping(pool) with SqlMutationMapping[IO] {
       def updatePopulation(id: Int, population: Int): IO[Unit] =
         pool.use { s =>
-          s.prepare(sql"update city set population=${codec.int4} where id=${codec.int4}".command).use { ps =>
+          s.prepareR(sql"update city set population=${codec.int4} where id=${codec.int4}".command).use { ps =>
             ps.execute(population ~ id).void
           }
         }
@@ -110,7 +110,7 @@ final class MutationSpec extends SkunkDatabaseSuite with SqlMutationSpec {
               VALUES (nextval('city_id'), ${codec.varchar}, ${codec.bpchar(3)}, 'ignored', ${codec.int4})
               RETURNING id
             """.query(codec.int4)
-          s.prepare(q).use { ps =>
+          s.prepareR(q).use { ps =>
             ps.unique(name ~ countryCode ~ population)
           }
         }

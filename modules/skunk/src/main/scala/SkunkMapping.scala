@@ -139,7 +139,7 @@ trait SkunkMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] { outer =
       }
 
     pool.use { s =>
-      s.prepare(fragment.fragment.query(rowDecoder)).use { ps =>
+      Resource.eval(s.prepare(fragment.fragment.query(rowDecoder))).use { ps =>
         ps.stream(fragment.argument, 1024).compile.toVector
       }
     }.onError {
