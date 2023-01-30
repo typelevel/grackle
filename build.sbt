@@ -23,7 +23,7 @@ val testContainersVersion       = "0.40.12"
 val typenameVersion             = "1.0.0"
 
 val Scala2 = "2.13.10"
-val Scala3 = "3.2.1"
+val Scala3 = "3.2.2"
 ThisBuild / scalaVersion        := Scala2
 ThisBuild / crossScalaVersions  := Seq(Scala2, Scala3)
 
