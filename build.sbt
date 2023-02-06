@@ -2,14 +2,14 @@ import nl.zolotko.sbt.jfr.{JfrRecording, JfrRecorderOptions}
 import scala.concurrent.duration.DurationInt
 
 val catsVersion                 = "2.9.0"
-val catsParseVersion            = "0.3.8"
+val catsParseVersion            = "0.3.9"
 val catsEffectVersion           = "3.1.1"
 val catsTestkitScalaTestVersion = "2.1.5"
 val circeVersion                = "0.14.3"
 val doobieVersion               = "1.0.0-RC2"
-val flywayVersion               = "9.10.2"
-val fs2Version                  = "3.4.0"
-val http4sVersion               = "0.23.16"
+val flywayVersion               = "9.14.1"
+val fs2Version                  = "3.5.0"
+val http4sVersion               = "0.23.18"
 val http4sBlazeVersion          = "0.23.13"
 val kindProjectorVersion        = "0.13.2"
 val literallyVersion            = "1.1.0"
@@ -23,7 +23,7 @@ val testContainersVersion       = "0.40.12"
 val typenameVersion             = "1.0.0"
 
 val Scala2 = "2.13.10"
-val Scala3 = "3.2.1"
+val Scala3 = "3.2.2"
 ThisBuild / scalaVersion        := Scala2
 ThisBuild / crossScalaVersions  := Seq(Scala2, Scala3)
 
@@ -49,6 +49,7 @@ ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
+  scalacOptions += "-Wconf:msg=unused value of type org.scalatest.Assertion:silent",
   libraryDependencies ++= Seq(
     "org.typelevel"     %% "cats-testkit"           % catsVersion % "test",
     "org.typelevel"     %% "cats-testkit-scalatest" % catsTestkitScalaTestVersion % "test"

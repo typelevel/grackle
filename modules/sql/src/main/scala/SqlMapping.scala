@@ -1877,7 +1877,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 predicate = false
               )
 
-            case _ => None
+            case _ =>
               sys.error(s"Non-subobject mapping for field '$fieldName' of type ${parentContext.tpe}")
           }
 
@@ -2332,7 +2332,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             val pred1 = pred0.map(p => contextualiseWhereTerms(context, baseRef, p))
 
             val distOrders =
-              keyCols.map(col => OrderSelection(col.derive(baseRef).toTerm, true, true))
+              keyCols.map(col => OrderSelection(col.derive(baseRef).toTerm, true, true)) ++
               oss.filterNot(os => keyCols.contains(columnForSqlTerm(context, os.term).getOrElse(sys.error(s"No column for term ${os.term}"))))
             val distOrderCols = orderCols.diff(keyCols).map(_.derive(baseRef))
 
@@ -2867,7 +2867,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             val subtpes = narrows.map(_.subtpe)
             val supertpe = context.tpe.underlying
             assert(supertpe.underlying.isInterface || supertpe.underlying.isUnion)
-            subtpes.map(subtpe => assert(subtpe <:< supertpe))
+            subtpes.foreach(subtpe => assert(subtpe <:< supertpe))
 
             val discriminator = discriminatorForType(context)
             val narrowPredicates = subtpes.map { subtpe =>
@@ -3120,7 +3120,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           case Some(cols) => cols
           case None =>
             val keys = SqlMappingLike.this.keyColumnsForType(context).map(index)
-            keyColumnsMemo.put(key, keys)
+            keyColumnsMemo.put(key, keys): Unit
             keys
         }
       }
