@@ -178,7 +178,7 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
       LeafMapping[EntityType](EntityTypeType)
     )
 
-  object entityTypeDiscriminator extends SqlDiscriminator {
+  lazy val entityTypeDiscriminator = new SqlDiscriminator {
     def discriminate(c: Cursor): Result[Type] = {
       for {
         et <- c.fieldAs[EntityType]("entityType")

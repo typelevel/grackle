@@ -73,6 +73,14 @@ final class InterfacesSpec extends SkunkDatabaseSuite with SqlInterfacesSpec {
     }
 }
 
+final class InterfacesSpec2 extends SkunkDatabaseSuite with SqlInterfacesSpec2 {
+  lazy val mapping =
+    new SkunkTestMapping(pool) with SqlInterfacesMapping2[IO] {
+      def entityType: Codec =
+        (codec.int4.imap(EntityType.fromInt)(EntityType.toInt), false)
+    }
+}
+
 final class JsonbSpec extends SkunkDatabaseSuite with SqlJsonbSpec {
   lazy val mapping = new SkunkTestMapping(pool) with SqlJsonbMapping[IO]
 }
