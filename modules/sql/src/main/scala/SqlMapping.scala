@@ -3369,14 +3369,14 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       }
 
     def narrowsTo(subtpe: TypeRef): Boolean = {
-      val ctpe =
-        discriminatorForType(context) match {
-          case Some(disc) => disc.discriminator.discriminate(this).getOrElse(tpe)
-          case _ => tpe
-        }
-      if (ctpe =:= tpe)
-        asTable.map(table => mapped.narrowsTo(context.asType(subtpe), table)).right.getOrElse(false)
-      else ctpe <:< subtpe
+      def check(ctpe: Type): Boolean =
+        if (ctpe =:= tpe) asTable.map(table => mapped.narrowsTo(context.asType(subtpe), table)).right.getOrElse(false)
+        else ctpe <:< subtpe
+
+      discriminatorForType(context) match {
+        case Some(disc) => disc.discriminator.discriminate(this).map(check).getOrElse(false)
+        case _ => check(tpe)
+      }
     }
 
     def narrow(subtpe: TypeRef): Result[Cursor] = {

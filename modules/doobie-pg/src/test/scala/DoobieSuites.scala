@@ -73,6 +73,14 @@ final class InterfacesSpec extends DoobieDatabaseSuite with SqlInterfacesSpec {
     }
 }
 
+final class InterfacesSpec2 extends DoobieDatabaseSuite with SqlInterfacesSpec2 {
+  lazy val mapping =
+    new DoobieTestMapping(xa) with SqlInterfacesMapping2[IO] {
+      def entityType: Codec =
+        (Meta[Int].timap(EntityType.fromInt)(EntityType.toInt), false)
+    }
+}
+
 final class JsonbSpec extends DoobieDatabaseSuite with SqlJsonbSpec {
   lazy val mapping = new DoobieTestMapping(xa) with SqlJsonbMapping[IO]
 }
