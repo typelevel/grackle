@@ -27,7 +27,7 @@ val Scala3 = "3.2.2"
 ThisBuild / scalaVersion        := Scala2
 ThisBuild / crossScalaVersions  := Seq(Scala2, Scala3)
 
-ThisBuild / tlBaseVersion    := "0.10"
+ThisBuild / tlBaseVersion    := "0.11"
 ThisBuild / organization     := "edu.gemini"
 ThisBuild / organizationName := "Association of Universities for Research in Astronomy, Inc. (AURA)"
 ThisBuild / startYear        := Some(2019)

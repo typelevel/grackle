@@ -6,7 +6,7 @@ package edu.gemini.grackle
 import scala.collection.Factory
 
 import cats.Monad
-import cats.data.{Ior, IorT}
+import cats.data.{Chain, Ior, IorT}
 import cats.implicits._
 import fs2.{ Stream, Compiler }
 import io.circe.{Encoder, Json}
@@ -17,7 +17,7 @@ import org.tpolecat.typename._
 import Cursor.{AbstractCursor, Context, Env}
 import Query.Select
 import QueryCompiler.{ComponentElaborator, SelectElaborator, IntrospectionLevel}
-import QueryInterpreter.mkErrorResult
+import QueryInterpreter.{mkErrorResult, ProtoJson}
 import IntrospectionLevel._
 
 trait QueryExecutor[F[_], T] { outer =>
@@ -61,6 +61,12 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
         QueryInterpreter.mkInvalidResponse(invalid).pure[Stream[F,*]]
     }
 
+  def combineQueries
+    (queries: List[(Query, Type, Env)])
+    (exec: List[(Query, Type, Env)] => F[(Chain[Problem], List[ProtoJson])]): F[(Chain[Problem], List[ProtoJson])] = {
+    exec(queries)
+  }
+
   /** Yields a `Cursor` focused on the top level operation type of the query */
   def defaultRootCursor(query: Query, tpe: Type, env: Env): F[Result[(Query, Cursor)]] =
     Result((query, RootCursor(Context(tpe), None, env))).pure[F].widen
@@ -97,7 +103,7 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
       LeafCursor(fieldContext, focus, Some(parent), parent.env).rightIor
 
     fieldMapping(context, fieldName) match {
-      case Some(_ : RootEffect) =>
+      case Some(_ : EffectMapping) =>
         mkLeafCursor(parent.focus)
       case Some(CursorField(_, f, _, _, _)) =>
         f(parent).flatMap(res => mkLeafCursor(res))
@@ -135,10 +141,22 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
       }
     }
 
+  /** Yields the `EffectMapping`, if any, associated with `fieldName`. */
+  def effectMapping(context: Context, fieldName: String): Option[EffectMapping] =
+    fieldMapping(context, fieldName).collect {
+      case em: EffectMapping => em
+    }
+
   /** Yields the `RootEffect`, if any, associated with `fieldName`. */
   def rootEffect(context: Context, fieldName: String): Option[RootEffect] =
     fieldMapping(context, fieldName).collect {
       case re: RootEffect => re
+    }
+
+  /** Yields the `RootStream`, if any, associated with `fieldName`. */
+  def rootStream(context: Context, fieldName: String): Option[RootStream] =
+    fieldMapping(context, fieldName).collect {
+      case rs: RootStream => rs
     }
 
   def leafMapping[T](tpe: Type): Option[LeafMapping[T]] =
@@ -235,14 +253,20 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
   }
 
   /**
+    * Abstract type of field mappings with effects.
+    */
+  abstract class EffectMapping extends FieldMapping {
+    def toRootStream: RootStream
+  }
+
+  /**
    * Root effects can perform an intial effect prior to computing the resulting
    * `Cursor` and effective `Query`.
    *
-   * Convenience methods are provided to cover the cases where only one of the
-   * query or the cursor are computed, and for where the computation is one-shot
-   * or a Stream. One-shot effects are used to perform initial effectful setup
-   * for a query or to perform the effect associated with a GraphQL mutation.
-   * Stream effects are used for GraphQL subscriptions.
+   * These effects are used to perform initial effectful setup for a query or to
+   * perform the effect associated with a GraphQL mutation. Convenience methods
+   * are provided to cover the cases where only one of the query or the cursor
+   * are computed.
    *
    * If only the query is computed the default root cursor for the mapping will
    * be used. If only the cursor is computed the client query (after elaboration)
@@ -250,9 +274,11 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
    * be passed to the result construction stage via the environment associated
    * with the returned cursor.
    */
-  case class RootEffect private (fieldName: String, effect: (Query, Path, Env) => Stream[F, Result[(Query, Cursor)]])(implicit val pos: SourcePos) extends FieldMapping {
+  case class RootEffect private (fieldName: String, effect: (Query, Path, Env) => F[Result[(Query, Cursor)]])(implicit val pos: SourcePos)
+    extends EffectMapping {
     def hidden = false
     def withParent(tpe: Type): RootEffect = this
+    def toRootStream: RootStream = RootStream(fieldName)((q, p, e) => Stream.eval(effect(q, p, e)))
   }
 
   object RootEffect {
@@ -260,24 +286,13 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
      * Yields a `RootEffect` which performs both an initial effect and yields an effect-specific query and
      * corresponding root cursor.
      */
-    def apply(fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[(Query, Cursor)]])(implicit pos: SourcePos, di: DummyImplicit): RootEffect =
+    def apply(fieldName: String)(effect: (Query, Path, Env) => F[Result[(Query, Cursor)]])(implicit pos: SourcePos, di: DummyImplicit): RootEffect =
       new RootEffect(fieldName, effect)
 
     /**
       * Yields a `RootEffect` which performs an initial effect and yields an effect-specific root cursor.
       */
     def computeCursor(fieldName: String)(effect: (Query, Path, Env) => F[Result[Cursor]])(implicit pos: SourcePos): RootEffect =
-      new RootEffect(
-        fieldName,
-        (query, path, env) => Stream.eval(effect(query, path, env).map(_.map(c => (query, c))))
-      )
-
-    /**
-      * Yields a `RootEffect` which yields a stream of effect-specific root cursors.
-      *
-      * This form of effect is typically used to implement GraphQL subscriptions.
-      */
-    def computeCursorStream(fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[Cursor]])(implicit pos: SourcePos): RootEffect =
       new RootEffect(
         fieldName,
         (query, path, env) => effect(query, path, env).map(_.map(c => (query, c)))
@@ -291,23 +306,62 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
       new RootEffect(
         fieldName,
         (query, path, env) =>
-          Stream.eval(
-            (for {
-              q  <- IorT(effect(query, path, env))
-              qc <- IorT(defaultRootCursor(q, path.rootTpe, env))
-            } yield qc).value
-          )
+          (for {
+            q  <- IorT(effect(query, path, env))
+            qc <- IorT(defaultRootCursor(q, path.rootTpe, env))
+          } yield qc).value
+      )
+  }
+
+  /**
+   * Root streams can perform an intial effect prior to emitting the resulting
+   * cursors and effective queryies.
+   *
+   * Stream effects are used for GraphQL subscriptions. Convenience methods are
+   * provided to cover the cases where only one of the query or the cursor are
+   * computed
+   *
+   * If only the query is computed the default root cursor for the mapping will
+   * be used. If only the cursor is computed the client query (after elaboration)
+   * is used unmodified ... in this case results of the performed effect can only
+   * be passed to the result construction stage via the environment associated
+   * with the returned cursor.
+   */
+  case class RootStream private (fieldName: String, effect: (Query, Path, Env) => Stream[F, Result[(Query, Cursor)]])(implicit val pos: SourcePos)
+    extends EffectMapping {
+    def hidden = false
+    def withParent(tpe: Type): RootStream = this
+    def toRootStream: RootStream = this
+  }
+
+  object RootStream {
+    /**
+     * Yields a `RootStream` which performs both an initial effect and yields an effect-specific query and
+     * corresponding root cursor.
+     */
+    def apply(fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[(Query, Cursor)]])(implicit pos: SourcePos, di: DummyImplicit): RootStream =
+      new RootStream(fieldName, effect)
+
+    /**
+      * Yields a `RootStream` which yields a stream of effect-specific root cursors.
+      *
+      * This form of effect is typically used to implement GraphQL subscriptions.
+      */
+    def computeCursor(fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[Cursor]])(implicit pos: SourcePos): RootStream =
+      new RootStream(
+        fieldName,
+        (query, path, env) => effect(query, path, env).map(_.map(c => (query, c)))
       )
 
     /**
-      * Yields a `RootEffect` which yields a stream of effect-specific queries
+      * Yields a `RootStream` which yields a stream of effect-specific queries
       * which are executed with respect to the default root cursor for the
       * corresponding `Mapping`.
       *
       * This form of effect is typically used to implement GraphQL subscriptions.
       */
-    def computeQueryStream(fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[Query]])(implicit pos: SourcePos): RootEffect =
-      new RootEffect(
+    def computeQuery(fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[Query]])(implicit pos: SourcePos): RootStream =
+      new RootStream(
         fieldName,
         (query, path, env) =>
           effect(query, path, env).flatMap(rq =>

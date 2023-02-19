@@ -703,13 +703,13 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     rootFieldMapping(context, query) match {
       //case Some(_: SqlFieldMapping) => true // Scala 3 thinks this is unreachable
       case Some(fm) if fm.isInstanceOf[SqlFieldMapping] => true
-      case Some(re: RootEffect) =>
+      case Some(re: EffectMapping) =>
         val fieldContext = context.forFieldOrAttribute(re.fieldName, None)
         objectMapping(fieldContext).map { om =>
           om.fieldMappings.exists {
             //case _: SqlFieldMapping => true // Scala 3 thinks this is unreachable
-      case fm if fm.isInstanceOf[SqlFieldMapping] => true
-      case _ => false
+            case fm if fm.isInstanceOf[SqlFieldMapping] => true
+            case _ => false
           }
         }.getOrElse(false)
       case _ => false
@@ -745,7 +745,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           }
         )
 
-      case (Some(_: SqlObject)|Some(_: RootEffect), sc: SqlCursor) =>
+      case (Some(_: SqlObject)|Some(_: EffectMapping), sc: SqlCursor) =>
         sc.asTable.map { table =>
           val focussed = sc.mapped.narrow(fieldContext, table)
           sc.mkChild(context = fieldContext, focus = focussed)

@@ -23,19 +23,19 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
 
   // Syntax to allow Circe-specific root effects
   implicit class CirceMappingRootEffectSyntax(self: RootEffect.type) {
-
     def computeJson(fieldName: String)(effect: (Query, Path, Env) => F[Result[Json]])(implicit pos: SourcePos): RootEffect =
       self.computeCursor(fieldName)((q, p, e) => effect(q, p, e).map(_.map(circeCursor(p, e, _))))
     
-    def computeJsonStream(fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[Json]])(implicit pos: SourcePos): RootEffect =
-      self.computeCursorStream(fieldName)((q, p, e) => effect(q, p, e).map(_.map(circeCursor(p, e, _))))
-
     def computeEncodable[A](fieldName: String)(effect: (Query, Path, Env) => F[Result[A]])(implicit pos: SourcePos, enc: Encoder[A]): RootEffect =
       computeJson(fieldName)((q, p, e) => effect(q, p, e).map(_.map(enc(_))))
+  }
 
-    def computeEncodableStream[A](fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[A]])(implicit pos: SourcePos, enc: Encoder[A]): RootEffect =
-      computeJsonStream(fieldName)((q, p, e) => effect(q, p, e).map(_.map(enc(_))))
+  implicit class CirceMappingRootStreamSyntax(self: RootStream.type) {
+    def computeJson(fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[Json]])(implicit pos: SourcePos): RootStream =
+      self.computeCursor(fieldName)((q, p, e) => effect(q, p, e).map(_.map(circeCursor(p, e, _))))
 
+    def computeEncodable[A](fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[A]])(implicit pos: SourcePos, enc: Encoder[A]): RootStream =
+      computeJson(fieldName)((q, p, e) => effect(q, p, e).map(_.map(enc(_))))
   }
 
   def circeCursor(path: Path, env: Env, value: Json): Cursor =
@@ -52,7 +52,7 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
         CirceCursor(fieldContext, json, Some(parent), parent.env).rightIor
       case (Some(CursorFieldJson(_, f, _, _)), _) =>
         f(parent).map(res => CirceCursor(fieldContext, focus = res, parent = Some(parent), env = parent.env))
-      case (None|Some(RootEffect(_, _)), json: Json) =>
+      case (None|Some(_: EffectMapping), json: Json) =>
         val f = json.asObject.flatMap(_(fieldName))
         f match {
           case None if fieldContext.tpe.isNullable => CirceCursor(fieldContext, Json.Null, Some(parent), parent.env).rightIor

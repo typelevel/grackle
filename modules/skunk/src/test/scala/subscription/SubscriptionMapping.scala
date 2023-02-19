@@ -84,7 +84,7 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
       ObjectMapping(
         tpe = SubscriptionType,
         fieldMappings = List(
-          RootEffect.computeQueryStream("channel")((query, _, _) =>
+          RootStream.computeQuery("channel")((query, _, _) =>
             for {
               s  <- fs2.Stream.resource(pool)
               id <- s.channel(id"city_channel").listen(256).map(_.value.toInt)
