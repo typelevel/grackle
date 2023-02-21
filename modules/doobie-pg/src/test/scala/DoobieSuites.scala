@@ -26,7 +26,10 @@ final class CoalesceSpec extends DoobieDatabaseSuite with SqlCoalesceSpec {
 }
 
 final class ComposedWorldSpec extends DoobieDatabaseSuite with SqlComposedWorldSpec {
-  lazy val mapping = new SqlComposedMapping(new DoobieTestMapping(xa) with SqlWorldMapping[IO], CurrencyMapping[IO])
+  def mapping: IO[(CurrencyMapping[IO], QueryExecutor[IO, Json])] =
+    for {
+      currencyMapping <- CurrencyMapping[IO]
+    } yield (currencyMapping, new SqlComposedMapping(new DoobieTestMapping(xa) with SqlWorldMapping[IO], currencyMapping))
 }
 
 final class CompositeKeySpec extends DoobieDatabaseSuite with SqlCompositeKeySpec {

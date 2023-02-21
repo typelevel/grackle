@@ -26,7 +26,10 @@ final class CoalesceSpec extends SkunkDatabaseSuite with SqlCoalesceSpec {
 }
 
 final class ComposedWorldSpec extends SkunkDatabaseSuite with SqlComposedWorldSpec {
-  lazy val mapping = new SqlComposedMapping(new SkunkTestMapping(pool) with SqlWorldMapping[IO], CurrencyMapping[IO])
+  def mapping: IO[(CurrencyMapping[IO], QueryExecutor[IO, Json])] =
+    for {
+      currencyMapping <- CurrencyMapping[IO]
+    } yield (currencyMapping, new SqlComposedMapping(new SkunkTestMapping(pool) with SqlWorldMapping[IO], currencyMapping))
 }
 
 final class CompositeKeySpec extends SkunkDatabaseSuite with SqlCompositeKeySpec {

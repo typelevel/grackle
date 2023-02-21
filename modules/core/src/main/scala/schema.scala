@@ -716,6 +716,20 @@ object Value {
 
   case object AbsentValue extends Value
 
+  object StringListValue {
+    def apply(ss: List[String]): Value =
+      ListValue(ss.map(StringValue(_)))
+
+    def unapply(value: Value): Option[List[String]] =
+      value match {
+        case ListValue(l) => l.traverse {
+          case StringValue(s) => Some(s)
+          case _ => None
+        }
+        case _ => None
+      }
+  }
+
   def checkValue(iv: InputValue, value: Option[Value]): Result[Value] =
     (iv.tpe.dealias, value) match {
       case (_, None) if iv.defaultValue.isDefined =>

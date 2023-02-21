@@ -50,7 +50,7 @@ final class SubscriptionSpec extends CatsSuite {
             )
           )),
           ObjectMapping(SubscriptionType, List(
-            RootEffect.computeCursorStream("watch")((_, path, env) =>
+            RootStream.computeCursor("watch")((_, path, env) =>
               ref.discrete.map(n => Result(valueCursor(path, env, n))))
           ))
         )

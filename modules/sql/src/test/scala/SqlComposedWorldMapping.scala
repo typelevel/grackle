@@ -3,43 +3,48 @@
 
 package edu.gemini.grackle.sql.test
 
-import cats.Monad
-import cats.data.Ior
+import cats.data.{Chain, Ior}
+import cats.effect.{Ref, Sync}
 import cats.implicits._
 import edu.gemini.grackle._
 import edu.gemini.grackle.sql.Like
 import edu.gemini.grackle.syntax._
+import io.circe.Json
 
+import Cursor.Env
 import Query._
 import Predicate._
 import Value._
 import QueryCompiler._
-import QueryInterpreter.mkErrorResult
+import QueryInterpreter.{mkErrorResult, ProtoJson}
 
 /* Currency component */
 
-object CurrencyData {
-  case class Currency(
-    code: String,
-    exchangeRate: Double,
-    countryCode: String
-  )
+case class Currency(
+  code: String,
+  exchangeRate: Double,
+  countryCode: String
+)
 
-  val BRL = Currency("BRL", 0.25, "BRA")
-  val EUR = Currency("EUR", 1.12, "NLD")
-  val GBP = Currency("GBP", 1.25, "GBR")
-
-  val currencies = List(BRL, EUR, GBP)
-
+case class CurrencyData(currencies: Map[String, Currency]) {
+  def exchangeRate(code: String): Option[Double] = currencies.get(code).map(_.exchangeRate)
+  def update(code: String, exchangeRate: Double): Option[CurrencyData] =
+    currencies.get(code).map(currency => CurrencyData(currencies.updated(code, currency.copy(exchangeRate = exchangeRate))))
+  def currencies(countryCodes: List[String]): List[Currency] =
+    currencies.values.filter(c => countryCodes.contains(c.countryCode)).toList
 }
 
-class CurrencyMapping[F[_] : Monad] extends ValueMapping[F] {
-  import CurrencyData._
+class CurrencyMapping[F[_] : Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[F, Int]) extends ValueMapping[F] {
+  def update(code: String, exchangeRate: Double): F[Unit] =
+    dataRef.update(data => data.update(code, exchangeRate).getOrElse(data))
+
+  def count: F[Int] = countRef.get
 
   val schema =
     schema"""
       type Query {
-        allCurrencies: [Currency!]!
+        exchangeRate(code: String!): Currency
+        currencies(countryCodes: [String!]!): [Currency!]!
       }
       type Currency {
         code: String!
@@ -57,7 +62,18 @@ class CurrencyMapping[F[_] : Monad] extends ValueMapping[F] {
         tpe = QueryType,
         fieldMappings =
           List(
-            ValueField("allCurrencies", _ => currencies)
+            RootEffect.computeCursor("exchangeRate") {
+              case (Select(_, List(Binding("code", StringValue(code))), _), path, env) =>
+                countRef.update(_+1) *>
+                dataRef.get.map(data => Result(valueCursor(path, env, data.exchangeRate(code))))
+              case _ => Result.failure("Bad query").pure[F].widen
+            },
+            RootEffect.computeCursor("currencies") {
+              case (Select(_, List(Binding("countryCodes", StringListValue(countryCodes))), _), path, env) =>
+                countRef.update(_+1) *>
+                dataRef.get.map(data => Result(valueCursor(path, env, data.currencies(countryCodes))))
+              case _ => Result.failure("Bad query").pure[F].widen
+            }
           )
       ),
       ValueObjectMapping[Currency](
@@ -70,15 +86,96 @@ class CurrencyMapping[F[_] : Monad] extends ValueMapping[F] {
           )
       )
   )
+
+  override def combineQueries
+    (queries: List[(Query, Type, Env)])
+    (exec: List[(Query, Type, Env)] => F[(Chain[Problem], List[ProtoJson])]): F[(Chain[Problem], List[ProtoJson])] = {
+
+    import SimpleCurrencyQuery.unpackResults
+
+    if(queries.sizeCompare(1) <= 0) exec(queries)
+    else {
+      val indexedQueries = queries.zipWithIndex
+      val (groupable, ungroupable) = indexedQueries.partition {
+        case ((SimpleCurrencyQuery(_, _), _, _), _) => true
+        case _ => false
+      }
+
+      val grouped: List[((Select, Type, Env), List[Int])] =
+        (groupable.collect {
+          case ((SimpleCurrencyQuery(code, child), tpe, env), i) =>
+            ((child, tpe, env), code, i)
+        }).groupBy(_._1).toList.map {
+          case ((child, tpe, env), xs) =>
+            val (codes, is) = xs.foldLeft((List.empty[String], List.empty[Int])) {
+              case ((codes, is), (_, code, i)) => (code :: codes, i :: is)
+            }
+            ((SimpleCurrencyQuery(codes, child), tpe, env), is)
+        }
+
+      val (grouped0, groupedIndices) = grouped.unzip
+      val (ungroupable0, ungroupedIndices) = ungroupable.unzip
+
+      for {
+        groupedResults   <- exec(grouped0).map(_.map(_.zip(groupedIndices)))
+        ungroupedResults <- exec(ungroupable0).map(_.map(_.zip(ungroupedIndices)))
+      } yield {
+        val allErrors = groupedResults._1 ++ ungroupedResults._1
+        val allResults = groupedResults._2.flatMap((unpackResults _).tupled) ++ ungroupedResults._2
+
+        val repackedResults = indexedQueries.map {
+          case (_, i) => allResults.find(_._2 == i).map(_._1).getOrElse(ProtoJson.fromJson(Json.Null))
+        }
+
+        (allErrors, repackedResults)
+      }
+    }
+  }
+
+  object SimpleCurrencyQuery {
+    def apply(codes: List[String], child: Query): Select =
+      Select("currencies", List(Binding("countryCodes", StringListValue(codes))), child)
+
+    def unapply(sel: Select): Option[(String, Query)] =
+      sel match {
+        case Select("currencies", List(Binding("countryCodes", StringListValue(List(code)))), child)  => Some((code, child))
+        case _ => None
+      }
+
+    def unpackResults(res: ProtoJson, indices: List[Int]): List[(ProtoJson, Int)] =
+      res match {
+        case j: Json =>
+          (for {
+            obj <- j.asObject
+            fld <- obj("currencies")
+            arr <- fld.asArray
+          } yield {
+            val ress = arr.toList.map { elem => ProtoJson.fromJson(Json.obj("currencies" -> Json.arr(elem))) }
+            ress.zip(indices)
+          }).getOrElse(Nil)
+        case _ => Nil
+      }
+  }
 }
 
 object CurrencyMapping {
-  def apply[F[_] : Monad]: CurrencyMapping[F] = new CurrencyMapping[F]
+  def apply[F[_] : Sync]: F[CurrencyMapping[F]] = {
+    val BRL = Currency("BRL", 0.25, "BRA")
+    val EUR = Currency("EUR", 1.12, "NLD")
+    val GBP = Currency("GBP", 1.25, "GBR")
+
+    val data = CurrencyData(List(BRL, EUR, GBP).map(c => (c.code, c)).toMap)
+
+    for {
+      dataRef  <- Ref[F].of(data)
+      countRef <- Ref[F].of(0)
+    } yield new CurrencyMapping[F](dataRef, countRef)
+  }
 }
 
 /* Composition */
 
-class SqlComposedMapping[F[_] : Monad]
+class SqlComposedMapping[F[_] : Sync]
   (world: Mapping[F], currency: Mapping[F]) extends ComposedMapping[F] {
   val schema =
     schema"""
@@ -154,7 +251,7 @@ class SqlComposedMapping[F[_] : Monad]
   def countryCurrencyJoin(c: Cursor, q: Query): Result[Query] =
     (c.fieldAs[String]("code"), q) match {
       case (Ior.Right(countryCode: String), Select("currencies", _, child)) =>
-        Select("allCurrencies", Nil, Filter(Eql(CurrencyType / "countryCode", Const(countryCode)), child)).rightIor
+        Select("currencies", List(Binding("countryCodes", ListValue(List(StringValue(countryCode))))), child).rightIor
       case _ => mkErrorResult(s"Expected 'code' attribute at ${c.tpe}")
     }
 
