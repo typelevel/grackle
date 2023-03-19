@@ -125,6 +125,19 @@ final class MutationSpec extends DoobieDatabaseSuite with SqlMutationSpec {
     }
 }
 
+final class NestedEffectsSpec extends DoobieDatabaseSuite with SqlNestedEffectsSpec {
+  def mapping: IO[(CurrencyService[IO], QueryExecutor[IO, Json])] =
+    for {
+      currencyService0 <- CurrencyService[IO]
+    } yield {
+      val mapping =
+        new DoobieTestMapping(xa) with SqlNestedEffectsMapping[IO] {
+          lazy val currencyService = currencyService0
+        }
+      (currencyService0, mapping)
+    }
+}
+
 final class Paging1Spec extends DoobieDatabaseSuite with SqlPaging1Spec {
   lazy val mapping = new DoobieTestMapping(xa) with SqlPaging1Mapping[IO]
 }

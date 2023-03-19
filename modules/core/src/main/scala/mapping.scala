@@ -6,7 +6,7 @@ package edu.gemini.grackle
 import scala.collection.Factory
 
 import cats.Monad
-import cats.data.{Chain, Ior, IorT}
+import cats.data.{Ior, IorT}
 import cats.implicits._
 import fs2.{ Stream, Compiler }
 import io.circe.{Encoder, Json}
@@ -15,8 +15,8 @@ import org.tpolecat.sourcepos.SourcePos
 import org.tpolecat.typename._
 
 import Cursor.{AbstractCursor, Context, Env}
-import Query.Select
-import QueryCompiler.{ComponentElaborator, SelectElaborator, IntrospectionLevel}
+import Query.{EffectHandler, Select}
+import QueryCompiler.{ComponentElaborator, EffectElaborator, SelectElaborator, IntrospectionLevel}
 import QueryInterpreter.{mkErrorResult, ProtoJson}
 import IntrospectionLevel._
 
@@ -61,15 +61,29 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
         QueryInterpreter.mkInvalidResponse(invalid).pure[Stream[F,*]]
     }
 
-  def combineQueries
-    (queries: List[(Query, Type, Env)])
-    (exec: List[(Query, Type, Env)] => F[(Chain[Problem], List[ProtoJson])]): F[(Chain[Problem], List[ProtoJson])] = {
-    exec(queries)
-  }
+  /** Combine and execute multiple queries.
+   *
+   *  Each query is interpreted in the context of the Cursor it is
+   *  paired with. The result list is aligned with the argument
+   *  query list. For each query at most one stage will be run and the
+   *  corresponding result may contain deferred components.
+   *
+   *  Errors are aggregated across all the argument queries and are
+   *  accumulated on the `Left` of the result.
+   *
+   *  This method is typically called at the end of a stage to evaluate
+   *  deferred subqueries in the result of that stage. These will be
+   *  grouped by and passed jointly to the responsible mapping in
+   *  the next stage using this method. Maappongs which are able
+   *  to benefit from combining queries may do so by overriding this
+   *  method to implement their specific combinging logic.
+   */
+  def combineAndRun(queries: List[(Query, Cursor)]): F[Result[List[ProtoJson]]] =
+    queries.map { case (q, c) => (q, schema.queryType, c) }.traverse((interpreter.runRootEffects _).tupled).map(ProtoJson.combineResults)
 
   /** Yields a `Cursor` focused on the top level operation type of the query */
-  def defaultRootCursor(query: Query, tpe: Type, env: Env): F[Result[(Query, Cursor)]] =
-    Result((query, RootCursor(Context(tpe), None, env))).pure[F].widen
+  def defaultRootCursor(query: Query, tpe: Type, parentCursor: Option[Cursor]): F[Result[(Query, Cursor)]] =
+    Result((query, RootCursor(Context(tpe), parentCursor, Env.empty))).pure[F].widen
 
   /**
    * Root `Cursor` focussed on the top level operation of a query
@@ -139,12 +153,6 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
           ot.interfaces.collectFirstSome(nt => fieldMapping(context.asType(nt), fieldName))
         case _ => None
       }
-    }
-
-  /** Yields the `EffectMapping`, if any, associated with `fieldName`. */
-  def effectMapping(context: Context, fieldName: String): Option[EffectMapping] =
-    fieldMapping(context, fieldName).collect {
-      case em: EffectMapping => em
     }
 
   /** Yields the `RootEffect`, if any, associated with `fieldName`. */
@@ -255,8 +263,20 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
   /**
     * Abstract type of field mappings with effects.
     */
-  abstract class EffectMapping extends FieldMapping {
-    def toRootStream: RootStream
+  trait EffectMapping extends FieldMapping
+
+  object EffectMapping {
+    case class NestedEffect(fieldName: String, handler: EffectHandler[F])(implicit val pos: SourcePos)
+      extends EffectMapping {
+      def hidden = false
+      def withParent(tpe: Type): NestedEffect = this
+    }
+
+    def apply(fieldName: String)(effect: (Query, Cursor) => F[Result[(Query, Cursor)]])(implicit pos: SourcePos): NestedEffect =
+      new NestedEffect(fieldName, (qs: List[(Query, Cursor)]) => effect.tupled(qs.head).map(_.map(List(_))))
+
+    def apply(fieldName: String, handler: EffectHandler[F])(implicit pos: SourcePos): NestedEffect =
+      new NestedEffect(fieldName, handler)
   }
 
   /**
@@ -308,14 +328,14 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
         (query, path, env) =>
           (for {
             q  <- IorT(effect(query, path, env))
-            qc <- IorT(defaultRootCursor(q, path.rootTpe, env))
-          } yield qc).value
+            qc <- IorT(defaultRootCursor(q, path.rootTpe, None))
+          } yield qc.map(_.withEnv(env))).value
       )
   }
 
   /**
    * Root streams can perform an intial effect prior to emitting the resulting
-   * cursors and effective queryies.
+   * cursors and effective queries.
    *
    * Stream effects are used for GraphQL subscriptions. Convenience methods are
    * provided to cover the cases where only one of the query or the cursor are
@@ -331,7 +351,6 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
     extends EffectMapping {
     def hidden = false
     def withParent(tpe: Type): RootStream = this
-    def toRootStream: RootStream = this
   }
 
   object RootStream {
@@ -368,8 +387,8 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
             Stream.eval(
               (for {
                 q  <- IorT(rq.pure[F])
-                qc <- IorT(defaultRootCursor(q, path.rootTpe, env))
-              } yield qc).value
+                qc <- IorT(defaultRootCursor(q, path.rootTpe, None))
+              } yield qc.map(_.withEnv(env))).value
             )
           )
       )
@@ -406,8 +425,8 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
 
   case class Delegate(
     fieldName: String,
-    interpreter: Mapping[F],
-    join: (Cursor, Query) => Result[Query] = ComponentElaborator.TrivialJoin
+    mapping: Mapping[F],
+    join: (Query, Cursor) => Result[Query] = ComponentElaborator.TrivialJoin
   )(implicit val pos: SourcePos) extends FieldMapping {
     def hidden = false
     def withParent(tpe: Type): Delegate = this
@@ -429,7 +448,21 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
     ComponentElaborator(componentMappings)
   }
 
-  def compilerPhases: List[QueryCompiler.Phase] = List(selectElaborator, componentElaborator)
+  lazy val effectElaborator = {
+    val effectMappings =
+      typeMappings.flatMap {
+        case om: ObjectMapping =>
+          om.fieldMappings.collect {
+            case EffectMapping.NestedEffect(fieldName, handler) =>
+              EffectElaborator.EffectMapping(schema.ref(om.tpe.toString), fieldName, handler)
+          }
+        case _ => Nil
+      }
+
+    EffectElaborator(effectMappings)
+  }
+
+  def compilerPhases: List[QueryCompiler.Phase] = List(selectElaborator, componentElaborator, effectElaborator)
 
   lazy val compiler = new QueryCompiler(schema, compilerPhases)
 

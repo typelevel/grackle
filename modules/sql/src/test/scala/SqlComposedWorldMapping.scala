@@ -3,7 +3,7 @@
 
 package edu.gemini.grackle.sql.test
 
-import cats.data.{Chain, Ior}
+import cats.data.IorT
 import cats.effect.{Ref, Sync}
 import cats.implicits._
 import edu.gemini.grackle._
@@ -11,12 +11,12 @@ import edu.gemini.grackle.sql.Like
 import edu.gemini.grackle.syntax._
 import io.circe.Json
 
-import Cursor.Env
+import Cursor.{Context, Env}
 import Query._
 import Predicate._
 import Value._
 import QueryCompiler._
-import QueryInterpreter.{mkErrorResult, ProtoJson}
+import QueryInterpreter.ProtoJson
 
 /* Currency component */
 
@@ -31,7 +31,7 @@ case class CurrencyData(currencies: Map[String, Currency]) {
   def update(code: String, exchangeRate: Double): Option[CurrencyData] =
     currencies.get(code).map(currency => CurrencyData(currencies.updated(code, currency.copy(exchangeRate = exchangeRate))))
   def currencies(countryCodes: List[String]): List[Currency] =
-    currencies.values.filter(c => countryCodes.contains(c.countryCode)).toList
+    countryCodes.flatMap(cc => currencies.values.find(_.countryCode == cc).toList)
 }
 
 class CurrencyMapping[F[_] : Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[F, Int]) extends ValueMapping[F] {
@@ -87,49 +87,59 @@ class CurrencyMapping[F[_] : Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[
       )
   )
 
-  override def combineQueries
-    (queries: List[(Query, Type, Env)])
-    (exec: List[(Query, Type, Env)] => F[(Chain[Problem], List[ProtoJson])]): F[(Chain[Problem], List[ProtoJson])] = {
-
+  override def combineAndRun(queries: List[(Query, Cursor)]): F[Result[List[ProtoJson]]] = {
     import SimpleCurrencyQuery.unpackResults
 
-    if(queries.sizeCompare(1) <= 0) exec(queries)
+    val expandedQueries =
+      queries.map {
+        case (Select("currencies", _, child), c@Code(code)) =>
+          (Select("currencies", List(Binding("countryCodes", ListValue(List(StringValue(code))))), child), c)
+        case other => other
+      }
+
+    if(expandedQueries.sizeCompare(1) <= 0) super.combineAndRun(expandedQueries)
     else {
-      val indexedQueries = queries.zipWithIndex
+      val indexedQueries = expandedQueries.zipWithIndex
       val (groupable, ungroupable) = indexedQueries.partition {
-        case ((SimpleCurrencyQuery(_, _), _, _), _) => true
+        case ((SimpleCurrencyQuery(_, _), _), _) => true
         case _ => false
       }
 
-      val grouped: List[((Select, Type, Env), List[Int])] =
+      def mkKey(q: ((Query, Cursor), String, Int)): (Query, Env, Context) =
+        (q._1._1, q._1._2.fullEnv, q._1._2.context)
+
+      val grouped: List[((Select, Cursor), List[Int])] =
         (groupable.collect {
-          case ((SimpleCurrencyQuery(code, child), tpe, env), i) =>
-            ((child, tpe, env), code, i)
-        }).groupBy(_._1).toList.map {
-          case ((child, tpe, env), xs) =>
+          case ((SimpleCurrencyQuery(code, child), cursor), i) =>
+            ((child, cursor), code, i)
+        }).groupBy(mkKey).toList.map {
+          case ((child, _, _), xs) =>
             val (codes, is) = xs.foldLeft((List.empty[String], List.empty[Int])) {
               case ((codes, is), (_, code, i)) => (code :: codes, i :: is)
             }
-            ((SimpleCurrencyQuery(codes, child), tpe, env), is)
+            val cursor = xs.head._1._2
+            ((SimpleCurrencyQuery(codes, child), cursor), is)
         }
 
       val (grouped0, groupedIndices) = grouped.unzip
       val (ungroupable0, ungroupedIndices) = ungroupable.unzip
 
-      for {
-        groupedResults   <- exec(grouped0).map(_.map(_.zip(groupedIndices)))
-        ungroupedResults <- exec(ungroupable0).map(_.map(_.zip(ungroupedIndices)))
+      (for {
+        groupedResults   <- IorT(super.combineAndRun(grouped0))
+        ungroupedResults <- IorT(super.combineAndRun(ungroupable0))
       } yield {
-        val allErrors = groupedResults._1 ++ ungroupedResults._1
-        val allResults = groupedResults._2.flatMap((unpackResults _).tupled) ++ ungroupedResults._2
-
+        val allResults: List[(ProtoJson, Int)] = groupedResults.zip(groupedIndices).flatMap((unpackResults _).tupled) ++ ungroupedResults.zip(ungroupedIndices)
         val repackedResults = indexedQueries.map {
           case (_, i) => allResults.find(_._2 == i).map(_._1).getOrElse(ProtoJson.fromJson(Json.Null))
         }
 
-        (allErrors, repackedResults)
-      }
+        repackedResults
+      }).value
     }
+  }
+
+  object Code {
+    def unapply(c: Cursor): Option[String] = c.fieldAs[String]("code").toOption
   }
 
   object SimpleCurrencyQuery {
@@ -243,17 +253,10 @@ class SqlComposedMapping[F[_] : Sync]
         tpe = CountryType,
         fieldMappings =
           List(
-            Delegate("currencies", currency, countryCurrencyJoin)
+            Delegate("currencies", currency)
           )
       )
     )
-
-  def countryCurrencyJoin(c: Cursor, q: Query): Result[Query] =
-    (c.fieldAs[String]("code"), q) match {
-      case (Ior.Right(countryCode: String), Select("currencies", _, child)) =>
-        Select("currencies", List(Binding("countryCodes", ListValue(List(StringValue(countryCode))))), child).rightIor
-      case _ => mkErrorResult(s"Expected 'code' attribute at ${c.tpe}")
-    }
 
   override val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {

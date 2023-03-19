@@ -56,21 +56,26 @@ object Query {
    *  `join` is applied to the current cursor and `child` yielding a continuation query which will be
    *  evaluated by the interpreter identified by `componentId`.
    */
-  case class Component[F[_]](mapping: Mapping[F], join: (Cursor, Query) => Result[Query], child: Query) extends Query {
+  case class Component[F[_]](mapping: Mapping[F], join: (Query, Cursor) => Result[Query], child: Query) extends Query {
     def render = s"<component: $mapping ${child.render}>"
+  }
+
+  /** Embeds possibly batched effects.
+   *  `handler` is applied to one or more possibly batched queries and cursors yielding corresponding
+   *  continuation queries and cursors which will be evaluated by the current interpreter in the next
+   *  phase.
+   */
+  case class Effect[F[_]](handler: EffectHandler[F], child: Query) extends Query {
+    def render = s"<effect: ${child.render}>"
+  }
+
+  trait EffectHandler[F[_]] {
+    def runEffects(queries: List[(Query, Cursor)]): F[Result[List[(Query, Cursor)]]]
   }
 
   /** Evaluates an introspection query relative to `schema` */
   case class Introspect(schema: Schema, child: Query) extends Query {
     def render = s"<introspect: ${child.render}>"
-  }
-
-  /** A deferred query.
-   *  `join` is applied to the current cursor and `child` yielding a continuation query which will be
-   *  evaluated by the current interpreter in its next stage.
-   */
-  case class Defer(join: (Cursor, Query) => Result[Query], child: Query, rootTpe: Type) extends Query {
-    def render = s"<defer: ${child.render}>"
   }
 
   /** Add `env` to the environment for the continuation `child` */

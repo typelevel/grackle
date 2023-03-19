@@ -173,7 +173,7 @@ object ComposedListMapping extends ComposedMapping[Id] {
     }
   ))
 
-  def collectionItemJoin(c: Cursor, q: Query): Result[Query] =
+  def collectionItemJoin(q: Query, c: Cursor): Result[Query] =
     (c.focus, q) match {
       case (c: CollectionData.Collection, Select("items", _, child)) =>
         Group(c.itemIds.map(id => Select("itemById", Nil, Unique(Filter(Eql(ItemType / "id", Const(id)), child))))).rightIor

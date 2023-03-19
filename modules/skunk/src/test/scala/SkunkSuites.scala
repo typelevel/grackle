@@ -128,6 +128,19 @@ final class MutationSpec extends SkunkDatabaseSuite with SqlMutationSpec {
     }
 }
 
+final class NestedEffectsSpec extends SkunkDatabaseSuite with SqlNestedEffectsSpec {
+  def mapping: IO[(CurrencyService[IO], QueryExecutor[IO, Json])] =
+    for {
+      currencyService0 <- CurrencyService[IO]
+    } yield {
+      val mapping =
+        new SkunkTestMapping(pool) with SqlNestedEffectsMapping[IO] {
+          lazy val currencyService = currencyService0
+        }
+      (currencyService0, mapping)
+    }
+}
+
 final class Paging1Spec extends SkunkDatabaseSuite with SqlPaging1Spec {
   lazy val mapping = new SkunkTestMapping(pool) with SqlPaging1Mapping[IO]
 }
