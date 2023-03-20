@@ -2330,10 +2330,12 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             val nonNullKeys = predCols.map(col => IsNull(col.toTerm, false))
 
             val pred1 = pred0.map(p => contextualiseWhereTerms(context, baseRef, p))
+            val distOss0 = oss.map(os => contextualiseOrderTerms(context, baseRef, os))
 
             val distOrders =
               keyCols.map(col => OrderSelection(col.derive(baseRef).toTerm, true, true)) ++
-              oss.filterNot(os => keyCols.contains(columnForSqlTerm(context, os.term).getOrElse(sys.error(s"No column for term ${os.term}"))))
+              distOss0.filterNot(os => keyCols.contains(columnForSqlTerm(context, os.term).getOrElse(sys.error(s"No column for term ${os.term}"))))
+
             val distOrderCols = orderCols.diff(keyCols).map(_.derive(baseRef))
 
             val predQuery0 = SqlSelect(

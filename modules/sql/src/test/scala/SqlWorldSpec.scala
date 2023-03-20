@@ -1893,4 +1893,50 @@ trait SqlWorldSpec extends AnyFunSuite {
 
     assertWeaklyEqual(res, expected)
   }
+
+  test("query with top-level ordering, limit and subobjects") {
+    val query = """
+      query {
+        countries(limit: 3, byPopulation: true) {
+          name
+          population
+          cities {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "countries" : [
+            {
+              "name" : "Bouvet Island",
+              "population" : 0,
+              "cities" : [
+              ]
+            },
+            {
+              "name" : "Antarctica",
+              "population" : 0,
+              "cities" : [
+              ]
+            },
+            {
+              "name" : "French Southern territories",
+              "population" : 0,
+              "cities" : [
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected, strictPaths = List(List("data", "countries")))
+  }
 }
