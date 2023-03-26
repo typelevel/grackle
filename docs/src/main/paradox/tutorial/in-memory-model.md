@@ -210,9 +210,9 @@ sealed trait Query {
   case class Group(queries: List[Query]) extends Query
   case class Unique(child: Query) extends Query
   case class Filter(pred: Predicate, child: Query) extends Query
-  case class Component[F[_]](mapping: Mapping[F], join: (Cursor, Query) => Result[Query], child: Query) extends Query
+  case class Component[F[_]](mapping: Mapping[F], join: (Query, Cursor) => Result[Query], child: Query) extends Query
+  case class Effect[F[_]](handler: EffectHandler[F], child: Query) extends Query
   case class Introspect(schema: Schema, child: Query) extends Query
-  case class Defer(join: (Cursor, Query) => Result[Query], child: Query, rootTpe: Type) extends Query
   case class Environment(env: Env, child: Query) extends Query
   case class Wrap(name: String, child: Query) extends Query
   case class Rename(name: String, child: Query) extends Query

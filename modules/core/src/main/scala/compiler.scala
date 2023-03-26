@@ -425,10 +425,10 @@ object QueryCompiler {
         case u@Unique(child)          => transform(child, vars, schema, tpe.nonNull.list).map(ec => u.copy(child = ec))
         case f@Filter(_, child)       => tpe.item.toRightIor(mkOneError(s"Filter of non-List type $tpe")).flatMap(item => transform(child, vars, schema, item).map(ec => f.copy(child = ec)))
         case c@Component(_, _, child) => transform(child, vars, schema, tpe).map(ec => c.copy(child = ec))
-        case d@Defer(_, child, _)     => transform(child, vars, schema, tpe).map(ec => d.copy(child = ec))
+        case e@Effect(_, child)       => transform(child, vars, schema, tpe).map(ec => e.copy(child = ec))
         case s@Skip(_, _, child)      => transform(child, vars, schema, tpe).map(ec => s.copy(child = ec))
         case l@Limit(_, child)        => transform(child, vars, schema, tpe).map(ec => l.copy(child = ec))
-        case o@Offset(_, child)        => transform(child, vars, schema, tpe).map(ec => o.copy(child = ec))
+        case o@Offset(_, child)       => transform(child, vars, schema, tpe).map(ec => o.copy(child = ec))
         case o@OrderBy(_, child)      => transform(child, vars, schema, tpe).map(ec => o.copy(child = ec))
         case e@Environment(_, child)  => transform(child, vars, schema, tpe).map(ec => e.copy(child = ec))
         case t@TransformCursor(_, child) => transform(child, vars, schema, tpe).map(ec => t.copy(child = ec))
@@ -643,10 +643,10 @@ object QueryCompiler {
 
   /**
    * A compiler phase which partitions a query for execution by multiple
-   * composed interpreters.
+   * composed mappings.
    *
    * This phase transforms the input query by assigning subtrees to component
-   * interpreters as specified by the supplied `mapping`.
+   * mappings as specified by the supplied `mapping`.
    *
    * The mapping has `Type` and field name pairs as keys and component id and
    * join function pairs as values. When the traversal of the input query
@@ -667,7 +667,7 @@ object QueryCompiler {
    *    interpreter the subquery can be parameterised with values derived
    *    from the parent query.
    */
-  class ComponentElaborator[F[_]] private (cmapping: Map[(Type, String), (Mapping[F], (Cursor, Query) => Result[Query])]) extends Phase {
+  class ComponentElaborator[F[_]] private (cmapping: Map[(Type, String), (Mapping[F], (Query, Cursor) => Result[Query])]) extends Phase {
     override def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
       query match {
         case PossiblyRenamedSelect(Select(fieldName, args, child), resultName) =>
@@ -690,12 +690,41 @@ object QueryCompiler {
   }
 
   object ComponentElaborator {
-    val TrivialJoin = (_: Cursor, q: Query) => q.rightIor
+    val TrivialJoin = (q: Query, _: Cursor) => q.rightIor
 
-    case class ComponentMapping[F[_]](tpe: TypeRef, fieldName: String, mapping: Mapping[F], join: (Cursor, Query) => Result[Query] = TrivialJoin)
+    case class ComponentMapping[F[_]](tpe: TypeRef, fieldName: String, mapping: Mapping[F], join: (Query, Cursor) => Result[Query] = TrivialJoin)
 
     def apply[F[_]](mappings: List[ComponentMapping[F]]): ComponentElaborator[F] =
       new ComponentElaborator(mappings.map(m => ((m.tpe, m.fieldName), (m.mapping, m.join))).toMap)
+  }
+
+  class EffectElaborator[F[_]] private (cmapping: Map[(Type, String), EffectHandler[F]]) extends Phase {
+    override def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
+      query match {
+        case PossiblyRenamedSelect(Select(fieldName, args, child), resultName) =>
+          (for {
+            obj      <- tpe.underlyingObject
+            childTpe =  obj.field(fieldName).getOrElse(ScalarType.AttributeType)
+          } yield {
+            transform(child, vars, schema, childTpe).map { elaboratedChild =>
+              schema.ref(obj).flatMap(ref => cmapping.get((ref, fieldName))) match {
+                case Some(handler) =>
+                  Wrap(resultName, Effect(handler, PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)))
+                case None =>
+                  PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)
+              }
+            }
+          }).getOrElse(mkErrorResult(s"Type $tpe has no field '$fieldName'"))
+
+        case _ => super.transform(query, vars, schema, tpe)
+      }
+  }
+
+  object EffectElaborator {
+    case class EffectMapping[F[_]](tpe: TypeRef, fieldName: String, handler: EffectHandler[F])
+
+    def apply[F[_]](mappings: List[EffectMapping[F]]): EffectElaborator[F] =
+      new EffectElaborator(mappings.map(m => ((m.tpe, m.fieldName), m.handler)).toMap)
   }
 
   class QuerySizeValidator(maxDepth: Int, maxWidth: Int) extends Phase {
@@ -726,9 +755,9 @@ object QueryCompiler {
           case Select(_, _, child) => if (group) loop(child, depth, width, false) else loop(child, depth + 1, width, false)
           case Group(queries) => handleGroupedQueries(queries, depth, width)
           case Component(_, _, child) => loop(child, depth, width, false)
+          case Effect(_, child) => loop(child, depth, width, false)
           case Environment(_, child) => loop(child, depth, width, false)
           case Empty => (depth, width)
-          case Defer(_, child, _) => loop(child, depth, width, false)
           case Filter(_, child) => loop(child, depth, width, false)
           case Introspect(_, _) => (depth, width)
           case Limit(_, child) => loop(child, depth, width, false)

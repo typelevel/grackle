@@ -125,6 +125,7 @@ lazy val sql = project
     name := "gsp-graphql-sql",
     libraryDependencies ++= Seq(
       "org.typelevel"     %% "log4cats-slf4j"         % log4catsVersion,
+      "io.circe"          %% "circe-generic"          % circeVersion % "test",
       "ch.qos.logback"    %  "logback-classic"        % logbackVersion % "test",
       "com.dimafeng"      %% "testcontainers-scala-scalatest"  % testContainersVersion % "test",
       "com.dimafeng"      %% "testcontainers-scala-postgresql" % testContainersVersion % "test",
