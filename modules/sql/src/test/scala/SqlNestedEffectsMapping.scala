@@ -3,6 +3,7 @@
 
 package edu.gemini.grackle.sql.test
 
+import cats.data.IorT
 import cats.effect.{Ref, Sync}
 import cats.implicits._
 import io.circe.{Encoder, Json}
@@ -12,6 +13,7 @@ import io.circe.generic.semiauto.deriveEncoder
 import edu.gemini.grackle._
 import sql.Like
 import syntax._
+import Cursor.Env
 import Query._, Predicate._, Value._
 import QueryCompiler._
 
@@ -50,10 +52,6 @@ object CurrencyService {
 
 trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
   def currencyService: CurrencyService[F]
-
-  object root extends RootDef {
-    val numCountries = col("num_countries", int8)
-  }
 
   object country extends TableDef("country") {
     val code           = col("code", bpchar(3))
@@ -130,6 +128,7 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
         code: String!
         exchangeRate: Float!
         countryCode: String!
+        country: Country!
       }
     """
 
@@ -168,28 +167,34 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
           SqlField("code2",           country.code2),
           SqlObject("cities",         Join(country.code, city.countrycode)),
           SqlObject("languages",      Join(country.code, countrylanguage.countrycode)),
-          EffectMapping("currencies", CurrencyQueryHandler)
+          EffectField("currencies",   CurrencyQueryHandler)
         ),
       ),
       ObjectMapping(
         tpe = CityType,
         fieldMappings = List(
-          SqlField("id", city.id, key = true, hidden = true),
-          SqlField("countrycode", city.countrycode, hidden = true),
-          SqlField("name", city.name),
-          SqlField("district", city.district),
-          SqlField("population", city.population),
-          SqlObject("country", Join(city.countrycode, country.code)),
+          SqlField("id",              city.id, key = true, hidden = true),
+          SqlField("countrycode",     city.countrycode, hidden = true),
+          SqlField("name",            city.name),
+          SqlField("district",        city.district),
+          SqlField("population",      city.population),
+          SqlObject("country",        Join(city.countrycode, country.code)),
         )
       ),
       ObjectMapping(
         tpe = LanguageType,
         fieldMappings = List(
-          SqlField("language", countrylanguage.language, key = true, associative = true),
-          SqlField("isOfficial", countrylanguage.isOfficial),
-          SqlField("percentage", countrylanguage.percentage),
-          SqlField("countrycode", countrylanguage.countrycode, hidden = true),
-          SqlObject("countries", Join(countrylanguage.countrycode, country.code))
+          SqlField("language",        countrylanguage.language, key = true, associative = true),
+          SqlField("isOfficial",      countrylanguage.isOfficial),
+          SqlField("percentage",      countrylanguage.percentage),
+          SqlField("countrycode",     countrylanguage.countrycode, hidden = true),
+          SqlObject("countries",      Join(countrylanguage.countrycode, country.code))
+        )
+      ),
+      ObjectMapping(
+        tpe = CurrencyType,
+        fieldMappings = List(
+          EffectField("country",      CountryQueryHandler)
         )
       )
     )
@@ -233,16 +238,47 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
     }
   }
 
+  object CountryQueryHandler extends EffectHandler[F] {
+    def runEffects(queries: List[(Query, Cursor)]): F[Result[List[(Query, Cursor)]]] = {
+      runGrouped(queries) {
+        case (PossiblyRenamedSelect(Select("country", _, child), alias), cursors, indices) =>
+          val codes = cursors.flatMap(_.fieldAs[Json]("countryCode").toOption.flatMap(_.asString).toList)
+          val combinedQuery = PossiblyRenamedSelect(Select("country", Nil, Filter(In(CountryType / "code", codes), child)), alias)
+
+          (for {
+            cursor <- IorT(sqlCursor(combinedQuery, Env.empty))
+          } yield {
+            codes.map { code =>
+              (PossiblyRenamedSelect(Select("country", Nil, Unique(Filter(Eql(CountryType / "code", Const(code)), child))), alias), cursor)
+            }.zip(indices)
+          }).value.widen
+
+        case _ => sys.error("Continuation query has the wrong shape")
+      }
+    }
+
+    def runGrouped(ts: List[(Query, Cursor)])(op: (Query, List[Cursor], List[Int]) => F[Result[List[((Query, Cursor), Int)]]]): F[Result[List[(Query, Cursor)]]] = {
+      val groupedAndIndexed = ts.zipWithIndex.groupMap(_._1._1)(ti => (ti._1._2, ti._2)).toList
+      val groupedResults =
+        groupedAndIndexed.map { case (q, cis) =>
+          val (cursors, indices) = cis.unzip
+          op(q, cursors, indices)
+        }
+
+      groupedResults.sequence.map(_.sequence.map(_.flatten.sortBy(_._2).map(_._1)))
+    }
+  }
+
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
-      case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Filter(Eql(CountryType / "code", Const(code)), child))).rightIor
-
       case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
         if (namePattern == "%")
           Select("cities", Nil, child).rightIor
         else
           Select("cities", Nil, Filter(Like(CityType / "name", namePattern, true), child)).rightIor
+
+      case Select("country", List(Binding("code", StringValue(code))), child) =>
+        Select("country", Nil, Unique(Filter(Eql(CountryType / "code", Const(code)), child))).rightIor
     }
   ))
 }

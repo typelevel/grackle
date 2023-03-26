@@ -73,6 +73,47 @@ trait SqlNestedEffectsSpec extends AnyFunSuite {
     assertWeaklyEqual(res, expected)
   }
 
+  test("composed query with aliasing") {
+    val query = """
+      query {
+        country(code: "GBR") {
+          name
+          cur1:currencies {
+            code
+          }
+          cur2:currencies {
+            exchangeRate
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "name" : "United Kingdom",
+            "cur1" : [
+              {
+                "code" : "GBP"
+              }
+            ],
+            "cur2" : [
+              {
+                "exchangeRate" : 1.25
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = mapping.flatMap(_._2.compileAndRun(query)).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
   test("simple multiple nested query") {
     val query = """
       query {
@@ -281,4 +322,151 @@ trait SqlNestedEffectsSpec extends AnyFunSuite {
 
     assertWeaklyEqual(res, expected)
   }
+
+  test("doubly composed query (1)") {
+    val query = """
+      query {
+        country(code: "GBR") {
+          name
+          currencies {
+            code
+            exchangeRate
+            country {
+              name
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "name" : "United Kingdom",
+            "currencies" : [
+              {
+                "code" : "GBP",
+                "exchangeRate" : 1.25,
+                "country" : {
+                  "name" : "United Kingdom"
+                }
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = mapping.flatMap(_._2.compileAndRun(query)).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
+  test("doubly composed query (2)") {
+    val query = """
+      query {
+        cities(namePattern: "Ame%") {
+          name
+          country {
+            name
+            currencies {
+              code
+              exchangeRate
+              country {
+                name
+              }
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "cities" : [
+            {
+              "name" : "Amersfoort",
+              "country" : {
+                "name" : "Netherlands",
+                "currencies" : [
+                  {
+                    "code" : "EUR",
+                    "exchangeRate" : 1.12,
+                    "country" : {
+                      "name" : "Netherlands"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name" : "Americana",
+              "country" : {
+                "name" : "Brazil",
+                "currencies" : [
+                  {
+                    "code" : "BRL",
+                    "exchangeRate" : 0.25,
+                    "country" : {
+                      "name" : "Brazil"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.flatMap(_._2.compileAndRun(query)).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
+  test("doubly composed query with alias") {
+    val query = """
+      query {
+        country(code: "GBR") {
+          name
+          currencies {
+            code
+            exchangeRate
+            foo:country {
+              name
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "name" : "United Kingdom",
+            "currencies" : [
+              {
+                "code" : "GBP",
+                "exchangeRate" : 1.25,
+                "foo" : {
+                  "name" : "United Kingdom"
+                }
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = mapping.flatMap(_._2.compileAndRun(query)).unsafeRunSync()
+    //println(res)
+
+    assertWeaklyEqual(res, expected)
+  }
+
 }

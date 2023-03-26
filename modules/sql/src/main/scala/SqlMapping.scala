@@ -641,6 +641,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     loop(query, context)
   }
 
+  def sqlCursor(query: Query, env: Env): F[Result[Cursor]] =
+    defaultRootCursor(query, schema.queryType, Some(RootCursor(Context(schema.queryType), None, env))).map(_.map(_._2))
+
   // Overrides definition in Mapping
   override def defaultRootCursor(query: Query, tpe: Type, parentCursor: Option[Cursor]): F[Result[(Query, Cursor)]] = {
     val context = Context(tpe)

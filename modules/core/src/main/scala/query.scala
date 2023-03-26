@@ -213,7 +213,13 @@ object Query {
 
   case class UntypedVarDef(name: String, tpe: Ast.Type, default: Option[Value])
 
-  /** Extractor for nested Rename/Select patterns in the query algebra */
+  /**
+   * Extractor for nested Rename/Select patterns in the query algebra
+   *
+   * PossiblyRenamedSelect is an extractor/constructor for a Select node
+   * possibly wrapped in a Rename node so that they can be handled together
+   * conveniently.
+   */
   object PossiblyRenamedSelect {
     def apply(sel: Select, resultName: String): Query = sel match {
       case Select(`resultName`, _, _) => sel

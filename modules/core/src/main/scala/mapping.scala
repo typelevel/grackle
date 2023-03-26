@@ -265,18 +265,15 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
     */
   trait EffectMapping extends FieldMapping
 
-  object EffectMapping {
-    case class NestedEffect(fieldName: String, handler: EffectHandler[F])(implicit val pos: SourcePos)
-      extends EffectMapping {
-      def hidden = false
-      def withParent(tpe: Type): NestedEffect = this
-    }
+  case class EffectField(fieldName: String, handler: EffectHandler[F])(implicit val pos: SourcePos)
+    extends EffectMapping {
+    def hidden = false
+    def withParent(tpe: Type): EffectField = this
+  }
 
-    def apply(fieldName: String)(effect: (Query, Cursor) => F[Result[(Query, Cursor)]])(implicit pos: SourcePos): NestedEffect =
-      new NestedEffect(fieldName, (qs: List[(Query, Cursor)]) => effect.tupled(qs.head).map(_.map(List(_))))
-
-    def apply(fieldName: String, handler: EffectHandler[F])(implicit pos: SourcePos): NestedEffect =
-      new NestedEffect(fieldName, handler)
+  object EffectField {
+    def apply(fieldName: String)(effect: (Query, Cursor) => F[Result[(Query, Cursor)]])(implicit pos: SourcePos): EffectField =
+      new EffectField(fieldName, (qs: List[(Query, Cursor)]) => effect.tupled(qs.head).map(_.map(List(_))))
   }
 
   /**
@@ -453,7 +450,7 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
       typeMappings.flatMap {
         case om: ObjectMapping =>
           om.fieldMappings.collect {
-            case EffectMapping.NestedEffect(fieldName, handler) =>
+            case EffectField(fieldName, handler) =>
               EffectElaborator.EffectMapping(schema.ref(om.tpe.toString), fieldName, handler)
           }
         case _ => Nil
