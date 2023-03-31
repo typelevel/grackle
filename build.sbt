@@ -19,7 +19,7 @@ val skunkVersion                = "0.5.1"
 val shapeless2Version           = "2.3.10"
 val shapeless3Version           = "3.1.0"
 val sourcePosVersion            = "1.1.0"
-val testContainersVersion       = "0.40.12"
+val testContainersVersion       = "0.40.14"
 val typenameVersion             = "1.1.0"
 
 val Scala2 = "2.13.10"
