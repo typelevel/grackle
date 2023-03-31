@@ -8,7 +8,7 @@ import scala.annotation.tailrec
 import scala.collection.Factory
 
 import cats.Monad
-import cats.data.{Chain, Ior, NonEmptyChain, NonEmptyList, State}
+import cats.data.{NonEmptyList, State}
 import cats.implicits._
 import io.circe.Json
 import org.tpolecat.sourcepos.SourcePos
@@ -635,14 +635,17 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         case u: UntypedNarrow => u.copy(child = loop(u.child, context))
         case n@Narrow(subtpe, _) => n.copy(child = loop(n.child, context.asType(subtpe)))
         case s: Skip => s.copy(child = loop(s.child, context))
-        case other@(_: Component[_] | _: Defer | Empty | _: Introspect | _: Select | Skipped) => other
+        case other@(_: Component[_] | _: Effect[_] | Empty | _: Introspect | _: Select | Skipped) => other
       }
 
     loop(query, context)
   }
 
+  def sqlCursor(query: Query, env: Env): F[Result[Cursor]] =
+    defaultRootCursor(query, schema.queryType, Some(RootCursor(Context(schema.queryType), None, env))).map(_.map(_._2))
+
   // Overrides definition in Mapping
-  override def defaultRootCursor(query: Query, tpe: Type, env: Env): F[Result[(Query, Cursor)]] = {
+  override def defaultRootCursor(query: Query, tpe: Type, parentCursor: Option[Cursor]): F[Result[(Query, Cursor)]] = {
     val context = Context(tpe)
 
     val rootQueries = ungroup(query)
@@ -659,19 +662,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           _     <- monitor.queryMapped(query, mapped.fragment, table.numRows, table.numCols)
         } yield {
           val stripped: Query = stripCompiled(query, context)
-          val cursor: SqlCursor = SqlCursor(context, table, mapped, None, env)
+          val cursor: SqlCursor = SqlCursor(context, table, mapped, parentCursor, Env.empty)
           (stripped, cursor)
         }
-      }
-
-    def combineAll(results: List[Result[(Query, SqlCursor)]]): (Chain[Problem], List[Query], List[SqlCursor]) =
-      results.foldLeft((Chain.empty[Problem], List.empty[Query], List.empty[SqlCursor])) {
-        case ((ps, qs, cs), elem) =>
-          elem match {
-            case Ior.Left(ps0) => (ps0.toChain ++ ps, qs, cs)
-            case Ior.Right((q, c)) => (ps, q :: qs, c :: cs)
-            case Ior.Both(ps0, (q, c)) => (ps0.toChain ++ ps, q :: qs, c :: cs)
-          }
       }
 
     val (sqlRoots, otherRoots) = rootQueries.partition(isLocallyMapped(context, _))
@@ -682,13 +675,12 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       })
     else {
       sqlRoots.traverse(mkCursor).map { qcs =>
-        val (problems, queries, cursors) = combineAll(qcs)
-
-        val mergedQuery = mergeQueries(queries ++ otherRoots)
-        val cursor = MultiRootCursor(cursors)
-        NonEmptyChain.fromChain(problems).map(problems0 =>
-          Ior.Both(problems0, (mergedQuery, cursor))
-        ).getOrElse(Result((mergedQuery, cursor)))
+        qcs.sequence.map(_.unzip match {
+          case (queries, cursors) =>
+            val mergedQuery = mergeQueries(queries ++ otherRoots)
+            val cursor = MultiRootCursor(cursors)
+            (mergedQuery, cursor)
+        })
       }
     }
   }
@@ -3045,7 +3037,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           case TransformCursor(_, child) =>
             loop(child, context, parentConstraints, exposeJoins)
 
-          case Empty | Skipped | Query.Component(_, _, _) | (_: Defer) | (_: UntypedNarrow) | (_: Skip) | (_: Select) =>
+          case Empty | Skipped | Query.Component(_, _, _) | Query.Effect(_, _) | (_: UntypedNarrow) | (_: Skip) | (_: Select) =>
             None
         }
       }

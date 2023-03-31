@@ -20,7 +20,7 @@ val shapeless2Version           = "2.3.10"
 val shapeless3Version           = "3.1.0"
 val sourcePosVersion            = "1.1.0"
 val testContainersVersion       = "0.40.12"
-val typenameVersion             = "1.0.0"
+val typenameVersion             = "1.1.0"
 
 val Scala2 = "2.13.10"
 val Scala3 = "3.2.2"
@@ -125,6 +125,7 @@ lazy val sql = project
     name := "gsp-graphql-sql",
     libraryDependencies ++= Seq(
       "org.typelevel"     %% "log4cats-slf4j"         % log4catsVersion,
+      "io.circe"          %% "circe-generic"          % circeVersion % "test",
       "ch.qos.logback"    %  "logback-classic"        % logbackVersion % "test",
       "com.dimafeng"      %% "testcontainers-scala-scalatest"  % testContainersVersion % "test",
       "com.dimafeng"      %% "testcontainers-scala-postgresql" % testContainersVersion % "test",
