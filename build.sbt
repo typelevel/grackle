@@ -51,8 +51,8 @@ lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
   scalacOptions += "-Wconf:msg=unused value of type org.scalatest.Assertion:silent",
   libraryDependencies ++= Seq(
-    "org.typelevel"     %% "cats-testkit"           % catsVersion % "test",
-    "org.typelevel"     %% "cats-testkit-scalatest" % catsTestkitScalaTestVersion % "test"
+    "org.typelevel"     %%% "cats-testkit"           % catsVersion % "test",
+    "org.typelevel"     %%% "cats-testkit-scalatest" % catsTestkitScalaTestVersion % "test"
   ) ++ Seq(
     compilerPlugin("org.typelevel" %% "kind-projector" % kindProjectorVersion cross CrossVersion.full),
   ).filterNot(_ => tlIsScala3.value),
@@ -64,28 +64,10 @@ lazy val commonSettings = Seq(
   ))
 )
 
-lazy val modules: List[ProjectReference] = List(
-  core,
-  circe,
-  sql,
-  doobie,
-  skunk,
-  generic,
-  demo,
-  benchmarks,
-  profile
-)
+lazy val root = tlCrossRootProject.aggregate(core, circe, sql, doobie, skunk, generic, demo, benchmarks, profile)
 
-lazy val `gsp-graphql` = project.in(file("."))
-  .settings(commonSettings)
-  .enablePlugins(NoPublishPlugin)
-  .aggregate(modules:_*)
-  .disablePlugins(RevolverPlugin)
-  .settings(
-    makeSite := { (docs / makeSite).value }
-  )
-
-lazy val core = project
+lazy val core = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
   .in(file("modules/core"))
   .enablePlugins(AutomateHeaderPlugin)
   .disablePlugins(RevolverPlugin)
@@ -94,18 +76,19 @@ lazy val core = project
     name := "gsp-graphql-core",
     libraryDependencies ++=
       Seq(
-        "org.typelevel"     %% "cats-parse"             % catsParseVersion,
-        "org.typelevel"     %% "cats-core"              % catsVersion,
-        "org.typelevel"     %% "literally"              % literallyVersion,
-        "io.circe"          %% "circe-core"             % circeVersion,
-        "io.circe"          %% "circe-parser"           % circeVersion,
-        "org.tpolecat"      %% "typename"               % typenameVersion,
-        "org.tpolecat"      %% "sourcepos"              % sourcePosVersion,
-        "co.fs2"            %% "fs2-core"               % fs2Version,
+        "org.typelevel"     %%% "cats-parse"             % catsParseVersion,
+        "org.typelevel"     %%% "cats-core"              % catsVersion,
+        "org.typelevel"     %%% "literally"              % literallyVersion,
+        "io.circe"          %%% "circe-core"             % circeVersion,
+        "io.circe"          %%% "circe-parser"           % circeVersion,
+        "org.tpolecat"      %%% "typename"               % typenameVersion,
+        "org.tpolecat"      %%% "sourcepos"              % sourcePosVersion,
+        "co.fs2"            %%% "fs2-core"               % fs2Version,
       )
   )
 
-lazy val circe = project
+lazy val circe = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
   .in(file("modules/circe"))
   .enablePlugins(AutomateHeaderPlugin)
   .disablePlugins(RevolverPlugin)
@@ -115,7 +98,8 @@ lazy val circe = project
     name := "gsp-graphql-circe",
   )
 
-lazy val sql = project
+lazy val sql = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
   .in(file("modules/sql"))
   .enablePlugins(AutomateHeaderPlugin)
   .disablePlugins(RevolverPlugin)
@@ -132,7 +116,8 @@ lazy val sql = project
     )
   )
 
-lazy val doobie = project
+lazy val doobie = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
   .in(file("modules/doobie-pg"))
   .enablePlugins(AutomateHeaderPlugin)
   .disablePlugins(RevolverPlugin)
@@ -140,7 +125,7 @@ lazy val doobie = project
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-doobie-pg",
-    Test / fork := true,
+    Test / fork := false,
     Test / parallelExecution := false,
     libraryDependencies ++= Seq(
       "org.tpolecat" %% "doobie-core"           % doobieVersion,
@@ -148,7 +133,9 @@ lazy val doobie = project
     )
   )
 
-lazy val skunk = project
+
+lazy val skunk = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
   .in(file("modules/skunk"))
   .enablePlugins(AutomateHeaderPlugin)
   .disablePlugins(RevolverPlugin)
@@ -156,7 +143,7 @@ lazy val skunk = project
   .settings(commonSettings)
   .settings(
     name := "gsp-graphql-skunk",
-    Test / fork := true,
+    Test / fork := false,
     Test / parallelExecution := false,
     libraryDependencies ++= Seq(
       "org.tpolecat"      %% "skunk-core"  % skunkVersion,
@@ -164,7 +151,8 @@ lazy val skunk = project
     )
   )
 
-lazy val generic = project
+lazy val generic = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
   .in(file("modules/generic"))
   .enablePlugins(AutomateHeaderPlugin)
   .disablePlugins(RevolverPlugin)
@@ -179,7 +167,8 @@ lazy val generic = project
       })
   )
 
-lazy val demo = project
+lazy val demo = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
   .in(file("demo"))
   .enablePlugins(NoPublishPlugin, AutomateHeaderPlugin)
   .dependsOn(core, generic, doobie)
@@ -201,12 +190,14 @@ lazy val demo = project
     )
   )
 
-lazy val benchmarks = project
+lazy val benchmarks = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
   .in(file("benchmarks"))
   .dependsOn(core)
   .enablePlugins(NoPublishPlugin, JmhPlugin)
 
-lazy val profile = project
+lazy val profile = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
   .in(file("profile"))
   .enablePlugins(NoPublishPlugin)
   .dependsOn(core)
@@ -224,20 +215,7 @@ lazy val profile = project
         pathToGcRoots = true.some,
       )
     ),
+    Test / fork := false,
     fork := true
   )
 
-lazy val docs = project
-  .in(file("docs"))
-  .enablePlugins(ParadoxSitePlugin)
-  .settings(
-    paradoxTheme         := Some(builtinParadoxTheme("generic")),
-    previewLaunchBrowser := false,
-    paradoxProperties ++= Map(
-      "scala-versions"          -> (core / crossScalaVersions).value.map(CrossVersion.partialVersion).flatten.map(_._2).mkString("2.", "/", ""),
-      "org"                     -> organization.value,
-      "scala.binary.version"    -> s"2.${CrossVersion.partialVersion(scalaVersion.value).get._2}",
-      "core-dep"                -> s"${(core / name).value}_2.${CrossVersion.partialVersion(scalaVersion.value).get._2}",
-      "version"                 -> version.value
-    )
-  )
