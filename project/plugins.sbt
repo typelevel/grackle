@@ -1,5 +1,5 @@
 addSbtPlugin("org.typelevel"             % "sbt-typelevel-ci-release" % "0.4.19")
-addSbtPlugin("io.spray"                  % "sbt-revolver"             % "0.9.1")
+addSbtPlugin("io.spray"                  % "sbt-revolver"             % "0.10.0")
 addSbtPlugin("com.typesafe.sbt"          % "sbt-site"                 % "1.4.1")
 addSbtPlugin("com.typesafe.sbt"          % "sbt-ghpages"              % "0.6.3")
 addSbtPlugin("com.timushev.sbt"          % "sbt-updates"              % "0.6.4")
