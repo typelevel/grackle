@@ -13,9 +13,6 @@ import Cursor.{Context, DeferredCursor, Env}
 abstract class GenericMapping[F[_]](implicit val M: Monad[F]) extends Mapping[F] with GenericMappingLike[F]
 
 trait GenericMappingLike[F[_]] extends ScalaVersionSpecificGenericMappingLike[F] {
-  
-  type CursorBuilder[T] = edu.gemini.grackle.generic.CursorBuilder[T]
-
   def genericCursor[T](path: Path, env: Env, t: T)(implicit cb: => CursorBuilder[T]): Result[Cursor] =
     if(path.isRoot)
       cb.build(Context(path.rootTpe), t, None, env)
