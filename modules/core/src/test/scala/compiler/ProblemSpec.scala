@@ -7,6 +7,7 @@ import cats.tests.CatsSuite
 import edu.gemini.grackle.syntax._
 import edu.gemini.grackle.Problem
 import io.circe.syntax._
+import io.circe.JsonObject
 
 final class ProblemSpec extends CatsSuite {
 
@@ -103,6 +104,24 @@ final class ProblemSpec extends CatsSuite {
   test("toString (message only)") {
     assert(
       Problem("foo", Nil, Nil).toString == "foo"
+    )
+  }
+
+  test("extension") {
+    val p = Problem("foo", extension = Some(JsonObject("bar" -> 42.asJson, "baz" -> List("a", "b").asJson)))
+    assert(
+      p.asJson == json"""
+        {
+          "message" : "foo",
+          "extension" : {
+            "bar" : 42,
+            "baz" : [
+              "a",
+              "b"
+            ]
+          }
+        }
+      """
     )
   }
 
