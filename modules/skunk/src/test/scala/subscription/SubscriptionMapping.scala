@@ -4,7 +4,6 @@
 package edu.gemini.grackle.skunk.test.subscription
 
 import cats.effect.{ Resource, Sync }
-import cats.syntax.all._
 import skunk.Session
 import skunk.codec.all._
 import skunk.implicits._
@@ -92,7 +91,7 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
               query match {
                 case s@Select(_, _, child0) =>
                   Result(s.copy(child = Unique(Filter(Eql(CityType / "id", Const(id)), child0))))
-                case _ => sys.error("Implementation error: expected Select")
+                case _ => Result.internalError("Implementation error: expected Select")
               }
           )
         )
@@ -102,7 +101,7 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("city", List(Binding("id", IntValue(id))), child) =>
-        Select("city", Nil, Unique(Filter(Eql(CityType / "id", Const(id)), child))).rightIor
+        Select("city", Nil, Unique(Filter(Eql(CityType / "id", Const(id)), child))).success
     },
   ))
 }

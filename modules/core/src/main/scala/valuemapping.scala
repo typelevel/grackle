@@ -6,15 +6,14 @@ package edu.gemini.grackle
 import scala.collection.Factory
 import scala.reflect.ClassTag
 
-import cats.Monad
-import cats.implicits._
+import cats.MonadThrow
 import io.circe.Json
 import org.tpolecat.sourcepos.SourcePos
 
+import syntax._
 import Cursor.{Context, DeferredCursor, Env}
-import QueryInterpreter.mkErrorResult
 
-abstract class ValueMapping[F[_]](implicit val M: Monad[F]) extends Mapping[F] with ValueMappingLike[F]
+abstract class ValueMapping[F[_]](implicit val M: MonadThrow[F]) extends Mapping[F] with ValueMappingLike[F]
 
 trait ValueMappingLike[F[_]] extends Mapping[F] {
   def mkCursor(context: Context, focus: Any, parent: Option[Cursor], env: Env): Cursor =
@@ -27,7 +26,7 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
     if(path.path.isEmpty)
       mkCursor(Context(path.rootTpe), t, None, env)
     else {
-      DeferredCursor(path, (context, parent) => mkCursor(context, t, Some(parent), env).rightIor)
+      DeferredCursor(path, (context, parent) => mkCursor(context, t, Some(parent), env).success)
     }
 
   override def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
@@ -40,7 +39,7 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
           case _ => ()
         }
         val childFocus = f.asInstanceOf[Any => Any](parentFocus)
-        mkCursor(fieldContext, childFocus, Some(parent), Env.empty).rightIor
+        mkCursor(fieldContext, childFocus, Some(parent), Env.empty).success
 
       case _ =>
         super.mkCursorForField(parent, fieldName, resultName)
@@ -89,14 +88,14 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
 
     def isLeaf: Boolean = false
     def asLeaf: Result[Json] =
-      mkErrorResult(s"Not a leaf: $tpe")
+      Result.internalError(s"Not a leaf: $tpe")
 
     def preunique: Result[Cursor] = {
       val listTpe = tpe.nonNull.list
       focus match {
-        case _: List[_] => mkChild(context.asType(listTpe), focus).rightIor
+        case _: List[_] => mkChild(context.asType(listTpe), focus).success
         case _ =>
-          mkErrorResult(s"Expected List type, found $focus for ${listTpe}")
+          Result.internalError(s"Expected List type, found $focus for ${listTpe}")
       }
     }
 
@@ -106,13 +105,13 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
     }
 
     def asList[C](factory: Factory[Cursor, C]): Result[C] = (tpe, focus) match {
-      case (ListType(tpe), it: List[_]) => it.view.map(f => mkChild(context.asType(tpe), f)).to(factory).rightIor
-      case _ => mkErrorResult(s"Expected List type, found $tpe")
+      case (ListType(tpe), it: List[_]) => it.view.map(f => mkChild(context.asType(tpe), f)).to(factory).success
+      case _ => Result.internalError(s"Expected List type, found $tpe")
     }
 
     def listSize: Result[Int] = (tpe, focus) match {
-      case (ListType(_), it: List[_]) => it.size.rightIor
-      case _ => mkErrorResult(s"Expected List type, found $tpe")
+      case (ListType(_), it: List[_]) => it.size.success
+      case _ => Result.internalError(s"Expected List type, found $tpe")
     }
 
     def isNullable: Boolean = (tpe, focus) match {
@@ -121,14 +120,14 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
     }
 
     def asNullable: Result[Option[Cursor]] = (tpe, focus) match {
-      case (NullableType(tpe), o: Option[_]) => o.map(f => mkChild(context.asType(tpe), f)).rightIor
-      case (_: NullableType, _) => mkErrorResult(s"Found non-nullable $focus for $tpe")
-      case _ => mkErrorResult(s"Expected Nullable type, found $focus for $tpe")
+      case (NullableType(tpe), o: Option[_]) => o.map(f => mkChild(context.asType(tpe), f)).success
+      case (_: NullableType, _) => Result.internalError(s"Found non-nullable $focus for $tpe")
+      case _ => Result.internalError(s"Expected Nullable type, found $focus for $tpe")
     }
 
     def isDefined: Result[Boolean] = (tpe, focus) match {
-      case (_: NullableType, opt: Option[_]) => opt.isDefined.rightIor
-      case _ => mkErrorResult(s"Expected Nullable type, found $focus for $tpe")
+      case (_: NullableType, opt: Option[_]) => opt.isDefined.success
+      case _ => Result.internalError(s"Expected Nullable type, found $focus for $tpe")
     }
 
     def narrowsTo(subtpe: TypeRef): Boolean =
@@ -142,9 +141,9 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
 
     def narrow(subtpe: TypeRef): Result[Cursor] =
       if (narrowsTo(subtpe))
-        mkChild(context.asType(subtpe)).rightIor
+        mkChild(context.asType(subtpe)).success
       else
-        mkErrorResult(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
+        Result.internalError(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
 
     def hasField(fieldName: String): Boolean =
       fieldMapping(context, fieldName).isDefined

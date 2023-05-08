@@ -195,10 +195,9 @@ trait MappingValidator {
    */
   protected def transitiveInterfaceFieldMappings(tpe: Type): List[FieldMapping] =
     interfaces(tpe).flatMap { iface =>
-      typeMapping(iface) match {
-        case Some(om: ObjectMapping) => om.fieldMappings
-        case x => sys.error(s"wat?  $x") // TODO
-      }
+      typeMapping(iface).toList.collect {
+        case om: ObjectMapping => om.fieldMappings
+      }.flatten
     }
 
   protected def validateObjectFieldMappings(m: ObjectMapping, tpe: ObjectType): Chain[Failure] = {

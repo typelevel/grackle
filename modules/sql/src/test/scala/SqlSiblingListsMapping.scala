@@ -108,8 +108,8 @@ trait SqlSiblingListsData[F[_]] extends SqlTestMapping[F] {
     Map(
       QueryType -> {
         case Select("a", List(Binding("id", StringValue(id))), child) =>
-          Select("a", Nil, Unique(Filter(Eql(AType / "id", Const(id)), child))).rightIor
-        case other => other.rightIor
+          Select("a", Nil, Unique(Filter(Eql(AType / "id", Const(id)), child))).success
+        case other => other.success
       }
     )
   )

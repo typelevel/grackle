@@ -7,11 +7,10 @@ import scala.annotation.tailrec
 import scala.util.matching.Regex
 
 import cats.Apply
-import cats.data.Ior
 import cats.kernel.{ Eq, Order }
 import cats.implicits._
 
-import QueryInterpreter.mkErrorResult
+import syntax._
 
 /**
  * A reified function over a `Cursor`.
@@ -33,6 +32,12 @@ trait Term[T] extends Product with Serializable { // fun fact: making this covar
 
   def forall(f: Term[_] => Boolean): Boolean =
     f(this) && children.forall(_.forall(f))
+
+  def forallR(f: Term[_] => Result[Boolean]): Result[Boolean] =
+    f(this).flatMap { p =>
+      if (!p) false.success
+      else children.foldLeftM(true) { case (acc, elem) => if(!acc) false.success else elem.forallR(f) }
+    }
 }
 
 object Term extends TermLow {
@@ -51,7 +56,7 @@ case class Path(rootTpe: Type, path: List[String] = Nil) {
   def isRoot = path.isEmpty
 
   def asTerm[A]: Term[A] =
-    if (isList) PathTerm.ListPath(path)
+    if (isList) PathTerm.ListPath(path).asInstanceOf[Term[A]]
     else PathTerm.UniquePath(path)
 
   lazy val isList: Boolean = rootTpe.pathIsList(path)
@@ -78,19 +83,19 @@ sealed trait PathTerm {
 }
 object PathTerm {
 
-  case class ListPath[A](path: List[String]) extends Term[A] with PathTerm {
-    def apply(c: Cursor): Result[A] =
-      c.flatListPath(path).map(_.map {
-        case Predicate.ScalarFocus(f) => f
-        case _ => sys.error("impossible")
-      } .asInstanceOf[A])
+  case class ListPath[A](path: List[String]) extends Term[List[A]] with PathTerm {
+    def apply(c: Cursor): Result[List[A]] =
+      c.flatListPath(path).flatMap(_.traverse {
+        case Predicate.ScalarFocus(f) => f.success
+        case _ => Result.internalError("impossible")
+      }).asInstanceOf[Result[List[A]]]
   }
 
   case class UniquePath[A](path: List[String]) extends Term[A] with PathTerm {
     def apply(c: Cursor): Result[A] =
-      c.listPath(path) match {
-        case Ior.Right(List(Predicate.ScalarFocus(a: A @unchecked))) => a.rightIor
-        case other => mkErrorResult(s"Expected exactly one element for path $path found $other")
+      c.listPath(path).flatMap {
+        case List(Predicate.ScalarFocus(a: A @unchecked)) => a.success
+        case other => Result.internalError(s"Expected exactly one element for path $path found $other")
       }
   }
 
@@ -103,21 +108,18 @@ object Predicate {
     def unapply(c: Cursor): Option[Any] =
       if (c.isLeaf) Some(c.focus)
       else if (c.isNullable && c.tpe.nonNull.isLeaf)
-        c.asNullable match {
-          case Ior.Right(Some(c)) => unapply(c).map(Some(_))
-          case _ => Some(None)
-        }
+        c.asNullable.toOption.map(_.flatMap(c => unapply(c)))
       else None
   }
 
   case object True extends Predicate {
-    def apply(c: Cursor): Result[Boolean] = true.rightIor
+    def apply(c: Cursor): Result[Boolean] = true.success
 
     def children = Nil
   }
 
   case object False extends Predicate {
-    def apply(c: Cursor): Result[Boolean] = false.rightIor
+    def apply(c: Cursor): Result[Boolean] = false.success
 
     def children = Nil
   }
@@ -149,7 +151,7 @@ object Predicate {
   }
 
   case class Const[T](v: T) extends Term[T] {
-    def apply(c: Cursor): Result[T] = v.rightIor
+    def apply(c: Cursor): Result[T] = v.success
     def children = Nil
   }
 

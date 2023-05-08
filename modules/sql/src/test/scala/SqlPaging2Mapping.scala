@@ -131,9 +131,9 @@ trait SqlPaging2Mapping[F[_]] extends SqlTestMapping[F] {
           if (lim < 1) query
           else Limit(lim, query)
 
-        Select("items", Nil, limit(offset(order(child)))).rightIor
+        Select("items", Nil, limit(offset(order(child)))).success
 
-      case other => other.rightIor
+      case other => other.success
     }
 
   override val selectElaborator = new SelectElaborator(Map(
@@ -149,7 +149,7 @@ trait SqlPaging2Mapping[F[_]] extends SqlTestMapping[F] {
         Group(List(
           s,
           Count("numCountries", Select("items", Nil, Select("code", Nil, Empty)))
-        )).rightIor
+        )).success
     },
     CountryType -> {
       case Select("cities", List(Binding("offset", IntValue(off)), Binding("limit", IntValue(lim))), child) => {
@@ -163,7 +163,7 @@ trait SqlPaging2Mapping[F[_]] extends SqlTestMapping[F] {
         Group(List(
           s,
           Count("numCities", Select("items", Nil, Select("id", Nil, Empty)))
-        )).rightIor
+        )).success
     }
   ))
 }

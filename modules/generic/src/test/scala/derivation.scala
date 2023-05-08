@@ -6,8 +6,8 @@ package generic
 
 import java.time._
 
-import cats._
-import cats.data.Ior
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.implicits._
 import cats.tests.CatsSuite
 import io.circe.Json
@@ -16,7 +16,6 @@ import edu.gemini.grackle.syntax._
 import Cursor.Context
 import Query._, Predicate._, Value._
 import QueryCompiler._
-import QueryInterpreter.{ mkErrorResult, mkOneError }
 import ScalarType._
 
 object StarWarsData {
@@ -41,9 +40,9 @@ object StarWarsData {
 
   def resolveFriends(c: Character): Result[Option[List[Character]]] =
     c.friends match {
-      case None => None.rightIor
+      case None => None.success
       case Some(ids) =>
-        ids.traverse(id => characters.find(_.id == id).toRightIor(mkOneError(s"Bad id '$id'"))).map(_.some)
+        ids.traverse(id => characters.find(_.id == id).toResultOrError(s"Bad id '$id'")).map(_.some)
     }
 
   case class Planet(value: String)
@@ -143,7 +142,7 @@ object StarWarsData {
   )
 }
 
-object StarWarsMapping extends GenericMapping[Id] {
+object StarWarsMapping extends GenericMapping[IO] {
   import StarWarsData.{characters, hero, Droid, Human, Episode}
 
   val schema =
@@ -206,18 +205,18 @@ object StarWarsMapping extends GenericMapping[Id] {
 
   val numberOfFriends: PartialFunction[Query, Result[Query]] = {
     case Select("numberOfFriends", Nil, Empty) =>
-      Count("numberOfFriends", Select("friends", Nil, Empty)).rightIor
+      Count("numberOfFriends", Select("friends", Nil, Empty)).success
   }
 
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
         Episode.values.find(_.toString == e.name).map { episode =>
-          Select("hero", Nil, Unique(Filter(Eql(CharacterType / "id", Const(hero(episode).id)), child))).rightIor
-        }.getOrElse(mkErrorResult(s"Unknown episode '${e.name}'"))
+          Select("hero", Nil, Unique(Filter(Eql(CharacterType / "id", Const(hero(episode).id)), child))).success
+        }.getOrElse(Result.failure(s"Unknown episode '${e.name}'"))
 
       case Select(f@("character" | "human" | "droid"), List(Binding("id", IDValue(id))), child) =>
-        Select(f, Nil, Unique(Filter(Eql(CharacterType / "id", Const(id)), child))).rightIor
+        Select(f, Nil, Unique(Filter(Eql(CharacterType / "id", Const(id)), child))).success
     },
     CharacterType -> numberOfFriends,
     HumanType -> numberOfFriends,
@@ -235,7 +234,7 @@ final class DerivationSpec extends CatsSuite {
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
-    assert(i == Ior.Right(Json.fromInt(23)))
+    assert(i == Result.Success(Json.fromInt(23)))
 
     val s =
       for {
@@ -243,7 +242,7 @@ final class DerivationSpec extends CatsSuite {
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
-    assert(s == Ior.Right(Json.fromString("foo")))
+    assert(s == Result.Success(Json.fromString("foo")))
 
     val b =
       for {
@@ -251,7 +250,7 @@ final class DerivationSpec extends CatsSuite {
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
-    assert(b == Ior.Right(Json.fromBoolean(true)))
+    assert(b == Result.Success(Json.fromBoolean(true)))
 
     val f =
       for {
@@ -259,7 +258,7 @@ final class DerivationSpec extends CatsSuite {
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
-    assert(f == Ior.Right(Json.fromDouble(13.0).get))
+    assert(f == Result.Success(Json.fromDouble(13.0).get))
   }
 
   test("types with a Circe Encoder instance have leaf cursor builders") {
@@ -269,7 +268,7 @@ final class DerivationSpec extends CatsSuite {
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
-    assert(z == Ior.Right(Json.fromString("2020-03-25T16:24:06.081Z")))
+    assert(z == Result.Success(Json.fromString("2020-03-25T16:24:06.081Z")))
   }
 
   test("Scala Enumeration types have leaf cursor builders") {
@@ -279,7 +278,7 @@ final class DerivationSpec extends CatsSuite {
         _  = assert(c.isLeaf)
         l  <- c.asLeaf
       } yield l
-    assert(e == Ior.Right(Json.fromString("JEDI")))
+    assert(e == Result.Success(Json.fromString("JEDI")))
   }
 
   test("product types have cursor builders") {
@@ -287,10 +286,10 @@ final class DerivationSpec extends CatsSuite {
       for {
         c <- CursorBuilder[Human].build(Context(HumanType), lukeSkywalker)
         f <- c.field("name", None)
-        n <- f.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
+        n <- f.asNullable.flatMap(_.toResultOrError("missing"))
         l <- n.asLeaf
       } yield l
-    assert(name == Ior.Right(Json.fromString("Luke Skywalker")))
+    assert(name == Result.Success(Json.fromString("Luke Skywalker")))
   }
 
   test("cursor builders can be resolved for nested types") {
@@ -298,11 +297,11 @@ final class DerivationSpec extends CatsSuite {
       for {
         c <- CursorBuilder[Character].build(Context(CharacterType), lukeSkywalker)
         f <- c.field("appearsIn", None)
-        n <- f.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
+        n <- f.asNullable.flatMap(_.toResultOrError("missing"))
         l <- n.asList(List)
         s <- l.traverse(_.asLeaf)
       } yield s
-    assert(appearsIn == Ior.Right(List(Json.fromString("NEWHOPE"), Json.fromString("EMPIRE"), Json.fromString("JEDI"))))
+    assert(appearsIn == Result.Success(List(Json.fromString("NEWHOPE"), Json.fromString("EMPIRE"), Json.fromString("JEDI"))))
   }
 
   test("default cursor builders can be customised by mapping fields") {
@@ -310,13 +309,13 @@ final class DerivationSpec extends CatsSuite {
       for {
         c <- CursorBuilder[Human].build(Context(HumanType), lukeSkywalker)
         f <- c.field("friends", None)
-        n <- f.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
+        n <- f.asNullable.flatMap(_.toResultOrError("missing"))
         l <- n.asList(List)
         m <- l.traverse(_.field("name", None))
-        p <- m.traverse(_.asNullable.flatMap(_.toRightIor(mkOneError("missing"))))
+        p <- m.traverse(_.asNullable.flatMap(_.toResultOrError("missing")))
         q <- p.traverse(_.asLeaf)
       } yield q
-    assert(friends == Ior.Right(List(Json.fromString("Han Solo"), Json.fromString("Leia Organa"), Json.fromString("C-3PO"), Json.fromString("R2-D2"))))
+    assert(friends == Result.Success(List(Json.fromString("Han Solo"), Json.fromString("Leia Organa"), Json.fromString("C-3PO"), Json.fromString("R2-D2"))))
   }
 
   test("sealed ADTs have narrowable cursor builders") {
@@ -325,10 +324,10 @@ final class DerivationSpec extends CatsSuite {
         c <- CursorBuilder[Character].build(Context(CharacterType), lukeSkywalker)
         h <- c.narrow(HumanType)
         m <- h.field("homePlanet", None)
-        n <- m.asNullable.flatMap(_.toRightIor(mkOneError("missing")))
+        n <- m.asNullable.flatMap(_.toResultOrError("missing"))
         l <- n.asLeaf
       } yield l
-    assert(homePlanets == Ior.Right(Json.fromString("Tatooine")))
+    assert(homePlanets == Result.Success(Json.fromString("Tatooine")))
   }
 
   test("simple query") {
@@ -350,7 +349,7 @@ final class DerivationSpec extends CatsSuite {
       }
     """
 
-    val res = StarWarsMapping.compileAndRun(query)
+    val res = StarWarsMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -377,7 +376,7 @@ final class DerivationSpec extends CatsSuite {
       }
     """
 
-    val res = StarWarsMapping.compileAndRun(query)
+    val res = StarWarsMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -419,7 +418,7 @@ final class DerivationSpec extends CatsSuite {
       }
     """
 
-    val res = StarWarsMapping.compileAndRun(query)
+    val res = StarWarsMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -470,7 +469,7 @@ final class DerivationSpec extends CatsSuite {
       }
     """
 
-    val res = StarWarsMapping.compileAndRun(query)
+    val res = StarWarsMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -499,7 +498,7 @@ final class DerivationSpec extends CatsSuite {
       }
     """
 
-    val res = StarWarsMapping.compileAndRun(query)
+    val res = StarWarsMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -581,7 +580,7 @@ final class DerivationSpec extends CatsSuite {
       }
     """
 
-    val res = StarWarsMapping.compileAndRun(query)
+    val res = StarWarsMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)

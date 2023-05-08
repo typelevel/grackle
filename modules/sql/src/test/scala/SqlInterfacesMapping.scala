@@ -3,7 +3,6 @@
 
 package edu.gemini.grackle.sql.test
 
-import cats.implicits._
 import cats.kernel.Eq
 import io.circe.Encoder
 
@@ -203,7 +202,7 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("films", Nil, child) =>
-        Select("films", Nil, Filter(Eql[EntityType](FilmType / "entityType", Const(EntityType.Film)), child)).rightIor
+        Select("films", Nil, Filter(Eql[EntityType](FilmType / "entityType", Const(EntityType.Film)), child)).success
     }
   ))
 

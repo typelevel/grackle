@@ -5,8 +5,8 @@ package edu.gemini.grackle
 
 import scala.collection.Factory
 
-import cats.Monad
-import cats.data.{Ior, IorT}
+import cats.MonadThrow
+import cats.data.Chain
 import cats.implicits._
 import fs2.{ Stream, Compiler }
 import io.circe.{Encoder, Json}
@@ -14,10 +14,11 @@ import io.circe.syntax._
 import org.tpolecat.sourcepos.SourcePos
 import org.tpolecat.typename._
 
+import syntax._
 import Cursor.{AbstractCursor, Context, Env}
 import Query.{EffectHandler, Select}
 import QueryCompiler.{ComponentElaborator, EffectElaborator, SelectElaborator, IntrospectionLevel}
-import QueryInterpreter.{mkErrorResult, ProtoJson}
+import QueryInterpreter.ProtoJson
 import IntrospectionLevel._
 
 trait QueryExecutor[F[_], T] { outer =>
@@ -34,7 +35,7 @@ trait QueryExecutor[F[_], T] { outer =>
 }
 
 abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
-  implicit val M: Monad[F]
+  implicit val M: MonadThrow[F]
   val schema: Schema
   val typeMappings: List[TypeMapping]
 
@@ -47,18 +48,18 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
   def compileAndRunOne(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty)(
     implicit sc: Compiler[F,F]
   ): F[Json] =
-    compileAndRunAll(text, name, untypedVars, introspectionLevel, env).compile.toList.map {
-      case List(j) => j
-      case Nil     => QueryInterpreter.mkError("Result stream was empty.").asJson
-      case js      => QueryInterpreter.mkError(s"Result stream contained ${js.length} results; expected exactly one.").asJson
+    compileAndRunAll(text, name, untypedVars, introspectionLevel, env).compile.toList.flatMap {
+      case List(j) => j.pure[F]
+      case Nil     => M.raiseError(new IllegalStateException("Result stream was empty."))
+      case js      => M.raiseError(new IllegalStateException(s"Result stream contained ${js.length} results; expected exactly one."))
     }
 
   def compileAndRunAll(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): Stream[F,Json] =
     compiler.compile(text, name, untypedVars, introspectionLevel) match {
-      case Ior.Right(operation) =>
+      case Result.Success(operation) =>
         run(operation.query, operation.rootTpe, env)
       case invalid =>
-        QueryInterpreter.mkInvalidResponse(invalid).pure[Stream[F,*]]
+        Stream.eval(mkInvalidResponse(invalid))
     }
 
   /** Combine and execute multiple queries.
@@ -114,7 +115,7 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
     val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
 
     def mkLeafCursor(focus: Any): Result[Cursor] =
-      LeafCursor(fieldContext, focus, Some(parent), parent.env).rightIor
+      LeafCursor(fieldContext, focus, Some(parent), parent.env).success
 
     fieldMapping(context, fieldName) match {
       case Some(_ : EffectMapping) =>
@@ -122,7 +123,7 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
       case Some(CursorField(_, f, _, _, _)) =>
         f(parent).flatMap(res => mkLeafCursor(res))
       case _ =>
-        mkErrorResult(s"No field '$fieldName' for type ${parent.tpe}")
+        Result.failure(s"No field '$fieldName' for type ${parent.tpe}")
     }
   }
 
@@ -187,20 +188,18 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
   private lazy val encoderMemo: scala.collection.immutable.Map[Type, Encoder[Any]] = {
     val intTypeEncoder: Encoder[Any] =
       new Encoder[Any] {
-        def apply(i: Any): Json = i match {
+        def apply(i: Any): Json = (i: @unchecked) match {
           case i: Int => Json.fromInt(i)
           case l: Long => Json.fromLong(l)
-          case other => sys.error(s"Not an Int: $other")
         }
       }
 
     val floatTypeEncoder: Encoder[Any] =
       new Encoder[Any] {
-        def apply(f: Any): Json = f match {
-          case f: Float => Json.fromFloat(f).getOrElse(sys.error(s"Unrepresentable float $f"))
-          case d: Double => Json.fromDouble(d).getOrElse(sys.error(s"Unrepresentable double $d"))
+        def apply(f: Any): Json = (f: @unchecked) match {
+          case f: Float => Json.fromFloatOrString(f)
+          case d: Double => Json.fromDoubleOrString(d)
           case d: BigDecimal => Json.fromBigDecimal(d)
-          case other => sys.error(s"Not a Float: $other")
         }
       }
 
@@ -324,8 +323,8 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
         fieldName,
         (query, path, env) =>
           (for {
-            q  <- IorT(effect(query, path, env))
-            qc <- IorT(defaultRootCursor(q, path.rootTpe, None))
+            q  <- ResultT(effect(query, path, env))
+            qc <- ResultT(defaultRootCursor(q, path.rootTpe, None))
           } yield qc.map(_.withEnv(env))).value
       )
   }
@@ -383,8 +382,8 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
           effect(query, path, env).flatMap(rq =>
             Stream.eval(
               (for {
-                q  <- IorT(rq.pure[F])
-                qc <- IorT(defaultRootCursor(q, path.rootTpe, None))
+                q  <- ResultT(rq.pure[F])
+                qc <- ResultT(defaultRootCursor(q, path.rootTpe, None))
               } yield qc.map(_.withEnv(env))).value
             )
           )
@@ -475,16 +474,16 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
     def isLeaf: Boolean = tpe.isLeaf
 
     def asLeaf: Result[Json] =
-      encoderForLeaf(tpe).map(enc => enc(focus).rightIor).getOrElse(mkErrorResult(
+      encoderForLeaf(tpe).map(enc => enc(focus).success).getOrElse(Result.internalError(
         s"Cannot encode value $focus at ${context.path.reverse.mkString("/")} (of GraphQL type ${context.tpe}). Did you forget a LeafMapping?".stripMargin.trim
       ))
 
     def preunique: Result[Cursor] = {
       val listTpe = tpe.nonNull.list
       focus match {
-        case _: List[_] => mkChild(context.asType(listTpe), focus).rightIor
+        case _: List[_] => mkChild(context.asType(listTpe), focus).success
         case _ =>
-          mkErrorResult(s"Expected List type, found $focus for ${listTpe}")
+          Result.internalError(s"Expected List type, found $focus for ${listTpe}")
       }
     }
 
@@ -495,13 +494,13 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
       }
 
     def asList[C](factory: Factory[Cursor, C]): Result[C] = (tpe, focus) match {
-      case (ListType(tpe), it: List[_]) => it.view.map(f => mkChild(context.asType(tpe), focus = f)).to(factory).rightIor
-      case _ => mkErrorResult(s"Expected List type, found $tpe")
+      case (ListType(tpe), it: List[_]) => it.view.map(f => mkChild(context.asType(tpe), focus = f)).to(factory).success
+      case _ => Result.internalError(s"Expected List type, found $tpe")
     }
 
     def listSize: Result[Int] = (tpe, focus) match {
-      case (ListType(_), it: List[_]) => it.size.rightIor
-      case _ => mkErrorResult(s"Expected List type, found $tpe")
+      case (ListType(_), it: List[_]) => it.size.success
+      case _ => Result.internalError(s"Expected List type, found $tpe")
     }
 
     def isNullable: Boolean =
@@ -512,34 +511,66 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
 
     def asNullable: Result[Option[Cursor]] =
       (tpe, focus) match {
-        case (NullableType(_), None) => None.rightIor
-        case (NullableType(tpe), Some(v)) => Some(mkChild(context.asType(tpe), focus = v)).rightIor
-        case _ => mkErrorResult(s"Not nullable at ${context.path}")
+        case (NullableType(_), None) => None.success
+        case (NullableType(tpe), Some(v)) => Some(mkChild(context.asType(tpe), focus = v)).success
+        case _ => Result.internalError(s"Not nullable at ${context.path}")
       }
 
     def isDefined: Result[Boolean] =
       (tpe, focus) match {
-        case (NullableType(_), opt: Option[_]) => opt.isDefined.rightIor
-        case _ => mkErrorResult(s"Not nullable at ${context.path}")
+        case (NullableType(_), opt: Option[_]) => opt.isDefined.success
+        case _ => Result.internalError(s"Not nullable at ${context.path}")
       }
 
     def narrowsTo(subtpe: TypeRef): Boolean = false
     def narrow(subtpe: TypeRef): Result[Cursor] =
-      mkErrorResult(s"Cannot narrow $tpe to $subtpe")
+      Result.failure(s"Cannot narrow $tpe to $subtpe")
 
     def hasField(fieldName: String): Boolean = false
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
-      mkErrorResult(s"Cannot select field '$fieldName' from leaf type $tpe")
+      Result.failure(s"Cannot select field '$fieldName' from leaf type $tpe")
   }
+
+  /**
+   * Construct a GraphQL response from the possibly absent result `data`
+   * and a collection of errors.
+   */
+  def mkResponse(data: Option[Json], errors: Chain[Problem]): Json = {
+    val dataField = data.map { value => ("data", value) }.toList
+    val fields =
+      (dataField, errors.toList) match {
+        case (Nil, Nil)   => List(("errors", Json.fromValues(List(Problem("Invalid query").asJson))))
+        case (data, Nil)  => data
+        case (data, errs) => ("errors", errs.asJson) :: data
+      }
+    Json.fromFields(fields)
+  }
+
+  /** Construct a GraphQL response from a `Result`. */
+  def mkResponse(result: Result[Json]): F[Json] =
+    result match {
+      case Result.InternalError(err) => M.raiseError(err)
+      case _ => mkResponse(result.toOption, result.toProblems).pure[F]
+    }
+
+  /**
+   *  Construct a GraphQL error response from a `Result`, ignoring any
+   *  right hand side in `result`.
+   */
+  def mkInvalidResponse(result: Result[Operation]): F[Json] =
+    result match {
+      case Result.InternalError(err) => M.raiseError(err)
+      case _ => mkResponse(None, result.toProblems).pure[F]
+    }
 }
 
-abstract class ComposedMapping[F[_]](implicit val M: Monad[F]) extends Mapping[F] {
+abstract class ComposedMapping[F[_]](implicit val M: MonadThrow[F]) extends Mapping[F] {
   override def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
     val context = parent.context
     val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
     fieldMapping(context, fieldName) match {
       case Some(_) =>
-        ComposedCursor(fieldContext, parent.env).rightIor
+        ComposedCursor(fieldContext, parent.env).success
       case _ =>
         super.mkCursorForField(parent, fieldName, resultName)
     }

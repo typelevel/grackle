@@ -3,6 +3,7 @@
 
 package compiler
 
+import cats.effect.unsafe.implicits.global
 import cats.tests.CatsSuite
 import edu.gemini.grackle.syntax._
 
@@ -42,7 +43,7 @@ final class AttributesSpec extends CatsSuite {
       }
     """
 
-    val res = ItemMapping.compileAndRun(query)
+    val res = ItemMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -68,7 +69,7 @@ final class AttributesSpec extends CatsSuite {
       }
     """
 
-    val res = ItemMapping.compileAndRun(query)
+    val res = ItemMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -94,7 +95,7 @@ final class AttributesSpec extends CatsSuite {
       }
     """
 
-    val res = ItemMapping.compileAndRun(query)
+    val res = ItemMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)

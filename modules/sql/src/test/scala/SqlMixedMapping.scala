@@ -91,7 +91,7 @@ trait SqlMixedMapping[F[_]] extends SqlTestMapping[F] with ValueMappingLike[F] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("movie", List(Binding("id", UUIDValue(id))), child) =>
-        Select("movie", Nil, Unique(Filter(Eql(MovieType / "id", Const(id)), child))).rightIor
+        Select("movie", Nil, Unique(Filter(Eql(MovieType / "id", Const(id)), child))).success
     }
   ))
 }

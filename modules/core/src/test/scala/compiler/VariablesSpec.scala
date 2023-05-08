@@ -3,7 +3,7 @@
 
 package compiler
 
-import cats.data.{Chain, Ior}
+import cats.data.NonEmptyChain
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle._
@@ -40,7 +40,7 @@ final class VariablesSuite extends CatsSuite {
 
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
   }
 
   test("list variable query") {
@@ -66,7 +66,7 @@ final class VariablesSuite extends CatsSuite {
 
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
   }
 
   test("enum variable query") {
@@ -92,7 +92,7 @@ final class VariablesSuite extends CatsSuite {
 
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
   }
 
   test("scalar variable query") {
@@ -118,7 +118,7 @@ final class VariablesSuite extends CatsSuite {
 
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
   }
 
   test("scalar variable query bigdecimal") {
@@ -144,7 +144,7 @@ final class VariablesSuite extends CatsSuite {
 
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
   }
 
   test("object variable query") {
@@ -186,7 +186,7 @@ final class VariablesSuite extends CatsSuite {
 
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
   }
 
   test("invalid: bogus input object field") {
@@ -214,7 +214,7 @@ final class VariablesSuite extends CatsSuite {
 
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
-    assert(compiled.map(_.query) == Ior.Left(Chain.one(expected)))
+    assert(compiled.map(_.query) == Result.Failure(NonEmptyChain.one(expected)))
   }
 
   test("variable within list query") {
@@ -240,7 +240,7 @@ final class VariablesSuite extends CatsSuite {
 
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
   }
 
   test("simple variable within an object query") {
@@ -278,7 +278,7 @@ final class VariablesSuite extends CatsSuite {
 
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
   }
 
   test("enum variable within an object query") {
@@ -316,7 +316,7 @@ final class VariablesSuite extends CatsSuite {
 
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
   }
 
   test("scalar variable within an object query") {
@@ -354,7 +354,7 @@ final class VariablesSuite extends CatsSuite {
 
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
   }
 }
 

@@ -3,7 +3,8 @@
 
 package compiler
 
-import cats.Id
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.implicits._
 import cats.tests.CatsSuite
 
@@ -19,7 +20,7 @@ object ItemData {
     List(Item("A", List("A")), Item("AB", List("A", "B")), Item("BC", List("B", "C")), Item("C", List("C")))
 }
 
-object ItemMapping extends ValueMapping[Id] {
+object ItemMapping extends ValueMapping[IO] {
   import ItemData._
 
   val schema =
@@ -71,13 +72,13 @@ object ItemMapping extends ValueMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("itemByTag", List(Binding("tag", IDValue(tag))), child) =>
-        Select("itemByTag", Nil, Filter(Contains(ItemType / "tags", Const(tag)), child)).rightIor
+        Select("itemByTag", Nil, Filter(Contains(ItemType / "tags", Const(tag)), child)).success
       case Select("itemByTagCount", List(Binding("count", IntValue(count))), child) =>
-        Select("itemByTagCount", Nil, Filter(Eql(ItemType / "tagCount", Const(count)), child)).rightIor
+        Select("itemByTagCount", Nil, Filter(Eql(ItemType / "tagCount", Const(count)), child)).success
       case Select("itemByTagCountVA", List(Binding("count", IntValue(count))), child) =>
-        Select("itemByTagCountVA", Nil, Filter(Eql(ItemType / "tagCountVA", Const(count)), child)).rightIor
+        Select("itemByTagCountVA", Nil, Filter(Eql(ItemType / "tagCountVA", Const(count)), child)).success
       case Select("itemByTagCountCA", List(Binding("count", IntValue(count))), child) =>
-        Select("itemByTagCountCA", Nil, Filter(Eql(ItemType / "tagCountCA", Const(count)), child)).rightIor
+        Select("itemByTagCountCA", Nil, Filter(Eql(ItemType / "tagCountCA", Const(count)), child)).success
     }
   ))
 }
@@ -123,7 +124,7 @@ final class PredicatesSpec extends CatsSuite {
       }
     """
 
-    val res = ItemMapping.compileAndRun(query)
+    val res = ItemMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -153,7 +154,7 @@ final class PredicatesSpec extends CatsSuite {
       }
     """
 
-    val res = ItemMapping.compileAndRun(query)
+    val res = ItemMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -194,7 +195,7 @@ final class PredicatesSpec extends CatsSuite {
       }
     """
 
-    val res = ItemMapping.compileAndRun(query)
+    val res = ItemMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)

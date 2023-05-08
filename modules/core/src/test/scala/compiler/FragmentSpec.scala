@@ -3,8 +3,8 @@
 
 package compiler
 
-import cats.Id
-import cats.data.Ior
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.implicits._
 import cats.tests.CatsSuite
 
@@ -93,9 +93,9 @@ final class FragmentSuite extends CatsSuite {
 
     val compiled = FragmentMapping.compiler.compile(query)
 
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
 
-    val res = FragmentMapping.run(compiled.right.get).compile.toList.head
+    val res = FragmentMapping.run(compiled.toOption.get).compile.toList.unsafeRunSync().head
     //println(res)
     assert(res == expectedResult)
   }
@@ -183,9 +183,9 @@ final class FragmentSuite extends CatsSuite {
 
     val compiled = FragmentMapping.compiler.compile(query)
 
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
 
-    val res = FragmentMapping.run(compiled.right.get).compile.toList.head
+    val res = FragmentMapping.run(compiled.toOption.get).compile.toList.unsafeRunSync().head
     //println(res)
     assert(res == expectedResult)
   }
@@ -260,9 +260,9 @@ final class FragmentSuite extends CatsSuite {
 
     val compiled = FragmentMapping.compiler.compile(query)
 
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
 
-    val res = FragmentMapping.run(compiled.right.get).compile.toList.head
+    val res = FragmentMapping.run(compiled.toOption.get).compile.toList.unsafeRunSync().head
     //println(res)
     assert(res == expectedResult)
   }
@@ -325,9 +325,9 @@ final class FragmentSuite extends CatsSuite {
 
     val compiled = FragmentMapping.compiler.compile(query)
 
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
 
-    val res = FragmentMapping.run(compiled.right.get).compile.toList.head
+    val res = FragmentMapping.run(compiled.toOption.get).compile.toList.unsafeRunSync().head
     //println(res)
     assert(res == expectedResult)
   }
@@ -429,9 +429,9 @@ final class FragmentSuite extends CatsSuite {
 
     val compiled = FragmentMapping.compiler.compile(query)
 
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
 
-    val res = FragmentMapping.run(compiled.right.get).compile.toList.head
+    val res = FragmentMapping.run(compiled.toOption.get).compile.toList.unsafeRunSync().head
     //println(res)
     assert(res == expectedResult)
   }
@@ -481,9 +481,9 @@ final class FragmentSuite extends CatsSuite {
 
     val compiled = FragmentMapping.compiler.compile(query)
 
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
 
-    val res = FragmentMapping.run(compiled.right.get).compile.toList.head
+    val res = FragmentMapping.run(compiled.toOption.get).compile.toList.unsafeRunSync().head
     //println(res)
     assert(res == expectedResult)
   }
@@ -518,7 +518,7 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val res = FragmentMapping.compileAndRun(query)
+    val res = FragmentMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -559,7 +559,7 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val res = FragmentMapping.compileAndRun(query)
+    val res = FragmentMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -589,7 +589,7 @@ final class FragmentSuite extends CatsSuite {
       }
     """
 
-    val res = FragmentMapping.compileAndRun(query)
+    val res = FragmentMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -624,7 +624,7 @@ object FragmentData {
   )
 }
 
-object FragmentMapping extends ValueMapping[Id] {
+object FragmentMapping extends ValueMapping[IO] {
   import FragmentData._
 
   val schema =
@@ -698,9 +698,9 @@ object FragmentMapping extends ValueMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("user", List(Binding("id", IDValue(id))), child) =>
-        Select("user", Nil, Unique(Filter(Eql(FragmentMapping.UserType / "id", Const(id)), child))).rightIor
+        Select("user", Nil, Unique(Filter(Eql(FragmentMapping.UserType / "id", Const(id)), child))).success
       case sel@Select("profiles", _, _) =>
-        sel.rightIor
+        sel.success
     }
   ))
 }

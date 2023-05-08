@@ -11,7 +11,6 @@ import Cursor.Env
 import Query.{Binding, Count, Empty, Environment, Limit, Offset, OrderBy, OrderSelection, OrderSelections, Select}
 import QueryCompiler.SelectElaborator
 import Value.IntValue
-import QueryInterpreter.mkOneError
 
 // Mapping illustrating paging in "counted" style: paged results can
 // report the current offet, limit and total number of items in the
@@ -120,7 +119,7 @@ trait SqlPaging1Mapping[F[_]] extends SqlTestMapping[F] {
     )
 
   def genValue(key: String)(c: Cursor): Result[Int] =
-    c.env[Int](key).toRightIor(mkOneError(s"Missing key '$key'"))
+    c.env[Int](key).toResultOrError(s"Missing key '$key'")
 
   def transformChild[T: Order](query: Query, orderTerm: Term[T], off: Int, lim: Int): Result[Query] =
     Query.mapFields(query) {
@@ -136,9 +135,9 @@ trait SqlPaging1Mapping[F[_]] extends SqlTestMapping[F] {
           if (lim < 1) query
           else Limit(lim, query)
 
-        Select("items", Nil, limit(offset(order(child)))).rightIor
+        Select("items", Nil, limit(offset(order(child)))).success
 
-      case other => other.rightIor
+      case other => other.success
     }
 
   override val selectElaborator = new SelectElaborator(Map(
@@ -151,7 +150,7 @@ trait SqlPaging1Mapping[F[_]] extends SqlTestMapping[F] {
     },
     PagedCountryType -> {
       case Select("total", Nil, Empty) =>
-        Count("total", Select("items", Nil, Select("code", Nil, Empty))).rightIor
+        Count("total", Select("items", Nil, Select("code", Nil, Empty))).success
     },
     CountryType -> {
       case Select("cities", List(Binding("offset", IntValue(off)), Binding("limit", IntValue(lim))), child) => {
@@ -162,7 +161,7 @@ trait SqlPaging1Mapping[F[_]] extends SqlTestMapping[F] {
     },
     PagedCityType -> {
       case Select("total", Nil, Empty) =>
-        Count("total", Select("items", Nil, Select("id", Nil, Empty))).rightIor
+        Count("total", Select("items", Nil, Select("id", Nil, Empty))).success
     }
   ))
 }

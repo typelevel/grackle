@@ -10,7 +10,6 @@ import syntax._
 import Predicate.{Const, Eql}
 import Query.{Binding, Filter, Select, Unique}
 import QueryCompiler.SelectElaborator
-import QueryInterpreter.mkErrorResult
 import Value.{AbsentValue, NullValue, ObjectValue, StringValue}
 
 trait SqlFilterJoinAliasMapping[F[_]] extends SqlTestMapping[F] {
@@ -102,9 +101,9 @@ trait SqlFilterJoinAliasMapping[F[_]] extends SqlTestMapping[F] {
 
   def mkFilter(query: Query, filter: Value): Result[Query] = {
     filter match {
-      case AbsentValue|NullValue => query.rightIor
-      case FilterValue(pred) => Filter(pred, query).rightIor
-      case _ => mkErrorResult(s"Expected filter value, found $filter")
+      case AbsentValue|NullValue => query.success
+      case FilterValue(pred) => Filter(pred, query).success
+      case _ => Result.failure(s"Expected filter value, found $filter")
     }
   }
 
@@ -115,7 +114,7 @@ trait SqlFilterJoinAliasMapping[F[_]] extends SqlTestMapping[F] {
           "episode",
           Nil,
           Unique(Filter(Eql(EpisodeType / "id", Const(id)), child))
-        ).rightIor
+        ).success
     },
     EpisodeType -> {
       case Select("images", List(Binding("filter", filter)), child) =>
@@ -124,7 +123,7 @@ trait SqlFilterJoinAliasMapping[F[_]] extends SqlTestMapping[F] {
         } yield Select("images", Nil, fc)
 
       case other =>
-        other.rightIor
+        other.success
     }
   ))
 }

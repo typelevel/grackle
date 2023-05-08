@@ -6,14 +6,16 @@ package sql
 
 import scala.util.matching.Regex
 
+import syntax._
+
 case class Like private[sql] (x: Term[_], pattern: String, caseInsensitive: Boolean) extends Predicate {
   lazy val r = Like.likeToRegex(pattern, caseInsensitive)
   def apply(c: Cursor): Result[Boolean] =
-    x(c).map(_ match {
-      case s: String => r.matches(s)
-      case Some(s: String) => r.matches(s)
-      case None => false
-      case other => sys.error(s"Expected value of type String or Option[String], found $other")
+    x(c).flatMap(_ match {
+      case s: String => r.matches(s).success
+      case Some(s: String) => r.matches(s).success
+      case None => false.success
+      case other => Result.internalError(s"Expected value of type String or Option[String], found $other")
     })
   def children = List(x)
 }

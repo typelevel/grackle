@@ -261,7 +261,7 @@ Extracting out the case for the `character` selector,
 
 ```scala
 case Select(f@("character"), List(Binding("id", IDValue(id))), child) =>
-  Select(f, Nil, Unique(Filter(Eql(CharacterType / "id", Const(id)), child))).rightIor
+  Select(f, Nil, Unique(Filter(Eql(CharacterType / "id", Const(id)), child))).success
 
 ```
 

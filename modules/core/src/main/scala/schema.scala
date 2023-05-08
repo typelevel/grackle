@@ -3,14 +3,14 @@
 
 package edu.gemini.grackle
 
-import cats.data.{Ior, NonEmptyChain}
+import cats.data.NonEmptyChain
 import cats.parse.Parser
 import cats.implicits._
 import io.circe.Json
 import org.tpolecat.sourcepos.SourcePos
 
+import syntax._
 import Ast.{EnumTypeDefinition, FieldDefinition, InterfaceTypeDefinition, ObjectTypeDefinition, TypeDefinition}
-import QueryInterpreter.{mkError, mkErrorResult, mkOneError}
 import ScalarType._
 import Value._
 
@@ -184,7 +184,7 @@ sealed trait Type extends Product {
     }
 
   def withField[T](fieldName: String)(body: Type => Result[T]): Result[T] =
-    field(fieldName).map(body).getOrElse(mkErrorResult(s"Unknown field '$fieldName' in '$this'"))
+    field(fieldName).map(body).getOrElse(Result.failure(s"Unknown field '$fieldName' in '$this'"))
 
   /**
    * Yield the type of the field at the end of the path `fns` starting
@@ -338,7 +338,7 @@ sealed trait Type extends Product {
   }
 
   def withUnderlyingField[T](fieldName: String)(body: Type => Result[T]): Result[T] =
-    underlyingObject.toRightIor(mkOneError(s"$this is not an object or interface type")).flatMap(_.withField(fieldName)(body))
+    underlyingObject.toResult(s"$this is not an object or interface type").flatMap(_.withField(fieldName)(body))
 
   /** Is this type a leaf type?
    *
@@ -733,44 +733,44 @@ object Value {
   def checkValue(iv: InputValue, value: Option[Value]): Result[Value] =
     (iv.tpe.dealias, value) match {
       case (_, None) if iv.defaultValue.isDefined =>
-        iv.defaultValue.get.rightIor
+        iv.defaultValue.get.success
       case (_: NullableType, None) =>
-        AbsentValue.rightIor
+        AbsentValue.success
       case (_: NullableType, Some(AbsentValue)) =>
-        AbsentValue.rightIor
+        AbsentValue.success
       case (_: NullableType, Some(NullValue)) =>
-        NullValue.rightIor
+        NullValue.success
       case (NullableType(tpe), Some(_)) =>
         checkValue(iv.copy(tpe = tpe), value)
       case (IntType, Some(value: IntValue)) =>
-        value.rightIor
+        value.success
       case (FloatType, Some(value: FloatValue)) =>
-        value.rightIor
+        value.success
       case (StringType, Some(value: StringValue)) =>
-        value.rightIor
+        value.success
       case (BooleanType, Some(value: BooleanValue)) =>
-        value.rightIor
+        value.success
 
       // Custom Scalars
       case (s @ ScalarType(_, _), Some(value: IntValue)) if !s.isBuiltIn =>
-        value.rightIor
+        value.success
       case (s @ ScalarType(_, _), Some(value: FloatValue)) if !s.isBuiltIn =>
-        value.rightIor
+        value.success
       case (s @ ScalarType(_, _), Some(value: StringValue)) if !s.isBuiltIn =>
-        value.rightIor
+        value.success
       case (s @ ScalarType(_, _), Some(value: BooleanValue)) if !s.isBuiltIn =>
-        value.rightIor
+        value.success
 
       case (IDType, Some(value: IDValue)) =>
-        value.rightIor
+        value.success
       case (IDType, Some(StringValue(s))) =>
-        IDValue(s).rightIor
+        IDValue(s).success
       case (IDType, Some(IntValue(i))) =>
-        IDValue(i.toString).rightIor
+        IDValue(i.toString).success
       case (_: EnumType, Some(value: TypedEnumValue)) =>
-        value.rightIor
+        value.success
       case (e: EnumType, Some(UntypedEnumValue(name))) if e.hasValue(name) =>
-        TypedEnumValue(e.value(name).get).rightIor
+        TypedEnumValue(e.value(name).get).success
       case (ListType(tpe), Some(ListValue(arr))) =>
         arr.traverse { elem =>
           checkValue(iv.copy(tpe = tpe, defaultValue = None), Some(elem))
@@ -779,12 +779,12 @@ object Value {
         val obj = fs.toMap
         val unknownFields = fs.map(_._1).filterNot(f => ivs.exists(_.name == f))
         if (unknownFields.nonEmpty)
-          mkErrorResult(s"Unknown field(s) ${unknownFields.map(s => s"'$s'").mkString("", ", ", "")} in input object value of type ${nme}")
+          Result.failure(s"Unknown field(s) ${unknownFields.map(s => s"'$s'").mkString("", ", ", "")} in input object value of type ${nme}")
         else
           ivs.traverse(iv => checkValue(iv, obj.get(iv.name)).map(v => (iv.name, v))).map(ObjectValue.apply)
-      case (_: ScalarType, Some(value)) => value.rightIor
-      case (tpe, Some(value)) => mkErrorResult(s"Expected $tpe found '$value' for '${iv.name}'")
-      case (tpe, None) => mkErrorResult(s"Value of type $tpe required for '${iv.name}'")
+      case (_: ScalarType, Some(value)) => value.success
+      case (tpe, Some(value)) => Result.failure(s"Expected $tpe found '$value' for '${iv.name}'")
+      case (tpe, None) => Result.failure(s"Value of type $tpe required for '${iv.name}'")
     }
 
   def checkVarValue(iv: InputValue, value: Option[Json]): Result[Value] = {
@@ -792,38 +792,38 @@ object Value {
 
     (iv.tpe.dealias, value) match {
       case (_, None) if iv.defaultValue.isDefined =>
-        iv.defaultValue.get.rightIor
+        iv.defaultValue.get.success
       case (_: NullableType, None) =>
-        AbsentValue.rightIor
+        AbsentValue.success
       case (_: NullableType, Some(jsonNull(_))) =>
-        NullValue.rightIor
+        NullValue.success
       case (NullableType(tpe), Some(_)) =>
         checkVarValue(iv.copy(tpe = tpe), value)
       case (IntType, Some(jsonInt(value))) =>
-        IntValue(value).rightIor
+        IntValue(value).success
       case (FloatType, Some(jsonDouble(value))) =>
-        FloatValue(value).rightIor
+        FloatValue(value).success
       case (StringType, Some(jsonString(value))) =>
-        StringValue(value).rightIor
+        StringValue(value).success
       case (BooleanType, Some(jsonBoolean(value))) =>
-        BooleanValue(value).rightIor
+        BooleanValue(value).success
       case (IDType, Some(jsonInt(value))) =>
-        IDValue(value.toString).rightIor
+        IDValue(value.toString).success
 
       // Custom scalars
       case (s @ ScalarType(_, _), Some(jsonInt(value))) if !s.isBuiltIn =>
-        IntValue(value).rightIor
+        IntValue(value).success
       case (s @ ScalarType(_, _), Some(jsonDouble(value))) if !s.isBuiltIn =>
-        FloatValue(value).rightIor
+        FloatValue(value).success
       case (s @ ScalarType(_, _), Some(jsonString(value))) if !s.isBuiltIn =>
-        StringValue(value).rightIor
+        StringValue(value).success
       case (s @ ScalarType(_, _), Some(jsonBoolean(value))) if !s.isBuiltIn =>
-        BooleanValue(value).rightIor
+        BooleanValue(value).success
 
       case (IDType, Some(jsonString(value))) =>
-        IDValue(value).rightIor
+        IDValue(value).success
       case (e: EnumType, Some(jsonString(name))) if e.hasValue(name) =>
-        TypedEnumValue(e.value(name).get).rightIor
+        TypedEnumValue(e.value(name).get).success
       case (ListType(tpe), Some(jsonArray(arr))) =>
         arr.traverse { elem =>
           checkVarValue(iv.copy(tpe = tpe, defaultValue = None), Some(elem))
@@ -831,12 +831,12 @@ object Value {
       case (InputObjectType(nme, _, ivs), Some(jsonObject(obj))) =>
         val unknownFields = obj.keys.filterNot(f => ivs.exists(_.name == f))
         if (unknownFields.nonEmpty)
-          mkErrorResult(s"Unknown field(s) ${unknownFields.map(s => s"'$s'").mkString("", ", ", "")} in input object value of type ${nme}")
+          Result.failure(s"Unknown field(s) ${unknownFields.map(s => s"'$s'").mkString("", ", ", "")} in input object value of type ${nme}")
         else
           ivs.traverse(iv => checkVarValue(iv, obj(iv.name)).map(v => (iv.name, v))).map(ObjectValue.apply)
-      case (_: ScalarType, Some(jsonString(value))) => StringValue(value).rightIor
-      case (tpe, Some(value)) => mkErrorResult(s"Expected $tpe found '$value' for '${iv.name}'")
-      case (tpe, None) => mkErrorResult(s"Value of type $tpe required for '${iv.name}'")
+      case (_: ScalarType, Some(jsonString(value))) => StringValue(value).success
+      case (tpe, Some(value)) => Result.failure(s"Expected $tpe found '$value' for '${iv.name}'")
+      case (tpe, None) => Result.failure(s"Value of type $tpe required for '${iv.name}'")
     }
   }
 }
@@ -868,7 +868,7 @@ object SchemaParser {
    */
   def parseText(text: String)(implicit pos: SourcePos): Result[Schema] = {
     def toResult[T](pr: Either[Parser.Error, T]): Result[T] =
-      Ior.fromEither(pr).leftMap(e => mkOneError(e.expected.toList.mkString(",")))
+      Result.fromEither(pr.leftMap(_.expected.toList.mkString(",")))
 
     for {
       doc <- toResult(GraphQLParser.Document.parseAll(text))
@@ -884,8 +884,8 @@ object SchemaParser {
       def mkRootOperationType(rootTpe: RootOperationTypeDefinition): Result[(OperationType, Type)] = {
         val RootOperationTypeDefinition(optype, tpe) = rootTpe
         mkType(schema)(tpe).flatMap {
-          case NullableType(nt: NamedType) => (optype, nt).rightIor
-          case other => mkErrorResult(s"Root operation types must be named types, found $other (${other.productPrefix}).")
+          case NullableType(nt: NamedType) => (optype, nt).success
+          case other => Result.failure(s"Root operation types must be named types, found $other")
         }
       }
 
@@ -910,14 +910,14 @@ object SchemaParser {
 
       val defns = doc.collect { case schema: SchemaDefinition => schema }
       defns match {
-        case Nil => None.rightIor
+        case Nil => None.success
         case SchemaDefinition(rootTpes, _) :: Nil =>
           rootTpes.traverse(mkRootOperationType).map { ops0 =>
             val ops = ops0.toMap
             Some(build(ops.get(Query).getOrElse(defaultQueryType), ops.get(Mutation), ops.get(Subscription)))
           }
 
-        case _ => mkErrorResult("At most one schema definition permitted")
+        case _ => Result.failure("At most one schema definition permitted")
       }
     }
 
@@ -929,40 +929,40 @@ object SchemaParser {
     }
 
     def mkTypeDef(schema: Schema)(td: TypeDefinition): Result[NamedType] = td match {
-      case ScalarTypeDefinition(Name("Int"), _, _) => IntType.rightIor
-      case ScalarTypeDefinition(Name("Float"), _, _) => FloatType.rightIor
-      case ScalarTypeDefinition(Name("String"), _, _) => StringType.rightIor
-      case ScalarTypeDefinition(Name("Boolean"), _, _) => BooleanType.rightIor
-      case ScalarTypeDefinition(Name("ID"), _, _) => IDType.rightIor
-      case ScalarTypeDefinition(Name(nme), desc, _) => ScalarType(nme, desc).rightIor
+      case ScalarTypeDefinition(Name("Int"), _, _) => IntType.success
+      case ScalarTypeDefinition(Name("Float"), _, _) => FloatType.success
+      case ScalarTypeDefinition(Name("String"), _, _) => StringType.success
+      case ScalarTypeDefinition(Name("Boolean"), _, _) => BooleanType.success
+      case ScalarTypeDefinition(Name("ID"), _, _) => IDType.success
+      case ScalarTypeDefinition(Name(nme), desc, _) => ScalarType(nme, desc).success
       case ObjectTypeDefinition(Name(nme), desc, fields0, ifs0, _) =>
-        if (fields0.isEmpty) mkErrorResult(s"object type $nme must define at least one field")
+        if (fields0.isEmpty) Result.failure(s"object type $nme must define at least one field")
         else
           for {
             fields <- fields0.traverse(mkField(schema))
             ifs = ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
           } yield ObjectType(nme, desc, fields, ifs)
       case InterfaceTypeDefinition(Name(nme), desc, fields0, ifs0, _) =>
-        if (fields0.isEmpty) mkErrorResult(s"interface type $nme must define at least one field")
+        if (fields0.isEmpty) Result.failure(s"interface type $nme must define at least one field")
         else
           for {
             fields <- fields0.traverse(mkField(schema))
             ifs = ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
           } yield InterfaceType(nme, desc, fields, ifs)
       case UnionTypeDefinition(Name(nme), desc, _, members0) =>
-        if (members0.isEmpty) mkErrorResult(s"union type $nme must define at least one member")
+        if (members0.isEmpty) Result.failure(s"union type $nme must define at least one member")
         else {
           val members = members0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
-          UnionType(nme, desc, members).rightIor
+          UnionType(nme, desc, members).success
         }
       case EnumTypeDefinition(Name(nme), desc, _, values0) =>
-        if (values0.isEmpty) mkErrorResult(s"enum type $nme must define at least one enum value")
+        if (values0.isEmpty) Result.failure(s"enum type $nme must define at least one enum value")
         else
           for {
             values <- values0.traverse(mkEnumValue)
           } yield EnumType(nme, desc, values)
       case InputObjectTypeDefinition(Name(nme), desc, fields0, _) =>
-        if (fields0.isEmpty) mkErrorResult(s"input object type $nme must define at least one input field")
+        if (fields0.isEmpty) Result.failure(s"input object type $nme must define at least one input field")
         else
           for {
             fields <- fields0.traverse(mkInputValue(schema))
@@ -987,7 +987,7 @@ object SchemaParser {
           case Ast.Type.List(tpe) => loop(tpe, true).map(tpe => wrap(ListType(tpe)))
           case Ast.Type.NonNull(Left(tpe)) => loop(tpe, false)
           case Ast.Type.NonNull(Right(tpe)) => loop(tpe, false)
-          case Ast.Type.Named(Name(nme)) => wrap(ScalarType(nme).getOrElse(schema.ref(nme))).rightIor
+          case Ast.Type.Named(Name(nme)) => wrap(ScalarType(nme).getOrElse(schema.ref(nme))).success
         }
       }
 
@@ -1012,23 +1012,23 @@ object SchemaParser {
 
     def parseDeprecated(directives: List[DefinedDirective]): Result[(Boolean, Option[String])] =
       directives.collect { case dir@DefinedDirective(Name("deprecated"), _) => dir } match {
-        case Nil => (false, None).rightIor
-        case DefinedDirective(_, List((Name("reason"), Ast.Value.StringValue(reason)))) :: Nil => (true, Some(reason)).rightIor
-        case DefinedDirective(_, Nil) :: Nil => (true, Some("No longer supported")).rightIor
-        case DefinedDirective(_, _) :: Nil => mkErrorResult(s"deprecated must have a single String 'reason' argument, or no arguments")
-        case _ => mkErrorResult(s"Only a single deprecated allowed at a given location")
+        case Nil => (false, None).success
+        case DefinedDirective(_, List((Name("reason"), Ast.Value.StringValue(reason)))) :: Nil => (true, Some(reason)).success
+        case DefinedDirective(_, Nil) :: Nil => (true, Some("No longer supported")).success
+        case DefinedDirective(_, _) :: Nil => Result.failure(s"deprecated must have a single String 'reason' argument, or no arguments")
+        case _ => Result.failure(s"Only a single deprecated allowed at a given location")
       }
 
     // Share with Query parser
     def parseValue(value: Ast.Value): Result[Value] = {
       value match {
-        case Ast.Value.IntValue(i) => IntValue(i).rightIor
-        case Ast.Value.FloatValue(d) => FloatValue(d).rightIor
-        case Ast.Value.StringValue(s) => StringValue(s).rightIor
-        case Ast.Value.BooleanValue(b) => BooleanValue(b).rightIor
-        case Ast.Value.EnumValue(e) => UntypedEnumValue(e.value).rightIor
-        case Ast.Value.Variable(v) => UntypedVariableValue(v.value).rightIor
-        case Ast.Value.NullValue => NullValue.rightIor
+        case Ast.Value.IntValue(i) => IntValue(i).success
+        case Ast.Value.FloatValue(d) => FloatValue(d).success
+        case Ast.Value.StringValue(s) => StringValue(s).success
+        case Ast.Value.BooleanValue(b) => BooleanValue(b).success
+        case Ast.Value.EnumValue(e) => UntypedEnumValue(e.value).success
+        case Ast.Value.Variable(v) => UntypedVariableValue(v.value).success
+        case Ast.Value.NullValue => NullValue.success
         case Ast.Value.ListValue(vs) => vs.traverse(parseValue).map(ListValue.apply)
         case Ast.Value.ObjectValue(fs) =>
           fs.traverse { case (name, value) =>
@@ -1067,7 +1067,7 @@ object SchemaValidator {
     val undefinedResults = checkForUndefined(checkForDuplicates(namedTypes), defns)
 
     val errors = NonEmptyChain.fromSeq(checkForEnumValueDuplicates(defns) ++ validateImpls(defns))
-    errors.map(undefinedResults.addLeft(_)).getOrElse(undefinedResults)
+    errors.map(undefinedResults.withProblems).getOrElse(undefinedResults)
   }
 
   def validateImpls(definitions: List[TypeDefinition]): List[Problem] = {
@@ -1079,13 +1079,13 @@ object SchemaValidator {
       case a: ObjectTypeDefinition => a
     }
 
-    def validateImplementor(name: Ast.Name, implements: List[Ast.Type.Named], fields: List[Ast.FieldDefinition]) = {
+    def validateImplementor(name: Ast.Name, implements: List[Ast.Type.Named], fields: List[Ast.FieldDefinition]): List[Problem] = {
       implements.flatMap { ifaceName =>
-          interfaces.find(_.name == ifaceName.astName) match {
-            case Some(interface) => checkImplementation(name, fields, interface)
-            case None => List(mkError(s"Interface ${ifaceName.astName.value} implemented by ${name.value} is not defined"))
-          }
+        interfaces.find(_.name == ifaceName.astName) match {
+          case Some(interface) => checkImplementation(name, fields, interface)
+          case None => List(Problem(s"Interface ${ifaceName.astName.value} implemented by ${name.value} is not defined"))
         }
+      }
     }
 
     val interfaceErrors = interfaces.flatMap { iface =>
@@ -1103,13 +1103,13 @@ object SchemaValidator {
     interface.fields.flatMap { ifaceField =>
       implementorFields.find(_.name == ifaceField.name).map { matching =>
         if (ifaceField.tpe != matching.tpe) {
-          Some(mkError(s"Field ${matching.name.value} has type ${matching.tpe.name}, however implemented interface ${interface.name.value} requires it to be of type ${ifaceField.tpe.name}"))
+          Some(Problem(s"Field ${matching.name.value} has type ${matching.tpe.name}, however implemented interface ${interface.name.value} requires it to be of type ${ifaceField.tpe.name}"))
         } else if (!argsMatch(matching, ifaceField)) {
-          Some(mkError(s"Field ${matching.name.value} of ${name.value} has has an argument list that does not match that specified by implemented interface ${interface.name.value}"))
+          Some(Problem(s"Field ${matching.name.value} of ${name.value} has has an argument list that does not match that specified by implemented interface ${interface.name.value}"))
         } else {
           None
         }
-      }.getOrElse(Some(mkError(s"Expected field ${ifaceField.name.value} from interface ${interface.name.value} is not implemented by ${name.value}")))
+      }.getOrElse(Some(Problem(s"Expected field ${ifaceField.name.value} from interface ${interface.name.value} is not implemented by ${name.value}")))
     }
   }
 
@@ -1125,7 +1125,7 @@ object SchemaValidator {
 
     enums.flatMap { `enum` =>
       val duplicateValues = `enum`.values.groupBy(identity).collect { case (x, xs) if xs.length > 1 => x }.toList
-      duplicateValues.map(dupe => mkError(s"Duplicate EnumValueDefinition of ${dupe.name.value} for EnumTypeDefinition ${`enum`.name.value}"))
+      duplicateValues.map(dupe => Problem(s"Duplicate EnumValueDefinition of ${dupe.name.value} for EnumTypeDefinition ${`enum`.name.value}"))
     }
   }
 
@@ -1136,8 +1136,8 @@ object SchemaValidator {
   }
 
   def dedupedOrError(dupes: Map[String, List[(NamedType, Int)]]): Result[List[NamedTypeWithIndex]] = dupes.map {
-    case (name, tpe) if tpe.length > 1 => mkErrorResult[NamedTypeWithIndex](s"Duplicate NamedType found: $name")
-    case (name, typeAndIndex) => typeAndIndex.headOption.map(_.rightIor).getOrElse(mkErrorResult(s"No NamedType found for $name, something has gone wrong."))
+    case (name, tpe) if tpe.length > 1 => Result.failure[NamedTypeWithIndex](s"Duplicate NamedType found: $name")
+    case (name, typeAndIndex) => typeAndIndex.headOption.map(_.success).getOrElse(Result.failure(s"No NamedType found for $name, something has gone wrong."))
   }.toList.sequence
 
   def checkForDuplicates(namedTypes: Result[List[NamedType]]): Result[List[NamedType]] =
@@ -1155,7 +1155,7 @@ object SchemaValidator {
       val typeNames = (t ::: defaultTypes).map(_.name)
 
       referencedTypes(defns).collect {
-        case tpe if !typeNames.contains(tpe) => mkErrorResult[NamedType](s"Reference to undefined type: $tpe")
+        case tpe if !typeNames.contains(tpe) => Result.failure[NamedType](s"Reference to undefined type: $tpe")
       }.sequence
     }
     namedTypes combine lefts

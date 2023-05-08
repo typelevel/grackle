@@ -3,8 +3,8 @@
 
 package compiler
 
-import cats.Id
-import cats.implicits._
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle._
@@ -12,9 +12,8 @@ import edu.gemini.grackle.syntax._
 import Cursor.Env
 import Query._, Value._
 import QueryCompiler._
-import QueryInterpreter.mkOneError
 
-object EnvironmentMapping extends ValueMapping[Id] {
+object EnvironmentMapping extends ValueMapping[IO] {
   val schema =
     schema"""
       type Query {
@@ -69,26 +68,26 @@ object EnvironmentMapping extends ValueMapping[Id] {
     (for {
       x <- c.env[Int]("x")
       y <- c.env[Int]("y")
-    } yield x+y).toRightIor(mkOneError(s"Missing argument"))
+    } yield x+y).toResult(s"Missing argument")
 
   def url(c: Cursor): Result[String] = {
     c.env[Boolean]("secure").map(secure =>
       if(secure) "https://localhost/" else "http://localhost/"
-    ).toRightIor(mkOneError(s"Missing argument"))
+    ).toResult(s"Missing argument")
   }
 
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("nestedSum", List(Binding("x", IntValue(x)), Binding("y", IntValue(y))), child) =>
-        Environment(Env("x" -> x, "y" -> y), Select("nestedSum", Nil, child)).rightIor
+        Environment(Env("x" -> x, "y" -> y), Select("nestedSum", Nil, child)).success
     },
     NestedType -> {
       case Select("sum", List(Binding("x", IntValue(x)), Binding("y", IntValue(y))), child) =>
-        Environment(Env("x" -> x, "y" -> y), Select("sum", Nil, child)).rightIor
+        Environment(Env("x" -> x, "y" -> y), Select("sum", Nil, child)).success
     },
     NestedSumType -> {
       case Select("nestedSum", List(Binding("x", IntValue(x)), Binding("y", IntValue(y))), child) =>
-        Environment(Env("x" -> x, "y" -> y), Select("nestedSum", Nil, child)).rightIor
+        Environment(Env("x" -> x, "y" -> y), Select("nestedSum", Nil, child)).success
     }
   ))
 }
@@ -113,7 +112,7 @@ final class EnvironmentSpec extends CatsSuite {
       }
     """
 
-    val res = EnvironmentMapping.compileAndRun(query)
+    val res = EnvironmentMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -140,7 +139,7 @@ final class EnvironmentSpec extends CatsSuite {
       }
     """
 
-    val res = EnvironmentMapping.compileAndRun(query)
+    val res = EnvironmentMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -171,7 +170,7 @@ final class EnvironmentSpec extends CatsSuite {
       }
     """
 
-    val res = EnvironmentMapping.compileAndRun(query)
+    val res = EnvironmentMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -202,7 +201,7 @@ final class EnvironmentSpec extends CatsSuite {
       }
     """
 
-    val res = EnvironmentMapping.compileAndRun(query)
+    val res = EnvironmentMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -228,7 +227,7 @@ final class EnvironmentSpec extends CatsSuite {
       }
     """
 
-    val res = EnvironmentMapping.compileAndRun(query)
+    val res = EnvironmentMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -253,7 +252,7 @@ final class EnvironmentSpec extends CatsSuite {
       }
     """
 
-    val res = EnvironmentMapping.compileAndRun(query, env = Env("secure" -> true))
+    val res = EnvironmentMapping.compileAndRun(query, env = Env("secure" -> true)).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -278,7 +277,7 @@ final class EnvironmentSpec extends CatsSuite {
       }
     """
 
-    val res = EnvironmentMapping.compileAndRun(query, env = Env("secure" -> false))
+    val res = EnvironmentMapping.compileAndRun(query, env = Env("secure" -> false)).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -307,7 +306,7 @@ final class EnvironmentSpec extends CatsSuite {
       }
     """
 
-    val res = EnvironmentMapping.compileAndRun(query, env = Env("secure" -> true))
+    val res = EnvironmentMapping.compileAndRun(query, env = Env("secure" -> true)).unsafeRunSync()
     //println(res)
 
     assert(res == expected)

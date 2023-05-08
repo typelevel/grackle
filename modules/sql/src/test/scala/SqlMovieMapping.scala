@@ -183,11 +183,11 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("movieById", List(Binding("id", UUIDValue(id))), child) =>
-        Select("movieById", Nil, Unique(Filter(Eql(MovieType / "id", Const(id)), child))).rightIor
+        Select("movieById", Nil, Unique(Filter(Eql(MovieType / "id", Const(id)), child))).success
       case Select("moviesByGenre", List(Binding("genre", GenreValue(genre))), child) =>
-        Select("moviesByGenre", Nil, Filter(Eql(MovieType / "genre", Const(genre)), child)).rightIor
+        Select("moviesByGenre", Nil, Filter(Eql(MovieType / "genre", Const(genre)), child)).success
       case Select("moviesByGenres", List(Binding("genres", GenreListValue(genres))), child) =>
-        Select("moviesByGenres", Nil, Filter(In(MovieType / "genre", genres), child)).rightIor
+        Select("moviesByGenres", Nil, Filter(In(MovieType / "genre", genres), child)).success
       case Select("moviesReleasedBetween", List(Binding("from", DateValue(from)), Binding("to", DateValue(to))), child) =>
         Select("moviesReleasedBetween", Nil,
           Filter(
@@ -197,21 +197,21 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
             ),
             child
           )
-        ).rightIor
+        ).success
       case Select("moviesLongerThan", List(Binding("duration", IntervalValue(duration))), child) =>
         Select("moviesLongerThan", Nil,
           Filter(
             Not(Lt(MovieType / "duration", Const(duration))),
             child
           )
-        ).rightIor
+        ).success
       case Select("moviesShownLaterThan", List(Binding("time", TimeValue(time))), child) =>
         Select("moviesShownLaterThan", Nil,
           Filter(
             Not(Lt(MovieType / "showTime", Const(time))),
             child
           )
-        ).rightIor
+        ).success
       case Select("moviesShownBetween", List(Binding("from", DateTimeValue(from)), Binding("to", DateTimeValue(to))), child) =>
         Select("moviesShownBetween", Nil,
           Filter(
@@ -221,9 +221,9 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
             ),
             child
           )
-        ).rightIor
+        ).success
       case Select("longMovies", Nil, child) =>
-        Select("longMovies", Nil, Filter(Eql(MovieType / "isLong", Const(true)), child)).rightIor
+        Select("longMovies", Nil, Filter(Eql(MovieType / "isLong", Const(true)), child)).success
     }
   ))
 

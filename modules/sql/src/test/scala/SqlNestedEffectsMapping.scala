@@ -3,7 +3,6 @@
 
 package edu.gemini.grackle.sql.test
 
-import cats.data.IorT
 import cats.effect.{Ref, Sync}
 import cats.implicits._
 import io.circe.{Encoder, Json}
@@ -234,7 +233,7 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
             val cursor = CirceCursor(ctx, res, Some(parentCursor), parentCursor.env)
             (child, cursor)
         }
-      }.rightIor
+      }.success
     }
   }
 
@@ -246,14 +245,14 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
           val combinedQuery = PossiblyRenamedSelect(Select("country", Nil, Filter(In(CountryType / "code", codes), child)), alias)
 
           (for {
-            cursor <- IorT(sqlCursor(combinedQuery, Env.empty))
+            cursor <- ResultT(sqlCursor(combinedQuery, Env.empty))
           } yield {
             codes.map { code =>
               (PossiblyRenamedSelect(Select("country", Nil, Unique(Filter(Eql(CountryType / "code", Const(code)), child))), alias), cursor)
             }.zip(indices)
           }).value.widen
 
-        case _ => sys.error("Continuation query has the wrong shape")
+        case _ => Result.internalError("Continuation query has the wrong shape").pure[F].widen
       }
     }
 
@@ -273,12 +272,12 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
     QueryType -> {
       case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
         if (namePattern == "%")
-          Select("cities", Nil, child).rightIor
+          Select("cities", Nil, child).success
         else
-          Select("cities", Nil, Filter(Like(CityType / "name", namePattern, true), child)).rightIor
+          Select("cities", Nil, Filter(Like(CityType / "name", namePattern, true), child)).success
 
       case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Filter(Eql(CountryType / "code", Const(code)), child))).rightIor
+        Select("country", Nil, Unique(Filter(Eql(CountryType / "code", Const(code)), child))).success
     }
   ))
 }

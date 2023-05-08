@@ -6,7 +6,7 @@ package demo
 import cats.effect.{ExitCode, IO, IOApp, Resource}
 import cats.implicits._
 import com.dimafeng.testcontainers.PostgreSQLContainer
-import demo.starwars.StarWarsMapping
+import demo.starwars.{StarWarsData, StarWarsMapping}
 import demo.world.WorldMapping
 import doobie.hikari.HikariTransactor
 import org.flywaydb.core.Flyway
@@ -30,7 +30,7 @@ object Main extends IOApp {
           )
           val starWarsGraphQLRoutes = GraphQLService.routes[IO](
             "starwars",
-            GraphQLService.fromGenericIdMapping(StarWarsMapping)
+            GraphQLService.fromMapping(new StarWarsMapping[IO] with StarWarsData[IO])
           )
           DemoServer.stream[IO](worldGraphQLRoutes <+> starWarsGraphQLRoutes).compile.drain
         }
