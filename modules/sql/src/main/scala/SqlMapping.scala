@@ -9,7 +9,7 @@ import scala.collection.Factory
 import scala.util.control.NonFatal
 
 import cats.MonadThrow
-import cats.data.{IndexedStateT, NonEmptyList, OptionT, StateT}
+import cats.data.{NonEmptyList, OptionT, StateT}
 import cats.implicits._
 import io.circe.Json
 import org.tpolecat.sourcepos.SourcePos
@@ -64,10 +64,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       table.hashCode() + column.hashCode()
   }
 
-  type Aliased[T] = IndexedStateT[Result, AliasState, AliasState, T]
+  type Aliased[T] = StateT[Result, AliasState, T]
   object Aliased {
-    def pure[T](t: T): Aliased[T] = IndexedStateT.pure(t)
-    def liftR[T](rt: Result[T]): Aliased[T] = IndexedStateT.liftF(rt)
+    def pure[T](t: T): Aliased[T] = StateT.pure(t)
+    def liftR[T](rt: Result[T]): Aliased[T] = StateT.liftF(rt)
     def tableDef(table: TableExpr): Aliased[String] = StateT(_.tableDef(table).success)
     def tableRef(table: TableExpr): Aliased[String] = StateT(_.tableRef(table).success)
     def columnDef(column: SqlColumn): Aliased[(Option[String], String)] = StateT(_.columnDef(column).success)
