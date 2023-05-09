@@ -262,8 +262,8 @@ trait ResultInstances extends ResultInstances0 {
               fn(a) match {
                 case err@Result.InternalError(_) => err
                 case Result.Success(a)       => loop(Result.Warning(ps, a))
-                case Result.Failure(ps0)     => Result.Failure(ps ++ ps0)
-                case Result.Warning(ps0, a)  => loop(Result.Warning(ps ++ ps0, a))
+                case Result.Failure(ps0)     => Result.Failure(ps0 ++ ps)
+                case Result.Warning(ps0, a)  => loop(Result.Warning(ps0 ++ ps, a))
               }
           }
         loop(fn(a))

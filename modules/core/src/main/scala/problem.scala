@@ -3,6 +3,7 @@
 
 package edu.gemini.grackle
 
+import cats.Eq
 import io.circe._
 import io.circe.syntax._
 
@@ -62,4 +63,6 @@ object Problem {
 
   }
 
+  implicit val eqProblem: Eq[Problem] =
+    Eq.by(p => (p.message, p.locations, p.path))
 }
