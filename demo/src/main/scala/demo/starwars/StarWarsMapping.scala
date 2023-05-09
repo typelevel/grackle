@@ -3,20 +3,97 @@
 
 package demo.starwars
 
-import cats._
 import cats.implicits._
 import edu.gemini.grackle.Predicate._
 import edu.gemini.grackle.Query._
 import edu.gemini.grackle.QueryCompiler._
-import edu.gemini.grackle.QueryInterpreter.{mkErrorResult, mkOneError}
 import edu.gemini.grackle.Value._
 import edu.gemini.grackle._
 import edu.gemini.grackle.generic._
 import edu.gemini.grackle.syntax._
 
+trait StarWarsMapping[F[_]] extends GenericMapping[F] { self: StarWarsData[F] =>
+  // #schema
+  val schema =
+    schema"""
+      type Query {
+          hero(episode: Episode!): Character!
+          character(id: ID!): Character
+          human(id: ID!): Human
+          droid(id: ID!): Droid
+        }
+        enum Episode {
+          NEWHOPE
+          EMPIRE
+          JEDI
+        }
+        interface Character {
+          id: String!
+          name: String
+          friends: [Character!]
+          appearsIn: [Episode!]
+        }
+        type Human implements Character {
+          id: String!
+          name: String
+          friends: [Character!]
+          appearsIn: [Episode!]
+          homePlanet: String
+        }
+        type Droid implements Character {
+          id: String!
+          name: String
+          friends: [Character!]
+          appearsIn: [Episode!]
+          primaryFunction: String
+        }
+    """
+  // #schema
+
+  val QueryType = schema.ref("Query")
+  val EpisodeType = schema.ref("Episode")
+  val CharacterType = schema.ref("Character")
+  val HumanType = schema.ref("Human")
+  val DroidType = schema.ref("Droid")
+
+  val typeMappings =
+    List(
+      // #root
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            GenericField("hero", characters),
+            GenericField("character", characters),
+            GenericField("human", characters.collect { case h: Human => h }),
+            GenericField("droid", characters.collect { case d: Droid => d })
+          )
+      )
+      // #root
+    )
+
+  // #elaborator
+  override val selectElaborator = new SelectElaborator(Map(
+    QueryType -> {
+      // The hero selector takes an Episode argument and yields a single value. We use the
+      // Unique operator to pick out the target using the FieldEquals predicate.
+      case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
+        Episode.values.find(_.toString == e.name).map { episode =>
+          Select("hero", Nil, Unique(Filter(Eql(CharacterType / "id", Const(hero(episode).id)), child))).success
+        }.getOrElse(Result.failure(s"Unknown episode '${e.name}'"))
+
+      // The character, human and droid selectors all take a single ID argument and yield a
+      // single value (if any) or null. We use the Unique operator to pick out the target
+      // using the FieldEquals predicate.
+      case Select(f@("character" | "human" | "droid"), List(Binding("id", IDValue(id))), child) =>
+        Select(f, Nil, Unique(Filter(Eql(CharacterType / "id", Const(id)), child))).success
+    }
+  ))
+  // #elaborator
+}
+
 // The types and values for the in-memory Star Wars example.
-object StarWarsData {
-  import StarWarsMapping._
+trait StarWarsData[F[_]] extends GenericMapping[F] { self: StarWarsMapping[F] =>
   import semiauto._
 
   // #model_types
@@ -66,9 +143,9 @@ object StarWarsData {
 
   def resolveFriends(c: Character): Result[Option[List[Character]]] =
     c.friends match {
-      case None => None.rightIor
+      case None => None.success
       case Some(ids) =>
-        ids.traverse(id => characters.find(_.id == id).toRightIor(mkOneError(s"Bad id '$id'"))).map(_.some)
+        ids.traverse(id => characters.find(_.id == id).toResultOrError(s"Bad id '$id'")).map(_.some)
     }
 
   // #model_types
@@ -139,87 +216,4 @@ object StarWarsData {
     EMPIRE -> lukeSkywalker,
     JEDI -> r2d2
   )
-
-}
-
-object StarWarsMapping extends GenericMapping[Id] {
-  import StarWarsData._
-
-  // #schema
-  val schema =
-    schema"""
-      type Query {
-          hero(episode: Episode!): Character!
-          character(id: ID!): Character
-          human(id: ID!): Human
-          droid(id: ID!): Droid
-        }
-        enum Episode {
-          NEWHOPE
-          EMPIRE
-          JEDI
-        }
-        interface Character {
-          id: String!
-          name: String
-          friends: [Character!]
-          appearsIn: [Episode!]
-        }
-        type Human implements Character {
-          id: String!
-          name: String
-          friends: [Character!]
-          appearsIn: [Episode!]
-          homePlanet: String
-        }
-        type Droid implements Character {
-          id: String!
-          name: String
-          friends: [Character!]
-          appearsIn: [Episode!]
-          primaryFunction: String
-        }
-    """
-  // #schema
-
-  val QueryType = schema.ref("Query")
-  val EpisodeType = schema.ref("Episode")
-  val CharacterType = schema.ref("Character")
-  val HumanType = schema.ref("Human")
-  val DroidType = schema.ref("Droid")
-
-  val typeMappings =
-    List(
-      // #root
-      ObjectMapping(
-        tpe = QueryType,
-        fieldMappings =
-          List(
-            GenericField("hero", characters),
-            GenericField("character", characters),
-            GenericField("human", characters.collect { case h: Human => h }),
-            GenericField("droid", characters.collect { case d: Droid => d })
-          )
-      )
-      // #root
-    )
-
-  // #elaborator
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      // The hero selector takes an Episode argument and yields a single value. We use the
-      // Unique operator to pick out the target using the FieldEquals predicate.
-      case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
-        Episode.values.find(_.toString == e.name).map { episode =>
-          Select("hero", Nil, Unique(Filter(Eql(CharacterType / "id", Const(hero(episode).id)), child))).rightIor
-        }.getOrElse(mkErrorResult(s"Unknown episode '${e.name}'"))
-
-      // The character, human and droid selectors all take a single ID argument and yield a
-      // single value (if any) or null. We use the Unique operator to pick out the target
-      // using the FieldEquals predicate.
-      case Select(f@("character" | "human" | "droid"), List(Binding("id", IDValue(id))), child) =>
-        Select(f, Nil, Unique(Filter(Eql(CharacterType / "id", Const(id)), child))).rightIor
-    }
-  ))
-  // #elaborator
 }

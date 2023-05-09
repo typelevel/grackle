@@ -3,10 +3,11 @@
 
 package compiler
 
-import cats.{Id, Monad}
+import cats.MonadThrow
+import cats.effect.IO
 
 import edu.gemini.grackle._
 
-abstract class TestMapping(implicit val M: Monad[Id]) extends Mapping[Id] {
+abstract class TestMapping(implicit val M: MonadThrow[IO]) extends Mapping[IO] {
   val typeMappings: List[TypeMapping] = Nil
 }

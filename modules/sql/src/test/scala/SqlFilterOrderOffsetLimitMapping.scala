@@ -9,7 +9,6 @@ import edu.gemini.grackle._, syntax._
 import Predicate.{Const, Eql}
 import Query.{Binding, Filter, Limit, Offset, OrderBy, OrderSelection, OrderSelections, Select}
 import QueryCompiler.SelectElaborator
-import QueryInterpreter.mkErrorResult
 import Value.{AbsentValue, IntValue, NullValue, ObjectValue, StringValue, TypedEnumValue}
 
 trait SqlFilterOrderOffsetLimitMapping[F[_]] extends SqlTestMapping[F] {
@@ -132,37 +131,37 @@ trait SqlFilterOrderOffsetLimitMapping[F[_]] extends SqlTestMapping[F] {
 
   def mkOffset(query: Query, limit: Value): Result[Query] =
     limit match {
-      case AbsentValue|NullValue => query.rightIor
-      case IntValue(num) if num == 0 => query.rightIor
-      case IntValue(num) if num > 0 => Offset(num, query).rightIor
-      case IntValue(num) => mkErrorResult(s"Expected offset >= 0, found $num")
-      case other =>  mkErrorResult(s"Expected offset >= 0, found $other")
+      case AbsentValue|NullValue => query.success
+      case IntValue(num) if num == 0 => query.success
+      case IntValue(num) if num > 0 => Offset(num, query).success
+      case IntValue(num) => Result.failure(s"Expected offset >= 0, found $num")
+      case other =>  Result.failure(s"Expected offset >= 0, found $other")
     }
 
   def mkLimit(query: Query, limit: Value): Result[Query] =
     limit match {
-      case AbsentValue|NullValue => query.rightIor
-      case IntValue(num) if num > 0 => Limit(num, query).rightIor
-      case IntValue(num) => mkErrorResult(s"Expected limit > 0, found $num")
-      case other =>  mkErrorResult(s"Expected limit > 0, found $other")
+      case AbsentValue|NullValue => query.success
+      case IntValue(num) if num > 0 => Limit(num, query).success
+      case IntValue(num) => Result.failure(s"Expected limit > 0, found $num")
+      case other =>  Result.failure(s"Expected limit > 0, found $other")
     }
 
   def mkFilter(query: Query, tpe: Type, filter: Value): Result[Query] = {
     filter match {
-      case AbsentValue|NullValue => query.rightIor
-      case FilterValue(id) => Filter(Eql(tpe / "id", Const(id)), query).rightIor
-      case _ => mkErrorResult(s"Expected filter value, found $filter")
+      case AbsentValue|NullValue => query.success
+      case FilterValue(id) => Filter(Eql(tpe / "id", Const(id)), query).success
+      case _ => Result.failure(s"Expected filter value, found $filter")
     }
   }
 
   def mkOrderBy(query: Query, order: Value)(oss: ListOrder => List[OrderSelection[_]]): Result[Query] =
     order match {
-      case AbsentValue|NullValue => query.rightIor
+      case AbsentValue|NullValue => query.success
       case OrderValue(o) => oss(o) match {
-        case Nil => query.rightIor
-        case oss => OrderBy(OrderSelections(oss), query).rightIor
+        case Nil => query.success
+        case oss => OrderBy(OrderSelections(oss), query).success
       }
-      case _ => mkErrorResult(s"Expected sort value, found $order")
+      case _ => Result.failure(s"Expected sort value, found $order")
     }
 
   override val selectElaborator: SelectElaborator = new SelectElaborator(Map(
@@ -174,7 +173,7 @@ trait SqlFilterOrderOffsetLimitMapping[F[_]] extends SqlTestMapping[F] {
           lc <- mkLimit(oc, limit)
         } yield Select("root", Nil, lc)
 
-      case other => other.rightIor
+      case other => other.success
     },
     RootType -> {
       case Select("listA", List(Binding("filter", filter), Binding("order", order), Binding("offset", offset), Binding("limit", limit)), child) =>
@@ -194,7 +193,7 @@ trait SqlFilterOrderOffsetLimitMapping[F[_]] extends SqlTestMapping[F] {
         } yield Select("listB", Nil, lc)
 
       case other =>
-        other.rightIor
+        other.success
     }
   ))
 }

@@ -8,7 +8,9 @@ import java.time.{Duration, LocalDate, LocalTime, ZonedDateTime}
 import java.util.UUID
 import scala.util.Try
 
-import cats._
+import cats.{Eq, Order}
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.implicits._
 import cats.tests.CatsSuite
 import io.circe.Encoder
@@ -92,7 +94,7 @@ object MovieData {
     ).sortBy(_.id.toString)
 }
 
-object MovieMapping extends GenericMapping[Id] {
+object MovieMapping extends GenericMapping[IO] {
   import MovieData._
 
   val schema =
@@ -179,9 +181,9 @@ object MovieMapping extends GenericMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("movieById", List(Binding("id", UUIDValue(id))), child) =>
-        Select("movieById", Nil, Unique(Filter(Eql(MovieType / "id", Const(id)), child))).rightIor
+        Select("movieById", Nil, Unique(Filter(Eql(MovieType / "id", Const(id)), child))).success
       case Select("moviesByGenre", List(Binding("genre", GenreValue(genre))), child) =>
-        Select("moviesByGenre", Nil, Filter(Eql(MovieType / "genre", Const(genre)), child)).rightIor
+        Select("moviesByGenre", Nil, Filter(Eql(MovieType / "genre", Const(genre)), child)).success
       case Select("moviesReleasedBetween", List(Binding("from", DateValue(from)), Binding("to", DateValue(to))), child) =>
         Select("moviesReleasedBetween", Nil,
           Filter(
@@ -191,21 +193,21 @@ object MovieMapping extends GenericMapping[Id] {
             ),
             child
           )
-        ).rightIor
+        ).success
       case Select("moviesLongerThan", List(Binding("duration", IntervalValue(duration))), child) =>
         Select("moviesLongerThan", Nil,
           Filter(
             Not(Lt(MovieType / "duration", Const(duration))),
             child
           )
-        ).rightIor
+        ).success
       case Select("moviesShownLaterThan", List(Binding("time", TimeValue(time))), child) =>
         Select("moviesShownLaterThan", Nil,
           Filter(
             Not(Lt(MovieType / "showTime", Const(time))),
             child
           )
-        ).rightIor
+        ).success
       case Select("moviesShownBetween", List(Binding("from", DateTimeValue(from)), Binding("to", DateTimeValue(to))), child) =>
         Select("moviesShownBetween", Nil,
           Filter(
@@ -215,7 +217,7 @@ object MovieMapping extends GenericMapping[Id] {
             ),
             child
           )
-        ).rightIor
+        ).success
     }
   ))
 }
@@ -252,7 +254,7 @@ final class DerivedScalarsSpec extends CatsSuite {
       }
     """
 
-    val res = MovieMapping.compileAndRun(query)
+    val res = MovieMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -289,7 +291,7 @@ final class DerivedScalarsSpec extends CatsSuite {
       }
     """
 
-    val res = MovieMapping.compileAndRun(query)
+    val res = MovieMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -326,7 +328,7 @@ final class DerivedScalarsSpec extends CatsSuite {
       }
     """
 
-    val res = MovieMapping.compileAndRun(query)
+    val res = MovieMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -359,7 +361,7 @@ final class DerivedScalarsSpec extends CatsSuite {
       }
     """
 
-    val res = MovieMapping.compileAndRun(query)
+    val res = MovieMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -396,7 +398,7 @@ final class DerivedScalarsSpec extends CatsSuite {
       }
     """
 
-    val res = MovieMapping.compileAndRun(query)
+    val res = MovieMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -433,7 +435,7 @@ final class DerivedScalarsSpec extends CatsSuite {
       }
     """
 
-    val res = MovieMapping.compileAndRun(query)
+    val res = MovieMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)

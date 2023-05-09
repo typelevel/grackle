@@ -11,7 +11,6 @@ import Cursor.{Env, ListTransformCursor}
 import Query.{Binding, Count, Empty, Environment, Group, Limit, Offset, OrderBy, OrderSelection, OrderSelections, Select, TransformCursor}
 import QueryCompiler.SelectElaborator
 import Value.IntValue
-import QueryInterpreter.mkErrorResult
 
 // Mapping illustrating paging in "has more" style: paged results can report
 // whether there are more elements beyond the current sub list.
@@ -136,7 +135,7 @@ trait SqlPaging3Mapping[F[_]] extends SqlTestMapping[F] {
         num  <- c.fieldAs[Long](countField)
       } yield num > last
     } else
-      mkErrorResult("Result has unexpected shape")
+      Result.internalError("Result has unexpected shape")
   }
 
   def genItems(keyPrefix: String)(c: Cursor): Result[Cursor] = {
@@ -166,11 +165,11 @@ trait SqlPaging3Mapping[F[_]] extends SqlTestMapping[F] {
           else Limit(if (hasHasMore) lim+1 else lim, query)
 
         if(hasHasMore)
-          Select("items", Nil, TransformCursor(genItems(keyPrefix), limit(offset(order(child))))).rightIor
+          Select("items", Nil, TransformCursor(genItems(keyPrefix), limit(offset(order(child))))).success
         else
-          Select("items", Nil, limit(offset(order(child)))).rightIor
+          Select("items", Nil, limit(offset(order(child)))).success
 
-      case other => other.rightIor
+      case other => other.success
     }
 
   override val selectElaborator = new SelectElaborator(Map(
@@ -191,7 +190,7 @@ trait SqlPaging3Mapping[F[_]] extends SqlTestMapping[F] {
                 child
               ))
             )
-          ).rightIor
+          ).success
       }
     },
     CountryType -> {
@@ -211,7 +210,7 @@ trait SqlPaging3Mapping[F[_]] extends SqlTestMapping[F] {
                 child
               ))
             )
-          ).rightIor
+          ).success
       }
     }
   ))

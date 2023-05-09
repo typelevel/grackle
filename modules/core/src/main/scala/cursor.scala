@@ -6,13 +6,12 @@ package edu.gemini.grackle
 import scala.collection.Factory
 import scala.reflect.{classTag, ClassTag}
 
-import cats.data.Ior
 import cats.implicits._
 import io.circe.Json
 import org.tpolecat.typename.{ TypeName, typeName }
 
+import syntax._
 import Cursor.{ cast, Context, Env }
-import QueryInterpreter.{ mkErrorResult, mkOneError }
 
 /**
  * Indicates a position within an abstract data model during the interpretation
@@ -47,10 +46,7 @@ trait Cursor {
 
   /** Yields the value of the supplied environment key, if any, or an error if none. */
   def envR[T: ClassTag: TypeName](nme: String): Result[T] =
-    env.getR(nme)  match {
-      case err @ Ior.Left(_) => parent.fold[Result[T]](err)(_.envR(nme))
-      case ok => ok
-    }
+    env(nme).toResultOrError(s"Key '$nme' of type ${typeName[T]} was not found in $this")
 
   /** Yields the cumulative environment defined at this `Cursor`. */
   def fullEnv: Env = parent.map(_.fullEnv).getOrElse(Env.empty).add(env)
@@ -62,7 +58,7 @@ trait Cursor {
    * an error or the left hand side otherwise.
    */
   def as[T: ClassTag]: Result[T] =
-    cast[T](focus).toRightIor(mkOneError(s"Expected value of type ${classTag[T]} for focus of type $tpe at path $path, found $focus"))
+    cast[T](focus).toResultOrError(s"Expected value of type ${classTag[T]} for focus of type $tpe at path $path, found $focus")
 
   /** Is the value at this `Cursor` of a scalar or enum type? */
   def isLeaf: Boolean
@@ -149,7 +145,7 @@ trait Cursor {
   /** True if this cursor is nullable and null, false otherwise. */
   def isNull: Boolean =
     isNullable && (asNullable match {
-      case Ior.Right(None) => true
+      case Result.Success(None) => true
       case _ => false
     })
 
@@ -160,7 +156,7 @@ trait Cursor {
   def nullableHasField(fieldName: String): Boolean =
     if (isNullable)
       asNullable match {
-        case Ior.Right(Some(c)) => c.nullableHasField(fieldName)
+        case Result.Success(Some(c)) => c.nullableHasField(fieldName)
         case _ => false
       }
     else hasField(fieldName)
@@ -172,11 +168,9 @@ trait Cursor {
    */
   def nullableField(fieldName: String): Result[Cursor] =
     if (isNullable)
-      asNullable match {
-        case Ior.Right(Some(c)) => c.nullableField(fieldName)
-        case Ior.Right(None) => mkErrorResult(s"Expected non-null for field '$fieldName'")
-        case Ior.Left(es) => es.leftIor
-        case Ior.Both(es, _) => es.leftIor
+      asNullable.flatMap {
+        case Some(c) => c.nullableField(fieldName)
+        case None => Result.internalError(s"Expected non-null for field '$fieldName'")
       }
     else field(fieldName, None)
 
@@ -186,7 +180,7 @@ trait Cursor {
     case fieldName :: rest =>
       nullableHasField(fieldName) && {
         nullableField(fieldName) match {
-          case Ior.Right(c) =>
+          case Result.Success(c) =>
             !c.isList && c.hasPath(rest)
           case _ => false
         }
@@ -199,11 +193,11 @@ trait Cursor {
    * hand side if there is no such field.
    */
   def path(fns: List[String]): Result[Cursor] = fns match {
-    case Nil => this.rightIor
+    case Nil => this.success
     case fieldName :: rest =>
       nullableField(fieldName) match {
-        case Ior.Right(c) => c.path(rest)
-        case _ => mkErrorResult(s"Bad path")
+        case Result.Success(c) => c.path(rest)
+        case _ => Result.internalError(s"Bad path")
       }
   }
 
@@ -219,7 +213,7 @@ trait Cursor {
       case fieldName :: rest =>
         c.nullableHasField(fieldName) && {
           c.nullableField(fieldName) match {
-            case Ior.Right(c) =>
+            case Result.Success(c) =>
               loop(c, rest, c.isList)
             case _ => false
           }
@@ -235,26 +229,17 @@ trait Cursor {
    * the left hand side if there is no such path.
    */
   def listPath(fns: List[String]): Result[List[Cursor]] = fns match {
-    case Nil => List(this).rightIor
+    case Nil => List(this).success
     case fieldName :: rest =>
       if (isNullable)
-        asNullable match {
-          case Ior.Right(Some(c)) => c.listPath(fns)
-          case Ior.Right(None) => Nil.rightIor
-          case Ior.Left(es) => es.leftIor
-          case Ior.Both(es, _) => es.leftIor
+        asNullable.flatMap {
+          case Some(c) => c.listPath(fns)
+          case None => Nil.success
         }
       else if (isList)
-        asList match {
-          case Ior.Right(cs) => cs.flatTraverse(_.listPath(fns))
-          case other => other
-        }
+        asList.flatMap(_.flatTraverse(_.listPath(fns)))
       else
-        field(fieldName, None) match {
-          case Ior.Right(c) => c.listPath(rest)
-          case Ior.Left(es) => es.leftIor
-          case Ior.Both(es, _) => es.leftIor
-        }
+        field(fieldName, None).flatMap(_.listPath(rest))
   }
 
   /**
@@ -265,7 +250,7 @@ trait Cursor {
    * cursors corresponding to the field elements.
    */
   def flatListPath(fns: List[String]): Result[List[Cursor]] =
-    listPath(fns).flatMap(cs => cs.flatTraverse(c => if (c.isList) c.asList else List(c).rightIor))
+    listPath(fns).flatMap(cs => cs.flatTraverse(c => if (c.isList) c.asList else List(c).success))
 }
 
 object Cursor {
@@ -296,19 +281,19 @@ object Cursor {
       if(path.isEmpty) None
       else Some(copy(path = path.tail, resultPath = resultPath.tail, typePath = typePath.tail))
 
-    def forField(fieldName: String, resultName: String): Option[Context] =
+    def forField(fieldName: String, resultName: String): Result[Context] =
       tpe.underlyingField(fieldName).map { fieldTpe =>
         copy(path = fieldName :: path, resultPath = resultName :: resultPath, typePath = fieldTpe :: typePath)
-      }
+      }.toResultOrError(s"No field '$fieldName' for type $tpe")
 
-    def forField(fieldName: String, resultName: Option[String]): Option[Context] =
+    def forField(fieldName: String, resultName: Option[String]): Result[Context] =
       tpe.underlyingField(fieldName).map { fieldTpe =>
         copy(path = fieldName :: path, resultPath = resultName.getOrElse(fieldName) :: resultPath, typePath = fieldTpe :: typePath)
-      }
+      }.toResultOrError(s"No field '$fieldName' for type $tpe")
 
-    def forPath(path1: List[String]): Option[Context] =
+    def forPath(path1: List[String]): Result[Context] =
       path1 match {
-        case Nil => Some(this)
+        case Nil => this.success
         case hd :: tl => forField(hd, hd).flatMap(_.forPath(tl))
       }
 
@@ -336,7 +321,7 @@ object Cursor {
 
     def apply(rootTpe: Type): Context = Context(rootTpe, Nil, Nil, Nil)
 
-    def apply(path: Path): Option[Context] =
+    def apply(path: Path): Result[Context] =
       path.path.foldLeftM(Context(path.rootTpe, Nil, Nil, Nil)) { case (acc, elem) =>
         acc.forField(elem, None)
       }
@@ -345,7 +330,7 @@ object Cursor {
   def flatten(c: Cursor): Result[List[Cursor]] =
     if(c.isList) c.asList.flatMap(flatten)
     else if(c.isNullable) c.asNullable.flatMap(oc => flatten(oc.toList))
-    else List(c).rightIor
+    else List(c).success
 
   def flatten(cs: List[Cursor]): Result[List[Cursor]] =
     cs.flatTraverse(flatten)
@@ -357,10 +342,7 @@ object Cursor {
     def get[T: ClassTag](name: String): Option[T]
 
     def getR[A: ClassTag: TypeName](name: String): Result[A] =
-      get[A](name) match {
-        case None        => Result.failure(s"Key '$name' of type ${typeName[A]} was not found in $this")
-        case Some(value) => Result(value)
-      }
+      get[A](name).toResultOrError(s"Key '$name' of type ${typeName[A]} was not found in $this")
 
     def addFromQuery(query: Query): Env =
       query match {
@@ -418,36 +400,36 @@ object Cursor {
     def isLeaf: Boolean = false
 
     def asLeaf: Result[Json] =
-      mkErrorResult(s"Expected Scalar type, found $tpe for focus ${focus} at ${context.path.reverse.mkString("/")}")
+      Result.internalError(s"Expected Scalar type, found $tpe for focus ${focus} at ${context.path.reverse.mkString("/")}")
 
     def preunique: Result[Cursor] =
-      mkErrorResult(s"Expected List type, found $focus for ${tpe.nonNull.list}")
+      Result.internalError(s"Expected List type, found $focus for ${tpe.nonNull.list}")
 
     def isList: Boolean = false
 
     def asList[C](factory: Factory[Cursor, C]): Result[C] =
-      mkErrorResult(s"Expected List type, found $tpe")
+      Result.internalError(s"Expected List type, found $tpe")
 
     def listSize: Result[Int] =
-      mkErrorResult(s"Expected List type, found $tpe")
+      Result.internalError(s"Expected List type, found $tpe")
 
     def isNullable: Boolean = false
 
     def asNullable: Result[Option[Cursor]] =
-      mkErrorResult(s"Expected Nullable type, found $focus for $tpe")
+      Result.internalError(s"Expected Nullable type, found $focus for $tpe")
 
     def isDefined: Result[Boolean] =
-      mkErrorResult(s"Expected Nullable type, found $focus for $tpe")
+      Result.internalError(s"Expected Nullable type, found $focus for $tpe")
 
     def narrowsTo(subtpe: TypeRef): Boolean = false
 
     def narrow(subtpe: TypeRef): Result[Cursor] =
-      mkErrorResult(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
+      Result.internalError(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
 
     def hasField(fieldName: String): Boolean = false
 
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
-      mkErrorResult(s"No field '$fieldName' for type $tpe")
+      Result.internalError(s"No field '$fieldName' for type $tpe")
   }
 
   /** Proxy `Cursor` which delegates most methods to an underlying `Cursor`.. */
@@ -491,7 +473,7 @@ object Cursor {
 
   /** Empty `Cursor` with no content */
   case class EmptyCursor(context: Context, parent: Option[Cursor], env: Env) extends AbstractCursor {
-    def focus: Any = mkErrorResult(s"Empty cursor has no focus")
+    def focus: Any = Result.internalError(s"Empty cursor has no focus")
     def withEnv(env0: Env): EmptyCursor = copy(env = env.add(env0))
   }
 
@@ -502,23 +484,23 @@ object Cursor {
    */
   case class ListTransformCursor(underlying: Cursor, newSize: Int, newElems: Seq[Cursor]) extends ProxyCursor(underlying) {
     override def withEnv(env: Env): Cursor = new ListTransformCursor(underlying.withEnv(env), newSize, newElems)
-    override lazy val listSize: Result[Int] = newSize.rightIor
+    override lazy val listSize: Result[Int] = newSize.success
     override def asList[C](factory: Factory[Cursor, C]): Result[C] =
-      factory.fromSpecific(newElems).rightIor
+      factory.fromSpecific(newElems).success
   }
 
   case class DeferredCursor(context: Context, parent: Option[Cursor], env: Env, deferredPath: List[String], mkCursor: (Context, Cursor) => Result[Cursor]) extends AbstractCursor {
-    def focus: Any = mkErrorResult(s"Empty cursor has no focus")
+    def focus: Any = Result.internalError(s"Empty cursor has no focus")
     def withEnv(env0: Env): DeferredCursor = copy(env = env.add(env0))
 
     override def hasField(fieldName: String): Boolean = fieldName == deferredPath.head
 
     override def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
-      if(fieldName != deferredPath.head) mkErrorResult(s"No field '$fieldName' for type $tpe")
+      if(fieldName != deferredPath.head) Result.internalError(s"No field '$fieldName' for type $tpe")
       else
         for {
-          fieldContext <- Result.fromOption(context.forField(fieldName, resultName), s"No field '$fieldName' for type $tpe")
-          cursor       <- if(path.sizeCompare(1) > 0) DeferredCursor(fieldContext, Some(this), env, deferredPath.tail, mkCursor).rightIor
+          fieldContext <- context.forField(fieldName, resultName)
+          cursor       <- if(path.sizeCompare(1) > 0) DeferredCursor(fieldContext, Some(this), env, deferredPath.tail, mkCursor).success
                           else mkCursor(fieldContext, this)
         } yield cursor
   }

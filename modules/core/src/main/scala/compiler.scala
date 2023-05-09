@@ -5,14 +5,13 @@ package edu.gemini.grackle
 
 import scala.annotation.tailrec
 
-import cats.data.Ior
 import cats.parse.{LocationMap, Parser}
 import cats.implicits._
 import io.circe.Json
 
+import syntax._
 import Query._, Predicate._, Value._, UntypedOperation._
 import QueryCompiler._
-import QueryInterpreter.{ mkErrorResult, mkOneError }
 import ScalarType._
 
 /**
@@ -28,9 +27,9 @@ object QueryParser {
    */
   def parseText(text: String, name: Option[String] = None): Result[UntypedOperation] = {
     def toResult[T](pr: Either[Parser.Error, T]): Result[T] =
-      Ior.fromEither(pr).leftMap { e =>
+      Result.fromEither(pr.leftMap { e =>
         val lm = LocationMap(text)
-        val error = lm.toLineCol(e.failedAtOffset) match {
+        lm.toLineCol(e.failedAtOffset) match {
           case Some((row, col)) =>
             lm.getLine(row) match {
               case Some(line) =>
@@ -41,8 +40,7 @@ object QueryParser {
             }
           case None => "Truncated query"
         }
-        mkOneError(error)
-      }
+      })
 
     for {
       doc   <- toResult(GraphQLParser.Document.parseAll(text))
@@ -55,20 +53,20 @@ object QueryParser {
     val fragments = doc.collect { case frag: FragmentDefinition => (frag.name.value, frag) }.toMap
 
     (ops, name) match {
-      case (Nil, _) => mkErrorResult("At least one operation required")
+      case (Nil, _) => Result.failure("At least one operation required")
       case (List(op: Operation), None) => parseOperation(op, fragments)
       case (List(qs: QueryShorthand), None) => parseQueryShorthand(qs, fragments)
       case (_, None) =>
-        mkErrorResult("Operation name required to select unique operation")
+        Result.failure("Operation name required to select unique operation")
       case (ops, _) if ops.exists { case _: QueryShorthand => true ; case _ => false } =>
-        mkErrorResult("Query shorthand cannot be combined with multiple operations")
+        Result.failure("Query shorthand cannot be combined with multiple operations")
       case (ops, Some(name)) =>
         ops.filter { case Operation(_, Some(Name(`name`)), _, _, _) => true ; case _ => false } match {
           case List(op: Operation) => parseOperation(op, fragments)
           case Nil =>
-            mkErrorResult(s"No operation named '$name'")
+            Result.failure(s"No operation named '$name'")
           case _ =>
-            mkErrorResult(s"Multiple operations named '$name'")
+            Result.failure(s"Multiple operations named '$name'")
         }
     }
   }
@@ -123,7 +121,7 @@ object QueryParser {
 
     case FragmentSpread(Name(name), directives) =>
       for {
-        frag  <- fragments.get(name).toRightIor(mkOneError(s"Undefined fragment '$name'"))
+        frag  <- fragments.get(name).toResult(s"Undefined fragment '$name'")
         skip  <- parseSkipInclude(directives)
         sels0 <- parseSelections(frag.selectionSet, Some(frag.typeCondition.name), fragments)
       } yield {
@@ -147,15 +145,15 @@ object QueryParser {
       }
 
     case _ =>
-      mkErrorResult("Field or fragment spread required")
+      Result.failure("Field or fragment spread required")
   }
 
   def parseSkipInclude(directives: List[Directive]): Result[Option[(Boolean, Value)]] =
     directives.collect { case dir@Directive(Name("skip"|"include"), _) => dir } match {
-      case Nil => None.rightIor
+      case Nil => None.success
       case Directive(Name(si), List((Name("if"), value))) :: Nil => parseValue(value).map(v => Some((si == "skip", v)))
-      case Directive(Name(si), _) :: Nil => mkErrorResult(s"$si must have a single Boolean 'if' argument")
-      case _ => mkErrorResult(s"Only a single skip/include allowed at a given location")
+      case Directive(Name(si), _) :: Nil => Result.failure(s"$si must have a single Boolean 'if' argument")
+      case _ => Result.failure(s"Only a single skip/include allowed at a given location")
     }
 
   def parseArgs(args: List[(Name, Ast.Value)]): Result[List[Binding]] =
@@ -166,13 +164,13 @@ object QueryParser {
 
   def parseValue(value: Ast.Value): Result[Value] = {
     value match {
-      case Ast.Value.IntValue(i) => IntValue(i).rightIor
-      case Ast.Value.FloatValue(d) => FloatValue(d).rightIor
-      case Ast.Value.StringValue(s) => StringValue(s).rightIor
-      case Ast.Value.BooleanValue(b) => BooleanValue(b).rightIor
-      case Ast.Value.EnumValue(e) => UntypedEnumValue(e.value).rightIor
-      case Ast.Value.Variable(v) => UntypedVariableValue(v.value).rightIor
-      case Ast.Value.NullValue => NullValue.rightIor
+      case Ast.Value.IntValue(i) => IntValue(i).success
+      case Ast.Value.FloatValue(d) => FloatValue(d).success
+      case Ast.Value.StringValue(s) => StringValue(s).success
+      case Ast.Value.BooleanValue(b) => BooleanValue(b).success
+      case Ast.Value.EnumValue(e) => UntypedEnumValue(e.value).success
+      case Ast.Value.Variable(v) => UntypedVariableValue(v.value).success
+      case Ast.Value.NullValue => NullValue.success
       case Ast.Value.ListValue(vs) => vs.traverse(parseValue).map(ListValue(_))
       case Ast.Value.ObjectValue(fs) =>
         fs.traverse { case (name, value) =>
@@ -345,11 +343,11 @@ class QueryCompiler(schema: Schema, phases: List[Phase]) {
 
   def compileVars(varDefs: VarDefs, untypedVars: Option[Json]): Result[Vars] =
     untypedVars match {
-      case None => Map.empty.rightIor
+      case None => Map.empty.success
       case Some(untypedVars) =>
         untypedVars.asObject match {
           case None =>
-            mkErrorResult(s"Variables must be represented as a Json object")
+            Result.failure(s"Variables must be represented as a Json object")
           case Some(obj) =>
             varDefs.traverse(iv => checkVarValue(iv, obj(iv.name)).map(v => (iv.name, (iv.tpe, v)))).map(_.toMap)
         }
@@ -361,8 +359,8 @@ class QueryCompiler(schema: Schema, phases: List[Phase]) {
       case Ast.Type.NonNull(Right(list)) => loop(list, true)
       case Ast.Type.List(elem) => loop(elem, false).map(e => if (nonNull) ListType(e) else NullableType(ListType(e)))
       case Ast.Type.Named(name) => schema.definition(name.value) match {
-        case None => mkErrorResult(s"Undefine typed '${name.value}'")
-        case Some(tpe) => (if (nonNull) tpe else NullableType(tpe)).rightIor
+        case None => Result.failure(s"Undefined typed '${name.value}'")
+        case Some(tpe) => (if (nonNull) tpe else NullableType(tpe)).success
       }
     }
     loop(tpe, false)
@@ -394,12 +392,12 @@ object QueryCompiler {
           } yield {
             val isLeaf = childTpe.isUnderlyingLeaf
             if (isLeaf && child != Empty)
-              mkErrorResult(s"Leaf field '$fieldName' of $obj must have an empty subselection set")
+              Result.failure(s"Leaf field '$fieldName' of $obj must have an empty subselection set")
             else if (!isLeaf && child == Empty)
-              mkErrorResult(s"Non-leaf field '$fieldName' of $obj must have a non-empty subselection set")
+              Result.failure(s"Non-leaf field '$fieldName' of $obj must have a non-empty subselection set")
             else
               transform(child, vars, schema, childTpe).map(ec => s.copy(child = ec))
-          }).getOrElse(mkErrorResult(s"Unknown field '$fieldName' in select"))
+          }).getOrElse(Result.failure(s"Unknown field '$fieldName' in select"))
 
         case UntypedNarrow(tpnme, child) =>
           (for {
@@ -408,7 +406,7 @@ object QueryCompiler {
             transform(child, vars, schema, subtpe).map { ec =>
               if (tpe.underlyingObject.map(_ <:< subtpe).getOrElse(false)) ec else Narrow(schema.ref(tpnme), ec)
             }
-          }).getOrElse(mkErrorResult(s"Unknown type '$tpnme' in type condition"))
+          }).getOrElse(Result.failure(s"Unknown type '$tpnme' in type condition"))
 
         case i@Introspect(_, child) if tpe =:= schema.queryType =>
           transform(child, vars, Introspection.schema, Introspection.schema.queryType).map(ec => i.copy(child = ec))
@@ -423,7 +421,7 @@ object QueryCompiler {
         case c@Count(_, child)        => transform(child, vars, schema, tpe).map(ec => c.copy(child = ec))
         case g@Group(children)        => children.traverse(q => transform(q, vars, schema, tpe)).map(eqs => g.copy(queries = eqs))
         case u@Unique(child)          => transform(child, vars, schema, tpe.nonNull.list).map(ec => u.copy(child = ec))
-        case f@Filter(_, child)       => tpe.item.toRightIor(mkOneError(s"Filter of non-List type $tpe")).flatMap(item => transform(child, vars, schema, item).map(ec => f.copy(child = ec)))
+        case f@Filter(_, child)       => tpe.item.toResult(s"Filter of non-List type $tpe").flatMap(item => transform(child, vars, schema, item).map(ec => f.copy(child = ec)))
         case c@Component(_, _, child) => transform(child, vars, schema, tpe).map(ec => c.copy(child = ec))
         case e@Effect(_, child)       => transform(child, vars, schema, tpe).map(ec => e.copy(child = ec))
         case s@Skip(_, _, child)      => transform(child, vars, schema, tpe).map(ec => s.copy(child = ec))
@@ -432,8 +430,8 @@ object QueryCompiler {
         case o@OrderBy(_, child)      => transform(child, vars, schema, tpe).map(ec => o.copy(child = ec))
         case e@Environment(_, child)  => transform(child, vars, schema, tpe).map(ec => e.copy(child = ec))
         case t@TransformCursor(_, child) => transform(child, vars, schema, tpe).map(ec => t.copy(child = ec))
-        case Skipped                  => Skipped.rightIor
-        case Empty                    => Empty.rightIor
+        case Skipped                  => Skipped.success
+        case Empty                    => Empty.success
       }
   }
 
@@ -443,11 +441,11 @@ object QueryCompiler {
         case s@PossiblyRenamedSelect(Select(fieldName @ ("__typename" | "__schema" | "__type"), _, _), _) =>
           (fieldName, level) match {
             case ("__typename", Disabled) =>
-              mkErrorResult("Introspection is disabled")
+              Result.failure("Introspection is disabled")
             case ("__schema" | "__type", TypenameOnly | Disabled) =>
-              mkErrorResult("Introspection is disabled")
+              Result.failure("Introspection is disabled")
             case _ =>
-              Introspect(schema, s).rightIor
+              Introspect(schema, s).success
           }
         case _ => super.transform(query, vars, schema, tpe)
       }
@@ -483,7 +481,7 @@ object QueryCompiler {
         case Skip(skip, cond, child) =>
           for {
             c  <- extractCond(vars, cond)
-            elaboratedChild <- if(c == skip) Skipped.rightIor else transform(child, vars, schema, tpe)
+            elaboratedChild <- if(c == skip) Skipped.success else transform(child, vars, schema, tpe)
           } yield elaboratedChild
 
         case _ => super.transform(query, vars, schema, tpe)
@@ -496,14 +494,14 @@ object QueryCompiler {
       value match {
         case UntypedVariableValue(varName) =>
           vars.get(varName) match {
-            case Some((_, value)) => value.rightIor
-            case None => mkErrorResult(s"Undefined variable '$varName'")
+            case Some((_, value)) => value.success
+            case None => Result.failure(s"Undefined variable '$varName'")
           }
         case ObjectValue(fields) =>
             val (keys, values) = fields.unzip
             values.traverse(elaborateValue(vars)).map(evs => ObjectValue(keys.zip(evs)))
         case ListValue(elems) => elems.traverse(elaborateValue(vars)).map(ListValue.apply)
-        case other => other.rightIor
+        case other => other.success
       }
 
 
@@ -511,12 +509,12 @@ object QueryCompiler {
       value match {
         case UntypedVariableValue(varName) =>
           vars.get(varName) match {
-            case Some((tpe, BooleanValue(value))) if tpe.nonNull =:= BooleanType => value.rightIor
-            case Some((_, _)) => mkErrorResult(s"Argument of skip/include must be boolean")
-            case None => mkErrorResult(s"Undefined variable '$varName'")
+            case Some((tpe, BooleanValue(value))) if tpe.nonNull =:= BooleanType => value.success
+            case Some((_, _)) => Result.failure(s"Argument of skip/include must be boolean")
+            case None => Result.failure(s"Undefined variable '$varName'")
           }
-        case BooleanValue(value) => value.rightIor
-        case _ => mkErrorResult(s"Argument of skip/include must be boolean")
+        case BooleanValue(value) => value.success
+        case _ => Result.failure(s"Argument of skip/include must be boolean")
       }
   }
 
@@ -568,14 +566,14 @@ object QueryCompiler {
                 obj <- tpe.underlyingObject
                 ref <- schema.ref(obj)
                 e   <- mapping0.get(ref)
-              } yield (s: Select) => if (e.isDefinedAt(s)) e(s) else s.rightIor).getOrElse((s: Select) => s.rightIor)
+              } yield (s: Select) => if (e.isDefinedAt(s)) e(s) else s.success).getOrElse((s: Select) => s.success)
 
             val obj = tpe.underlyingObject
             val isLeaf = childTpe.isUnderlyingLeaf
             if (isLeaf && child != Empty)
-              mkErrorResult(s"Leaf field '$fieldName' of $obj must have an empty subselection set")
+              Result.failure(s"Leaf field '$fieldName' of $obj must have an empty subselection set")
             else if (!isLeaf && child == Empty)
-              mkErrorResult(s"Non-leaf field '$fieldName' of $obj must have a non-empty subselection set")
+              Result.failure(s"Non-leaf field '$fieldName' of $obj must have a non-empty subselection set")
             else
               for {
                 elaboratedChild <- transform(child, vars, schema, childTpe)
@@ -599,7 +597,7 @@ object QueryCompiler {
             case q => q
           })
 
-        case Skipped => Empty.rightIor
+        case Skipped => Empty.success
 
         case _ => super.transform(query, vars, schema, tpe)
       }
@@ -612,14 +610,14 @@ object QueryCompiler {
               val infos = field.args
               val unknownArgs = args.filterNot(arg => infos.exists(_.name == arg.name))
               if (unknownArgs.nonEmpty)
-                mkErrorResult(s"Unknown argument(s) ${unknownArgs.map(s => s"'${s.name}'").mkString("", ", ", "")} in field $fieldName of type ${twf.name}")
+                Result.failure(s"Unknown argument(s) ${unknownArgs.map(s => s"'${s.name}'").mkString("", ", ", "")} in field $fieldName of type ${twf.name}")
               else {
                 val argMap = args.groupMapReduce(_.name)(_.value)((x, _) => x)
                 infos.traverse(info => checkValue(info, argMap.get(info.name)).map(v => Binding(info.name, v)))
               }
-            case _ => mkErrorResult(s"No field '$fieldName' in type $tpe")
+            case _ => Result.failure(s"No field '$fieldName' in type $tpe")
           }
-        case _ => mkErrorResult(s"Type $tpe is not an object or interface type")
+        case _ => Result.failure(s"Type $tpe is not an object or interface type")
       }
   }
 
@@ -630,13 +628,13 @@ object QueryCompiler {
     Map(
       Introspection.schema.ref("Query") -> {
         case sel@Select("__type", List(Binding("name", StringValue(name))), _) =>
-          sel.eliminateArgs(child => Unique(Filter(Eql(TypeType / "name", Const(Option(name))), child))).rightIor
+          sel.eliminateArgs(child => Unique(Filter(Eql(TypeType / "name", Const(Option(name))), child))).success
       },
       Introspection.schema.ref("__Type") -> {
         case sel@Select("fields", List(Binding("includeDeprecated", BooleanValue(include))), _) =>
-          sel.eliminateArgs(child => if (include) child else Filter(Eql(FieldType / "isDeprecated", Const(false)), child)).rightIor
+          sel.eliminateArgs(child => if (include) child else Filter(Eql(FieldType / "isDeprecated", Const(false)), child)).success
         case sel@Select("enumValues", List(Binding("includeDeprecated", BooleanValue(include))), _) =>
-          sel.eliminateArgs(child => if (include) child else Filter(Eql(EnumValueType / "isDeprecated", Const(false)), child)).rightIor
+          sel.eliminateArgs(child => if (include) child else Filter(Eql(EnumValueType / "isDeprecated", Const(false)), child)).success
       }
     )
   }
@@ -683,14 +681,14 @@ object QueryCompiler {
                   PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)
               }
             }
-          }).getOrElse(mkErrorResult(s"Type $tpe has no field '$fieldName'"))
+          }).getOrElse(Result.failure(s"Type $tpe has no field '$fieldName'"))
 
         case _ => super.transform(query, vars, schema, tpe)
       }
   }
 
   object ComponentElaborator {
-    val TrivialJoin = (q: Query, _: Cursor) => q.rightIor
+    val TrivialJoin = (q: Query, _: Cursor) => q.success
 
     case class ComponentMapping[F[_]](tpe: TypeRef, fieldName: String, mapping: Mapping[F], join: (Query, Cursor) => Result[Query] = TrivialJoin)
 
@@ -714,7 +712,7 @@ object QueryCompiler {
                   PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)
               }
             }
-          }).getOrElse(mkErrorResult(s"Type $tpe has no field '$fieldName'"))
+          }).getOrElse(Result.failure(s"Type $tpe has no field '$fieldName'"))
 
         case _ => super.transform(query, vars, schema, tpe)
       }
@@ -730,10 +728,10 @@ object QueryCompiler {
   class QuerySizeValidator(maxDepth: Int, maxWidth: Int) extends Phase {
     override def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
       querySize(query) match {
-        case (depth, _) if depth > maxDepth => mkErrorResult(s"Query is too deep: depth is $depth levels, maximum is $maxDepth")
-        case (_, width) if width > maxWidth => mkErrorResult(s"Query is too wide: width is $width leaves, maximum is $maxWidth")
-        case (depth, width) if depth > maxDepth && width > maxWidth => mkErrorResult(s"Query is too complex: width/depth is $width/$depth leaves/levels, maximum is $maxWidth/$maxDepth")
-        case (_, _) => Ior.Right(query)
+        case (depth, _) if depth > maxDepth => Result.failure(s"Query is too deep: depth is $depth levels, maximum is $maxDepth")
+        case (_, width) if width > maxWidth => Result.failure(s"Query is too wide: width is $width leaves, maximum is $maxWidth")
+        case (depth, width) if depth > maxDepth && width > maxWidth => Result.failure(s"Query is too complex: width/depth is $width/$depth leaves/levels, maximum is $maxWidth/$maxDepth")
+        case (_, _) => query.success
       }
 
     def querySize(query: Query): (Int, Int) = {

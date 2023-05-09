@@ -5,13 +5,14 @@ package edu.gemini.grackle.sql.test
 
 import cats.implicits._
 import io.circe.Json
+import io.circe.syntax.EncoderOps
+
 import edu.gemini.grackle._
 import syntax._
 import Query._
 import Predicate._
 import Value._
 import QueryCompiler._
-import io.circe.syntax.EncoderOps
 
 trait SqlCursorJsonMapping[F[_]] extends SqlTestMapping[F] {
 
@@ -92,7 +93,7 @@ trait SqlCursorJsonMapping[F[_]] extends SqlTestMapping[F] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("brands", List(Binding("id", IntValue(id))), child) =>
-        Select("brands", Nil, Unique(Filter(Eql(BrandType / "id", Const(id)), child))).rightIor
+        Select("brands", Nil, Unique(Filter(Eql(BrandType / "id", Const(id)), child))).success
     }
   ))
 }

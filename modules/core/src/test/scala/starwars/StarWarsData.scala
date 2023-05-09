@@ -3,7 +3,7 @@
 
 package starwars
 
-import cats.Id
+import cats.effect.IO
 import cats.implicits._
 import io.circe.Encoder
 
@@ -113,7 +113,7 @@ object StarWarsData {
   )
 }
 
-object StarWarsMapping extends ValueMapping[Id] {
+object StarWarsMapping extends ValueMapping[IO] {
   import StarWarsData.{characters, hero, resolveFriends, Character, Droid, Episode, Human}
 
   val schema =
@@ -204,7 +204,7 @@ object StarWarsMapping extends ValueMapping[Id] {
 
   val numberOfFriends: PartialFunction[Query, Result[Query]] = {
     case Select("numberOfFriends", Nil, Empty) =>
-      Count("numberOfFriends", Select("friends", Nil, Empty)).rightIor
+      Count("numberOfFriends", Select("friends", Nil, Empty)).success
   }
 
 
@@ -212,11 +212,11 @@ object StarWarsMapping extends ValueMapping[Id] {
     QueryType -> {
       case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
         val episode = Episode.values.find(_.toString == e.name).get
-        Select("hero", Nil, Unique(Filter(Eql(CharacterType / "id", Const(hero(episode).id)), child))).rightIor
+        Select("hero", Nil, Unique(Filter(Eql(CharacterType / "id", Const(hero(episode).id)), child))).success
       case Select(f@("character" | "human" | "droid"), List(Binding("id", IDValue(id))), child) =>
-        Select(f, Nil, Unique(Filter(Eql(CharacterType / "id", Const(id)), child))).rightIor
+        Select(f, Nil, Unique(Filter(Eql(CharacterType / "id", Const(id)), child))).success
       case Select("characters", List(Binding("offset", IntValue(offset)), Binding("limit", IntValue(limit))), child) =>
-        Select("characters", Nil, Limit(limit, Offset(offset, child))).rightIor
+        Select("characters", Nil, Limit(limit, Offset(offset, child))).success
     },
     CharacterType -> numberOfFriends,
     HumanType -> numberOfFriends,

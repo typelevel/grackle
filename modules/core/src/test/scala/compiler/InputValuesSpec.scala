@@ -3,7 +3,7 @@
 
 package compiler
 
-import cats.data.{Chain, Ior}
+import cats.data.NonEmptyChain
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle._
@@ -36,7 +36,7 @@ final class InputValuesSuite extends CatsSuite {
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
     //println(compiled)
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
   }
 
   test("list value") {
@@ -63,7 +63,7 @@ final class InputValuesSuite extends CatsSuite {
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
     //println(compiled)
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
   }
 
   test("input object value") {
@@ -91,7 +91,7 @@ final class InputValuesSuite extends CatsSuite {
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
     //println(compiled)
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
   }
 
   test("invalid input object value") {
@@ -107,7 +107,7 @@ final class InputValuesSuite extends CatsSuite {
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
     //println(compiled)
-    assert(compiled.map(_.query) == Ior.Left(Chain.one(expected)))
+    assert(compiled.map(_.query) == Result.Failure(NonEmptyChain.one(expected)))
   }
 }
 

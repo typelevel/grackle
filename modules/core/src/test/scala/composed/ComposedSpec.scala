@@ -3,6 +3,7 @@
 
 package composed
 
+import cats.effect.unsafe.implicits.global
 import cats.tests.CatsSuite
 import edu.gemini.grackle.syntax._
 
@@ -28,7 +29,7 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val res = ComposedMapping.compileAndRun(query)
+    val res = ComposedMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -53,7 +54,7 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val res = ComposedMapping.compileAndRun(query)
+    val res = ComposedMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -86,7 +87,7 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val res = ComposedMapping.compileAndRun(query)
+    val res = ComposedMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -135,7 +136,7 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val res = ComposedMapping.compileAndRun(query)
+    val res = ComposedMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -178,7 +179,7 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val res = ComposedMapping.compileAndRun(query)
+    val res = ComposedMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -211,7 +212,7 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val res = ComposedMapping.compileAndRun(query)
+    val res = ComposedMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -248,7 +249,7 @@ final class ComposedSpec extends CatsSuite {
       }
     """
 
-    val res = ComposedMapping.compileAndRun(query)
+    val res = ComposedMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)

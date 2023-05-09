@@ -133,23 +133,23 @@ trait SqlProjectionMapping[F[_]] extends SqlTestMapping[F] {
           case Level0FilterValue(f) => Filter(f, child)
           case _ => child
         }
-        Select("level0", Nil, f).rightIor
+        Select("level0", Nil, f).success
 
       case Select("level1", List(Binding("filter", filter)), child) =>
         val f = filter match {
           case Level1FilterValue(f) => Filter(f, child)
           case _ => child
         }
-        Select("level1", Nil, f).rightIor
+        Select("level1", Nil, f).success
 
       case Select("level2", List(Binding("filter", filter)), child) =>
         val f = filter match {
           case Level2FilterValue(f) => Filter(f, child)
           case _ => child
         }
-        Select("level2", Nil, f).rightIor
+        Select("level2", Nil, f).success
 
-      case other => other.rightIor
+      case other => other.success
     },
     Level0Type -> {
       case Select("level1", List(Binding("filter", filter)), child) =>
@@ -157,9 +157,9 @@ trait SqlProjectionMapping[F[_]] extends SqlTestMapping[F] {
           case Level1FilterValue(f) => Filter(f, child)
           case _ => child
         }
-        Select("level1", Nil, f).rightIor
+        Select("level1", Nil, f).success
 
-      case other => other.rightIor
+      case other => other.success
     },
     Level1Type -> {
       case Select("level2", List(Binding("filter", filter)), child) =>
@@ -167,9 +167,9 @@ trait SqlProjectionMapping[F[_]] extends SqlTestMapping[F] {
           case Level2FilterValue(f) => Filter(f, child)
           case _ => child
         }
-        Select("level2", Nil, f).rightIor
+        Select("level2", Nil, f).success
 
-      case other => other.rightIor
+      case other => other.success
     }
   ))
 }

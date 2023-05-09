@@ -73,7 +73,7 @@ trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
               case Some((id, pop)) =>
                 updatePopulation(id, pop).as(Result(query))
               case None =>
-                sys.error(s"Implementation error, expected id and population in $env.")
+                Result.internalError(s"Implementation error, expected id and population in $env.").pure[F].widen
             }
           ),
           RootEffect.computeQuery("createCity")((query, _, env) =>
@@ -84,9 +84,9 @@ trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
                     createCity(name, cc, pop).map { id =>
                       Result(en.copy(child = s.copy(child = (Unique(Filter(Eql(CityType / "id", Const(id)), child))))))
                     }
-                  case _ => sys.error(s"Implementation error: expected Environment node.")
+                  case _ => Result.internalError(s"Implementation error: expected Environment node.").pure[F].widen
                 }
-              case None => sys.error(s"Implementation error: expected name, countryCode and population in $env.")
+              case None => Result.internalError(s"Implementation error: expected name, countryCode and population in $env.").pure[F].widen
             }
           )
         )
@@ -114,7 +114,7 @@ trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("city", List(Binding("id", IntValue(id))), child) =>
-        Select("city", Nil, Unique(Filter(Eql(CityType / "id", Const(id)), child))).rightIor
+        Select("city", Nil, Unique(Filter(Eql(CityType / "id", Const(id)), child))).success
     },
     MutationType -> {
 
@@ -126,13 +126,13 @@ trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
             // the mutation generated a new id. But for now it seems easiest to do it here.
             Unique(Filter(Eql(CityType / "id", Const(id)), child))
           )
-        ).rightIor
+        ).success
 
       case Select("createCity", List(Binding("name", StringValue(name)), Binding("countryCode", StringValue(code)), Binding("population", IntValue(pop))), child) =>
           Environment(
             Cursor.Env[Any]("name" -> name, "countryCode" -> code, "population" -> pop),
             Select("createCity", Nil, child)
-          ).rightIor
+          ).success
 
     }
   ))

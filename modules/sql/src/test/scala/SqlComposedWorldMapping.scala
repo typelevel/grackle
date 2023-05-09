@@ -3,7 +3,6 @@
 
 package edu.gemini.grackle.sql.test
 
-import cats.data.IorT
 import cats.effect.{Ref, Sync}
 import cats.implicits._
 import edu.gemini.grackle._
@@ -125,8 +124,8 @@ class CurrencyMapping[F[_] : Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[
       val (ungroupable0, ungroupedIndices) = ungroupable.unzip
 
       (for {
-        groupedResults   <- IorT(super.combineAndRun(grouped0))
-        ungroupedResults <- IorT(super.combineAndRun(ungroupable0))
+        groupedResults   <- ResultT(super.combineAndRun(grouped0))
+        ungroupedResults <- ResultT(super.combineAndRun(ungroupable0))
       } yield {
         val allResults: List[(ProtoJson, Int)] = groupedResults.zip(groupedIndices).flatMap((unpackResults _).tupled) ++ ungroupedResults.zip(ungroupedIndices)
         val repackedResults = indexedQueries.map {
@@ -261,11 +260,11 @@ class SqlComposedMapping[F[_] : Sync]
   override val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {
       case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Filter(Eql(CountryType / "code", Const(code)), child))).rightIor
+        Select("country", Nil, Unique(Filter(Eql(CountryType / "code", Const(code)), child))).success
       case Select("countries", _, child) =>
-        Select("countries", Nil, child).rightIor
+        Select("countries", Nil, child).success
       case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
-        Select("cities", Nil, Filter(Like(CityType / "name", namePattern, true), child)).rightIor
+        Select("cities", Nil, Filter(Like(CityType / "name", namePattern, true), child)).success
     }
   ))
 }

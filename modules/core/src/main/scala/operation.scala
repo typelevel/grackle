@@ -3,19 +3,17 @@
 
 package edu.gemini.grackle
 
-import cats.implicits._
-
+import syntax._
 import Query._
-import QueryInterpreter.mkOneError
 
 sealed trait UntypedOperation {
   val query: Query
   val variables: UntypedVarDefs
   def rootTpe(schema: Schema): Result[NamedType] =
     this match {
-      case UntypedOperation.UntypedQuery(_, _)        => schema.queryType.rightIor
-      case UntypedOperation.UntypedMutation(_, _)     => schema.mutationType.toRight(mkOneError("No mutation type defined in this schema.")).toIor
-      case UntypedOperation.UntypedSubscription(_, _) => schema.subscriptionType.toRight(mkOneError("No subscription type defined in this schema.")).toIor
+      case UntypedOperation.UntypedQuery(_, _)        => schema.queryType.success
+      case UntypedOperation.UntypedMutation(_, _)     => schema.mutationType.toResult("No mutation type defined in this schema.")
+      case UntypedOperation.UntypedSubscription(_, _) => schema.subscriptionType.toResult("No subscription type defined in this schema.")
     }
 }
 object UntypedOperation {

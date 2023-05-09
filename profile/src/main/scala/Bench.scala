@@ -172,10 +172,10 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
     QueryType -> {
 
       case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Filter(Eql(CountryType / "code", Const(code)), child))).rightIor
+        Select("country", Nil, Unique(Filter(Eql(CountryType / "code", Const(code)), child))).success
 
       case Select("city", List(Binding("id", IntValue(id))), child) =>
-        Select("city", Nil, Unique(Filter(Eql(CityType / "id", Const(id)), child))).rightIor
+        Select("city", Nil, Unique(Filter(Eql(CityType / "id", Const(id)), child))).success
 
       case Select("countries", List(Binding("limit", IntValue(num)), Binding("offset", IntValue(off)), Binding("minPopulation", IntValue(min)), Binding("byPopulation", BooleanValue(byPop))), child) =>
         def limit(query: Query): Query =
@@ -198,16 +198,16 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
           if (min == 0) query
           else Filter(GtEql(CountryType / "population", Const(min)), query)
 
-        Select("countries", Nil, limit(offset(order(filter(child))))).rightIor
+        Select("countries", Nil, limit(offset(order(filter(child))))).success
 
       case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
         if (namePattern == "%")
-          Select("cities", Nil, child).rightIor
+          Select("cities", Nil, child).success
         else
-          Select("cities", Nil, Filter(Like(CityType / "name", namePattern, true), child)).rightIor
+          Select("cities", Nil, Filter(Like(CityType / "name", namePattern, true), child)).success
 
       case Select("language", List(Binding("language", StringValue(language))), child) =>
-        Select("language", Nil, Unique(Filter(Eql(LanguageType / "language", Const(language)), child))).rightIor
+        Select("language", Nil, Unique(Filter(Eql(LanguageType / "language", Const(language)), child))).success
 
       case Select("search", List(Binding("minPopulation", IntValue(min)), Binding("indepSince", IntValue(year))), child) =>
         Select("search", Nil,
@@ -218,17 +218,17 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
             ),
             child
           )
-        ).rightIor
+        ).success
 
       case Select("search2", List(Binding("indep", BooleanValue(indep)), Binding("limit", IntValue(num))), child) =>
-        Select("search2", Nil, Limit(num, Filter(IsNull[Int](CountryType / "indepyear", isNull = !indep), child))).rightIor
+        Select("search2", Nil, Limit(num, Filter(IsNull[Int](CountryType / "indepyear", isNull = !indep), child))).success
     },
     CountryType -> {
       case Select("numCities", List(Binding("namePattern", AbsentValue)), Empty) =>
-        Count("numCities", Select("cities", Nil, Select("name", Nil, Empty))).rightIor
+        Count("numCities", Select("cities", Nil, Select("name", Nil, Empty))).success
 
       case Select("numCities", List(Binding("namePattern", StringValue(namePattern))), Empty) =>
-        Count("numCities", Select("cities", Nil, Filter(Like(CityType / "name", namePattern, true), Select("name", Nil, Empty)))).rightIor
+        Count("numCities", Select("cities", Nil, Filter(Like(CityType / "name", namePattern, true), Select("name", Nil, Empty)))).success
     }
   ))
 }

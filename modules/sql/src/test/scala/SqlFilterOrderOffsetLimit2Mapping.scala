@@ -3,12 +3,9 @@
 
 package edu.gemini.grackle.sql.test
 
-import cats.implicits._
-
 import edu.gemini.grackle._, syntax._
 import Query.{Binding, Limit, Select}
 import QueryCompiler.SelectElaborator
-import QueryInterpreter.mkErrorResult
 import Value.{AbsentValue, IntValue, NullValue}
 
 trait SqlFilterOrderOffsetLimit2Mapping[F[_]] extends SqlTestMapping[F] {
@@ -112,10 +109,10 @@ trait SqlFilterOrderOffsetLimit2Mapping[F[_]] extends SqlTestMapping[F] {
 
   def mkLimit(query: Query, limit: Value): Result[Query] =
     limit match {
-      case AbsentValue|NullValue => query.rightIor
-      case IntValue(num) if num > 0 => Limit(num, query).rightIor
-      case IntValue(num) => mkErrorResult(s"Expected limit > 0, found $num")
-      case other =>  mkErrorResult(s"Expected limit > 0, found $other")
+      case AbsentValue|NullValue => query.success
+      case IntValue(num) if num > 0 => Limit(num, query).success
+      case IntValue(num) => Result.failure(s"Expected limit > 0, found $num")
+      case other =>  Result.failure(s"Expected limit > 0, found $other")
     }
 
   override val selectElaborator: SelectElaborator = new SelectElaborator(Map(
@@ -130,7 +127,7 @@ trait SqlFilterOrderOffsetLimit2Mapping[F[_]] extends SqlTestMapping[F] {
           lc <- mkLimit(child, limit)
         } yield Select("containers", Nil, lc)
 
-      case other => other.rightIor
+      case other => other.success
     },
     RootType -> {
       case Select("containers", List(Binding("limit", limit)), child) =>
@@ -148,7 +145,7 @@ trait SqlFilterOrderOffsetLimit2Mapping[F[_]] extends SqlTestMapping[F] {
           lc <- mkLimit(child, limit)
         } yield Select("listB", Nil, lc)
 
-      case other => other.rightIor
+      case other => other.success
     },
     ContainerType -> {
       case Select("listA", List(Binding("limit", limit)), child) =>
@@ -161,7 +158,7 @@ trait SqlFilterOrderOffsetLimit2Mapping[F[_]] extends SqlTestMapping[F] {
           lc <- mkLimit(child, limit)
         } yield Select("listB", Nil, lc)
 
-      case other => other.rightIor
+      case other => other.success
     }
   ))
 }

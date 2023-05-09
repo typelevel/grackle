@@ -3,10 +3,9 @@
 
 package schema
 
-import cats.data.{Ior, NonEmptyChain}
-import cats.data.Ior.Both
+import cats.data.NonEmptyChain
 import cats.tests.CatsSuite
-import edu.gemini.grackle.Schema
+import edu.gemini.grackle.{Result, Schema}
 import edu.gemini.grackle.syntax._
 
 final class SchemaSpec extends CatsSuite {
@@ -25,11 +24,12 @@ final class SchemaSpec extends CatsSuite {
     )
 
     schema match {
-      case Ior.Left(e) => assert(e.head.message == "Reference to undefined type: Episod")
-      case Both(a, b)  =>
+      case Result.Failure(e) => assert(e.head.message == "Reference to undefined type: Episod")
+      case Result.Warning(a, b)  =>
         assert(a.head.message == "Reference to undefined type: Episod")
         assert(b.types.map(_.name) == List("Query", "Episode"))
-      case Ior.Right(b) => fail(s"Shouldn't compile: $b")
+      case Result.Success(b) => fail(s"Shouldn't compile: $b")
+      case Result.InternalError(e) => fail(s"Shouldn't error: $e")
     }
   }
 
@@ -49,7 +49,7 @@ final class SchemaSpec extends CatsSuite {
     )
 
     schema match {
-      case Both(a, b)  =>
+      case Result.Warning(a, b)  =>
         assert(a.head.message == "Reference to undefined type: CCid")
         assert(b.types.map(_.name) == List("Query", "CCId", "Episode"))
       case unexpected => fail(s"This was unexpected: $unexpected")
@@ -74,7 +74,7 @@ final class SchemaSpec extends CatsSuite {
     )
 
     schema match {
-      case Ior.Left(e) => assert(e.head.message == "Duplicate NamedType found: Episode")
+      case Result.Failure(e) => assert(e.head.message == "Duplicate NamedType found: Episode")
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -89,7 +89,7 @@ final class SchemaSpec extends CatsSuite {
     )
 
     schema match {
-      case Ior.Left(e) => assert(e.head.message == "Only a single deprecated allowed at a given location")
+      case Result.Failure(e) => assert(e.head.message == "Only a single deprecated allowed at a given location")
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -105,7 +105,7 @@ final class SchemaSpec extends CatsSuite {
     )
 
     schema match {
-      case Ior.Left(e) => assert(e.head.message == "deprecated must have a single String 'reason' argument, or no arguments")
+      case Result.Failure(e) => assert(e.head.message == "deprecated must have a single String 'reason' argument, or no arguments")
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -121,7 +121,7 @@ final class SchemaSpec extends CatsSuite {
     )
 
     schema match {
-      case Both(a, b)  =>
+      case Result.Warning(a, b)  =>
         assert(a.head.message == "Duplicate EnumValueDefinition of NORTH for EnumTypeDefinition Direction")
         assert(b.types.map(_.name) == List("Direction"))
       case unexpected => fail(s"This was unexpected: $unexpected")
@@ -138,7 +138,7 @@ final class SchemaSpec extends CatsSuite {
     )
 
     schema match {
-      case Both(a, b)  =>
+      case Result.Warning(a, b)  =>
         assert(a.map(_.message) == NonEmptyChain("Interface Character implemented by Human is not defined", "Interface Contactable implemented by Human is not defined"))
         assert(b.types.map(_.name) == List("Human"))
       case unexpected => fail(s"This was unexpected: $unexpected")
@@ -161,7 +161,7 @@ final class SchemaSpec extends CatsSuite {
     )
 
     schema match {
-      case Both(a, b)  =>
+      case Result.Warning(a, b)  =>
         assert(a.map(_.message) == NonEmptyChain("Expected field id from interface Character is not implemented by Human", "Expected field email from interface Character is not implemented by Human"))
         assert(b.types.map(_.name) == List("Character", "Human"))
       case unexpected => fail(s"This was unexpected: $unexpected")
@@ -184,7 +184,7 @@ final class SchemaSpec extends CatsSuite {
     )
 
     schema match {
-      case Both(a, b)  =>
+      case Result.Warning(a, b)  =>
         assert(a.map(_.message) == NonEmptyChain("Expected field id from interface Character is not implemented by Named", "Expected field email from interface Character is not implemented by Named"))
         assert(b.types.map(_.name) == List("Character", "Named"))
       case unexpected => fail(s"This was unexpected: $unexpected")
@@ -205,7 +205,7 @@ final class SchemaSpec extends CatsSuite {
     )
 
     schema match {
-      case Both(a, b)  =>
+      case Result.Warning(a, b)  =>
         assert(a.map(_.message) == NonEmptyChain("Field name has type Int!, however implemented interface Character requires it to be of type String!"))
         assert(b.types.map(_.name) == List("Character", "Human"))
       case unexpected => fail(s"This was unexpected: $unexpected")
@@ -226,7 +226,7 @@ final class SchemaSpec extends CatsSuite {
     )
 
     schema match {
-      case Both(a, b)  =>
+      case Result.Warning(a, b)  =>
         assert(a.map(_.message) == NonEmptyChain("Field name of Human has has an argument list that does not match that specified by implemented interface Character"))
         assert(b.types.map(_.name) == List("Character", "Human"))
       case unexpected => fail(s"This was unexpected: $unexpected")
@@ -252,7 +252,7 @@ final class SchemaSpec extends CatsSuite {
     )
 
     schema match {
-      case Both(a, b)  =>
+      case Result.Warning(a, b)  =>
         assert(a.map(_.message) == NonEmptyChain("Expected field id from interface Character is not implemented by Human", "Expected field id from interface Character is not implemented by Dog"))
         assert(b.types.map(_.name) == List("Character", "Human", "Dog"))
       case unexpected => fail(s"This was unexpected: $unexpected")
@@ -278,7 +278,7 @@ final class SchemaSpec extends CatsSuite {
     )
 
     schema match {
-      case Both(a, b)  =>
+      case Result.Warning(a, b)  =>
         assert(a.map(_.message) == NonEmptyChain("Expected field id from interface Character is not implemented by Human", "Expected field email from interface Contactable is not implemented by Human"))
         assert(b.types.map(_.name) == List("Character", "Contactable", "Human"))
       case unexpected => fail(s"This was unexpected: $unexpected")
@@ -305,7 +305,7 @@ final class SchemaSpec extends CatsSuite {
     )
 
     schema match {
-      case Ior.Right(a) => assert(a.types.map(_.name) == List("Node", "Resource", "Human"))
+      case Result.Success(a) => assert(a.types.map(_.name) == List("Node", "Resource", "Human"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }

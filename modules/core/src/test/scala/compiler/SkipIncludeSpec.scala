@@ -3,7 +3,6 @@
 
 package compiler
 
-import cats.data.Ior
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle._
@@ -45,7 +44,7 @@ final class SkipIncludeSuite extends CatsSuite {
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
 
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
   }
 
   test("skip/include fragment spread") {
@@ -103,7 +102,7 @@ final class SkipIncludeSuite extends CatsSuite {
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
 
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
   }
 
   test("fragment spread with nested skip/include") {
@@ -140,7 +139,7 @@ final class SkipIncludeSuite extends CatsSuite {
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
 
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
   }
 
   test("skip/include inline fragment") {
@@ -205,7 +204,7 @@ final class SkipIncludeSuite extends CatsSuite {
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
 
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
   }
 
   test("inline fragment with nested skip/include") {
@@ -240,7 +239,7 @@ final class SkipIncludeSuite extends CatsSuite {
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
     //println(compiled)
 
-    assert(compiled.map(_.query) == Ior.Right(expected))
+    assert(compiled.map(_.query) == Result.Success(expected))
   }
 }
 

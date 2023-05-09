@@ -3,7 +3,6 @@
 
 package edu.gemini.grackle
 
-import cats.Id
 import io.circe.Encoder
 
 import ScalarType._
@@ -112,7 +111,7 @@ object Introspection {
           INPUT_FIELD_DEFINITION
         }
       """
-    ).right.get
+    ).toOption.get
 
   val QueryType = schema.queryType
   val __SchemaType = schema.ref("__Schema")
@@ -139,10 +138,10 @@ object Introspection {
     schema.types.filterNot(_ =:= schema.queryType) ++
     List(BooleanType, IntType, FloatType, StringType, IDType)
 
-  def interpreter(targetSchema: Schema): QueryInterpreter[Id] =
+  def interpreter(targetSchema: Schema): QueryInterpreter[Either[Throwable, *]] =
     new IntrospectionMapping(targetSchema).interpreter
 
-  class IntrospectionMapping(targetSchema: Schema) extends ValueMapping[Id] {
+  class IntrospectionMapping(targetSchema: Schema) extends ValueMapping[Either[Throwable, *]] {
     val allTypes = targetSchema.types ++ defaultTypes
 
     val schema = Introspection.schema

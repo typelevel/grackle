@@ -4,9 +4,8 @@
 package edu.gemini.grackle
 package circetests
 
-import cats.Id
+import cats.effect.IO
 import cats.data.OptionT
-import cats.implicits._
 import io.circe.Json
 
 import edu.gemini.grackle.circe.CirceMapping
@@ -15,7 +14,7 @@ import edu.gemini.grackle.syntax._
 import Query._
 import QueryCompiler._
 
-object TestCirceMapping extends CirceMapping[Id] {
+object TestCirceMapping extends CirceMapping[IO] {
   val schema =
     schema"""
       type Query {
@@ -116,7 +115,7 @@ object TestCirceMapping extends CirceMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     RootType -> {
       case Select("numChildren", Nil, Empty) =>
-        Count("numChildren", Select("children", Nil, Empty)).rightIor
+        Count("numChildren", Select("children", Nil, Empty)).success
     }
   ))
 }

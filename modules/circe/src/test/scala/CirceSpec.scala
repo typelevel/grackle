@@ -4,6 +4,7 @@
 package edu.gemini.grackle
 package circetests
 
+import cats.effect.unsafe.implicits.global
 import cats.tests.CatsSuite
 import edu.gemini.grackle.syntax._
 
@@ -37,7 +38,7 @@ final class CirceSpec extends CatsSuite {
       }
     """
 
-    val res = TestCirceMapping.compileAndRun(query)
+    val res = TestCirceMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -62,7 +63,7 @@ final class CirceSpec extends CatsSuite {
       }
     """
 
-    val res = TestCirceMapping.compileAndRun(query)
+    val res = TestCirceMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -93,7 +94,7 @@ final class CirceSpec extends CatsSuite {
       }
     """
 
-    val res = TestCirceMapping.compileAndRun(query)
+    val res = TestCirceMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -127,7 +128,7 @@ final class CirceSpec extends CatsSuite {
       }
     """
 
-    val res = TestCirceMapping.compileAndRun(query)
+    val res = TestCirceMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -169,7 +170,7 @@ final class CirceSpec extends CatsSuite {
       }
     """
 
-    val res = TestCirceMapping.compileAndRun(query)
+    val res = TestCirceMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -202,7 +203,7 @@ final class CirceSpec extends CatsSuite {
       }
     """
 
-    val res = TestCirceMapping.compileAndRun(query)
+    val res = TestCirceMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -247,7 +248,7 @@ final class CirceSpec extends CatsSuite {
       }
     """
 
-    val res = TestCirceMapping.compileAndRun(query)
+    val res = TestCirceMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -283,7 +284,7 @@ final class CirceSpec extends CatsSuite {
       }
     """
 
-    val res = TestCirceMapping.compileAndRun(query)
+    val res = TestCirceMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -308,7 +309,7 @@ final class CirceSpec extends CatsSuite {
       }
     """
 
-    val res = TestCirceMapping.compileAndRun(query)
+    val res = TestCirceMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -333,7 +334,7 @@ final class CirceSpec extends CatsSuite {
       }
     """
 
-    val res = TestCirceMapping.compileAndRun(query)
+    val res = TestCirceMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)

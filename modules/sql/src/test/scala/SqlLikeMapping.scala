@@ -3,8 +3,6 @@
 
 package edu.gemini.grackle.sql.test
 
-import cats.implicits._
-
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
 import Query._, Predicate._, Value._
@@ -63,7 +61,7 @@ trait SqlLikeMapping[F[_]] extends SqlTestMapping[F] {
       value match {
         case AbsentValue => None
         case StringValue(p) => Some(p)
-        case other => sys.error(s"Expected pattern, found $other")
+        case _ => None
       }
   }
 
@@ -73,7 +71,7 @@ trait SqlLikeMapping[F[_]] extends SqlTestMapping[F] {
         case AbsentValue => None
         case NullValue => Some(None)
         case StringValue(p) => Some(Some(p))
-        case other => sys.error(s"Expected pattern, found $other")
+        case _ => None
       }
   }
 
@@ -86,15 +84,15 @@ trait SqlLikeMapping[F[_]] extends SqlTestMapping[F] {
   override val selectElaborator: SelectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select(f@"likeNotNullableNotNullable", List(Binding("pattern", NonNullablePattern(pattern))), child) =>
-        Rename(f, Select("likes", Nil, Filter(Like(LikeType / "notNullable", pattern, false), child))).rightIor
+        Rename(f, Select("likes", Nil, Filter(Like(LikeType / "notNullable", pattern, false), child))).success
       case Select(f@"likeNotNullableNullable", List(Binding("pattern", NullablePattern(pattern))), child) =>
-        Rename(f, Select("likes", Nil, Filter(mkPredicate(LikeType / "notNullable", pattern), child))).rightIor
+        Rename(f, Select("likes", Nil, Filter(mkPredicate(LikeType / "notNullable", pattern), child))).success
       case Select(f@"likeNullableNotNullable", List(Binding("pattern", NonNullablePattern(pattern))), child) =>
-        Rename(f, Select("likes", Nil, Filter(Like(LikeType / "nullable", pattern, false), child))).rightIor
+        Rename(f, Select("likes", Nil, Filter(Like(LikeType / "nullable", pattern, false), child))).success
       case Select(f@"likeNullableNullable", List(Binding("pattern", NullablePattern(pattern))), child) =>
-        Rename(f, Select("likes", Nil, Filter(mkPredicate(LikeType / "nullable", pattern), child))).rightIor
+        Rename(f, Select("likes", Nil, Filter(mkPredicate(LikeType / "nullable", pattern), child))).success
 
-      case other => other.rightIor
+      case other => other.success
     }
   ))
 }

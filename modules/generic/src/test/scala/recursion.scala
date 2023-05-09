@@ -4,14 +4,14 @@
 package edu.gemini.grackle
 package generic
 
-import cats._
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.implicits._
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle.syntax._
 import Query._, Predicate._, Value._
 import QueryCompiler._
-import QueryInterpreter.mkOneError
 
 object MutualRecursionData {
   import MutualRecursionMapping._
@@ -25,9 +25,9 @@ object MutualRecursionData {
 
     def resolveProductions(p: Programme): Result[Option[List[Production]]] =
       p.productions match {
-        case None => None.rightIor
+        case None => None.success
         case Some(ids) =>
-          ids.traverse(id => productions.find(_.id == id).toRightIor(mkOneError(s"Bad id '$id'"))).map(_.some)
+          ids.traverse(id => productions.find(_.id == id).toResultOrError(s"Bad id '$id'")).map(_.some)
       }
   }
 
@@ -39,7 +39,7 @@ object MutualRecursionData {
 
     def resolveProgramme(p: Production): Result[Programme] = {
       val id = p.programme
-      programmes.find(_.id == id).toRightIor(mkOneError(s"Bad id '$id'"))
+      programmes.find(_.id == id).toResultOrError(s"Bad id '$id'")
     }
   }
 
@@ -47,7 +47,7 @@ object MutualRecursionData {
   val productions = List(Production("prod1", "prog1"))
 }
 
-object MutualRecursionMapping extends GenericMapping[Id] {
+object MutualRecursionMapping extends GenericMapping[IO] {
   import MutualRecursionData._
 
   val schema =
@@ -85,7 +85,7 @@ object MutualRecursionMapping extends GenericMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select(f@("programmeById" | "productionById"), List(Binding("id", IDValue(id))), child) =>
-        Select(f, Nil, Unique(Filter(Eql(ProgrammeType / "id", Const(id)), child))).rightIor
+        Select(f, Nil, Unique(Filter(Eql(ProgrammeType / "id", Const(id)), child))).success
     }
   ))
 }
@@ -110,7 +110,7 @@ final class MutualRecursionSpec extends CatsSuite {
       }
     """
 
-    val res = MutualRecursionMapping.compileAndRun(query)
+    val res = MutualRecursionMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -143,7 +143,7 @@ final class MutualRecursionSpec extends CatsSuite {
       }
     """
 
-    val res = MutualRecursionMapping.compileAndRun(query)
+    val res = MutualRecursionMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -180,7 +180,7 @@ final class MutualRecursionSpec extends CatsSuite {
       }
     """
 
-    val res = MutualRecursionMapping.compileAndRun(query)
+    val res = MutualRecursionMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -225,7 +225,7 @@ final class MutualRecursionSpec extends CatsSuite {
       }
     """
 
-    val res = MutualRecursionMapping.compileAndRun(query)
+    val res = MutualRecursionMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -256,7 +256,7 @@ final class MutualRecursionSpec extends CatsSuite {
       }
     """
 
-    val res = MutualRecursionMapping.compileAndRun(query)
+    val res = MutualRecursionMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -295,7 +295,7 @@ final class MutualRecursionSpec extends CatsSuite {
       }
     """
 
-    val res = MutualRecursionMapping.compileAndRun(query)
+    val res = MutualRecursionMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)

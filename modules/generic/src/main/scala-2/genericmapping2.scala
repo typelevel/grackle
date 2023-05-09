@@ -12,8 +12,8 @@ import shapeless.ops.hlist.{LiftAll => PLiftAll}
 import shapeless.ops.coproduct.{LiftAll => CLiftAll}
 import shapeless.ops.record.Keys
 
+import syntax._
 import Cursor.{AbstractCursor, Context, Env}
-import QueryInterpreter.{mkErrorResult, mkOneError}
 import ShapelessUtils._
 
 trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: GenericMappingLike[F] =>
@@ -53,7 +53,7 @@ trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: Ge
       val tpe = tpe0
 
       def build(context: Context, focus: T, parent: Option[Cursor], env: Env): Result[Cursor] =
-        CursorImpl(context.asType(tpe), focus, fieldMap, parent, env).rightIor
+        CursorImpl(context.asType(tpe), focus, fieldMap, parent, env).success
 
       def renameField(from: String, to: String): ObjectCursorBuilder[T] =
         transformFieldNames { case `from` => to ; case other => other }
@@ -75,7 +75,14 @@ trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: Ge
 
       override def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
         mkCursorForField(this, fieldName, resultName) orElse {
-          fieldMap.get(fieldName).toRightIor(mkOneError(s"No field '$fieldName' for type $tpe")).flatMap { f =>
+          fieldMap.get(fieldName) match {
+            case None =>
+              println(s"No field '$fieldName' for type $tpe")
+              println(fieldMap)
+            case _ =>
+          }
+
+          fieldMap.get(fieldName).toResult(s"No field '$fieldName' for type $tpe").flatMap { f =>
             f(context.forFieldOrAttribute(fieldName, resultName), focus, Some(this), Env.empty)
           }
         }
@@ -131,8 +138,8 @@ trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: Ge
         subtpe <:< tpe && rtpe <:< subtpe
 
       override def narrow(subtpe: TypeRef): Result[Cursor] =
-        if (narrowsTo(subtpe)) copy(tpe0 = subtpe).rightIor
-        else mkErrorResult(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
+        if (narrowsTo(subtpe)) copy(tpe0 = subtpe).success
+        else Result.internalError(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
     }
   }
 }

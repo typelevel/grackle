@@ -3,7 +3,8 @@
 
 package introspection
 
-import cats.Id
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.tests.CatsSuite
 import io.circe.{ ACursor, Json }
 
@@ -31,7 +32,7 @@ final class IntrospectionSuite extends CatsSuite {
     }
   }
 
-  def stripStandardTypes(result: Json): Json =
+  def stripStandardTypes(result: Json): Option[Json] =
     result
       .hcursor
       .downField("data")
@@ -39,7 +40,6 @@ final class IntrospectionSuite extends CatsSuite {
       .downField("types")
       .filterArray(_.hcursor.downField("name").as[String].exists(!standardTypeName(_)))
       .top // .root doesn't work in 0.13
-      .getOrElse(sys.error("stripStandardTypes failed"))
 
   test("simple type query") {
     val query = """
@@ -80,7 +80,7 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val res = TestMapping.compileAndRun(query)
+    val res = TestMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -237,7 +237,7 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val res = TestMapping.compileAndRun(query)
+    val res = TestMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -358,7 +358,7 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val res = TestMapping.compileAndRun(query)
+    val res = TestMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -445,7 +445,7 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val res = TestMapping.compileAndRun(query)
+    val res = TestMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -539,7 +539,7 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val res = TestMapping.compileAndRun(query)
+    val res = TestMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -629,7 +629,7 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val res = TestMapping.compileAndRun(query)
+    val res = TestMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -710,7 +710,7 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val res = TestMapping.compileAndRun(query)
+    val res = TestMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -801,7 +801,7 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val res = TestMapping.compileAndRun(query)
+    val res = TestMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -862,11 +862,11 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val res0 = TestMapping.compileAndRun(query)
+    val res0 = TestMapping.compileAndRun(query).unsafeRunSync()
     val res = stripStandardTypes(res0)
     //println(res)
 
-    assert(res == expected)
+    assert(res == Some(expected))
   }
 
   test("standard introspection query") {
@@ -1192,11 +1192,11 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val res0 = SmallMapping.compileAndRun(query)
+    val res0 = SmallMapping.compileAndRun(query).unsafeRunSync()
     val res = stripStandardTypes(res0)
     //println(res)
 
-    assert(res == expected)
+    assert(res == Some(expected))
   }
 
   test("typename query") {
@@ -1224,7 +1224,7 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val res = SmallMapping.compileAndRun(query)
+    val res = SmallMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -1253,7 +1253,7 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val res = SmallMapping.compileAndRun(query)
+    val res = SmallMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -1300,7 +1300,7 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val res = SmallMapping.compileAndRun(query)
+    val res = SmallMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -1331,7 +1331,7 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val res = TestMapping.compileAndRun(query, introspectionLevel = Disabled)
+    val res = TestMapping.compileAndRun(query, introspectionLevel = Disabled).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -1362,7 +1362,7 @@ final class IntrospectionSuite extends CatsSuite {
       }
     """
 
-    val res = SmallMapping.compileAndRun(query, introspectionLevel = TypenameOnly)
+    val res = SmallMapping.compileAndRun(query, introspectionLevel = TypenameOnly).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -1442,7 +1442,7 @@ object SmallData {
   )
 }
 
-object SmallMapping extends ValueMapping[Id] {
+object SmallMapping extends ValueMapping[IO] {
   import SmallData._
 
   val schema =

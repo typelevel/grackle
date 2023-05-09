@@ -8,6 +8,7 @@ import scala.annotation.tailrec
 import cats.implicits._
 import cats.kernel.Order
 
+import syntax._
 import Cursor.Env
 import Query._
 
@@ -163,7 +164,7 @@ object Query {
   case class OrderSelection[T: Order](term: Term[T], ascending: Boolean = true, nullsLast: Boolean = true) {
     def apply(x: Cursor, y: Cursor): Int = {
       def deref(c: Cursor): Option[T] =
-        if (c.isNullable) c.asNullable.getOrElse(None).flatMap(term(_).toOption)
+        if (c.isNullable) c.asNullable.toOption.flatten.flatMap(term(_).toOption)
         else term(c).toOption
 
       (deref(x), deref(y)) match {
@@ -344,7 +345,7 @@ object Query {
         case r@Rename(_, child) => loop(child).map(ec => r.copy(child = ec))
         case e@Environment(_, child) => loop(child).map(ec => e.copy(child = ec))
         case t@TransformCursor(_, child) => loop(child).map(ec => t.copy(child = ec))
-        case other => other.rightIor
+        case other => other.success
       }
     loop(query)
   }
@@ -455,9 +456,9 @@ object Query {
         val (selects, rest) = flattened.partition { case PossiblyRenamedSelect(_, _) => true ; case _ => false }
 
         val mergedSelects =
-          selects.groupBy { case PossiblyRenamedSelect(Select(fieldName, _, _), resultName) => (fieldName, resultName) ; case _ => sys.error("Impossible") }.values.map { rsels =>
+          selects.groupBy { case PossiblyRenamedSelect(Select(fieldName, _, _), resultName) => (fieldName, resultName) ; case _ => throw new MatchError("Impossible") }.values.map { rsels =>
             val PossiblyRenamedSelect(Select(fieldName, _, _), resultName) = rsels.head : @unchecked
-            val sels = rsels.map { case PossiblyRenamedSelect(sel, _) => sel ; case _ => sys.error("Impossible") }
+            val sels = rsels.collect { case PossiblyRenamedSelect(sel, _) => sel }
             val children = sels.map(_.child)
             val merged = mergeQueries(children)
             PossiblyRenamedSelect(Select(fieldName, Nil, merged), resultName)

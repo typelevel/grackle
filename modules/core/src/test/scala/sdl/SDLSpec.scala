@@ -245,8 +245,8 @@ final class SDLSuite extends CatsSuite {
 
     val res = SchemaParser.parseText(schema)
     val ser = res.map(_.toString)
-    //println(ser.right.get)
-    assert(ser.right.get == schema)
+    //println(ser.toOption.get)
+    assert(ser.toOption.get == schema)
   }
 
   test("deserialize schema (2)") {
@@ -287,8 +287,8 @@ final class SDLSuite extends CatsSuite {
 
     val res = SchemaParser.parseText(schema)
     val ser = res.map(_.toString)
-    //println(ser.right.get)
-    assert(ser.right.get == schema)
+    //println(ser.toOption.get)
+    assert(ser.toOption.get == schema)
   }
 
   test("deserialize schema (3)") {
@@ -310,7 +310,7 @@ final class SDLSuite extends CatsSuite {
 
     val res = SchemaParser.parseText(schema)
     val ser = res.map(_.toString)
-    //println(ser.right.get)
-    assert(ser.right.get == schema)
+    //println(ser.toOption.get)
+    assert(ser.toOption.get == schema)
   }
 }

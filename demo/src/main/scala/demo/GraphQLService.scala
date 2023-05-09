@@ -4,7 +4,6 @@
 package demo
 
 import cats.effect.Concurrent
-import cats.Id
 import cats.implicits._
 import edu.gemini.grackle.Mapping
 import io.circe.{Json, ParsingFailure, parser}
@@ -21,9 +20,6 @@ object GraphQLService {
 
   def fromMapping[F[_]: Concurrent](mapping: Mapping[F]): GraphQLService[F] =
     (op: Option[String], vars: Option[Json], query: String) => mapping.compileAndRun(query, op, vars)
-
-  def fromGenericIdMapping[F[_]: Concurrent](mapping: Mapping[Id]): GraphQLService[F] =
-    (op: Option[String], vars: Option[Json], query: String) => mapping.compileAndRun(query, op, vars).pure[F]
 
   def routes[F[_]: Concurrent](prefix: String, service: GraphQLService[F]): HttpRoutes[F] = {
     val dsl = new Http4sDsl[F]{}

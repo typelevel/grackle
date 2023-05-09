@@ -3,7 +3,8 @@
 
 package composed
 
-import cats.Id
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.implicits._
 import cats.tests.CatsSuite
 
@@ -11,7 +12,6 @@ import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
 import Query._, Predicate._, Value._
 import QueryCompiler._
-import QueryInterpreter.mkErrorResult
 
 object CollectionData {
   case class Collection(name: String, itemIds: List[String])
@@ -22,7 +22,7 @@ object CollectionData {
     )
 }
 
-object CollectionMapping extends ValueMapping[Id] {
+object CollectionMapping extends ValueMapping[IO] {
   import CollectionData._
 
   val schema =
@@ -65,7 +65,7 @@ object CollectionMapping extends ValueMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("collectionByName", List(Binding("name", StringValue(name))), child) =>
-        Select("collectionByName", Nil, Unique(Filter(Eql(CollectionType / "name", Const(name)), child))).rightIor
+        Select("collectionByName", Nil, Unique(Filter(Eql(CollectionType / "name", Const(name)), child))).success
     }
   ))
 }
@@ -75,7 +75,7 @@ object ItemData {
   val items = List(Item("A", "foo"), Item("B", "bar"), Item("C", "baz"))
 }
 
-object ItemMapping extends ValueMapping[Id] {
+object ItemMapping extends ValueMapping[IO] {
   import ItemData._
 
   val schema =
@@ -114,12 +114,12 @@ object ItemMapping extends ValueMapping[Id] {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("itemById", List(Binding("id", IDValue(id))), child) =>
-        Select("itemById", Nil, Unique(Filter(Eql(ItemType / "id", Const(id)), child))).rightIor
+        Select("itemById", Nil, Unique(Filter(Eql(ItemType / "id", Const(id)), child))).success
     }
   ))
 }
 
-object ComposedListMapping extends ComposedMapping[Id] {
+object ComposedListMapping extends ComposedMapping[IO] {
   val schema =
     schema"""
       type Query {
@@ -167,18 +167,18 @@ object ComposedListMapping extends ComposedMapping[Id] {
   override val selectElaborator =  new SelectElaborator(Map(
     QueryType -> {
       case Select("itemById", List(Binding("id", IDValue(id))), child) =>
-        Select("itemById", Nil, Unique(Filter(Eql(ItemType / "id", Const(id)), child))).rightIor
+        Select("itemById", Nil, Unique(Filter(Eql(ItemType / "id", Const(id)), child))).success
       case Select("collectionByName", List(Binding("name", StringValue(name))), child) =>
-        Select("collectionByName", Nil, Unique(Filter(Eql(CollectionType / "name", Const(name)), child))).rightIor
+        Select("collectionByName", Nil, Unique(Filter(Eql(CollectionType / "name", Const(name)), child))).success
     }
   ))
 
   def collectionItemJoin(q: Query, c: Cursor): Result[Query] =
     (c.focus, q) match {
       case (c: CollectionData.Collection, Select("items", _, child)) =>
-        Group(c.itemIds.map(id => Select("itemById", Nil, Unique(Filter(Eql(ItemType / "id", Const(id)), child))))).rightIor
+        Group(c.itemIds.map(id => Select("itemById", Nil, Unique(Filter(Eql(ItemType / "id", Const(id)), child))))).success
       case _ =>
-        mkErrorResult(s"Unexpected cursor focus type in collectionItemJoin")
+        Result.internalError(s"Unexpected cursor focus type in collectionItemJoin")
     }
 }
 
@@ -205,7 +205,7 @@ final class ComposedListSpec extends CatsSuite {
       }
     """
 
-    val res = CollectionMapping.compileAndRun(query)
+    val res = CollectionMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -232,7 +232,7 @@ final class ComposedListSpec extends CatsSuite {
       }
     """
 
-    val res = ItemMapping.compileAndRun(query)
+    val res = ItemMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -274,7 +274,7 @@ final class ComposedListSpec extends CatsSuite {
       }
     """
 
-    val res = ComposedListMapping.compileAndRun(query)
+    val res = ComposedListMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -311,7 +311,7 @@ final class ComposedListSpec extends CatsSuite {
       }
     """
 
-    val res = ComposedListMapping.compileAndRun(query)
+    val res = ComposedListMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -360,7 +360,7 @@ final class ComposedListSpec extends CatsSuite {
       }
     """
 
-    val res = ComposedListMapping.compileAndRun(query)
+    val res = ComposedListMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -406,7 +406,7 @@ final class ComposedListSpec extends CatsSuite {
       }
     """
 
-    val res = ComposedListMapping.compileAndRun(query)
+    val res = ComposedListMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)

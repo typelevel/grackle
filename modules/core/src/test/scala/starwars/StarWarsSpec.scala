@@ -3,6 +3,7 @@
 
 package starwars
 
+import cats.effect.unsafe.implicits.global
 import cats.tests.CatsSuite
 import edu.gemini.grackle.syntax._
 
@@ -35,7 +36,7 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val res = StarWarsMapping.compileAndRun(query)
+    val res = StarWarsMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -62,7 +63,7 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val res = StarWarsMapping.compileAndRun(query)
+    val res = StarWarsMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -104,7 +105,7 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val res = StarWarsMapping.compileAndRun(query)
+    val res = StarWarsMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -172,7 +173,7 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val res = StarWarsMapping.compileAndRun(query)
+    val res = StarWarsMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -197,7 +198,7 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val res = StarWarsMapping.compileAndRun(query)
+    val res = StarWarsMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -222,7 +223,7 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val res = StarWarsMapping.compileAndRun(query)
+    val res = StarWarsMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -253,7 +254,7 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val res = StarWarsMapping.compileAndRun(query)
+    val res = StarWarsMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -316,7 +317,7 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val res = StarWarsMapping.compileAndRun(query)
+    val res = StarWarsMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -360,7 +361,7 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val res = StarWarsMapping.compileAndRun(query)
+    val res = StarWarsMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -404,7 +405,7 @@ final class StarWarsSpec extends CatsSuite {
       }
     """
 
-    val res = StarWarsMapping.compileAndRun(query)
+    val res = StarWarsMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -443,7 +444,7 @@ final class StarWarsSpec extends CatsSuite {
     }
     """
 
-    val res = StarWarsMapping.compileAndRun(query)
+    val res = StarWarsMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)
@@ -482,7 +483,7 @@ final class StarWarsSpec extends CatsSuite {
     }
     """
 
-    val res = StarWarsMapping.compileAndRun(query)
+    val res = StarWarsMapping.compileAndRun(query).unsafeRunSync()
     //println(res)
 
     assert(res == expected)

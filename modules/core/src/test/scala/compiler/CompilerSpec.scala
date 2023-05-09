@@ -3,7 +3,7 @@
 
 package compiler
 
-import cats.data.{Chain, Ior}
+import cats.data.NonEmptyChain
 import cats.implicits._
 import cats.tests.CatsSuite
 
@@ -11,7 +11,6 @@ import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
 import Query._, Predicate._, Value._, UntypedOperation._
 import QueryCompiler._, ComponentElaborator.TrivialJoin
-import QueryInterpreter.mkOneError
 
 final class CompilerSuite extends CatsSuite {
   test("simple query") {
@@ -29,7 +28,7 @@ final class CompilerSuite extends CatsSuite {
       )
 
     val res = QueryParser.parseText(query)
-    assert(res == Ior.Right(UntypedQuery(expected, Nil)))
+    assert(res == Result.Success(UntypedQuery(expected, Nil)))
   }
 
   test("simple mutation") {
@@ -51,7 +50,7 @@ final class CompilerSuite extends CatsSuite {
       )
 
     val res = QueryParser.parseText(query)
-    assert(res == Ior.Right(UntypedMutation(expected, Nil)))
+    assert(res == Result.Success(UntypedMutation(expected, Nil)))
   }
 
   test("simple subscription") {
@@ -69,7 +68,7 @@ final class CompilerSuite extends CatsSuite {
       )
 
     val res = QueryParser.parseText(query)
-    assert(res == Ior.Right(UntypedSubscription(expected, Nil)))
+    assert(res == Result.Success(UntypedSubscription(expected, Nil)))
   }
 
   test("simple nested query") {
@@ -95,7 +94,7 @@ final class CompilerSuite extends CatsSuite {
       )
 
     val res = QueryParser.parseText(query)
-    assert(res == Ior.Right(UntypedQuery(expected, Nil)))
+    assert(res == Result.Success(UntypedQuery(expected, Nil)))
   }
 
   test("shorthand query") {
@@ -126,7 +125,7 @@ final class CompilerSuite extends CatsSuite {
       )
 
     val res = QueryParser.parseText(query)
-    assert(res == Ior.Right(UntypedQuery(expected, Nil)))
+    assert(res == Result.Success(UntypedQuery(expected, Nil)))
   }
 
   test("field alias") {
@@ -152,7 +151,7 @@ final class CompilerSuite extends CatsSuite {
       )
 
     val res = QueryParser.parseText(query)
-    assert(res == Ior.Right(UntypedQuery(expected, Nil)))
+    assert(res == Result.Success(UntypedQuery(expected, Nil)))
   }
 
   test("introspection query") {
@@ -181,7 +180,7 @@ final class CompilerSuite extends CatsSuite {
       )
 
     val res = QueryParser.parseText(query)
-    assert(res == Ior.Right(UntypedQuery(expected, Nil)))
+    assert(res == Result.Success(UntypedQuery(expected, Nil)))
   }
 
   test("simple selector elaborated query") {
@@ -212,7 +211,7 @@ final class CompilerSuite extends CatsSuite {
 
     val res = AtomicMapping.compiler.compile(query)
 
-    assert(res.map(_.query) == Ior.Right(expected))
+    assert(res.map(_.query) == Result.Success(expected))
   }
 
   test("invalid: object subselection set empty") {
@@ -226,7 +225,7 @@ final class CompilerSuite extends CatsSuite {
 
     val res = AtomicMapping.compiler.compile(query)
 
-    assert(res == Ior.Left(Chain(expected)))
+    assert(res == Result.Failure(NonEmptyChain(expected)))
   }
 
   test("invalid: object subselection set invalid") {
@@ -242,7 +241,7 @@ final class CompilerSuite extends CatsSuite {
 
     val res = AtomicMapping.compiler.compile(query)
 
-    assert(res == Ior.Left(Chain(expected)))
+    assert(res == Result.Failure(NonEmptyChain(expected)))
   }
 
   test("invalid: leaf subselection set not empty (1)") {
@@ -260,7 +259,7 @@ final class CompilerSuite extends CatsSuite {
 
     val res = AtomicMapping.compiler.compile(query)
 
-    assert(res == Ior.Left(Chain(expected)))
+    assert(res == Result.Failure(NonEmptyChain(expected)))
   }
 
   test("invalid: leaf subselection set not empty (2)") {
@@ -278,7 +277,7 @@ final class CompilerSuite extends CatsSuite {
 
     val res = AtomicMapping.compiler.compile(query)
 
-    assert(res == Ior.Left(Chain(expected)))
+    assert(res == Result.Failure(NonEmptyChain(expected)))
   }
 
   test("invalid: bogus field argument") {
@@ -294,7 +293,7 @@ final class CompilerSuite extends CatsSuite {
 
     val res = AtomicMapping.compiler.compile(query)
 
-    assert(res == Ior.Left(Chain(expected)))
+    assert(res == Result.Failure(NonEmptyChain(expected)))
   }
 
   test("simple component elaborated query") {
@@ -345,7 +344,7 @@ final class CompilerSuite extends CatsSuite {
 
     val res = ComposedMapping.compiler.compile(query)
 
-    assert(res.map(_.query) == Ior.Right(expected))
+    assert(res.map(_.query) == Result.Success(expected))
   }
 
   test("malformed query (1)") {
@@ -364,7 +363,7 @@ final class CompilerSuite extends CatsSuite {
         |        character(id: "1000" {
         |                             ^""".stripMargin
 
-    assert(res == Ior.Left(mkOneError(error)))
+    assert(res == Result.failure(error))
   }
 
   test("malformed query (2)") {
@@ -372,7 +371,7 @@ final class CompilerSuite extends CatsSuite {
 
     val res = QueryParser.parseText(query)
 
-    assert(res == Ior.Left(mkOneError("At least one operation required")))
+    assert(res == Result.failure("At least one operation required"))
   }
 
   test("malformed query (3)") {
@@ -388,7 +387,7 @@ final class CompilerSuite extends CatsSuite {
     val error =
       "Parse error at line 5 column 4\n    \n    ^"
 
-    assert(res == Ior.Left(mkOneError(error)))
+    assert(res == Result.failure(error))
   }
 }
 
@@ -411,7 +410,7 @@ object AtomicMapping extends TestMapping {
   override val selectElaborator = new SelectElaborator(Map(
     QueryType -> {
       case Select("character", List(Binding("id", StringValue(id))), child) =>
-        Select("character", Nil, Unique(Filter(Eql(CharacterType / "id", Const(id)), child))).rightIor
+        Select("character", Nil, Unique(Filter(Eql(CharacterType / "id", Const(id)), child))).success
     }
   ))
 }

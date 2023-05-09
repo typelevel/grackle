@@ -3,9 +3,9 @@
 
 package compiler
 
-import cats.data.{Chain, Ior}
+import cats.data.NonEmptyChain
 import cats.tests.CatsSuite
-import edu.gemini.grackle.Problem
+import edu.gemini.grackle.{Problem, Result}
 import starwars.StarWarsMapping
 
 class QuerySizeSpec extends CatsSuite {
@@ -206,7 +206,7 @@ class QuerySizeSpec extends CatsSuite {
     val expected = Problem("Query is too deep: depth is 8 levels, maximum is 5")
 
     val res = StarWarsMapping.compiler.compile(query)
-    assert(res == Ior.Left(Chain(expected)))
+    assert(res == Result.Failure(NonEmptyChain(expected)))
   }
 
   test("query too wide") {
@@ -231,6 +231,6 @@ class QuerySizeSpec extends CatsSuite {
     val expected = Problem("Query is too wide: width is 6 leaves, maximum is 5")
 
     val res = StarWarsMapping.compiler.compile(query)
-    assert(res == Ior.Left(Chain(expected)))
+    assert(res == Result.Failure(NonEmptyChain(expected)))
   }
 }

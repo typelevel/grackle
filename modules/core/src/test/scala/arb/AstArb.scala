@@ -79,7 +79,7 @@ trait AstArb {
       case Type.Named(Name("String")) => oneOf(alphaStr.map(Value.StringValue.apply), const(Value.NullValue))
       case Type.Named(Name("Float"))  => oneOf(arbitrary[Double].map(Value.FloatValue.apply), const(Value.NullValue))
       // no other named types are known yet
-      case Type.Named(x) => sys.error(s"unknown type: $x")
+      case Type.Named(_) => fail[Value]
 
       case Type.NonNull(t) => genValueForType(t.merge).flatMap { case Value.NullValue => fail ; case v => const(v) }
 
