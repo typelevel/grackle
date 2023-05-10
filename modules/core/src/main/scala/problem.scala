@@ -11,7 +11,8 @@ import io.circe.syntax._
 final case class Problem(
   message: String,
   locations: List[(Int, Int)] = Nil,
-  path: List[String] = Nil
+  path: List[String] = Nil,
+  extension: Option[JsonObject] = None,
 ) {
 
   override def toString = {
@@ -24,12 +25,14 @@ final case class Problem(
         if (a == b) a.toString else s"$a..$b"
       } .mkString(", ")
 
-    (path.nonEmpty, locations.nonEmpty) match {
+    val s = (path.nonEmpty, locations.nonEmpty) match {
       case (true, true)   => s"$message (at $pathText: $locationsText)"
       case (true, false)  => s"$message (at $pathText)"
       case (false, true)  => s"$message (at $locationsText)"
       case (false, false) => message
     }
+
+    extension.fold(s)(obj => s"$s, extension: ${obj.asJson.spaces2}")
 
   }
 
@@ -55,10 +58,14 @@ object Problem {
       if (p.path.isEmpty) Nil
       else List(("path" -> p.path.asJson))
 
+    val extensionField: List[(String, Json)] =
+      p.extension.fold(List.empty[(String, Json)])(obj => List("extension" -> obj.asJson))
+
     Json.fromFields(
       "message" -> p.message.asJson ::
       locationsField                :::
-      pathField
+      pathField                     :::
+      extensionField
     )
 
   }
