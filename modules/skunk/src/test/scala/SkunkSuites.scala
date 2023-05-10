@@ -15,6 +15,8 @@ import edu.gemini.grackle.sql.SqlStatsMonitor
 import edu.gemini.grackle.sql.test._
 import edu.gemini.grackle.Mapping
 
+import org.typelevel.twiddles._
+
 final class ArrayJoinSpec extends SkunkDatabaseSuite with SqlArrayJoinSpec {
   lazy val mapping = new SkunkTestMapping(pool) with SqlArrayJoinMapping[IO]
 }
@@ -110,7 +112,7 @@ final class MutationSpec extends SkunkDatabaseSuite with SqlMutationSpec {
       def updatePopulation(id: Int, population: Int): IO[Unit] =
         pool.use { s =>
           s.prepareR(sql"update city set population=${codec.int4} where id=${codec.int4}".command).use { ps =>
-            ps.execute(population ~ id).void
+            ps.execute(population *: id *: EmptyTuple).void
           }
         }
 
@@ -122,7 +124,7 @@ final class MutationSpec extends SkunkDatabaseSuite with SqlMutationSpec {
               RETURNING id
             """.query(codec.int4)
           s.prepareR(q).use { ps =>
-            ps.unique(name ~ countryCode ~ population)
+            ps.unique(name *: countryCode *: population *: EmptyTuple)
           }
         }
     }
