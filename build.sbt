@@ -47,9 +47,6 @@ ThisBuild / githubWorkflowBuild     ~= { steps =>
 }
 ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 
-// Temporary workaround for https://github.com/lampepfl/dotty/issues/15927
-ThisBuild / Compile / packageDoc / publishArtifact := false
-
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
   scalacOptions += "-Wconf:msg=unused value of type org.scalatest.Assertion:silent",
@@ -64,7 +61,15 @@ lazy val commonSettings = Seq(
     """|Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
         |For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
         |""".stripMargin
-  ))
+  )),
+  // Temporary workaround for https://github.com/lampepfl/dotty/issues/15927
+  Compile / doc / sources := {
+      val old = (Compile / doc / sources).value
+      scalaVersion.value match {
+        case Scala3 => Seq()
+        case Scala2 => old
+      }
+    }
 )
 
 lazy val modules: List[ProjectReference] = List(
