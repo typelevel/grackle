@@ -47,6 +47,9 @@ ThisBuild / githubWorkflowBuild     ~= { steps =>
 }
 ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 
+// Temporary workaround for https://github.com/lampepfl/dotty/issues/15927
+ThisBuild / Compile / packageDoc / publishArtifact := false
+
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
   scalacOptions += "-Wconf:msg=unused value of type org.scalatest.Assertion:silent",
