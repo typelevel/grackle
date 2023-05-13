@@ -6,6 +6,8 @@ package edu.gemini.grackle
 import cats.data.NonEmptyChain
 import cats.syntax.all._
 import org.typelevel.literally.Literally
+import edu.gemini.grackle.Ast.Document
+import edu.gemini.grackle.GraphQLParser.Document.parseAll
 import edu.gemini.grackle.Schema
 import io.circe.Json
 import io.circe.parser.parse
@@ -18,6 +20,7 @@ trait VersionSpecificSyntax {
 class StringContextOps(val sc: StringContext) extends AnyVal {
   def schema(args: Any*): Schema = macro SchemaLiteral.make
   def json(args: Any*): Json = macro JsonLiteral.make
+  def doc(args: Any*): Document = macro DocumentLiteral.make
 }
 
 object SchemaLiteral extends Literally[Schema] {
@@ -42,4 +45,15 @@ object JsonLiteral extends Literally[Json] {
     )
   }
   def make(c: Context)(args: c.Expr[Any]*): c.Expr[Json] = apply(c)(args: _*)
+}
+
+object DocumentLiteral extends Literally[Document] {
+  def validate(c: Context)(s: String): Either[String,c.Expr[Document]] = {
+    import c.universe._
+    parseAll(s).bimap(
+      pf => show"Invalid document: $pf",
+      _  => c.Expr(q"_root_.edu.gemini.grackle.GraphQLParser.Document.parseAll($s).toOption.get"),
+    )
+  }
+  def make(c: Context)(args: c.Expr[Any]*): c.Expr[Document] = apply(c)(args: _*)
 }
