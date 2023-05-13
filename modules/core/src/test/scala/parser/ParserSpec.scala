@@ -6,11 +6,12 @@ package parser
 import cats.tests.CatsSuite
 
 import edu.gemini.grackle.{ Ast, GraphQLParser }
+import edu.gemini.grackle.syntax._
 import Ast._, OperationType._, OperationDefinition._, Selection._, Value._, Type.Named
 
 final class ParserSuite extends CatsSuite {
   test("simple query") {
-    val query = """
+    val query = doc"""
       query {
         character(id: 1000) {
           name
@@ -29,10 +30,7 @@ final class ParserSuite extends CatsSuite {
         )
       )
 
-    GraphQLParser.Document.parseAll(query).toOption match {
-      case Some(List(q)) => assert(q == expected)
-      case _ => assert(false)
-    }
+    assert(query == List(expected))
   }
 
   test("multiple parameters (commas)") {
