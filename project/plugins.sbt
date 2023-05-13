@@ -1,7 +1,7 @@
 addSbtPlugin("org.typelevel"             % "sbt-typelevel-ci-release" % "0.4.20")
 addSbtPlugin("io.spray"                  % "sbt-revolver"             % "0.10.0")
 addSbtPlugin("com.typesafe.sbt"          % "sbt-site"                 % "1.4.1")
-addSbtPlugin("com.typesafe.sbt"          % "sbt-ghpages"              % "0.6.3")
+addSbtPlugin("com.github.sbt"          % "sbt-ghpages"              % "0.8.0")
 addSbtPlugin("com.timushev.sbt"          % "sbt-updates"              % "0.6.4")
 addSbtPlugin("de.heikoseeberger"         % "sbt-header"               % "5.9.0")
 addSbtPlugin("io.github.davidgregory084" % "sbt-tpolecat"             % "0.4.2")
