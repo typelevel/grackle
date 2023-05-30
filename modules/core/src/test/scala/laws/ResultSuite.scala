@@ -6,7 +6,7 @@ package laws
 import cats.Eq
 import cats.data.NonEmptyChain
 import cats.kernel.laws.discipline.{EqTests, SemigroupTests}
-import cats.laws.discipline.{ApplicativeTests, MonadErrorTests, TraverseTests}
+import cats.laws.discipline.{ApplicativeTests, MonadErrorTests, ParallelTests, TraverseTests}
 import cats.laws.discipline.arbitrary._
 import cats.tests.CatsSuite
 import org.scalacheck.{Arbitrary, Cogen, Gen}
@@ -39,13 +39,15 @@ class ResultSuite extends CatsSuite {
       )
     )
 
-  checkAll("Result[Int]", MonadErrorTests[Result, Either[Throwable, NonEmptyChain[Problem]]].monadError[Int, Int, Int])
+  checkAll("MonadError[Result] @ Int", MonadErrorTests[Result, Either[Throwable, NonEmptyChain[Problem]]].monadError[Int, Int, Int])
 
-  checkAll("Result[Int] with Option", TraverseTests[Result].traverse[Int, Int, Int, Int, Option, Option])
+  checkAll("Traverse[Result] @ Int with Option", TraverseTests[Result].traverse[Int, Int, Int, Int, Option, Option])
+
+  checkAll("Parallel[Result] @ Int", ParallelTests[Result].parallel[Either[Throwable, NonEmptyChain[Problem]], Int])
 
   checkAll("Semigroup[Result[List[T: Semigroup]]]", SemigroupTests[Result[List[Int]]].semigroup)
 
   checkAll("Eq[Result[Int]]", EqTests[Result[Int]].eqv)
 
-  checkAll("Applicative[ResultT]", ApplicativeTests[Result].applicative[Int, Int, Int])
+  checkAll("Applicative[ResultT] @ Int", ApplicativeTests[Result].applicative[Int, Int, Int])
 }
