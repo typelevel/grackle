@@ -22,17 +22,17 @@ trait SqlNestedEffectsSpec extends AnyFunSuite {
         {
           "code" : "EUR",
           "exchangeRate" : 1.12,
-          "countryCode" : "NLD"
+          "countryCode" : "NL"
         },
         {
           "code" : "GBP",
           "exchangeRate" : 1.25,
-          "countryCode" : "GBR"
+          "countryCode" : "GB"
         }
       ]
     """
 
-    val res = mapping.flatMap(_._1.get(List("GBR", "NLD"))).unsafeRunSync()
+    val res = mapping.flatMap(_._1.get(List("GB", "NL"))).unsafeRunSync()
     //println(res)
 
     assertWeaklyEqual(res, expected)

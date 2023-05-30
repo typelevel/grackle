@@ -264,15 +264,9 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
     */
   trait EffectMapping extends FieldMapping
 
-  case class EffectField(fieldName: String, handler: EffectHandler[F])(implicit val pos: SourcePos)
+  case class EffectField(fieldName: String, handler: EffectHandler[F], required: List[String] = Nil, hidden: Boolean = false)(implicit val pos: SourcePos)
     extends EffectMapping {
-    def hidden = false
     def withParent(tpe: Type): EffectField = this
-  }
-
-  object EffectField {
-    def apply(fieldName: String)(effect: (Query, Cursor) => F[Result[(Query, Cursor)]])(implicit pos: SourcePos): EffectField =
-      new EffectField(fieldName, (qs: List[(Query, Cursor)]) => effect.tupled(qs.head).map(_.map(List(_))))
   }
 
   /**
@@ -449,7 +443,7 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
       typeMappings.flatMap {
         case om: ObjectMapping =>
           om.fieldMappings.collect {
-            case EffectField(fieldName, handler) =>
+            case EffectField(fieldName, handler, _, _) =>
               EffectElaborator.EffectMapping(schema.ref(om.tpe.toString), fieldName, handler)
           }
         case _ => Nil
