@@ -6,7 +6,8 @@ package edu.gemini.grackle
 import scala.annotation.tailrec
 import scala.util.control.NonFatal
 
-import cats.{Applicative, Eq, Eval, Functor, Monad, MonadError, Semigroup, Traverse}
+import cats.{~>, Applicative, Eq, Eval, Functor, Monad, MonadError, Parallel, Semigroup, Traverse}
+import cats.arrow.FunctionK
 import cats.data.{Chain, NonEmptyChain}
 import cats.implicits._
 
@@ -272,6 +273,41 @@ trait ResultInstances extends ResultInstances0 {
       override def pure[A](a: A): Result[A] = Result.success(a)
 
       override def map[A, B](fa: Result[A])(f: A => B): Result[B] = fa.map(f)
+    }
+
+  implicit def grackleParallelForResult[E]: Parallel.Aux[Result, Result] =
+    new Parallel[Result] {
+      type F[x] = Result[x]
+
+      private[this] val identityK: Result ~> Result = FunctionK.id
+
+      def parallel: Result ~> Result = identityK
+      def sequential: Result ~> Result = identityK
+
+      val applicative: Applicative[Result] = new Applicative[Result] {
+        def pure[A](a: A): Result[A] = Result.success(a)
+        def ap[A, B](ff: Result[A => B])(fa: Result[A]): Result[B] =
+          fa match {
+            case err@Result.InternalError(_) => err
+            case fail@Result.Failure(_)      => fail
+            case Result.Success(a) =>
+              ff match {
+                case err@Result.InternalError(_) => err
+                case fail@Result.Failure(_)      => fail
+                case Result.Success(f)           => Result.success(f(a))
+                case Result.Warning(ps, f)       => Result.Warning(ps, f(a))
+              }
+            case Result.Warning(ps, a) =>
+              ff match {
+                case err@Result.InternalError(_) => err
+                case fail@Result.Failure(_)      => fail
+                case Result.Success(f)           => Result.Warning(ps, f(a))
+                case Result.Warning(ps0, f)      => Result.Warning(ps0 ++ ps, f(a))
+              }
+          }
+      }
+
+      lazy val monad: Monad[Result] = grackleMonadErrorForResult
     }
 }
 
