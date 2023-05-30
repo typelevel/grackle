@@ -237,7 +237,7 @@ lazy val profile = project
 
 lazy val docs = project
   .in(file("docs"))
-  .enablePlugins(ParadoxSitePlugin)
+  .enablePlugins(SitePreviewPlugin, ParadoxSitePlugin)
   .settings(
     paradoxTheme         := Some(builtinParadoxTheme("generic")),
     previewLaunchBrowser := false,
