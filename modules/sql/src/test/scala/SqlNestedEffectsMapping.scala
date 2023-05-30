@@ -36,9 +36,9 @@ class CurrencyService[F[_] : Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[
 
 object CurrencyService {
   def apply[F[_] : Sync]: F[CurrencyService[F]] = {
-    val BRL = Currency("BRL", 0.25, "BRA")
-    val EUR = Currency("EUR", 1.12, "NLD")
-    val GBP = Currency("GBP", 1.25, "GBR")
+    val BRL = Currency("BRL", 0.25, "BR")
+    val EUR = Currency("EUR", 1.12, "NL")
+    val GBP = Currency("GBP", 1.25, "GB")
 
     val data = CurrencyData(List(BRL, EUR, GBP).map(c => (c.code, c)).toMap)
 
@@ -166,7 +166,7 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
           SqlField("code2",           country.code2),
           SqlObject("cities",         Join(country.code, city.countrycode)),
           SqlObject("languages",      Join(country.code, countrylanguage.countrycode)),
-          EffectField("currencies",   CurrencyQueryHandler)
+          EffectField("currencies",   CurrencyQueryHandler, List("code2"))
         ),
       ),
       ObjectMapping(
@@ -200,8 +200,8 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
 
   object CurrencyQueryHandler extends EffectHandler[F] {
     def runEffects(queries: List[(Query, Cursor)]): F[Result[List[(Query, Cursor)]]] = {
-      val countryCodes = queries.map(_._2.fieldAs[String]("code").toOption)
-      val distinctCodes = queries.flatMap(_._2.fieldAs[String]("code").toList).distinct
+      val countryCodes = queries.map(_._2.fieldAs[String]("code2").toOption)
+      val distinctCodes = queries.flatMap(_._2.fieldAs[String]("code2").toList).distinct
 
       val children = queries.flatMap {
         case (PossiblyRenamedSelect(Select(name, _, child), alias), parentCursor) =>
@@ -238,10 +238,11 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
   }
 
   object CountryQueryHandler extends EffectHandler[F] {
+    val toCode = Map("BR" -> "BRA", "GB" -> "GBR", "NL" -> "NLD")
     def runEffects(queries: List[(Query, Cursor)]): F[Result[List[(Query, Cursor)]]] = {
       runGrouped(queries) {
         case (PossiblyRenamedSelect(Select("country", _, child), alias), cursors, indices) =>
-          val codes = cursors.flatMap(_.fieldAs[Json]("countryCode").toOption.flatMap(_.asString).toList)
+          val codes = cursors.flatMap(_.fieldAs[Json]("countryCode").toOption.flatMap(_.asString).toList).map(toCode)
           val combinedQuery = PossiblyRenamedSelect(Select("country", Nil, Filter(In(CountryType / "code", codes), child)), alias)
 
           (for {

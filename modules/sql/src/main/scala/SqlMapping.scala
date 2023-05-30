@@ -873,6 +873,8 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         required.flatTraverse(r => columnsForLeaf(context, r))
       case Some(CursorField(_, _, _, required, _)) =>
         required.flatTraverse(r => columnsForLeaf(context, r))
+      case Some(EffectField(_, _, required, _)) =>
+        required.flatTraverse(r => columnsForLeaf(context, r))
       case None =>
         Result.internalError(s"No mapping for field '$fieldName' of type ${context.tpe}")
       case other =>
@@ -2900,6 +2902,19 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 } yield res
               }
             }
+
+          case Effect(_, PossiblyRenamedSelect(Select(fieldName, _, _), _)) =>
+            columnsForLeaf(context, fieldName).flatMap {
+              case Nil => EmptySqlQuery.success
+              case cols =>
+                val constraintCols = if(exposeJoins) parentConstraints.lastOption.getOrElse(Nil).map(_._2) else Nil
+                val extraCols = keyColumnsForType(context) ++ constraintCols
+                for {
+                  parentTable <- parentTableForType(context)
+                  extraJoins  <- parentConstraintsToSqlJoins(parentTable, parentConstraints)
+                } yield
+                  SqlSelect(context, Nil, parentTable, (cols ++ extraCols).distinct, extraJoins, Nil, Nil, None, None, Nil, true, false)
+              }
 
           case TypeCase(default, narrows) =>
             def isSimple(query: Query): Boolean = {
