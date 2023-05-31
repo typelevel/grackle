@@ -310,6 +310,33 @@ final class SchemaSpec extends CatsSuite {
     }
   }
 
+  test("schema validation: implements non-interface") {
+    val schema =
+      Schema("""
+        type Query {
+          foo: Foo
+        }
+
+        type Foo {
+          foo: Int
+        }
+
+        type Bar implements Foo {
+          foo: Int
+          bar: String
+        }
+      """)
+
+    schema match {
+      case Result.Failure(e) => fail(s"Should warn: ${e.head.message}")
+      case Result.Warning(a, b)  =>
+        assert(a.head.message == "Non-interface type Foo declared as implemented by Bar")
+        assert(b.types.map(_.name) == List("Query", "Foo", "Bar"))
+      case Result.Success(b) => fail(s"Shouldn't compile: $b")
+      case Result.InternalError(e) => fail(s"Shouldn't error: $e")
+    }
+  }
+
   test("explicit Schema type (complete)") {
 
     val schema =
@@ -395,5 +422,4 @@ final class SchemaSpec extends CatsSuite {
   ignore("no query type (crashes)") {
     schema"scalar Foo".queryType
   }
-
 }

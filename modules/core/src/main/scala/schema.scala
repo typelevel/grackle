@@ -1083,7 +1083,11 @@ object SchemaValidator {
       implements.flatMap { ifaceName =>
         interfaces.find(_.name == ifaceName.astName) match {
           case Some(interface) => checkImplementation(name, fields, interface)
-          case None => List(Problem(s"Interface ${ifaceName.astName.value} implemented by ${name.value} is not defined"))
+          case None =>
+            definitions.find(_.name == ifaceName.astName) match {
+              case None => List(Problem(s"Interface ${ifaceName.astName.value} implemented by ${name.value} is not defined"))
+              case _    => List(Problem(s"Non-interface type ${ifaceName.astName.value} declared as implemented by ${name.value}"))
+            }
         }
       }
     }
