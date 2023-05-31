@@ -132,7 +132,6 @@ lazy val sql = project
   .settings(
     name := "gsp-graphql-sql",
     libraryDependencies ++= Seq(
-      "org.typelevel"     %% "log4cats-slf4j"         % log4catsVersion,
       "io.circe"          %% "circe-generic"          % circeVersion % "test",
       "ch.qos.logback"    %  "logback-classic"        % logbackVersion % "test",
       "com.dimafeng"      %% "testcontainers-scala-scalatest"  % testContainersVersion % "test",
@@ -151,8 +150,9 @@ lazy val doobie = project
     Test / fork := true,
     Test / parallelExecution := false,
     libraryDependencies ++= Seq(
-      "org.tpolecat" %% "doobie-core"           % doobieVersion,
-      "org.tpolecat" %% "doobie-postgres-circe" % doobieVersion,
+      "org.tpolecat"  %% "doobie-core"           % doobieVersion,
+      "org.tpolecat"  %% "doobie-postgres-circe" % doobieVersion,
+      "org.typelevel" %% "log4cats-core"         % log4catsVersion
     )
   )
 

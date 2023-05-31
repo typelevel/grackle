@@ -11,19 +11,13 @@ import doobie.postgres.implicits._
 import doobie.postgres.circe.jsonb.implicits._
 import doobie.{Get, Meta, Put, Transactor}
 import io.circe.Json
-import org.typelevel.log4cats.Logger
-import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 import edu.gemini.grackle.doobie.postgres.{DoobieMapping, DoobieMonitor}
 
 import edu.gemini.grackle.sql.test._
 
 trait DoobieDatabaseSuite extends SqlDatabaseSuite {
-
-  implicit val log: Logger[IO] = Slf4jLogger.getLogger[IO]
-
   // lazy vals because the container is not initialised until the test is run
-
   lazy val xa = {
     import container.{ driverClassName, jdbcUrl, username, password }
 

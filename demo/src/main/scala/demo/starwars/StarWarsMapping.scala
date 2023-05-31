@@ -152,7 +152,7 @@ trait StarWarsData[F[_]] extends GenericMapping[F] { self: StarWarsMapping[F] =>
 
   // #model_values
   // The character database ...
-  val characters: List[Character] = List(
+  lazy val characters: List[Character] = List(
     Human(
       id = "1000",
       name = Some("Luke Skywalker"),
