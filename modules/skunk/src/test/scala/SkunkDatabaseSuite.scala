@@ -7,7 +7,6 @@ import java.time.Duration
 
 import cats.effect.{IO, Resource, Sync}
 import natchez.Trace.Implicits.noop
-import org.testcontainers.containers.PostgreSQLContainer.POSTGRESQL_PORT
 import skunk.Session
 import skunk.codec.{ all => codec }
 import skunk.circe.codec.{ all => ccodec }
@@ -19,15 +18,19 @@ import edu.gemini.grackle.sql.test._
 trait SkunkDatabaseSuite extends SqlDatabaseSuite {
 
   // Slow because each usage will open a new socket, but ok for now.
-  lazy val pool: Resource[IO, Session[IO]] =
+  lazy val pool: Resource[IO, Session[IO]] = {
+    val connInfo = postgresConnectionInfo()
+    import connInfo._
+
     Session.single[IO](
-      host     = container.containerIpAddress,
-      port     = container.mappedPort(POSTGRESQL_PORT),
-      user     = container.username,
-      password = Some(container.password),
-      database = container.databaseName,
-      // debug    = true,
+      host     = if (host == "0.0.0.0") "127.0.0.1" else host,
+      port     = port,
+      user     = username,
+      password = Some(password),
+      database = databaseName,
+      //debug    = true,
     )
+  }
 
   abstract class SkunkTestMapping[F[_]: Sync](pool: Resource[F,Session[F]], monitor: SkunkMonitor[F] = SkunkMonitor.noopMonitor[IO])
     extends SkunkMapping[F](pool, monitor) with SqlTestMapping[F] {

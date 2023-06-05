@@ -3,14 +3,22 @@
 
 package grackle.test
 
+import cats.effect.IO
 import io.circe.{Json, JsonObject}
+import munit.Assertions._
 
 object GraphQLResponseTests {
   def assertWeaklyEqual(x: Json, y: Json, strictPaths: List[List[String]] = Nil): Unit =
     assert(weaklyEqual(x, y, strictPaths))
 
+  def assertWeaklyEqualIO(x: IO[Json], y: Json, strictPaths: List[List[String]] = Nil): IO[Unit] =
+    x.map(x0 => assert(weaklyEqual(x0, y, strictPaths)))
+
   def assertNoErrors(x: Json): Unit =
     assert(noErrors(x))
+
+  def assertNoErrorsIO(x: IO[Json]): IO[Unit] =
+    x.map(x0 => assert(noErrors(x0)))
 
   def hasField(x: Json, fieldName: String): Boolean =
     (for {

@@ -1,26 +1,29 @@
 import nl.zolotko.sbt.jfr.{JfrRecording, JfrRecorderOptions}
 import scala.concurrent.duration.DurationInt
 
-val catsVersion                 = "2.9.0"
-val catsParseVersion            = "0.3.9"
-val catsEffectVersion           = "3.1.1"
-val catsTestkitScalaTestVersion = "2.1.5"
-val circeVersion                = "0.14.5"
-val doobieVersion               = "1.0.0-RC2"
-val flywayVersion               = "9.19.1"
-val fs2Version                  = "3.7.0"
-val http4sVersion               = "0.23.19"
-val http4sBlazeVersion          = "0.23.15"
-val kindProjectorVersion        = "0.13.2"
-val literallyVersion            = "1.1.0"
-val logbackVersion              = "1.4.7"
-val log4catsVersion             = "2.6.0"
-val skunkVersion                = "0.6.0"
-val shapeless2Version           = "2.3.10"
-val shapeless3Version           = "3.1.0"
-val sourcePosVersion            = "1.1.0"
-val testContainersVersion       = "0.40.16"
-val typenameVersion             = "1.1.0"
+val catsVersion            = "2.9.0"
+val catsParseVersion       = "0.3.9"
+val catsEffectVersion      = "3.1.1"
+val circeVersion           = "0.14.5"
+val disciplineMunitVersion = "1.0.9"
+val doobieVersion          = "1.0.0-RC2"
+val flywayVersion          = "9.19.1"
+val fs2Version             = "3.7.0"
+val http4sVersion          = "0.23.19"
+val http4sBlazeVersion     = "0.23.15"
+val jnrUnixsocketVersion   = "0.38.19"
+val kindProjectorVersion   = "0.13.2"
+val literallyVersion       = "1.1.0"
+val logbackVersion         = "1.4.7"
+val log4catsVersion        = "2.6.0"
+val munitVersion           = "1.0.0-M7"
+val munitCatsEffectVersion = "2.0.0-M3"
+val skunkVersion           = "0.6.0"
+val shapeless2Version      = "2.3.10"
+val shapeless3Version      = "3.1.0"
+val sourcePosVersion       = "1.1.0"
+val typenameVersion        = "1.1.0"
+val whaleTailVersion       = "0.0.10"
 
 val Scala2 = "2.13.10"
 val Scala3 = "3.3.0"
@@ -49,18 +52,20 @@ ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
-  scalacOptions += "-Wconf:msg=unused value of type org.scalatest.Assertion:silent",
   libraryDependencies ++= Seq(
-    "org.typelevel"     %% "cats-testkit"           % catsVersion % "test",
-    "org.typelevel"     %% "cats-testkit-scalatest" % catsTestkitScalaTestVersion % "test"
+    "org.scalameta" %% "munit"             % munitVersion % "test",
+    "org.scalameta" %% "munit-scalacheck"  % munitVersion % "test",
+    "org.typelevel" %% "cats-laws"         % catsVersion % "test",
+    "org.typelevel" %% "discipline-munit"  % disciplineMunitVersion % "test",
+    "org.typelevel" %% "munit-cats-effect" % munitCatsEffectVersion % "test"
   ) ++ Seq(
     compilerPlugin("org.typelevel" %% "kind-projector" % kindProjectorVersion cross CrossVersion.full),
   ).filterNot(_ => tlIsScala3.value),
   headerMappings := headerMappings.value + (HeaderFileType.scala -> HeaderCommentStyle.cppStyleLineComment),
   headerLicense  := Some(HeaderLicense.Custom(
     """|Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
-        |For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
-        |""".stripMargin
+       |For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
+       |""".stripMargin
   )),
   // Temporary workaround for https://github.com/lampepfl/dotty/issues/15927
   Compile / doc / sources := {
@@ -102,14 +107,14 @@ lazy val core = project
     name := "gsp-graphql-core",
     libraryDependencies ++=
       Seq(
-        "org.typelevel"     %% "cats-parse"             % catsParseVersion,
-        "org.typelevel"     %% "cats-core"              % catsVersion,
-        "org.typelevel"     %% "literally"              % literallyVersion,
-        "io.circe"          %% "circe-core"             % circeVersion,
-        "io.circe"          %% "circe-parser"           % circeVersion,
-        "org.tpolecat"      %% "typename"               % typenameVersion,
-        "org.tpolecat"      %% "sourcepos"              % sourcePosVersion,
-        "co.fs2"            %% "fs2-core"               % fs2Version,
+        "org.typelevel" %% "cats-parse"   % catsParseVersion,
+        "org.typelevel" %% "cats-core"    % catsVersion,
+        "org.typelevel" %% "literally"    % literallyVersion,
+        "io.circe"      %% "circe-core"   % circeVersion,
+        "io.circe"      %% "circe-parser" % circeVersion,
+        "org.tpolecat"  %% "typename"     % typenameVersion,
+        "org.tpolecat"  %% "sourcepos"    % sourcePosVersion,
+        "co.fs2"        %% "fs2-core"     % fs2Version,
       )
   )
 
@@ -132,10 +137,10 @@ lazy val sql = project
   .settings(
     name := "gsp-graphql-sql",
     libraryDependencies ++= Seq(
-      "io.circe"          %% "circe-generic"          % circeVersion % "test",
-      "ch.qos.logback"    %  "logback-classic"        % logbackVersion % "test",
-      "com.dimafeng"      %% "testcontainers-scala-scalatest"  % testContainersVersion % "test",
-      "com.dimafeng"      %% "testcontainers-scala-postgresql" % testContainersVersion % "test",
+      "io.circe"          %% "circe-generic"      % circeVersion % "test",
+      "co.fs2"            %% "fs2-io"             % fs2Version % "test",
+      "io.chrisdavenport" %% "whale-tail-manager" % whaleTailVersion % "test",
+      "com.github.jnr"    % "jnr-unixsocket"      % jnrUnixsocketVersion % "test"
     )
   )
 
@@ -150,9 +155,10 @@ lazy val doobie = project
     Test / fork := true,
     Test / parallelExecution := false,
     libraryDependencies ++= Seq(
-      "org.tpolecat"  %% "doobie-core"           % doobieVersion,
-      "org.tpolecat"  %% "doobie-postgres-circe" % doobieVersion,
-      "org.typelevel" %% "log4cats-core"         % log4catsVersion
+      "org.tpolecat"   %% "doobie-core"           % doobieVersion,
+      "org.tpolecat"   %% "doobie-postgres-circe" % doobieVersion,
+      "org.typelevel"  %% "log4cats-core"         % log4catsVersion,
+      "ch.qos.logback" %  "logback-classic"       % logbackVersion % "test"
     )
   )
 
@@ -167,8 +173,8 @@ lazy val skunk = project
     Test / fork := true,
     Test / parallelExecution := false,
     libraryDependencies ++= Seq(
-      "org.tpolecat"      %% "skunk-core"  % skunkVersion,
-      "org.tpolecat"      %% "skunk-circe" % skunkVersion,
+      "org.tpolecat" %% "skunk-core"  % skunkVersion,
+      "org.tpolecat" %% "skunk-circe" % skunkVersion,
     )
   )
 
@@ -195,17 +201,18 @@ lazy val demo = project
   .settings(
     name := "gsp-graphql-demo",
     libraryDependencies ++= Seq(
-      "org.typelevel"     %% "log4cats-slf4j"                  % log4catsVersion,
-      "ch.qos.logback"    %  "logback-classic"                 % logbackVersion,
-      "org.tpolecat"      %% "doobie-core"                     % doobieVersion,
-      "org.tpolecat"      %% "doobie-postgres"                 % doobieVersion,
-      "org.tpolecat"      %% "doobie-hikari"                   % doobieVersion,
-      "org.http4s"        %% "http4s-blaze-server"             % http4sBlazeVersion,
-      "org.http4s"        %% "http4s-blaze-client"             % http4sBlazeVersion,
-      "org.http4s"        %% "http4s-circe"                    % http4sVersion,
-      "org.http4s"        %% "http4s-dsl"                      % http4sVersion,
-      "com.dimafeng"      %% "testcontainers-scala-postgresql" % testContainersVersion,
-      "org.flywaydb"      %  "flyway-core"                     % flywayVersion
+      "org.typelevel"     %% "log4cats-slf4j"      % log4catsVersion,
+      "ch.qos.logback"    %  "logback-classic"     % logbackVersion,
+      "org.tpolecat"      %% "doobie-core"         % doobieVersion,
+      "org.tpolecat"      %% "doobie-postgres"     % doobieVersion,
+      "org.tpolecat"      %% "doobie-hikari"       % doobieVersion,
+      "org.http4s"        %% "http4s-blaze-server" % http4sBlazeVersion,
+      "org.http4s"        %% "http4s-blaze-client" % http4sBlazeVersion,
+      "org.http4s"        %% "http4s-circe"        % http4sVersion,
+      "org.http4s"        %% "http4s-dsl"          % http4sVersion,
+      "org.flywaydb"      %  "flyway-core"         % flywayVersion,
+      "io.chrisdavenport" %% "whale-tail-manager"  % whaleTailVersion,
+      "com.github.jnr"    % "jnr-unixsocket"       % jnrUnixsocketVersion
     )
   )
 

@@ -3,27 +3,28 @@
 
 package demo
 
+import java.util.concurrent.Executors
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
+
 import cats.effect.{ExitCode, IO, IOApp, Resource}
 import cats.implicits._
-import com.dimafeng.testcontainers.PostgreSQLContainer
 import demo.starwars.{StarWarsData, StarWarsMapping}
 import demo.world.WorldMapping
 import doobie.hikari.HikariTransactor
+import io.chrisdavenport.whaletail.Docker
+import io.chrisdavenport.whaletail.manager._
 import org.flywaydb.core.Flyway
-import org.testcontainers.containers.{PostgreSQLContainer => JavaPostgreSQLContainer}
-import org.testcontainers.utility.DockerImageName
-
-import java.util.concurrent.Executors
-import scala.concurrent.ExecutionContext
 
 // #main
 object Main extends IOApp {
 
   def run(args: List[String]): IO[ExitCode] = {
-    container.use { container =>
+    container.use { connInfo =>
       for {
-        _ <- dbMigration(container)
-        _ <- transactor(container).use { xa =>
+        _ <- dbMigration(connInfo)
+        _ <- transactor(connInfo).use { xa =>
           val worldGraphQLRoutes = GraphQLService.routes(
             "world",
             GraphQLService.fromMapping(WorldMapping.mkMappingFromTransactor(xa))
@@ -38,38 +39,64 @@ object Main extends IOApp {
     }.as(ExitCode.Success)
   }
 
-  private val dbName = "test"
-  private val dbUser = "test"
-  private val dbPassword = "test"
-  private val container: Resource[IO, PostgreSQLContainer] = Resource.make(
-    IO {
-      val containerDef = PostgreSQLContainer.Def(
-        DockerImageName.parse(s"${JavaPostgreSQLContainer.IMAGE}:14.5"),
-        databaseName = dbName,
-        username = dbUser,
-        password = dbPassword
+  case class PostgresConnectionInfo(host: String, port: Int) {
+    val driverClassName = "org.postgresql.Driver"
+    val databaseName = "test"
+    val jdbcUrl = s"jdbc:postgresql://$host:$port/$databaseName"
+    val username = "test"
+    val password = "test"
+  }
+  object PostgresConnectionInfo {
+    val DefaultPort = 5432
+  }
+
+  val container: Resource[IO, PostgresConnectionInfo] = Docker.default[IO].flatMap(client =>
+    WhaleTailContainer.build(
+      client,
+      image = "postgres",
+      tag = "11.8".some,
+      ports = Map(PostgresConnectionInfo.DefaultPort -> None),
+      env = Map(
+        "POSTGRES_USER" -> "test",
+        "POSTGRES_PASSWORD" -> "test",
+        "POSTGRES_DB" -> "test"
+      ),
+      labels = Map.empty
+    ).evalTap(
+      ReadinessStrategy.checkReadiness(
+        client,
+        _,
+        ReadinessStrategy.LogRegex(".*database system is ready to accept connections.*".r, 2),
+        30.seconds
       )
-      containerDef.start()
-    }
-  )(c => IO(c.stop()))
+    )
+  ).flatMap(container =>
+    Resource.eval(
+      container.ports.get(PostgresConnectionInfo.DefaultPort).liftTo[IO](new Throwable("Missing Port"))
+    )
+  ).map {
+    case (host, port) => PostgresConnectionInfo(host, port)
+  }
 
-  private def dbUri(container: PostgreSQLContainer) =
-    s"jdbc:postgresql://${container.host}:${container.mappedPort(JavaPostgreSQLContainer.POSTGRESQL_PORT)}/$dbName"
-
-  private def transactor(container: PostgreSQLContainer): Resource[IO, HikariTransactor[IO]] =
+  def transactor(connInfo: PostgresConnectionInfo): Resource[IO, HikariTransactor[IO]] = {
+    import connInfo._
     HikariTransactor.newHikariTransactor[IO](
-      "org.postgresql.Driver",
-      dbUri(container),
-      dbUser,
-      dbPassword,
+      driverClassName,
+      jdbcUrl,
+      username,
+      password,
       ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(4))
     )
+  }
 
-  private def dbMigration(container: PostgreSQLContainer): IO[Unit] = IO {
-    val flyway = Flyway
-      .configure()
-      .dataSource(dbUri(container), dbUser, dbPassword)
-    flyway.load().migrate()
-  }.void
+  def dbMigration(connInfo: PostgresConnectionInfo): IO[Unit] = {
+    import connInfo._
+    IO {
+      val flyway = Flyway
+        .configure()
+        .dataSource(jdbcUrl, username, password)
+      flyway.load().migrate()
+    }.void
+  }
 }
 // #main
