@@ -3,16 +3,63 @@
 
 package edu.gemini.grackle.sql.test
 
-import cats.tests.CatsSuite
-import com.dimafeng.testcontainers.{ForAllTestContainer, PostgreSQLContainer}
-import org.scalatest.funsuite.AnyFunSuite
-import org.testcontainers.containers.BindMode
+import scala.concurrent.duration._
 
-trait SqlDatabaseSuite extends AnyFunSuite with CatsSuite with ForAllTestContainer {
+import cats.effect.{IO, Resource}
+import cats.implicits._
+import fs2.io.file.Path
+import io.chrisdavenport.whaletail.{Containers, Docker}
+import io.chrisdavenport.whaletail.manager._
+import munit.CatsEffectSuite
+import munit.catseffect._
 
-  override val container: PostgreSQLContainer = {
-    val c = PostgreSQLContainer()
-    c.container.withClasspathResourceMapping("db", "/docker-entrypoint-initdb.d/", BindMode.READ_ONLY)
-    c
+trait SqlDatabaseSuite extends CatsEffectSuite {
+  case class PostgresConnectionInfo(host: String, port: Int) {
+    val driverClassName = "org.postgresql.Driver"
+    val databaseName = "test"
+    val jdbcUrl = s"jdbc:postgresql://$host:$port/$databaseName"
+    val username = "test"
+    val password = "test"
   }
+  object PostgresConnectionInfo {
+    val DefaultPort = 5432
+  }
+
+  def bindPath(path: String): String =
+    Path(".").absolute.parent.flatMap(_.parent).flatMap(_.parent).get.toString+"/"+path
+
+  val resource: Resource[IO, PostgresConnectionInfo] =
+    Docker.default[IO].flatMap(client =>
+      WhaleTailContainer.build(
+        client,
+        image = "postgres",
+        tag = "11.8".some,
+        ports = Map(PostgresConnectionInfo.DefaultPort -> None),
+        binds = List(Containers.Bind(bindPath("modules/sql/src/test/resources/db/"), "/docker-entrypoint-initdb.d/", "ro")),
+        env = Map(
+          "POSTGRES_USER" -> "test",
+          "POSTGRES_PASSWORD" -> "test",
+          "POSTGRES_DB" -> "test"
+        ),
+        labels = Map.empty
+      ).evalTap(
+        ReadinessStrategy.checkReadiness(
+          client,
+          _,
+          ReadinessStrategy.LogRegex(".*database system is ready to accept connections.*".r, 2),
+          30.seconds
+        )
+      )
+    ).flatMap(container =>
+      Resource.eval(
+        container.ports.get(PostgresConnectionInfo.DefaultPort).liftTo[IO](new Throwable("Missing Port"))
+      )
+    ).map {
+      case (host, port) => PostgresConnectionInfo(host, port)
+    }
+
+  val postgresConnectionInfo: IOFixture[PostgresConnectionInfo] =
+    ResourceSuiteLocalFixture("postgresconnectioninfo", resource)
+
+  override def munitFixtures: Seq[IOFixture[_]] = Seq(postgresConnectionInfo)
 }

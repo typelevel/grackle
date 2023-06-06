@@ -15,60 +15,60 @@ import edu.gemini.grackle.sql.SqlStatsMonitor
 import edu.gemini.grackle.sql.test._
 import edu.gemini.grackle.Mapping
 
-final class ArrayJoinSpec extends DoobieDatabaseSuite with SqlArrayJoinSpec {
+final class ArrayJoinSuite extends DoobieDatabaseSuite with SqlArrayJoinSuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlArrayJoinMapping[IO]
 }
 
-final class CoalesceSpec extends DoobieDatabaseSuite with SqlCoalesceSpec {
+final class CoalesceSuite extends DoobieDatabaseSuite with SqlCoalesceSuite {
   type Fragment = doobie.Fragment
   def mapping: IO[(QueryExecutor[IO, Json], SqlStatsMonitor[IO,Fragment])] =
     DoobieMonitor.statsMonitor[IO].map(mon => (new DoobieTestMapping(xa, mon) with SqlCoalesceMapping[IO], mon))
 }
 
-final class ComposedWorldSpec extends DoobieDatabaseSuite with SqlComposedWorldSpec {
+final class ComposedWorldSuite extends DoobieDatabaseSuite with SqlComposedWorldSuite {
   def mapping: IO[(CurrencyMapping[IO], QueryExecutor[IO, Json])] =
     for {
       currencyMapping <- CurrencyMapping[IO]
     } yield (currencyMapping, new SqlComposedMapping(new DoobieTestMapping(xa) with SqlWorldMapping[IO], currencyMapping))
 }
 
-final class CompositeKeySpec extends DoobieDatabaseSuite with SqlCompositeKeySpec {
+final class CompositeKeySuite extends DoobieDatabaseSuite with SqlCompositeKeySuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlCompositeKeyMapping[IO]
 }
 
-final class CursorJsonSpec extends DoobieDatabaseSuite with SqlCursorJsonSpec {
+final class CursorJsonSuite extends DoobieDatabaseSuite with SqlCursorJsonSuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlCursorJsonMapping[IO]
 }
 
-final class EmbeddingSpec extends DoobieDatabaseSuite with SqlEmbeddingSpec {
+final class EmbeddingSuite extends DoobieDatabaseSuite with SqlEmbeddingSuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlEmbeddingMapping[IO]
 }
 
-final class Embedding2Spec extends DoobieDatabaseSuite with SqlEmbedding2Spec {
+final class Embedding2Suite extends DoobieDatabaseSuite with SqlEmbedding2Suite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlEmbedding2Mapping[IO]
 }
 
-final class Embedding3Spec extends DoobieDatabaseSuite with SqlEmbedding3Spec {
+final class Embedding3Suite extends DoobieDatabaseSuite with SqlEmbedding3Suite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlEmbedding3Mapping[IO]
 }
 
-final class FilterJoinAliasSpec extends DoobieDatabaseSuite with SqlFilterJoinAliasSpec {
+final class FilterJoinAliasSuite extends DoobieDatabaseSuite with SqlFilterJoinAliasSuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlFilterJoinAliasMapping[IO]
 }
 
-final class FilterOrderOffsetLimitSpec extends DoobieDatabaseSuite with SqlFilterOrderOffsetLimitSpec {
+final class FilterOrderOffsetLimitSuite extends DoobieDatabaseSuite with SqlFilterOrderOffsetLimitSuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlFilterOrderOffsetLimitMapping[IO]
 }
 
-final class FilterOrderOffsetLimit2Spec extends DoobieDatabaseSuite with SqlFilterOrderOffsetLimit2Spec {
+final class FilterOrderOffsetLimit2Suite extends DoobieDatabaseSuite with SqlFilterOrderOffsetLimit2Suite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlFilterOrderOffsetLimit2Mapping[IO]
 }
 
-final class GraphSpec extends DoobieDatabaseSuite with SqlGraphSpec {
+final class GraphSuite extends DoobieDatabaseSuite with SqlGraphSuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlGraphMapping[IO]
 }
 
-final class InterfacesSpec extends DoobieDatabaseSuite with SqlInterfacesSpec {
+final class InterfacesSuite extends DoobieDatabaseSuite with SqlInterfacesSuite {
   lazy val mapping =
     new DoobieTestMapping(xa) with SqlInterfacesMapping[IO] {
       def entityType: Codec =
@@ -76,7 +76,7 @@ final class InterfacesSpec extends DoobieDatabaseSuite with SqlInterfacesSpec {
     }
 }
 
-final class InterfacesSpec2 extends DoobieDatabaseSuite with SqlInterfacesSpec2 {
+final class InterfacesSuite2 extends DoobieDatabaseSuite with SqlInterfacesSuite2 {
   lazy val mapping =
     new DoobieTestMapping(xa) with SqlInterfacesMapping2[IO] {
       def entityType: Codec =
@@ -84,19 +84,19 @@ final class InterfacesSpec2 extends DoobieDatabaseSuite with SqlInterfacesSpec2 
     }
 }
 
-final class JsonbSpec extends DoobieDatabaseSuite with SqlJsonbSpec {
+final class JsonbSuite extends DoobieDatabaseSuite with SqlJsonbSuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlJsonbMapping[IO]
 }
 
-final class LikeSpec extends DoobieDatabaseSuite with SqlLikeSpec {
+final class LikeSuite extends DoobieDatabaseSuite with SqlLikeSuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlLikeMapping[IO]
 }
 
-final class MixedSpec extends DoobieDatabaseSuite with SqlMixedSpec {
+final class MixedSuite extends DoobieDatabaseSuite with SqlMixedSuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlMixedMapping[IO]
 }
 
-final class MovieSpec extends DoobieDatabaseSuite with SqlMovieSpec {
+final class MovieSuite extends DoobieDatabaseSuite with SqlMovieSuite {
   lazy val mapping =
     new DoobieTestMapping(xa) with SqlMovieMapping[IO] {
       def genre: Codec = (Meta[Int].imap(Genre.fromInt)(Genre.toInt), false)
@@ -104,7 +104,7 @@ final class MovieSpec extends DoobieDatabaseSuite with SqlMovieSpec {
     }
 }
 
-final class MutationSpec extends DoobieDatabaseSuite with SqlMutationSpec {
+final class MutationSuite extends DoobieDatabaseSuite with SqlMutationSuite {
   lazy val mapping =
     new DoobieTestMapping(xa) with SqlMutationMapping[IO] {
       def updatePopulation(id: Int, population: Int): IO[Unit] =
@@ -125,7 +125,7 @@ final class MutationSpec extends DoobieDatabaseSuite with SqlMutationSpec {
     }
 }
 
-final class NestedEffectsSpec extends DoobieDatabaseSuite with SqlNestedEffectsSpec {
+final class NestedEffectsSuite extends DoobieDatabaseSuite with SqlNestedEffectsSuite {
   def mapping: IO[(CurrencyService[IO], QueryExecutor[IO, Json])] =
     for {
       currencyService0 <- CurrencyService[IO]
@@ -138,23 +138,23 @@ final class NestedEffectsSpec extends DoobieDatabaseSuite with SqlNestedEffectsS
     }
 }
 
-final class Paging1Spec extends DoobieDatabaseSuite with SqlPaging1Spec {
+final class Paging1Suite extends DoobieDatabaseSuite with SqlPaging1Suite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlPaging1Mapping[IO]
 }
 
-final class Paging2Spec extends DoobieDatabaseSuite with SqlPaging2Spec {
+final class Paging2Suite extends DoobieDatabaseSuite with SqlPaging2Suite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlPaging2Mapping[IO]
 }
 
-final class Paging3Spec extends DoobieDatabaseSuite with SqlPaging3Spec {
+final class Paging3Suite extends DoobieDatabaseSuite with SqlPaging3Suite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlPaging3Mapping[IO]
 }
 
-final class ProjectionSpec extends DoobieDatabaseSuite with SqlProjectionSpec {
+final class ProjectionSuite extends DoobieDatabaseSuite with SqlProjectionSuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlProjectionMapping[IO]
 }
 
-final class RecursiveInterfacesSpec extends DoobieDatabaseSuite with SqlRecursiveInterfacesSpec {
+final class RecursiveInterfacesSuite extends DoobieDatabaseSuite with SqlRecursiveInterfacesSuite {
   lazy val mapping =
     new DoobieTestMapping(xa) with SqlRecursiveInterfacesMapping[IO] {
       def itemType: Codec =
@@ -162,23 +162,23 @@ final class RecursiveInterfacesSpec extends DoobieDatabaseSuite with SqlRecursiv
     }
 }
 
-final class SiblingListsSpec extends DoobieDatabaseSuite with SqlSiblingListsSpec {
+final class SiblingListsSuite extends DoobieDatabaseSuite with SqlSiblingListsSuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlSiblingListsData[IO]
 }
 
-final class TreeSpec extends DoobieDatabaseSuite with SqlTreeSpec {
+final class TreeSuite extends DoobieDatabaseSuite with SqlTreeSuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlTreeMapping[IO]
 }
 
-final class UnionsSpec extends DoobieDatabaseSuite with SqlUnionSpec {
+final class UnionsSuite extends DoobieDatabaseSuite with SqlUnionSuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlUnionsMapping[IO]
 }
 
-final class WorldSpec extends DoobieDatabaseSuite with SqlWorldSpec {
+final class WorldSuite extends DoobieDatabaseSuite with SqlWorldSuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlWorldMapping[IO]
 }
 
-final class WorldCompilerSpec extends DoobieDatabaseSuite with SqlWorldCompilerSpec {
+final class WorldCompilerSuite extends DoobieDatabaseSuite with SqlWorldCompilerSuite {
   type Fragment = doobie.Fragment
 
   def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO,Fragment])] =

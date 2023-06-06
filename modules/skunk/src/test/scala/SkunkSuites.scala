@@ -17,60 +17,60 @@ import edu.gemini.grackle.Mapping
 
 import org.typelevel.twiddles._
 
-final class ArrayJoinSpec extends SkunkDatabaseSuite with SqlArrayJoinSpec {
+final class ArrayJoinSuite extends SkunkDatabaseSuite with SqlArrayJoinSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlArrayJoinMapping[IO]
 }
 
-final class CoalesceSpec extends SkunkDatabaseSuite with SqlCoalesceSpec {
+final class CoalesceSuite extends SkunkDatabaseSuite with SqlCoalesceSuite {
   type Fragment = skunk.AppliedFragment
   def mapping: IO[(QueryExecutor[IO, Json], SqlStatsMonitor[IO,Fragment])] =
     SkunkMonitor.statsMonitor[IO].map(mon => (new SkunkTestMapping(pool, mon) with SqlCoalesceMapping[IO], mon))
 }
 
-final class ComposedWorldSpec extends SkunkDatabaseSuite with SqlComposedWorldSpec {
+final class ComposedWorldSuite extends SkunkDatabaseSuite with SqlComposedWorldSuite {
   def mapping: IO[(CurrencyMapping[IO], QueryExecutor[IO, Json])] =
     for {
       currencyMapping <- CurrencyMapping[IO]
     } yield (currencyMapping, new SqlComposedMapping(new SkunkTestMapping(pool) with SqlWorldMapping[IO], currencyMapping))
 }
 
-final class CompositeKeySpec extends SkunkDatabaseSuite with SqlCompositeKeySpec {
+final class CompositeKeySuite extends SkunkDatabaseSuite with SqlCompositeKeySuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlCompositeKeyMapping[IO]
 }
 
-final class CursorJsonSpec extends SkunkDatabaseSuite with SqlCursorJsonSpec {
+final class CursorJsonSuite extends SkunkDatabaseSuite with SqlCursorJsonSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlCursorJsonMapping[IO]
 }
 
-final class EmbeddingSpec extends SkunkDatabaseSuite with SqlEmbeddingSpec {
+final class EmbeddingSuite extends SkunkDatabaseSuite with SqlEmbeddingSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlEmbeddingMapping[IO]
 }
 
-final class Embedding2Spec extends SkunkDatabaseSuite with SqlEmbedding2Spec {
+final class Embedding2Suite extends SkunkDatabaseSuite with SqlEmbedding2Suite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlEmbedding2Mapping[IO]
 }
 
-final class Embedding3Spec extends SkunkDatabaseSuite with SqlEmbedding3Spec {
+final class Embedding3Suite extends SkunkDatabaseSuite with SqlEmbedding3Suite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlEmbedding3Mapping[IO]
 }
 
-final class FilterJoinAliasSpec extends SkunkDatabaseSuite with SqlFilterJoinAliasSpec {
+final class FilterJoinAliasSuite extends SkunkDatabaseSuite with SqlFilterJoinAliasSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlFilterJoinAliasMapping[IO]
 }
 
-final class FilterOrderOffsetLimitSpec extends SkunkDatabaseSuite with SqlFilterOrderOffsetLimitSpec {
+final class FilterOrderOffsetLimitSuite extends SkunkDatabaseSuite with SqlFilterOrderOffsetLimitSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlFilterOrderOffsetLimitMapping[IO]
 }
 
-final class FilterOrderOffsetLimit2Spec extends SkunkDatabaseSuite with SqlFilterOrderOffsetLimit2Spec {
+final class FilterOrderOffsetLimit2Suite extends SkunkDatabaseSuite with SqlFilterOrderOffsetLimit2Suite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlFilterOrderOffsetLimit2Mapping[IO]
 }
 
-final class GraphSpec extends SkunkDatabaseSuite with SqlGraphSpec {
+final class GraphSuite extends SkunkDatabaseSuite with SqlGraphSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlGraphMapping[IO]
 }
 
-final class InterfacesSpec extends SkunkDatabaseSuite with SqlInterfacesSpec {
+final class InterfacesSuite extends SkunkDatabaseSuite with SqlInterfacesSuite {
   lazy val mapping =
     new SkunkTestMapping(pool) with SqlInterfacesMapping[IO] {
       def entityType: Codec =
@@ -78,7 +78,7 @@ final class InterfacesSpec extends SkunkDatabaseSuite with SqlInterfacesSpec {
     }
 }
 
-final class InterfacesSpec2 extends SkunkDatabaseSuite with SqlInterfacesSpec2 {
+final class InterfacesSuite2 extends SkunkDatabaseSuite with SqlInterfacesSuite2 {
   lazy val mapping =
     new SkunkTestMapping(pool) with SqlInterfacesMapping2[IO] {
       def entityType: Codec =
@@ -86,19 +86,19 @@ final class InterfacesSpec2 extends SkunkDatabaseSuite with SqlInterfacesSpec2 {
     }
 }
 
-final class JsonbSpec extends SkunkDatabaseSuite with SqlJsonbSpec {
+final class JsonbSuite extends SkunkDatabaseSuite with SqlJsonbSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlJsonbMapping[IO]
 }
 
-final class LikeSpec extends SkunkDatabaseSuite with SqlLikeSpec {
+final class LikeSuite extends SkunkDatabaseSuite with SqlLikeSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlLikeMapping[IO]
 }
 
-final class MixedSpec extends SkunkDatabaseSuite with SqlMixedSpec {
+final class MixedSuite extends SkunkDatabaseSuite with SqlMixedSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlMixedMapping[IO]
 }
 
-final class MovieSpec extends SkunkDatabaseSuite with SqlMovieSpec {
+final class MovieSuite extends SkunkDatabaseSuite with SqlMovieSuite {
   lazy val mapping =
     new SkunkTestMapping(pool) with SqlMovieMapping[IO] {
       def genre: Codec = (codec.int4.imap(Genre.fromInt)(Genre.toInt), false)
@@ -106,7 +106,7 @@ final class MovieSpec extends SkunkDatabaseSuite with SqlMovieSpec {
     }
 }
 
-final class MutationSpec extends SkunkDatabaseSuite with SqlMutationSpec {
+final class MutationSuite extends SkunkDatabaseSuite with SqlMutationSuite {
   lazy val mapping =
     new SkunkTestMapping(pool) with SqlMutationMapping[IO] {
       def updatePopulation(id: Int, population: Int): IO[Unit] =
@@ -130,7 +130,7 @@ final class MutationSpec extends SkunkDatabaseSuite with SqlMutationSpec {
     }
 }
 
-final class NestedEffectsSpec extends SkunkDatabaseSuite with SqlNestedEffectsSpec {
+final class NestedEffectsSuite extends SkunkDatabaseSuite with SqlNestedEffectsSuite {
   def mapping: IO[(CurrencyService[IO], QueryExecutor[IO, Json])] =
     for {
       currencyService0 <- CurrencyService[IO]
@@ -143,23 +143,23 @@ final class NestedEffectsSpec extends SkunkDatabaseSuite with SqlNestedEffectsSp
     }
 }
 
-final class Paging1Spec extends SkunkDatabaseSuite with SqlPaging1Spec {
+final class Paging1Suite extends SkunkDatabaseSuite with SqlPaging1Suite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlPaging1Mapping[IO]
 }
 
-final class Paging2Spec extends SkunkDatabaseSuite with SqlPaging2Spec {
+final class Paging2Suite extends SkunkDatabaseSuite with SqlPaging2Suite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlPaging2Mapping[IO]
 }
 
-final class Paging3Spec extends SkunkDatabaseSuite with SqlPaging3Spec {
+final class Paging3Suite extends SkunkDatabaseSuite with SqlPaging3Suite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlPaging3Mapping[IO]
 }
 
-final class ProjectionSpec extends SkunkDatabaseSuite with SqlProjectionSpec {
+final class ProjectionSuite extends SkunkDatabaseSuite with SqlProjectionSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlProjectionMapping[IO]
 }
 
-final class RecursiveInterfacesSpec extends SkunkDatabaseSuite with SqlRecursiveInterfacesSpec {
+final class RecursiveInterfacesSuite extends SkunkDatabaseSuite with SqlRecursiveInterfacesSuite {
   lazy val mapping =
     new SkunkTestMapping(pool) with SqlRecursiveInterfacesMapping[IO] {
       def itemType: Codec =
@@ -167,23 +167,23 @@ final class RecursiveInterfacesSpec extends SkunkDatabaseSuite with SqlRecursive
     }
 }
 
-final class SiblingListsSpec extends SkunkDatabaseSuite with SqlSiblingListsSpec {
+final class SiblingListsSuite extends SkunkDatabaseSuite with SqlSiblingListsSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlSiblingListsData[IO]
 }
 
-final class TreeSpec extends SkunkDatabaseSuite with SqlTreeSpec {
+final class TreeSuite extends SkunkDatabaseSuite with SqlTreeSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlTreeMapping[IO]
 }
 
-final class UnionsSpec extends SkunkDatabaseSuite with SqlUnionSpec {
+final class UnionsSuite extends SkunkDatabaseSuite with SqlUnionSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlUnionsMapping[IO]
 }
 
-final class WorldSpec extends SkunkDatabaseSuite with SqlWorldSpec {
+final class WorldSuite extends SkunkDatabaseSuite with SqlWorldSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlWorldMapping[IO]
 }
 
-final class WorldCompilerSpec extends SkunkDatabaseSuite with SqlWorldCompilerSpec {
+final class WorldCompilerSuite extends SkunkDatabaseSuite with SqlWorldCompilerSuite {
   type Fragment = skunk.AppliedFragment
 
   def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO,Fragment])] =

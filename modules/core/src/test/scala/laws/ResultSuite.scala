@@ -8,13 +8,13 @@ import cats.data.NonEmptyChain
 import cats.kernel.laws.discipline.{EqTests, SemigroupTests}
 import cats.laws.discipline.{ApplicativeTests, MonadErrorTests, ParallelTests, TraverseTests}
 import cats.laws.discipline.arbitrary._
-import cats.tests.CatsSuite
+import munit.DisciplineSuite
 import org.scalacheck.{Arbitrary, Cogen, Gen}
 import org.scalacheck.Arbitrary.{arbitrary => getArbitrary}
 
 import edu.gemini.grackle.{Problem, Result}
 
-class ResultSuite extends CatsSuite {
+class ResultSuite extends DisciplineSuite {
   implicit val eqThrow: Eq[Throwable] = Eq.fromUniversalEquals
 
   implicit val grackleLawsArbitraryForProblem: Arbitrary[Problem] =

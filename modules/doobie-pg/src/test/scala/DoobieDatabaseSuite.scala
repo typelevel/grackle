@@ -19,7 +19,8 @@ import edu.gemini.grackle.sql.test._
 trait DoobieDatabaseSuite extends SqlDatabaseSuite {
   // lazy vals because the container is not initialised until the test is run
   lazy val xa = {
-    import container.{ driverClassName, jdbcUrl, username, password }
+    val connInfo = postgresConnectionInfo()
+    import connInfo._
 
     Transactor.fromDriverManager[IO](
       driverClassName,
