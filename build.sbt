@@ -57,7 +57,9 @@ lazy val commonSettings = Seq(
     "org.scalameta" %% "munit-scalacheck"  % munitVersion % "test",
     "org.typelevel" %% "cats-laws"         % catsVersion % "test",
     "org.typelevel" %% "discipline-munit"  % disciplineMunitVersion % "test",
-    "org.typelevel" %% "munit-cats-effect" % munitCatsEffectVersion % "test"
+    "org.typelevel" %% "munit-cats-effect" % munitCatsEffectVersion % "test",
+    "io.circe"      %% "circe-literal"     % circeVersion % "test",
+    "io.circe"      %% "circe-jawn"        % circeVersion % "test",
   ) ++ Seq(
     compilerPlugin("org.typelevel" %% "kind-projector" % kindProjectorVersion cross CrossVersion.full),
   ).filterNot(_ => tlIsScala3.value),
@@ -111,7 +113,6 @@ lazy val core = project
         "org.typelevel" %% "cats-core"    % catsVersion,
         "org.typelevel" %% "literally"    % literallyVersion,
         "io.circe"      %% "circe-core"   % circeVersion,
-        "io.circe"      %% "circe-parser" % circeVersion,
         "org.tpolecat"  %% "typename"     % typenameVersion,
         "org.tpolecat"  %% "sourcepos"    % sourcePosVersion,
         "co.fs2"        %% "fs2-core"     % fs2Version,

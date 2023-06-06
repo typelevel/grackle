@@ -5,9 +5,9 @@ package compiler
 
 import io.circe.syntax._
 import io.circe.JsonObject
+import io.circe.literal._
 import munit.CatsEffectSuite
 
-import edu.gemini.grackle.syntax._
 import edu.gemini.grackle.Problem
 
 final class ProblemSuite extends CatsEffectSuite {

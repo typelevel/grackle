@@ -4,6 +4,7 @@
 package compiler
 
 import cats.effect.IO
+import io.circe.literal._
 import munit.CatsEffectSuite
 
 import edu.gemini.grackle._

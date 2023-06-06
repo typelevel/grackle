@@ -8,9 +8,8 @@ import scala.concurrent.duration._
 import cats.effect.IO
 import cats.implicits._
 import io.circe.Json
+import io.circe.literal._
 import skunk.implicits._
-
-import edu.gemini.grackle.syntax._
 
 import edu.gemini.grackle.skunk.test.SkunkDatabaseSuite
 

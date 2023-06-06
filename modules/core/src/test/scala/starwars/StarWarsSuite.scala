@@ -4,9 +4,8 @@
 package starwars
 
 import cats.implicits._
+import io.circe.literal._
 import munit.CatsEffectSuite
-
-import edu.gemini.grackle.syntax._
 
 final class StarWarsSuite extends CatsEffectSuite {
 

@@ -3,9 +3,8 @@
 
 package composed
 
+import io.circe.literal._
 import munit.CatsEffectSuite
-
-import edu.gemini.grackle.syntax._
 
 final class ComposedSuite extends CatsEffectSuite {
   test("simple currency query") {

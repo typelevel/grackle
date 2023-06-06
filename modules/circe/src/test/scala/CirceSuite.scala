@@ -4,9 +4,8 @@
 package edu.gemini.grackle
 package circetests
 
+import io.circe.literal._
 import munit.CatsEffectSuite
-
-import edu.gemini.grackle.syntax._
 
 final class CirceSuite extends CatsEffectSuite {
   test("scalars") {

@@ -5,12 +5,12 @@ package edu.gemini.grackle.sql.test
 
 import cats.effect.IO
 import io.circe.Json
+import io.circe.literal._
 import munit.CatsEffectSuite
 
 import edu.gemini.grackle._
 import Predicate._
 import sql.{Like, SqlStatsMonitor}
-import syntax._
 
 import grackle.test.GraphQLResponseTests.assertWeaklyEqual
 

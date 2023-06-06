@@ -3,9 +3,8 @@
 
 package compiler
 
+import io.circe.literal._
 import munit.CatsEffectSuite
-
-import edu.gemini.grackle.syntax._
 
 final class AttributesSuite extends CatsEffectSuite {
   test("fields only") {

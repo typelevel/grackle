@@ -4,6 +4,7 @@
 package compiler
 
 import cats.data.NonEmptyChain
+import io.circe.literal._
 import munit.CatsEffectSuite
 
 import edu.gemini.grackle._
