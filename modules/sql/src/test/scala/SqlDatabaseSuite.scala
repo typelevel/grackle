@@ -7,7 +7,6 @@ import scala.concurrent.duration._
 
 import cats.effect.{IO, Resource}
 import cats.implicits._
-import fs2.io.file.Path
 import io.chrisdavenport.whaletail.{Containers, Docker}
 import io.chrisdavenport.whaletail.manager._
 import munit.CatsEffectSuite
@@ -26,7 +25,7 @@ trait SqlDatabaseSuite extends CatsEffectSuite {
   }
 
   def bindPath(path: String): String =
-    Path(".").absolute.parent.flatMap(_.parent).flatMap(_.parent).get.toString+"/"+path
+    buildinfo.BuildInfo.baseDirectory + "/" + path
 
   val resource: Resource[IO, PostgresConnectionInfo] =
     Docker.default[IO].flatMap(client =>

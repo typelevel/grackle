@@ -10,7 +10,7 @@ import edu.gemini.grackle.Ast.Document
 import edu.gemini.grackle.GraphQLParser.Document.parseAll
 import edu.gemini.grackle.Schema
 import io.circe.Json
-import io.circe.parser.parse
+import io.circe.jawn.parse
 
 trait VersionSpecificSyntax {
   implicit def toStringContextOps(sc: StringContext): StringContextOps =
@@ -41,7 +41,7 @@ object JsonLiteral extends Literally[Json] {
     import c.universe._
     parse(s).bimap(
       pf => s"Invalid JSON: ${pf.message}",
-      _  => c.Expr(q"_root_.io.circe.parser.parse($s).toOption.get"),
+      _  => c.Expr(q"_root_.io.circe.jawn.parse($s).toOption.get"),
     )
   }
   def make(c: Context)(args: c.Expr[Any]*): c.Expr[Json] = apply(c)(args: _*)
