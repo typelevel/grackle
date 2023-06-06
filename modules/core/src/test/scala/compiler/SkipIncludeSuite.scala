@@ -3,6 +3,7 @@
 
 package compiler
 
+import io.circe.literal._
 import munit.CatsEffectSuite
 
 import edu.gemini.grackle._

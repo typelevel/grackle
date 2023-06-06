@@ -25,13 +25,6 @@ object SchemaLiteral extends Literally[Schema]:
       _   => '{Schema(${Expr(s)}).toOption.get}
     )
 
-object JsonLiteral extends Literally[Json]:
-  def validate(s: String)(using Quotes) =
-    parse(s).bimap(
-      pf => s"Invalid JSON: ${pf.message}",
-      _  => '{parse(${Expr(s)}).toOption.get}
-    )
-
 object DocumentLiteral extends Literally[Document]:
   def validate(s: String)(using Quotes) =
     parseAll(s).bimap(

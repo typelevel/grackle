@@ -9,6 +9,7 @@ import cats.effect._
 import cats.implicits._
 import fs2.concurrent.SignallingRef
 import io.circe.Json
+import io.circe.literal._
 import munit.CatsEffectSuite
 
 import edu.gemini.grackle.{Cursor, Query, QueryCompiler, Mapping, Result, Schema, Value, ValueMapping}

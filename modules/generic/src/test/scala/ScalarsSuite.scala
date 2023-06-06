@@ -12,6 +12,7 @@ import cats.{Eq, Order}
 import cats.effect.IO
 import cats.implicits._
 import io.circe.Encoder
+import io.circe.literal._
 import munit.CatsEffectSuite
 
 import edu.gemini.grackle.syntax._

@@ -6,9 +6,8 @@ package edu.gemini.grackle.sql.test
 import cats.effect.IO
 import edu.gemini.grackle._
 import io.circe.Json
+import io.circe.literal._
 import munit.CatsEffectSuite
-
-import edu.gemini.grackle.syntax._
 
 import grackle.test.GraphQLResponseTests.assertWeaklyEqualIO
 

@@ -6,9 +6,8 @@ package effects
 import cats.effect.IO
 import fs2.concurrent.SignallingRef
 import io.circe.Json
+import io.circe.literal._
 import munit.CatsEffectSuite
-
-import edu.gemini.grackle.syntax._
 
 final class ValueEffectSuite extends CatsEffectSuite {
   test("value effect") {

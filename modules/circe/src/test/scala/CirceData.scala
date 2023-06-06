@@ -7,6 +7,7 @@ package circetests
 import cats.effect.IO
 import cats.data.OptionT
 import io.circe.Json
+import io.circe.literal._
 
 import edu.gemini.grackle.circe.CirceMapping
 import edu.gemini.grackle.syntax._
