@@ -156,7 +156,7 @@ lazy val sql = crossProject(JVMPlatform, JSPlatform, NativePlatform)
       "co.fs2"            %%% "fs2-io"             % fs2Version % "test",
     )
   )
-  .platformsSettings(JVMPlatform, NativePlatform)(
+  .platformsSettings(JVMPlatform, JSPlatform)(
     libraryDependencies ++= Seq(
       "io.chrisdavenport" %%% "whale-tail-manager" % whaleTailVersion % "test",
     )
