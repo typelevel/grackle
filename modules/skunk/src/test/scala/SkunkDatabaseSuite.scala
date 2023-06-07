@@ -23,7 +23,7 @@ trait SkunkDatabaseSuite extends SqlDatabaseSuite {
     import connInfo._
 
     Session.single[IO](
-      host     = if (host == "0.0.0.0") "127.0.0.1" else host,
+      host     = host,
       port     = port,
       user     = username,
       password = Some(password),
