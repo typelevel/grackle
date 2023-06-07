@@ -10,6 +10,7 @@ import scala.util.Try
 import cats.{Eq, Order}
 import cats.effect.IO
 import cats.implicits._
+import io.circe.literal._
 import munit.CatsEffectSuite
 
 import edu.gemini.grackle._

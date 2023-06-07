@@ -6,10 +6,10 @@ package edu.gemini.grackle.sql.test
 import cats.effect.IO
 import cats.syntax.all._
 import io.circe.Json
+import io.circe.literal._
 import munit.CatsEffectSuite
 
 import edu.gemini.grackle._
-import syntax._
 import sql.SqlStatsMonitor
 
 import grackle.test.GraphQLResponseTests.assertWeaklyEqual

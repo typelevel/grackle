@@ -8,6 +8,7 @@ import java.util.UUID
 import scala.util.Try
 
 import cats.implicits._
+import io.circe.literal._
 
 import edu.gemini.grackle._
 import syntax._

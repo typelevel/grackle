@@ -9,13 +9,11 @@ import edu.gemini.grackle.Ast.Document
 import edu.gemini.grackle.GraphQLParser.Document.parseAll
 import edu.gemini.grackle.Schema
 import io.circe.Json
-import io.circe.jawn.parse
 
 trait VersionSpecificSyntax:
 
   extension (inline ctx: StringContext)
     inline def schema(inline args: Any*): Schema = ${SchemaLiteral('ctx, 'args)}
-    inline def json(inline args: Any*): Json = ${JsonLiteral('ctx, 'args)}
     inline def doc(inline args: Any*): Document = ${ DocumentLiteral('ctx, 'args) }
 
 object SchemaLiteral extends Literally[Schema]:
@@ -23,13 +21,6 @@ object SchemaLiteral extends Literally[Schema]:
     Schema(s).toEither.bimap(
       nec => s"Invalid schema:${nec.toList.distinct.mkString("\n  🐞 ", "\n  🐞 ", "\n")}",
       _   => '{Schema(${Expr(s)}).toOption.get}
-    )
-
-object JsonLiteral extends Literally[Json]:
-  def validate(s: String)(using Quotes) =
-    parse(s).bimap(
-      pf => s"Invalid JSON: ${pf.message}",
-      _  => '{parse(${Expr(s)}).toOption.get}
     )
 
 object DocumentLiteral extends Literally[Document]:

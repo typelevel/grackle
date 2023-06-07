@@ -5,6 +5,7 @@ package composed
 
 import cats.effect.IO
 import cats.implicits._
+import io.circe.literal._
 import munit.CatsEffectSuite
 
 import edu.gemini.grackle._
