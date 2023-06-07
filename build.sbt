@@ -142,7 +142,7 @@ lazy val buildInfo = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   )
 
 lazy val sql = crossProject(JVMPlatform, JSPlatform, NativePlatform)
-  .crossType(CrossType.Pure)
+  .crossType(CrossType.Full)
   .in(file("modules/sql"))
   .enablePlugins(AutomateHeaderPlugin)
   .disablePlugins(RevolverPlugin)
@@ -153,6 +153,10 @@ lazy val sql = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     libraryDependencies ++= Seq(
       "io.circe"          %%% "circe-generic"      % circeVersion % "test",
       "co.fs2"            %%% "fs2-io"             % fs2Version % "test",
+    )
+  )
+  .platformsSettings(JVMPlatform, NativePlatform)(
+    libraryDependencies ++= Seq(
       "io.chrisdavenport" %%% "whale-tail-manager" % whaleTailVersion % "test",
     )
   )

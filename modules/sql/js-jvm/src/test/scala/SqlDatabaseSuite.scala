@@ -34,7 +34,7 @@ trait SqlDatabaseSuite extends CatsEffectSuite {
         image = "postgres",
         tag = "11.8".some,
         ports = Map(PostgresConnectionInfo.DefaultPort -> None),
-        binds = List(Containers.Bind(bindPath("modules/sql/src/test/resources/db/"), "/docker-entrypoint-initdb.d/", "ro")),
+        binds = List(Containers.Bind(bindPath("modules/sql/shared/src/test/resources/db/"), "/docker-entrypoint-initdb.d/", "ro")),
         env = Map(
           "POSTGRES_USER" -> "test",
           "POSTGRES_PASSWORD" -> "test",
