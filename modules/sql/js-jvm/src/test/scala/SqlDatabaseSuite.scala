@@ -27,7 +27,7 @@ trait SqlDatabaseSuite extends CatsEffectSuite {
   def bindPath(path: String): String =
     buildinfo.BuildInfo.baseDirectory + "/" + path
 
-  val resource: Resource[IO, PostgresConnectionInfo] =
+  val postgresConnectionInfoResource: Resource[IO, PostgresConnectionInfo] =
     Docker.default[IO].flatMap(client =>
       WhaleTailContainer.build(
         client,
@@ -58,7 +58,7 @@ trait SqlDatabaseSuite extends CatsEffectSuite {
     }
 
   val postgresConnectionInfo: IOFixture[PostgresConnectionInfo] =
-    ResourceSuiteLocalFixture("postgresconnectioninfo", resource)
+    ResourceSuiteLocalFixture("postgresconnectioninfo", postgresConnectionInfoResource)
 
   override def munitFixtures: Seq[IOFixture[_]] = Seq(postgresConnectionInfo)
 }

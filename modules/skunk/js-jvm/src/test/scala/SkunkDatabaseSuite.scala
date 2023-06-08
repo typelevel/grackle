@@ -17,20 +17,25 @@ import edu.gemini.grackle.sql.test._
 
 trait SkunkDatabaseSuite extends SqlDatabaseSuite {
 
-  // Slow because each usage will open a new socket, but ok for now.
-  lazy val pool: Resource[IO, Session[IO]] = {
-    val connInfo = postgresConnectionInfo()
-    import connInfo._
+  def poolResource: Resource[IO, Session[IO]] = {
+    postgresConnectionInfoResource.flatMap { connInfo =>
+      import connInfo._
 
-    Session.single[IO](
-      host     = host,
-      port     = port,
-      user     = username,
-      password = Some(password),
-      database = databaseName,
-      //debug    = true,
-    )
+      Session.single[IO](
+        host     = host,
+        port     = port,
+        user     = username,
+        password = Some(password),
+        database = databaseName,
+        //debug    = true,
+      )
+    }
   }
+
+  val poolFixture = ResourceSuiteLocalFixture("skunk", poolResource)
+  override def munitFixtures = Seq(poolFixture)
+
+  def pool = Resource.eval(IO(poolFixture()))
 
   abstract class SkunkTestMapping[F[_]: Sync](pool: Resource[F,Session[F]], monitor: SkunkMonitor[F] = SkunkMonitor.noopMonitor[IO])
     extends SkunkMapping[F](pool, monitor) with SqlTestMapping[F] {
