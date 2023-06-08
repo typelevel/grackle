@@ -7,7 +7,6 @@ import scala.concurrent.duration._
 
 import cats.effect.{IO, Resource}
 import cats.implicits._
-import fs2.io.file.Path
 import io.chrisdavenport.whaletail.{Containers, Docker}
 import io.chrisdavenport.whaletail.manager._
 import munit.CatsEffectSuite
@@ -26,16 +25,16 @@ trait SqlDatabaseSuite extends CatsEffectSuite {
   }
 
   def bindPath(path: String): String =
-    Path(".").absolute.parent.flatMap(_.parent).flatMap(_.parent).get.toString+"/"+path
+    buildinfo.BuildInfo.baseDirectory + "/" + path
 
-  val resource: Resource[IO, PostgresConnectionInfo] =
+  val postgresConnectionInfoResource: Resource[IO, PostgresConnectionInfo] =
     Docker.default[IO].flatMap(client =>
       WhaleTailContainer.build(
         client,
         image = "postgres",
         tag = "11.8".some,
         ports = Map(PostgresConnectionInfo.DefaultPort -> None),
-        binds = List(Containers.Bind(bindPath("modules/sql/src/test/resources/db/"), "/docker-entrypoint-initdb.d/", "ro")),
+        binds = List(Containers.Bind(bindPath("modules/sql/shared/src/test/resources/db/"), "/docker-entrypoint-initdb.d/", "ro")),
         env = Map(
           "POSTGRES_USER" -> "test",
           "POSTGRES_PASSWORD" -> "test",
@@ -59,7 +58,7 @@ trait SqlDatabaseSuite extends CatsEffectSuite {
     }
 
   val postgresConnectionInfo: IOFixture[PostgresConnectionInfo] =
-    ResourceSuiteLocalFixture("postgresconnectioninfo", resource)
+    ResourceSuiteLocalFixture("postgresconnectioninfo", postgresConnectionInfoResource)
 
   override def munitFixtures: Seq[IOFixture[_]] = Seq(postgresConnectionInfo)
 }
