@@ -1559,6 +1559,9 @@ trait SqlWorldSuite extends CatsEffectSuite {
       assertIO(resTotal, Some(expected))
   }
 
+  // JS treats floats as doubles
+  def isJS = Option(System.getProperty("java.vm.name")).contains("Scala.js")
+
   test("data types (1)") {
     val query = """
       query {
@@ -1582,29 +1585,54 @@ trait SqlWorldSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = json"""
-      {
-        "data" : {
-          "country" : {
-            "name" : "United Kingdom",
-            "continent" : "Europe",
-            "region" : "British Islands",
-            "surfacearea" : 242900.0,
-            "indepyear" : 1066,
-            "population" : 59623400,
-            "lifeexpectancy" : 77.7,
-            "gnp" : 1378330.00,
-            "gnpold" : 1296830.00,
-            "localname" : "United Kingdom",
-            "governmentform" : "Constitutional Monarchy",
-            "headofstate" : "Elisabeth II",
-            "capitalId" : 456,
-            "code2" : "GB",
-            "numCities" : 81
+    val expected = if (isJS) 
+      json"""
+          {
+            "data" : {
+              "country" : {
+                "name" : "United Kingdom",
+                "continent" : "Europe",
+                "region" : "British Islands",
+                "surfacearea" : 242900.0,
+                "indepyear" : 1066,
+                "population" : 59623400,
+                "lifeexpectancy" : 77.69999694824219,
+                "gnp" : 1378330.00,
+                "gnpold" : 1296830.00,
+                "localname" : "United Kingdom",
+                "governmentform" : "Constitutional Monarchy",
+                "headofstate" : "Elisabeth II",
+                "capitalId" : 456,
+                "code2" : "GB",
+                "numCities" : 81
+              }
+            }
           }
-        }
-      }
-    """
+        """
+    else
+      json"""
+          {
+            "data" : {
+              "country" : {
+                "name" : "United Kingdom",
+                "continent" : "Europe",
+                "region" : "British Islands",
+                "surfacearea" : 242900.0,
+                "indepyear" : 1066,
+                "population" : 59623400,
+                "lifeexpectancy" : 77.7,
+                "gnp" : 1378330.00,
+                "gnpold" : 1296830.00,
+                "localname" : "United Kingdom",
+                "governmentform" : "Constitutional Monarchy",
+                "headofstate" : "Elisabeth II",
+                "capitalId" : 456,
+                "code2" : "GB",
+                "numCities" : 81
+              }
+            }
+          }
+        """
 
     val res = mapping.compileAndRun(query)
 
@@ -1650,17 +1678,30 @@ trait SqlWorldSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = json"""
-      {
-        "data" : {
-          "language" : {
-            "language" : "Marma",
-            "isOfficial" : false,
-            "percentage" : 0.2
+    val expected = if (isJS)
+      json"""
+        {
+          "data" : {
+            "language" : {
+              "language" : "Marma",
+              "isOfficial" : false,
+              "percentage" : 0.20000000298023224
+            }
           }
         }
-      }
-    """
+      """
+    else
+      json"""
+        {
+          "data" : {
+            "language" : {
+              "language" : "Marma",
+              "isOfficial" : false,
+              "percentage" : 0.2
+            }
+          }
+        }
+      """
 
     val res = mapping.compileAndRun(query)
 
