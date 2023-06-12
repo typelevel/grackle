@@ -10,4 +10,4 @@ services:
       - POSTGRES_USER=test
       - POSTGRES_PASSWORD=test
     volumes:
-      - ./modules/sql/src/test/resources/db/:/docker-entrypoint-initdb.d/
+      - ./modules/sql/shared/src/test/resources/db/:/docker-entrypoint-initdb.d/
