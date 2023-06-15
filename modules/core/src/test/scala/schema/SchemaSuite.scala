@@ -14,45 +14,40 @@ final class SchemaSuite extends CatsEffectSuite {
     val schema =
       Schema(
       """
-         type Query {
+        type Query {
           episodeById(id: String!): Episod
-         }
+        }
 
-         type Episode {
+        type Episode {
           id: String!
         }
-    """
+      """
     )
 
     schema match {
-      case Result.Failure(e) => assert(e.head.message == "Reference to undefined type: Episod")
-      case Result.Warning(a, b)  =>
-        assert(a.head.message == "Reference to undefined type: Episod")
-        assert(b.types.map(_.name) == List("Query", "Episode"))
-      case Result.Success(b) => fail(s"Shouldn't compile: $b")
-      case Result.InternalError(e) => fail(s"Shouldn't error: $e")
+      case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("Reference to undefined type 'Episod'"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
 
   test("schema validation: undefined types: typo in the use of an InputValueDefinition") {
     val schema = Schema(
       """
-         type Query {
+        type Query {
           episodeById(id: CCid!): Episode
-         }
+        }
 
-         scalar CCId
+        scalar CCId
 
-         type Episode {
+        type Episode {
           id: CCId!
         }
-    """
+      """
     )
 
     schema match {
-      case Result.Warning(a, b)  =>
-        assert(a.head.message == "Reference to undefined type: CCid")
-        assert(b.types.map(_.name) == List("Query", "CCId", "Episode"))
+      case Result.Failure(ps)  =>
+        assertEquals(ps.map(_.message), NonEmptyChain("Reference to undefined type 'CCid'"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -60,22 +55,22 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: multiply-defined types") {
     val schema = Schema(
       """
-         type Query {
+        type Query {
           episodeById(id: String!): Episode
-         }
+        }
 
-         type Episode {
-           id: String!
-         }
+        type Episode {
+          id: String!
+        }
 
-         type Episode {
+        type Episode {
           episodeId: String!
         }
-    """
+      """
     )
 
     schema match {
-      case Result.Failure(e) => assert(e.head.message == "Duplicate NamedType found: Episode")
+      case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("Duplicate definition of type 'Episode' found"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -83,14 +78,14 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: multiple deprecated annotations") {
     val schema = Schema(
       """
-         type ExampleType {
+        type ExampleType {
           oldField: String @deprecated @deprecated
         }
-    """
+      """
     )
 
     schema match {
-      case Result.Failure(e) => assert(e.head.message == "Only a single deprecated allowed at a given location")
+      case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("Only a single deprecated allowed at a given location"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -99,14 +94,14 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: deprecated annotation with unsupported argument") {
     val schema = Schema(
       """
-         type ExampleType {
+        type ExampleType {
           oldField: String @deprecated(notareason: "foo bar baz")
         }
-    """
+      """
     )
 
     schema match {
-      case Result.Failure(e) => assert(e.head.message == "deprecated must have a single String 'reason' argument, or no arguments")
+      case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("deprecated must have a single String 'reason' argument, or no arguments"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -114,17 +109,15 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: duplicate enum values") {
     val schema = Schema(
       """
-         enum Direction {
+        enum Direction {
           NORTH
           NORTH
         }
-    """
+      """
     )
 
     schema match {
-      case Result.Warning(a, b)  =>
-        assert(a.head.message == "Duplicate EnumValueDefinition of NORTH for EnumTypeDefinition Direction")
-        assert(b.types.map(_.name) == List("Direction"))
+      case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("Duplicate definition of enum value 'NORTH' for Enum type 'Direction'"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -132,16 +125,15 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: object implementing unspecified interfaces") {
     val schema = Schema(
       """
-         type Human implements Character & Contactable {
-           name: String!
-         }
-    """
+        type Human implements Character & Contactable {
+          name: String!
+        }
+      """
     )
 
     schema match {
-      case Result.Warning(a, b)  =>
-        assert(a.map(_.message) == NonEmptyChain("Interface Character implemented by Human is not defined", "Interface Contactable implemented by Human is not defined"))
-        assert(b.types.map(_.name) == List("Human"))
+      case Result.Failure(ps) =>
+        assertEquals(ps.map(_.message), NonEmptyChain("Reference to undefined type 'Character'", "Reference to undefined type 'Contactable'"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -149,22 +141,21 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: object failing to implement interface fields") {
     val schema = Schema(
       """
-         interface Character {
+        interface Character {
           id: ID!
           name: String!
           email: String!
         }
 
-         type Human implements Character {
-           name: String!
-         }
-    """
+        type Human implements Character {
+          name: String!
+        }
+      """
     )
 
     schema match {
-      case Result.Warning(a, b)  =>
-        assert(a.map(_.message) == NonEmptyChain("Expected field id from interface Character is not implemented by Human", "Expected field email from interface Character is not implemented by Human"))
-        assert(b.types.map(_.name) == List("Character", "Human"))
+      case Result.Failure(ps) =>
+        assertEquals(ps.map(_.message), NonEmptyChain("Field 'id' from interface 'Character' is not defined by implementing type 'Human'", "Field 'email' from interface 'Character' is not defined by implementing type 'Human'"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -172,22 +163,21 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: interface failing to implement interface fields") {
     val schema = Schema(
       """
-         interface Character {
+        interface Character {
           id: ID!
           name: String!
           email: String!
         }
 
-         interface Named implements Character {
-           name: String!
-         }
-    """
+        interface Named implements Character {
+          name: String!
+        }
+      """
     )
 
     schema match {
-      case Result.Warning(a, b)  =>
-        assert(a.map(_.message) == NonEmptyChain("Expected field id from interface Character is not implemented by Named", "Expected field email from interface Character is not implemented by Named"))
-        assert(b.types.map(_.name) == List("Character", "Named"))
+      case Result.Failure(ps) =>
+        assertEquals(ps.map(_.message), NonEmptyChain("Field 'id' from interface 'Character' is not defined by implementing type 'Named'", "Field 'email' from interface 'Character' is not defined by implementing type 'Named'"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -195,67 +185,64 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: object implementing interface field with wrong type") {
     val schema = Schema(
       """
-         interface Character {
+        interface Character {
           name: String!
         }
 
-         type Human implements Character {
-           name: Int!
-         }
-    """
+        type Human implements Character {
+          name: Int!
+        }
+      """
     )
 
     schema match {
-      case Result.Warning(a, b)  =>
-        assert(a.map(_.message) == NonEmptyChain("Field name has type Int!, however implemented interface Character requires it to be of type String!"))
-        assert(b.types.map(_.name) == List("Character", "Human"))
-      case unexpected => fail(s"This was unexpected: $unexpected")
+      case Result.Failure(ps) =>
+        assertEquals(ps.map(_.message), NonEmptyChain("Field 'name' of type 'Human' has type 'Int!', however implemented interface 'Character' requires it to be a subtype of 'String!'"))
+      case unexpected => fail(s"This was unexpected: ${unexpected.getClass.getSimpleName}")
     }
   }
 
   test("schema validation: object implementing interface field with mismatched arguments") {
     val schema = Schema(
       """
-         interface Character {
+        interface Character {
           name(foo: Int!): String!
         }
 
-         type Human implements Character {
-           name(foo: String!): String!
-         }
-    """
+        type Human implements Character {
+          name(foo: String!): String!
+        }
+      """
     )
 
     schema match {
-      case Result.Warning(a, b)  =>
-        assert(a.map(_.message) == NonEmptyChain("Field name of Human has has an argument list that does not match that specified by implemented interface Character"))
-        assert(b.types.map(_.name) == List("Character", "Human"))
-      case unexpected => fail(s"This was unexpected: $unexpected")
+      case Result.Failure(ps) =>
+        assertEquals(ps.map(_.message), NonEmptyChain("Field 'name' of type 'Human' has has an argument list that does not conform to that specified by implemented interface 'Character'"))
+      case unexpected => fail(s"This was unexpected: ${unexpected.getClass.getSimpleName}")
     }
   }
 
   test("schema validation: multiple objects failing to implement interface field") {
     val schema = Schema(
       """
-         interface Character {
+        interface Character {
           id: ID!
           name: String!
         }
 
-         type Human implements Character {
-           name: String!
-         }
+        type Human implements Character {
+          name: String!
+        }
 
-         type Dog implements Character {
-           name: String!
-         }
-    """
+        type Dog implements Character {
+          name: String!
+        }
+      """
     )
 
     schema match {
-      case Result.Warning(a, b)  =>
-        assert(a.map(_.message) == NonEmptyChain("Expected field id from interface Character is not implemented by Human", "Expected field id from interface Character is not implemented by Dog"))
-        assert(b.types.map(_.name) == List("Character", "Human", "Dog"))
+      case Result.Failure(ps) =>
+        assertEquals(ps.map(_.message), NonEmptyChain("Field 'id' from interface 'Character' is not defined by implementing type 'Human'", "Field 'id' from interface 'Character' is not defined by implementing type 'Dog'"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -263,7 +250,7 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: object failing to implement multiple interface fields") {
     val schema = Schema(
       """
-         interface Character {
+        interface Character {
           id: ID!
           name: String!
         }
@@ -272,16 +259,15 @@ final class SchemaSuite extends CatsEffectSuite {
           email: String!
         }
 
-         type Human implements Character & Contactable {
-           name: String!
-         }
-    """
+        type Human implements Character & Contactable {
+          name: String!
+        }
+      """
     )
 
     schema match {
-      case Result.Warning(a, b)  =>
-        assert(a.map(_.message) == NonEmptyChain("Expected field id from interface Character is not implemented by Human", "Expected field email from interface Contactable is not implemented by Human"))
-        assert(b.types.map(_.name) == List("Character", "Contactable", "Human"))
+      case Result.Failure(ps) =>
+        assertEquals(ps.map(_.message), NonEmptyChain("Field 'id' from interface 'Character' is not defined by implementing type 'Human'", "Field 'email' from interface 'Contactable' is not defined by implementing type 'Human'"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -289,31 +275,31 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: object correctly implements transitive interface") {
     val schema = Schema(
       """
-         interface Node {
-            id: ID!
-          }
+        interface Node {
+          id: ID!
+        }
 
-          interface Resource implements Node {
-            id: ID!
-            url: String
-          }
+        interface Resource implements Node {
+          id: ID!
+          url: String
+        }
 
-         type Human implements Resource & Node {
-            id: ID!
-            url: String
-         }
-    """
+        type Human implements Resource & Node {
+          id: ID!
+          url: String
+        }
+      """
     )
 
     schema match {
-      case Result.Success(a) => assert(a.types.map(_.name) == List("Node", "Resource", "Human"))
+      case Result.Success(a) => assertEquals(a.types.map(_.name), List("Node", "Resource", "Human"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
 
   test("schema validation: implements non-interface") {
-    val schema =
-      Schema("""
+    val schema = Schema(
+      """
         type Query {
           foo: Foo
         }
@@ -326,15 +312,13 @@ final class SchemaSuite extends CatsEffectSuite {
           foo: Int
           bar: String
         }
-      """)
+      """
+    )
 
     schema match {
-      case Result.Failure(e) => fail(s"Should warn: ${e.head.message}")
-      case Result.Warning(a, b)  =>
-        assert(a.head.message == "Non-interface type Foo declared as implemented by Bar")
-        assert(b.types.map(_.name) == List("Query", "Foo", "Bar"))
-      case Result.Success(b) => fail(s"Shouldn't compile: $b")
-      case Result.InternalError(e) => fail(s"Shouldn't error: $e")
+      case Result.Failure(ps) =>
+        assertEquals(ps.map(_.message), NonEmptyChain("Non-interface type 'Foo' declared as implemented by type 'Bar'"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
 
@@ -342,7 +326,6 @@ final class SchemaSuite extends CatsEffectSuite {
 
     val schema =
       schema"""
-
         schema {
           query: MyQuery
           mutation: MyMutation
@@ -360,7 +343,6 @@ final class SchemaSuite extends CatsEffectSuite {
         type MySubscription {
           watchFoo: Int
         }
-
       """
 
     assert(schema.queryType                 =:= schema.ref("MyQuery"))
@@ -373,7 +355,6 @@ final class SchemaSuite extends CatsEffectSuite {
 
     val schema =
       schema"""
-
         schema {
           query: MyQuery
           mutation: MyMutation
@@ -386,12 +367,11 @@ final class SchemaSuite extends CatsEffectSuite {
         type MyMutation {
           setFoo(n: Int): Int
         }
-
       """
 
     assert(schema.queryType             =:= schema.ref("MyQuery"))
     assert(schema.mutationType.exists(_ =:= schema.ref("MyMutation")))
-    assert(schema.subscriptionType       == None)
+    assertEquals(schema.subscriptionType, None)
 
   }
 
@@ -399,7 +379,6 @@ final class SchemaSuite extends CatsEffectSuite {
 
     val schema =
       schema"""
-
         type Query {
           foo: Int
         }
@@ -411,16 +390,66 @@ final class SchemaSuite extends CatsEffectSuite {
         type Subscription {
           watchFoo: Int
         }
-
       """
 
     assert(schema.queryType                 =:= schema.ref("Query"))
     assert(schema.mutationType.exists(_     =:= schema.ref("Mutation")))
     assert(schema.subscriptionType.exists(_ =:= schema.ref("Subscription")))
-
   }
 
   test("no query type (crashes)") {
     intercept[NoSuchElementException](schema"scalar Foo".queryType)
+  }
+
+  test("schema validation: fields implementing interfaces can be subtypes") {
+    val schema = Schema(
+      """
+        type Query {
+          connections: [Connection!]!
+        }
+        interface Edge {
+          node: String
+        }
+        interface Connection {
+          edges: [Edge!]!
+        }
+        type MyEdge implements Edge {
+          node: String
+        }
+        type MyConnection implements Connection {
+          edges: [MyEdge!]!
+        }
+      """
+    )
+
+    schema match {
+      case Result.Success(s) => assertEquals(s.types.map(_.name), List("Query", "Edge", "Connection", "MyEdge", "MyConnection"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
+  test("schema validation: fields with commonly misnamed types") {
+    val schema = Schema(
+      """
+        type Query {
+          country(id: Long!): Country
+          countries(continent: String): [Country]
+        }
+
+        type Country {
+          id: Long!
+          name: String!
+          continent: String!
+          bestFood: String
+          hasEiffelTower: Boolean!
+        }
+      """
+    )
+
+    schema match {
+      case Result.Failure(ps)  =>
+        assertEquals(ps.map(_.message), NonEmptyChain("Reference to undefined type 'Long'", "Reference to undefined type 'Long'"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
   }
 }

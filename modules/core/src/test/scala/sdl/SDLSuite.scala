@@ -6,6 +6,7 @@ package sdl
 import munit.CatsEffectSuite
 
 import edu.gemini.grackle.{ Ast, GraphQLParser, SchemaParser }
+import edu.gemini.grackle.syntax._
 import Ast._, OperationType._, Type.{ List => _, _ }
 
 final class SDLSuite extends CatsEffectSuite {
@@ -30,9 +31,9 @@ final class SDLSuite extends CatsEffectSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseAll(schema).toOption
+    val res = GraphQLParser.Document.parseAll(schema)
 
-    assertEquals(res, Some(expected))
+    assertEquals(res, Right(expected))
   }
 
   test("parse scalar type definition") {
@@ -50,9 +51,9 @@ final class SDLSuite extends CatsEffectSuite {
         ScalarTypeDefinition(Name("Time"), Some("A scalar type"), List(Directive(Name("deprecated"), Nil)))
       )
 
-    val res = GraphQLParser.Document.parseAll(schema).toOption
+    val res = GraphQLParser.Document.parseAll(schema)
 
-    assertEquals(res, Some(expected))
+    assertEquals(res, Right(expected))
   }
 
   test("parse object type definition") {
@@ -82,9 +83,9 @@ final class SDLSuite extends CatsEffectSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseAll(schema).toOption
+    val res = GraphQLParser.Document.parseAll(schema)
 
-    assertEquals(res, Some(expected))
+    assertEquals(res, Right(expected))
   }
 
   test("parse interface type definition") {
@@ -114,9 +115,9 @@ final class SDLSuite extends CatsEffectSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseAll(schema).toOption
+    val res = GraphQLParser.Document.parseAll(schema)
 
-    assertEquals(res, Some(expected))
+    assertEquals(res, Right(expected))
   }
 
   test("parse union type definition") {
@@ -135,9 +136,9 @@ final class SDLSuite extends CatsEffectSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseAll(schema).toOption
+    val res = GraphQLParser.Document.parseAll(schema)
 
-    assertEquals(res, Some(expected))
+    assertEquals(res, Right(expected))
   }
 
   test("parse enum type definition") {
@@ -163,9 +164,9 @@ final class SDLSuite extends CatsEffectSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseAll(schema).toOption
+    val res = GraphQLParser.Document.parseAll(schema)
 
-    assertEquals(res, Some(expected))
+    assertEquals(res, Right(expected))
   }
 
   test("parse input object type definition") {
@@ -188,9 +189,9 @@ final class SDLSuite extends CatsEffectSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseAll(schema).toOption
+    val res = GraphQLParser.Document.parseAll(schema)
 
-    assertEquals(res, Some(expected))
+    assertEquals(res, Right(expected))
   }
 
   test("parse directive definition") {
@@ -219,9 +220,9 @@ final class SDLSuite extends CatsEffectSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseAll(schema).toOption
+    val res = GraphQLParser.Document.parseAll(schema)
 
-    assertEquals(res, Some(expected))
+    assertEquals(res, Right(expected))
   }
 
   test("deserialize schema (1)") {
@@ -246,7 +247,7 @@ final class SDLSuite extends CatsEffectSuite {
     val res = SchemaParser.parseText(schema)
     val ser = res.map(_.toString)
 
-    assertEquals(ser.toOption.get, schema)
+    assertEquals(ser, schema.success)
   }
 
   test("deserialize schema (2)") {
@@ -273,6 +274,7 @@ final class SDLSuite extends CatsEffectSuite {
        |type Human implements Character {
        |  id: String!
        |  name: String
+       |  fullname: String @deprecated(reason: "use 'name' instead")
        |  friends: [Character!]
        |  appearsIn: [Episode!]
        |  homePlanet: String
@@ -280,6 +282,7 @@ final class SDLSuite extends CatsEffectSuite {
        |type Droid implements Character {
        |  id: String!
        |  name: String
+       |  fullname: String @deprecated(reason: "use 'name' instead")
        |  friends: [Character!]
        |  appearsIn: [Episode!]
        |  primaryFunction: String
@@ -288,7 +291,7 @@ final class SDLSuite extends CatsEffectSuite {
     val res = SchemaParser.parseText(schema)
     val ser = res.map(_.toString)
 
-    assertEquals(ser.toOption.get, schema)
+    assertEquals(ser, schema.success)
   }
 
   test("deserialize schema (3)") {
@@ -311,6 +314,6 @@ final class SDLSuite extends CatsEffectSuite {
     val res = SchemaParser.parseText(schema)
     val ser = res.map(_.toString)
 
-    assertEquals(ser.toOption.get, schema)
+    assertEquals(ser, schema.success)
   }
 }
