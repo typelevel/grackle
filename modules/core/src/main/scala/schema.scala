@@ -3,14 +3,13 @@
 
 package edu.gemini.grackle
 
-import cats.data.NonEmptyChain
 import cats.parse.Parser
 import cats.implicits._
 import io.circe.Json
 import org.tpolecat.sourcepos.SourcePos
 
 import syntax._
-import Ast.{EnumTypeDefinition, FieldDefinition, InterfaceTypeDefinition, ObjectTypeDefinition, TypeDefinition}
+import Ast.{InterfaceTypeDefinition, ObjectTypeDefinition, TypeDefinition, UnionTypeDefinition}
 import ScalarType._
 import Value._
 
@@ -81,7 +80,7 @@ trait Schema {
    * Yields the type, if defined, `None` otherwise.
    */
   def definition(name: String): Option[NamedType] =
-    typeIndex.get(name).orElse(ScalarType(name)).map(_.dealias)
+    typeIndex.get(name).orElse(ScalarType.builtIn(name)).map(_.dealias)
 
   private lazy val typeIndex = types.map(tpe => (tpe.name, tpe)).toMap
 
@@ -145,7 +144,11 @@ sealed trait Type extends Product {
     (this.dealias, other.dealias) match {
       case (tp1, tp2) if tp1 == tp2 => true
       case (tp1, UnionType(_, _, members)) => members.exists(tp1 <:< _.dealias)
-      case (ObjectType(_, _, _, interfaces), tp2) => interfaces.exists(_.dealias == tp2)
+      case (ObjectType(_, _, _, interfaces), tp2) => interfaces.exists(_ <:< tp2)
+      case (InterfaceType(_, _, _, interfaces), tp2) => interfaces.exists(_ <:< tp2)
+      case (NullableType(tp1), NullableType(tp2)) => tp1 <:< tp2
+      case (tp1, NullableType(tp2)) => tp1 <:< tp2
+      case (ListType(tp1), ListType(tp2)) => tp1 <:< tp2
       case _ => false
     }
 
@@ -476,7 +479,7 @@ case class ScalarType(
 }
 
 object ScalarType {
-  def apply(tpnme: String): Option[ScalarType] = tpnme match {
+  def builtIn(tpnme: String): Option[ScalarType] = tpnme match {
     case "Int" => Some(IntType)
     case "Float" => Some(FloatType)
     case "String" => Some(StringType)
@@ -550,6 +553,7 @@ object ScalarType {
  */
 sealed trait TypeWithFields extends NamedType {
   def fields: List[Field]
+  def interfaces: List[NamedType]
 
   def fieldInfo(name: String): Option[Field] = fields.find(_.name == name)
 }
@@ -877,166 +881,6 @@ object SchemaParser {
   }
 
   def parseDocument(doc: Document)(implicit sourcePos: SourcePos): Result[Schema] = {
-
-    // explicit Schema type, if any
-    def mkSchemaType(schema: Schema): Result[Option[NamedType]] = {
-
-      def mkRootOperationType(rootTpe: RootOperationTypeDefinition): Result[(OperationType, Type)] = {
-        val RootOperationTypeDefinition(optype, tpe) = rootTpe
-        mkType(schema)(tpe).flatMap {
-          case NullableType(nt: NamedType) => (optype, nt).success
-          case other => Result.failure(s"Root operation types must be named types, found $other")
-        }
-      }
-
-      def build(query: Type, mutation: Option[Type], subscription: Option[Type]): NamedType = {
-        def mkRootDef(fieldName: String)(tpe: Type): Field =
-          Field(fieldName, None, Nil, tpe, false, None)
-
-        ObjectType(
-          name = "Schema",
-          description = None,
-          fields =
-            mkRootDef("query")(query) ::
-              List(
-                mutation.map(mkRootDef("mutation")),
-                subscription.map(mkRootDef("subscription"))
-              ).flatten,
-          interfaces = Nil
-        )
-      }
-
-      def defaultQueryType = schema.ref("Query")
-
-      val defns = doc.collect { case schema: SchemaDefinition => schema }
-      defns match {
-        case Nil => None.success
-        case SchemaDefinition(rootTpes, _) :: Nil =>
-          rootTpes.traverse(mkRootOperationType).map { ops0 =>
-            val ops = ops0.toMap
-            Some(build(ops.get(Query).getOrElse(defaultQueryType), ops.get(Mutation), ops.get(Subscription)))
-          }
-
-        case _ => Result.failure("At most one schema definition permitted")
-      }
-    }
-
-    def mkTypeDefs(schema: Schema): Result[List[NamedType]] = {
-      val defns: List[TypeDefinition] = doc.collect { case tpe: TypeDefinition => tpe }
-      val namedTypeResults = defns.traverse(mkTypeDef(schema))
-
-      SchemaValidator.validateSchema(namedTypeResults, defns)
-    }
-
-    def mkTypeDef(schema: Schema)(td: TypeDefinition): Result[NamedType] = td match {
-      case ScalarTypeDefinition(Name("Int"), _, _) => IntType.success
-      case ScalarTypeDefinition(Name("Float"), _, _) => FloatType.success
-      case ScalarTypeDefinition(Name("String"), _, _) => StringType.success
-      case ScalarTypeDefinition(Name("Boolean"), _, _) => BooleanType.success
-      case ScalarTypeDefinition(Name("ID"), _, _) => IDType.success
-      case ScalarTypeDefinition(Name(nme), desc, _) => ScalarType(nme, desc).success
-      case ObjectTypeDefinition(Name(nme), desc, fields0, ifs0, _) =>
-        if (fields0.isEmpty) Result.failure(s"object type $nme must define at least one field")
-        else
-          for {
-            fields <- fields0.traverse(mkField(schema))
-            ifs = ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
-          } yield ObjectType(nme, desc, fields, ifs)
-      case InterfaceTypeDefinition(Name(nme), desc, fields0, ifs0, _) =>
-        if (fields0.isEmpty) Result.failure(s"interface type $nme must define at least one field")
-        else
-          for {
-            fields <- fields0.traverse(mkField(schema))
-            ifs = ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
-          } yield InterfaceType(nme, desc, fields, ifs)
-      case UnionTypeDefinition(Name(nme), desc, _, members0) =>
-        if (members0.isEmpty) Result.failure(s"union type $nme must define at least one member")
-        else {
-          val members = members0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
-          UnionType(nme, desc, members).success
-        }
-      case EnumTypeDefinition(Name(nme), desc, _, values0) =>
-        if (values0.isEmpty) Result.failure(s"enum type $nme must define at least one enum value")
-        else
-          for {
-            values <- values0.traverse(mkEnumValue)
-          } yield EnumType(nme, desc, values)
-      case InputObjectTypeDefinition(Name(nme), desc, fields0, _) =>
-        if (fields0.isEmpty) Result.failure(s"input object type $nme must define at least one input field")
-        else
-          for {
-            fields <- fields0.traverse(mkInputValue(schema))
-          } yield InputObjectType(nme, desc, fields)
-    }
-
-    def mkField(schema: Schema)(f: FieldDefinition): Result[Field] = {
-      val FieldDefinition(Name(nme), desc, args0, tpe0, dirs) = f
-      for {
-        args <- args0.traverse(mkInputValue(schema))
-        tpe <- mkType(schema)(tpe0)
-        deprecation <- parseDeprecated(dirs)
-        (isDeprecated, reason) = deprecation
-      } yield Field(nme, desc, args, tpe, isDeprecated, reason)
-    }
-
-    def mkType(schema: Schema)(tpe: Ast.Type): Result[Type] = {
-      def loop(tpe: Ast.Type, nullable: Boolean): Result[Type] = {
-        def wrap(tpe: Type): Type = if (nullable) NullableType(tpe) else tpe
-
-        tpe match {
-          case Ast.Type.List(tpe) => loop(tpe, true).map(tpe => wrap(ListType(tpe)))
-          case Ast.Type.NonNull(Left(tpe)) => loop(tpe, false)
-          case Ast.Type.NonNull(Right(tpe)) => loop(tpe, false)
-          case Ast.Type.Named(Name(nme)) => wrap(ScalarType(nme).getOrElse(schema.ref(nme))).success
-        }
-      }
-
-      loop(tpe, true)
-    }
-
-    def mkInputValue(schema: Schema)(f: InputValueDefinition): Result[InputValue] = {
-      val InputValueDefinition(Name(nme), desc, tpe0, default0, _) = f
-      for {
-        tpe <- mkType(schema)(tpe0)
-        dflt <- default0.traverse(parseValue)
-      } yield InputValue(nme, desc, tpe, dflt)
-    }
-
-    def mkEnumValue(e: EnumValueDefinition): Result[EnumValue] = {
-      val EnumValueDefinition(Name(nme), desc, dirs) = e
-      for {
-        deprecation <- parseDeprecated(dirs)
-        (isDeprecated, reason) = deprecation
-      } yield EnumValue(nme, desc, isDeprecated, reason)
-    }
-
-    def parseDeprecated(directives: List[DefinedDirective]): Result[(Boolean, Option[String])] =
-      directives.collect { case dir@DefinedDirective(Name("deprecated"), _) => dir } match {
-        case Nil => (false, None).success
-        case DefinedDirective(_, List((Name("reason"), Ast.Value.StringValue(reason)))) :: Nil => (true, Some(reason)).success
-        case DefinedDirective(_, Nil) :: Nil => (true, Some("No longer supported")).success
-        case DefinedDirective(_, _) :: Nil => Result.failure(s"deprecated must have a single String 'reason' argument, or no arguments")
-        case _ => Result.failure(s"Only a single deprecated allowed at a given location")
-      }
-
-    // Share with Query parser
-    def parseValue(value: Ast.Value): Result[Value] = {
-      value match {
-        case Ast.Value.IntValue(i) => IntValue(i).success
-        case Ast.Value.FloatValue(d) => FloatValue(d).success
-        case Ast.Value.StringValue(s) => StringValue(s).success
-        case Ast.Value.BooleanValue(b) => BooleanValue(b).success
-        case Ast.Value.EnumValue(e) => UntypedEnumValue(e.value).success
-        case Ast.Value.Variable(v) => UntypedVariableValue(v.value).success
-        case Ast.Value.NullValue => NullValue.success
-        case Ast.Value.ListValue(vs) => vs.traverse(parseValue).map(ListValue.apply)
-        case Ast.Value.ObjectValue(fs) =>
-          fs.traverse { case (name, value) =>
-            parseValue(value).map(v => (name.value, v))
-          }.map(ObjectValue.apply)
-      }
-    }
-
     object schema extends Schema {
       var types: List[NamedType] = Nil
       var schemaType1: Option[NamedType] = null
@@ -1046,135 +890,280 @@ object SchemaParser {
 
       var directives: List[Directive] = Nil
 
-      def complete(types0: List[NamedType], schemaType0: Option[NamedType], directives0: List[Directive]): this.type = {
+      def complete(types0: List[NamedType], schemaType0: Option[NamedType], directives0: List[Directive]): Unit = {
         types = types0
         schemaType1 = schemaType0
         directives = directives0
-        this
       }
     }
 
+    val defns: List[TypeDefinition] = doc.collect { case tpe: TypeDefinition => tpe }
     for {
-      types <- mkTypeDefs(schema)
-      schemaType <- mkSchemaType(schema)
-    } yield schema.complete(types, schemaType, Nil)
+      types      <- mkTypeDefs(schema, defns)
+      schemaType <- mkSchemaType(schema, doc)
+      _          =  schema.complete(types, schemaType, Nil)
+      _          <- SchemaValidator.validateSchema(schema, defns)
+    } yield schema
+  }
+
+  // explicit Schema type, if any
+  def mkSchemaType(schema: Schema, doc: Document): Result[Option[NamedType]] = {
+    def mkRootOperationType(rootTpe: RootOperationTypeDefinition): Result[(OperationType, Type)] = {
+      val RootOperationTypeDefinition(optype, tpe) = rootTpe
+      mkType(schema)(tpe).flatMap {
+        case NullableType(nt: NamedType) => (optype, nt).success
+        case other => Result.failure(s"Root operation types must be named types, found $other")
+      }
+    }
+
+    def build(query: Type, mutation: Option[Type], subscription: Option[Type]): NamedType = {
+      def mkRootDef(fieldName: String)(tpe: Type): Field =
+        Field(fieldName, None, Nil, tpe, false, None)
+
+      ObjectType(
+        name = "Schema",
+        description = None,
+        fields =
+          mkRootDef("query")(query) ::
+            List(
+              mutation.map(mkRootDef("mutation")),
+              subscription.map(mkRootDef("subscription"))
+            ).flatten,
+        interfaces = Nil
+      )
+    }
+
+    def defaultQueryType = schema.ref("Query")
+
+    val defns = doc.collect { case schema: SchemaDefinition => schema }
+    defns match {
+      case Nil => None.success
+      case SchemaDefinition(rootTpes, _) :: Nil =>
+        rootTpes.traverse(mkRootOperationType).map { ops0 =>
+          val ops = ops0.toMap
+          Some(build(ops.get(Query).getOrElse(defaultQueryType), ops.get(Mutation), ops.get(Subscription)))
+        }
+
+      case _ => Result.failure("At most one schema definition permitted")
+    }
+  }
+
+  def mkTypeDefs(schema: Schema, defns: List[TypeDefinition]): Result[List[NamedType]] =
+    defns.traverse(mkTypeDef(schema))
+
+  def mkTypeDef(schema: Schema)(td: TypeDefinition): Result[NamedType] = td match {
+    case ScalarTypeDefinition(Name("Int"), _, _) => IntType.success
+    case ScalarTypeDefinition(Name("Float"), _, _) => FloatType.success
+    case ScalarTypeDefinition(Name("String"), _, _) => StringType.success
+    case ScalarTypeDefinition(Name("Boolean"), _, _) => BooleanType.success
+    case ScalarTypeDefinition(Name("ID"), _, _) => IDType.success
+    case ScalarTypeDefinition(Name(nme), desc, _) => ScalarType(nme, desc).success
+    case ObjectTypeDefinition(Name(nme), desc, fields0, ifs0, _) =>
+      if (fields0.isEmpty) Result.failure(s"object type $nme must define at least one field")
+      else
+        for {
+          fields <- fields0.traverse(mkField(schema))
+          ifs = ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+        } yield ObjectType(nme, desc, fields, ifs)
+    case InterfaceTypeDefinition(Name(nme), desc, fields0, ifs0, _) =>
+      if (fields0.isEmpty) Result.failure(s"interface type $nme must define at least one field")
+      else
+        for {
+          fields <- fields0.traverse(mkField(schema))
+          ifs = ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+        } yield InterfaceType(nme, desc, fields, ifs)
+    case UnionTypeDefinition(Name(nme), desc, _, members0) =>
+      if (members0.isEmpty) Result.failure(s"union type $nme must define at least one member")
+      else {
+        val members = members0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+        UnionType(nme, desc, members).success
+      }
+    case EnumTypeDefinition(Name(nme), desc, _, values0) =>
+      if (values0.isEmpty) Result.failure(s"enum type $nme must define at least one enum value")
+      else
+        for {
+          values <- values0.traverse(mkEnumValue)
+        } yield EnumType(nme, desc, values)
+    case InputObjectTypeDefinition(Name(nme), desc, fields0, _) =>
+      if (fields0.isEmpty) Result.failure(s"input object type $nme must define at least one input field")
+      else
+        for {
+          fields <- fields0.traverse(mkInputValue(schema))
+        } yield InputObjectType(nme, desc, fields)
+  }
+
+  def mkField(schema: Schema)(f: FieldDefinition): Result[Field] = {
+    val FieldDefinition(Name(nme), desc, args0, tpe0, dirs) = f
+    for {
+      args <- args0.traverse(mkInputValue(schema))
+      tpe <- mkType(schema)(tpe0)
+      deprecation <- parseDeprecated(dirs)
+      (isDeprecated, reason) = deprecation
+    } yield Field(nme, desc, args, tpe, isDeprecated, reason)
+  }
+
+  def mkType(schema: Schema)(tpe: Ast.Type): Result[Type] = {
+    def loop(tpe: Ast.Type, nullable: Boolean): Result[Type] = {
+      def wrap(tpe: Type): Type = if (nullable) NullableType(tpe) else tpe
+
+      tpe match {
+        case Ast.Type.List(tpe) => loop(tpe, true).map(tpe => wrap(ListType(tpe)))
+        case Ast.Type.NonNull(Left(tpe)) => loop(tpe, false)
+        case Ast.Type.NonNull(Right(tpe)) => loop(tpe, false)
+        case Ast.Type.Named(Name(nme)) => wrap(ScalarType.builtIn(nme).getOrElse(schema.ref(nme))).success
+      }
+    }
+
+    loop(tpe, true)
+  }
+
+  def mkInputValue(schema: Schema)(f: InputValueDefinition): Result[InputValue] = {
+    val InputValueDefinition(Name(nme), desc, tpe0, default0, _) = f
+    for {
+      tpe <- mkType(schema)(tpe0)
+      dflt <- default0.traverse(parseValue)
+    } yield InputValue(nme, desc, tpe, dflt)
+  }
+
+  def mkEnumValue(e: EnumValueDefinition): Result[EnumValue] = {
+    val EnumValueDefinition(Name(nme), desc, dirs) = e
+    for {
+      deprecation <- parseDeprecated(dirs)
+      (isDeprecated, reason) = deprecation
+    } yield EnumValue(nme, desc, isDeprecated, reason)
+  }
+
+  def parseDeprecated(directives: List[DefinedDirective]): Result[(Boolean, Option[String])] =
+    directives.collect { case dir@DefinedDirective(Name("deprecated"), _) => dir } match {
+      case Nil => (false, None).success
+      case DefinedDirective(_, List((Name("reason"), Ast.Value.StringValue(reason)))) :: Nil => (true, Some(reason)).success
+      case DefinedDirective(_, Nil) :: Nil => (true, Some("No longer supported")).success
+      case DefinedDirective(_, _) :: Nil => Result.failure(s"deprecated must have a single String 'reason' argument, or no arguments")
+      case _ => Result.failure(s"Only a single deprecated allowed at a given location")
+    }
+
+  // Share with Query parser
+  def parseValue(value: Ast.Value): Result[Value] = {
+    value match {
+      case Ast.Value.IntValue(i) => IntValue(i).success
+      case Ast.Value.FloatValue(d) => FloatValue(d).success
+      case Ast.Value.StringValue(s) => StringValue(s).success
+      case Ast.Value.BooleanValue(b) => BooleanValue(b).success
+      case Ast.Value.EnumValue(e) => UntypedEnumValue(e.value).success
+      case Ast.Value.Variable(v) => UntypedVariableValue(v.value).success
+      case Ast.Value.NullValue => NullValue.success
+      case Ast.Value.ListValue(vs) => vs.traverse(parseValue).map(ListValue.apply)
+      case Ast.Value.ObjectValue(fs) =>
+        fs.traverse { case (name, value) =>
+          parseValue(value).map(v => (name.value, v))
+        }.map(ObjectValue.apply)
+    }
   }
 }
 
 object SchemaValidator {
+  import SchemaRenderer.renderType
 
-  def validateSchema(namedTypes: Result[List[NamedType]], defns: List[TypeDefinition]): Result[List[NamedType]] = {
-    val undefinedResults = checkForUndefined(checkForDuplicates(namedTypes), defns)
+  def validateSchema(schema: Schema, defns: List[TypeDefinition]): Result[Unit] =
+    validateReferences(schema, defns) *>
+    validateUniqueDefns(schema) *>
+    validateUniqueEnumValues(schema) *>
+    validateImplementations(schema)
 
-    val errors = NonEmptyChain.fromSeq(checkForEnumValueDuplicates(defns) ++ validateImpls(defns))
-    errors.map(undefinedResults.withProblems).getOrElse(undefinedResults)
-  }
+  def validateReferences(schema: Schema, defns: List[TypeDefinition]): Result[Unit] = {
+    def underlyingName(tpe: Ast.Type): String =
+      tpe match {
+        case Ast.Type.List(tpe) => underlyingName(tpe)
+        case Ast.Type.NonNull(Left(tpe)) => underlyingName(tpe)
+        case Ast.Type.NonNull(Right(tpe)) => underlyingName(tpe)
+        case Ast.Type.Named(Ast.Name(nme)) => nme
+      }
 
-  def validateImpls(definitions: List[TypeDefinition]): List[Problem] = {
-    val interfaces = definitions.collect {
-      case a: InterfaceTypeDefinition => a
-    }
-
-    val objects = definitions.collect {
-      case a: ObjectTypeDefinition => a
-    }
-
-    def validateImplementor(name: Ast.Name, implements: List[Ast.Type.Named], fields: List[Ast.FieldDefinition]): List[Problem] = {
-      implements.flatMap { ifaceName =>
-        interfaces.find(_.name == ifaceName.astName) match {
-          case Some(interface) => checkImplementation(name, fields, interface)
-          case None =>
-            definitions.find(_.name == ifaceName.astName) match {
-              case None => List(Problem(s"Interface ${ifaceName.astName.value} implemented by ${name.value} is not defined"))
-              case _    => List(Problem(s"Non-interface type ${ifaceName.astName.value} declared as implemented by ${name.value}"))
-            }
-        }
+    def referencedTypes(defns: List[TypeDefinition]): List[String] = {
+      defns.flatMap {
+        case ObjectTypeDefinition(_, _, fields, interfaces, _) =>
+          (fields.flatMap(_.args.map(_.tpe)) ++ fields.map(_.tpe) ++ interfaces).map(underlyingName)
+        case InterfaceTypeDefinition(_, _, fields, interfaces, _) =>
+          (fields.flatMap(_.args.map(_.tpe)) ++ fields.map(_.tpe) ++ interfaces).map(underlyingName)
+        case u: UnionTypeDefinition =>
+          u.members.map(underlyingName)
+        case _ => Nil
       }
     }
 
-    val interfaceErrors = interfaces.flatMap { iface =>
-      validateImplementor(iface.name, iface.interfaces, iface.fields)
-    }
-
-    val objectErrors = objects.flatMap { obj =>
-      validateImplementor(obj.name, obj.interfaces, obj.fields)
-    }
-
-    interfaceErrors ++ objectErrors
-  }
-
-  def checkImplementation(name: Ast.Name, implementorFields: List[Ast.FieldDefinition], interface: InterfaceTypeDefinition): List[Problem] = {
-    interface.fields.flatMap { ifaceField =>
-      implementorFields.find(_.name == ifaceField.name).map { matching =>
-        if (ifaceField.tpe != matching.tpe) {
-          Some(Problem(s"Field ${matching.name.value} has type ${matching.tpe.name}, however implemented interface ${interface.name.value} requires it to be of type ${ifaceField.tpe.name}"))
-        } else if (!argsMatch(matching, ifaceField)) {
-          Some(Problem(s"Field ${matching.name.value} of ${name.value} has has an argument list that does not match that specified by implemented interface ${interface.name.value}"))
-        } else {
-          None
-        }
-      }.getOrElse(Some(Problem(s"Expected field ${ifaceField.name.value} from interface ${interface.name.value} is not implemented by ${name.value}")))
-    }
-  }
-
-  def argsMatch(fieldOne: FieldDefinition, fieldTwo: FieldDefinition): Boolean = fieldOne.args.corresponds(fieldTwo.args) { case (arg, implArg) =>
-    arg.name == implArg.name && arg.tpe == implArg.tpe
-  }
-
-  def checkForEnumValueDuplicates(definitions: List[TypeDefinition]): List[Problem] =
-  {
-    val enums = definitions.collect[EnumTypeDefinition] {
-      case a: EnumTypeDefinition => a
-    }
-
-    enums.flatMap { `enum` =>
-      val duplicateValues = `enum`.values.groupBy(identity).collect { case (x, xs) if xs.length > 1 => x }.toList
-      duplicateValues.map(dupe => Problem(s"Duplicate EnumValueDefinition of ${dupe.name.value} for EnumTypeDefinition ${`enum`.name.value}"))
-    }
-  }
-
-  type NamedTypeWithIndex = (NamedType, Int)
-
-  implicit object NamedTypeOrdering extends Ordering[NamedTypeWithIndex] {
-    def compare(a: NamedTypeWithIndex, b: NamedTypeWithIndex): Int = a._2 compare b._2
-  }
-
-  def dedupedOrError(dupes: Map[String, List[(NamedType, Int)]]): Result[List[NamedTypeWithIndex]] = dupes.map {
-    case (name, tpe) if tpe.length > 1 => Result.failure[NamedTypeWithIndex](s"Duplicate NamedType found: $name")
-    case (name, typeAndIndex) => typeAndIndex.headOption.map(_.success).getOrElse(Result.failure(s"No NamedType found for $name, something has gone wrong."))
-  }.toList.sequence
-
-  def checkForDuplicates(namedTypes: Result[List[NamedType]]): Result[List[NamedType]] =
-    for {
-      types <- namedTypes
-      map = types.zipWithIndex.groupBy(_._1.name)
-      unordered <- dedupedOrError(map)
-      res = unordered.sorted.map(_._1)
-    } yield res
-
-  def checkReferencedTypesAgainstDefinedTypes(namedTypes: Result[List[NamedType]], defns: List[TypeDefinition]): Result[List[NamedType]] = {
     val defaultTypes = List(StringType, IntType, FloatType, BooleanType, IDType)
+    val typeNames = (defaultTypes ++ schema.types).map(_.name).toSet
 
-    val lefts = namedTypes.flatMap { t =>
-      val typeNames = (t ::: defaultTypes).map(_.name)
-
+    val problems =
       referencedTypes(defns).collect {
-        case tpe if !typeNames.contains(tpe) => Result.failure[NamedType](s"Reference to undefined type: $tpe")
-      }.sequence
-    }
-    namedTypes combine lefts
+        case tpe if !typeNames.contains(tpe) => Problem(s"Reference to undefined type '$tpe'")
+      }
+
+    Result.fromProblems(problems)
   }
 
-  def referencedTypes(defns: List[TypeDefinition]): List[String] = defns.collect {
-    case o: ObjectTypeDefinition =>
-      (o.fields.flatMap(_.args.map(_.tpe)) ::: o.fields.map(_.tpe))
-        .map(_.name.replaceAll("[\\W]", ""))
-  }.flatten
+  def validateUniqueDefns(schema: Schema): Result[Unit] = {
+    val dupes = schema.types.groupBy(_.name).collect {
+      case (nme, tpes) if tpes.length > 1 => nme
+    }.toSet
 
-  def checkForUndefined(namedTypes: Result[List[NamedType]], defns: List[TypeDefinition]): Result[List[NamedType]] =
-    for {
-      res <- checkReferencedTypesAgainstDefinedTypes(namedTypes, defns)
-    } yield res
+    val problems = schema.types.map(_.name).distinct.collect {
+      case nme if dupes.contains(nme) => Problem(s"Duplicate definition of type '$nme' found")
+    }
+
+    Result.fromProblems(problems)
+  }
+
+  def validateUniqueEnumValues(schema: Schema): Result[Unit] = {
+    val enums = schema.types.collect {
+      case e: EnumType => e
+    }
+
+    val problems =
+      enums.flatMap { e =>
+        val duplicateValues = e.enumValues.groupBy(_.name).collect { case (nme, vs) if vs.length > 1 => nme }.toList
+        duplicateValues.map(dupe => Problem(s"Duplicate definition of enum value '$dupe' for Enum type '${e.name}'"))
+      }
+
+    Result.fromProblems(problems)
+  }
+
+  def validateImplementations(schema: Schema): Result[Unit] = {
+
+    def validateImplementor(impl: TypeWithFields): List[Problem] = {
+      import impl.{name, fields, interfaces}
+
+      interfaces.flatMap(_.dealias match {
+        case iface: InterfaceType =>
+          iface.fields.flatMap { ifField =>
+            fields.find(_.name == ifField.name).map { implField =>
+              val ifTpe = ifField.tpe
+              val implTpe = implField.tpe
+
+              val rp =
+                if (implTpe <:< ifTpe) Nil
+                else List(Problem(s"Field '${implField.name}' of type '$name' has type '${renderType(implTpe)}', however implemented interface '${iface.name}' requires it to be a subtype of '${renderType(ifTpe)}'"))
+
+              val argsMatch =
+                implField.args.corresponds(ifField.args) { case (arg0, arg1) =>
+                  arg0.name == arg1.name && arg0.tpe == arg1.tpe
+                }
+
+              val ap =
+                if (argsMatch) Nil
+                else List(Problem(s"Field '${implField.name}' of type '$name' has has an argument list that does not conform to that specified by implemented interface '${iface.name}'"))
+
+              rp ++ ap
+            }.getOrElse(List(Problem(s"Field '${ifField.name}' from interface '${iface.name}' is not defined by implementing type '$name'")))
+          }
+        case other =>
+          List(Problem(s"Non-interface type '${other.name}' declared as implemented by type '$name'"))
+      })
+    }
+
+    val impls = schema.types.collect { case impl: TypeWithFields => impl }
+    Result.fromProblems(impls.flatMap(validateImplementor))
+  }
 }
 
 object SchemaRenderer {

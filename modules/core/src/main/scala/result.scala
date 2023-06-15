@@ -194,6 +194,12 @@ object Result extends ResultInstances {
   def fromEither[A](ea: Either[String, A])(implicit ev: DummyImplicit): Result[A] =
     fromEither(ea.leftMap(Problem(_)))
 
+  def fromProblems(problems: Seq[Problem]): Result[Unit] =
+    NonEmptyChain.fromSeq(problems).map(Result.Failure(_)).getOrElse(Result.unit)
+
+  def fromProblems(problems: Chain[Problem]): Result[Unit] =
+    NonEmptyChain.fromChain(problems).map(Result.Failure(_)).getOrElse(Result.unit)
+
   def catchNonFatal[T](body: => T): Result[T] =
     try {
       success(body)
