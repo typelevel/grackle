@@ -62,15 +62,15 @@ trait DoobieMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] {
           }
       }
       def const(s: String): Fragment = DoobieFragment.const(s)
-      def and(fs: Fragment*): Fragment = fragments.and(fs: _*)
-      def andOpt(fs: Option[Fragment]*): Fragment = fragments.andOpt(fs: _*)
-      def orOpt(fs: Option[Fragment]*): Fragment = fragments.orOpt(fs: _*)
-      def whereAnd(fs: Fragment*): Fragment = fragments.whereAnd(fs: _*)
-      def whereAndOpt(fs: Option[Fragment]*): Fragment = fragments.whereAndOpt(fs: _*)
+      def and(fs: Fragment*): Fragment = fragments.andOpt(fs).getOrElse(empty)
+      def andOpt(fs: Option[Fragment]*): Fragment = fragments.andOpt(fs.flatten).getOrElse(empty)
+      def orOpt(fs: Option[Fragment]*): Fragment = fragments.orOpt(fs.flatten).getOrElse(empty)
+      def whereAnd(fs: Fragment*): Fragment = fragments.whereAndOpt(fs)
+      def whereAndOpt(fs: Option[Fragment]*): Fragment = fragments.whereAndOpt(fs.flatten)
       def parentheses(f: Fragment): Fragment = fragments.parentheses(f)
       def in[G[_]: Reducible, A](f: Fragment, fs: G[A], enc: Encoder): Fragment = {
         val (put, _) = enc
-        fragments.in(f, fs)(implicitly, put.asInstanceOf[Put[A]])
+        fragments.inOpt(f, fs)(implicitly, put.asInstanceOf[Put[A]]).getOrElse(empty)
       }
 
       def needsCollation(codec: Codec): Boolean =

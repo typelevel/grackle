@@ -3,7 +3,7 @@
 
 package edu.gemini.grackle.doobie.test
 
-import java.time.{Duration, LocalDate, LocalTime, ZonedDateTime}
+import java.time.{Duration, LocalDate, LocalTime, OffsetDateTime}
 import java.util.UUID
 
 import cats.effect.{IO, Sync}
@@ -26,7 +26,8 @@ trait DoobieDatabaseSuite extends SqlDatabaseSuite {
       driverClassName,
       jdbcUrl,
       username,
-      password
+      password,
+      None
     )
   }
 
@@ -47,7 +48,7 @@ trait DoobieDatabaseSuite extends SqlDatabaseSuite {
     def uuid: Codec = (Meta[UUID], false)
     def localDate: Codec = (Meta[LocalDate], false)
     def localTime: Codec = (Meta[LocalTime], false)
-    def zonedDateTime: Codec = (Meta[ZonedDateTime], false)
+    def offsetDateTime: Codec = (Meta[OffsetDateTime], false)
     def duration: Codec = (Meta[Long].timap(Duration.ofMillis)(_.toMillis), false)
 
     def jsonb: Codec = (new Meta(Get[Json], Put[Json]), false)

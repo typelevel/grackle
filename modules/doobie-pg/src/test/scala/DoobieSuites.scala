@@ -185,8 +185,8 @@ final class WorldCompilerSuite extends DoobieDatabaseSuite with SqlWorldCompiler
     DoobieMonitor.statsMonitor[IO].map(mon => (new DoobieTestMapping(xa, mon) with SqlWorldMapping[IO], mon))
 
   def simpleRestrictedQuerySql: String =
-    "SELECT country.code , country.name FROM country WHERE (( country.code = ?) )"
+    "SELECT country.code , country.name FROM country WHERE ( country.code = ?)"
 
   def simpleFilteredQuerySql: String =
-    "SELECT city.id , city.name FROM city WHERE (city.name ILIKE ?)"
+    "SELECT city.id , city.name FROM city WHERE city.name ILIKE ?"
 }

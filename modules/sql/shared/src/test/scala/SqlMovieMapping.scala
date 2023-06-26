@@ -4,7 +4,7 @@
 package edu.gemini.grackle.sql.test
 
 
-import java.time.{Duration, LocalDate, LocalTime, ZonedDateTime}
+import java.time.{Duration, LocalDate, LocalTime, OffsetDateTime}
 import java.util.UUID
 
 import scala.util.Try
@@ -31,7 +31,7 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
     val genre = col("genre", self.genre)
     val releaseDate = col("releasedate", localDate)
     val showTime = col("showtime", localTime)
-    val nextShowing = col("nextshowing", zonedDateTime)
+    val nextShowing = col("nextshowing", offsetDateTime)
     val duration = col("duration", self.duration)
     val categories = col("categories", list(varchar))
     val features = col("features", list(feature))
@@ -124,16 +124,16 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
       LeafMapping[UUID](UUIDType),
       LeafMapping[LocalTime](TimeType),
       LeafMapping[LocalDate](DateType),
-      LeafMapping[ZonedDateTime](DateTimeType),
+      LeafMapping[OffsetDateTime](DateTimeType),
       LeafMapping[Duration](IntervalType),
       LeafMapping[Genre](GenreType),
       LeafMapping[Feature](FeatureType),
       LeafMapping[List[Feature]](ListType(FeatureType))
     )
 
-  def nextEnding(c: Cursor): Result[ZonedDateTime] =
+  def nextEnding(c: Cursor): Result[OffsetDateTime] =
     for {
-      nextShowing <- c.fieldAs[ZonedDateTime]("nextShowing")
+      nextShowing <- c.fieldAs[OffsetDateTime]("nextShowing")
       duration    <- c.fieldAs[Duration]("duration")
     } yield nextShowing.plus(duration)
 
@@ -158,8 +158,8 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
   }
 
   object DateTimeValue {
-    def unapply(s: StringValue): Option[ZonedDateTime] =
-      Try(ZonedDateTime.parse(s.value)).toOption
+    def unapply(s: StringValue): Option[OffsetDateTime] =
+      Try(OffsetDateTime.parse(s.value)).toOption
   }
 
   object IntervalValue {
@@ -285,7 +285,7 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
   implicit val localTimeOrder: Order[LocalTime] =
     Order.fromComparable[LocalTime]
 
-  implicit val zonedDateTimeOrder: Order[ZonedDateTime] =
+  implicit val offsetDateTimeOrder: Order[OffsetDateTime] =
     Order.from(_.compareTo(_))
 
   implicit val durationOrder: Order[Duration] =

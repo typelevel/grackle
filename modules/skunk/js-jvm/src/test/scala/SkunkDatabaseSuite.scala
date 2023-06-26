@@ -53,7 +53,7 @@ trait SkunkDatabaseSuite extends SqlDatabaseSuite {
     def uuid: Codec = (codec.uuid, false)
     def localDate: Codec = (codec.date, false)
     def localTime: Codec = (codec.time, false)
-    def zonedDateTime: Codec = (codec.timestamptz.imap(_.toZonedDateTime)(_.toOffsetDateTime), false)
+    def offsetDateTime: Codec = (codec.timestamptz, false)
     def duration: Codec = (codec.int8.imap(Duration.ofMillis)(_.toMillis), false)
 
     def jsonb: Codec = (ccodec.jsonb, false)

@@ -59,8 +59,8 @@ trait SqlWorldCompilerSuite extends CatsEffectSuite {
     prog.map { case (res, stats, schema) =>
       assertWeaklyEqual(res, expected)
 
-      assert(
-        stats == List(
+      assertEquals(stats,
+        List(
           SqlStatsMonitor.SqlStats(
             Query.Select("country", Nil, Query.Unique(Query.Filter(Eql(schema.ref("Country") / "code",Const("GBR")),Query.Select("name",List(),Query.Empty)))),
             simpleRestrictedQuerySql,
@@ -114,8 +114,8 @@ trait SqlWorldCompilerSuite extends CatsEffectSuite {
     prog.map { case (res, stats, schema) =>
       assertWeaklyEqual(res, expected)
 
-      assert(
-        stats == List(
+      assertEquals(stats,
+        List(
           SqlStatsMonitor.SqlStats(
             Query.Select("cities", Nil, Query.Filter(Like(schema.ref("City") / "name","Linh%",true),Query.Select("name",List(),Query.Empty))),
             simpleFilteredQuerySql,

@@ -23,7 +23,7 @@ trait SqlTestMapping[F[_]] extends SqlMappingLike[F] { outer =>
   def uuid: Codec
   def localDate: Codec
   def localTime: Codec
-  def zonedDateTime: Codec
+  def offsetDateTime: Codec
   def duration: Codec
 
   def jsonb: Codec

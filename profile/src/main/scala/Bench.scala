@@ -244,7 +244,8 @@ object Bench extends IOApp {
       "org.postgresql.Driver",
       "jdbc:postgresql://localhost:5432/test?loggerLevel=OFF",
       "test",
-      "test"
+      "test",
+      None
     )
 
   val mapping = WorldMapping.mkMapping(xa)
