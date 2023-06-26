@@ -2,12 +2,12 @@ import nl.zolotko.sbt.jfr.{JfrRecording, JfrRecorderOptions}
 import scala.concurrent.duration.DurationInt
 
 val catsVersion            = "2.9.0"
-val catsParseVersion       = "0.3.9"
+val catsParseVersion       = "0.3.10"
 val catsEffectVersion      = "3.1.1"
 val circeVersion           = "0.14.5"
 val disciplineMunitVersion = "2.0.0-M3"
 val doobieVersion          = "1.0.0-RC4"
-val flywayVersion          = "9.19.4"
+val flywayVersion          = "9.20.0"
 val fs2Version             = "3.7.0"
 val http4sVersion          = "0.23.21"
 val http4sBlazeVersion     = "0.23.15"
