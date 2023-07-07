@@ -854,7 +854,8 @@ case class Directive(
   name: String,
   description: Option[String],
   locations: List[Ast.DirectiveLocation],
-  args: List[InputValue]
+  args: List[InputValue],
+  isRepeatable: Boolean
 )
 
 /**

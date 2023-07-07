@@ -88,6 +88,7 @@ object Introspection {
           description: String
           locations: [__DirectiveLocation!]!
           args: [__InputValue!]!
+          isRepeatable: Boolean!
         }
 
         enum __DirectiveLocation {
@@ -259,7 +260,8 @@ object Introspection {
               ValueField("name", _.name),
               ValueField("description", _.description),
               ValueField("locations", _.locations),
-              ValueField("args", _.args)
+              ValueField("args", _.args),
+              ValueField("isRepeatable", _.isRepeatable)
             )
         ),
         LeafMapping[TypeKind.Value](__TypeKindType)
