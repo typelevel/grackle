@@ -876,6 +876,7 @@ final class IntrospectionSuite extends CatsEffectSuite {
       |      args {
       |        ...InputValue
       |      }
+      |      isRepeatable
       |    }
       |  }
       |}
