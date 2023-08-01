@@ -3198,7 +3198,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           case Some(cols) => cols
           case None =>
             val keys = SqlMappingLike.this.keyColumnsForType(context).map(index)
-            keyColumnsMemo.put(key, keys): Unit
+            keyColumnsMemo += key -> keys
             keys
         }
       }

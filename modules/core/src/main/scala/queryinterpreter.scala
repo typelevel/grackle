@@ -18,7 +18,6 @@ import Cursor.{Context, Env, ListTransformCursor}
 import Query._
 import QueryInterpreter.ProtoJson
 import ProtoJson._
-import edu.gemini.grackle.Result
 
 class QueryInterpreter[F[_]](mapping: Mapping[F]) {
   import mapping.{mkResponse, M, RootCursor, RootEffect, RootStream}
