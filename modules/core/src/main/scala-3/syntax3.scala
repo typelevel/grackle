@@ -7,8 +7,6 @@ import cats.syntax.all._
 import org.typelevel.literally.Literally
 import edu.gemini.grackle.Ast.Document
 import edu.gemini.grackle.GraphQLParser.Document.parseAll
-import edu.gemini.grackle.Schema
-import io.circe.Json
 
 trait VersionSpecificSyntax:
 

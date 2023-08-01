@@ -195,3 +195,8 @@ final class WorldCompilerSuite extends SkunkDatabaseSuite with SqlWorldCompilerS
   def simpleFilteredQuerySql: String =
     "SELECT city.id, city.name FROM city WHERE (city.name ILIKE $1)"
 }
+
+// Needed to avoid an unused import warning in Scala 3.3.0+
+object Compat {
+  type Dummy = TwiddleCompat
+}
