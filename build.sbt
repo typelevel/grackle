@@ -49,6 +49,7 @@ ThisBuild / githubWorkflowBuild     ~= { steps =>
   ) +: steps
 }
 ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
+ThisBuild / tlBspCrossProjectPlatforms := Set(JVMPlatform)
 
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
@@ -91,7 +92,7 @@ lazy val modules: List[CompositeProject] = List(
   profile
 )
 
-lazy val `gsp-graphql` = tlCrossRootProject
+lazy val root = tlCrossRootProject
   .aggregate(modules:_*)
   .disablePlugins(RevolverPlugin)
   .settings(
