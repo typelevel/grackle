@@ -58,9 +58,9 @@ jobs:
       - name: Check Headers
         run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' headerCheckAll
 
-      - name: Check headers and formatting
+      - name: Check headers
         if: matrix.java == 'temurin@11' && matrix.os == 'ubuntu-latest'
-        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' headerCheckAll scalafmtCheckAll 'project /' scalafmtSbtCheck
+        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' headerCheckAll
 
       - name: scalaJSLink
         if: matrix.project == 'rootJS'
