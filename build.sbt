@@ -34,12 +34,13 @@ ThisBuild / tlBaseVersion    := "0.14"
 ThisBuild / organization     := "edu.gemini"
 ThisBuild / organizationName := "Association of Universities for Research in Astronomy, Inc. (AURA)"
 ThisBuild / startYear        := Some(2019)
-ThisBuild / licenses         += (("BSD-3-Clause", new URL("https://opensource.org/licenses/BSD-3-Clause")))
+ThisBuild / licenses         := Seq(("BSD-3-Clause", new URL("https://opensource.org/licenses/BSD-3-Clause")))
 ThisBuild / developers       := List(
   Developer("milessabin", "Miles Sabin", "miles@milessabin.com", url("http://milessabin.com/blog")),
   Developer("tpolecat",   "Rob Norris",  "rnorris@gemini.edu",   url("http://www.tpolecat.org")),
 )
 
+ThisBuild / tlCiScalafmtCheck       := false
 ThisBuild / tlCiReleaseBranches     := Seq("main")
 ThisBuild / tlSonatypeUseLegacyHost := false
 ThisBuild / githubWorkflowBuild     ~= { steps =>
@@ -49,6 +50,7 @@ ThisBuild / githubWorkflowBuild     ~= { steps =>
   ) +: steps
 }
 ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
+ThisBuild / tlBspCrossProjectPlatforms := Set(JVMPlatform)
 
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
@@ -91,7 +93,7 @@ lazy val modules: List[CompositeProject] = List(
   profile
 )
 
-lazy val `gsp-graphql` = tlCrossRootProject
+lazy val root = tlCrossRootProject
   .aggregate(modules:_*)
   .disablePlugins(RevolverPlugin)
   .settings(
