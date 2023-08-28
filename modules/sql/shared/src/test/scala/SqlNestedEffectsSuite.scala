@@ -162,7 +162,6 @@ trait SqlNestedEffectsSuite extends CatsEffectSuite {
     val prg =
       (for {
         cm  <- mapping
-        c   =  cm._1
         m   =  cm._2
         n0  <- cm._1.count
         res <- m.compileAndRun(query)
