@@ -50,6 +50,7 @@ ThisBuild / githubWorkflowBuild     ~= { steps =>
   ) +: steps
 }
 ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
+ThisBuild / githubWorkflowOSes += "macos-latest"
 ThisBuild / tlBspCrossProjectPlatforms := Set(JVMPlatform)
 
 lazy val commonSettings = Seq(

@@ -27,7 +27,7 @@ jobs:
     name: Build and Test
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macos-latest]
         scala: [2.13, 3]
         java: [temurin@11]
         project: [rootJS, rootJVM, rootNative]
