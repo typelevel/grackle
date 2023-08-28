@@ -121,7 +121,6 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     libraryDependencies += "io.github.cquiroz" %%% "scala-java-time" % "2.5.0",
     scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.CommonJSModule))
   )
-  .platformsSettings(JSPlatform, NativePlatform)(bspEnabled := false)
 
 lazy val circe = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
@@ -133,7 +132,6 @@ lazy val circe = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .settings(
     name := "gsp-graphql-circe",
   )
-  .platformsSettings(JSPlatform, NativePlatform)(bspEnabled := false)
 
 lazy val buildInfo = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
@@ -143,7 +141,6 @@ lazy val buildInfo = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .settings(
     buildInfoKeys += "baseDirectory" -> (LocalRootProject / baseDirectory).value.toString
   )
-  .platformsSettings(JSPlatform, NativePlatform)(bspEnabled := false)
 
 lazy val sql = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Full)
@@ -169,7 +166,6 @@ lazy val sql = crossProject(JVMPlatform, JSPlatform, NativePlatform)
       "com.github.jnr"    % "jnr-unixsocket"      % jnrUnixsocketVersion % "test"
     )
   )
-  .platformsSettings(JSPlatform, NativePlatform)(bspEnabled := false)
 
 lazy val doobie = project
   .in(file("modules/doobie-pg"))
@@ -210,7 +206,6 @@ lazy val skunk = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .jsSettings(
     scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.CommonJSModule))
   )
-  .platformsSettings(JSPlatform, NativePlatform)(bspEnabled := false)
 
 lazy val generic = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
@@ -227,7 +222,6 @@ lazy val generic = crossProject(JVMPlatform, JSPlatform, NativePlatform)
         case Scala2 => "com.chuusai"   %%% "shapeless"           % shapeless2Version
       })
   )
-  .platformsSettings(JSPlatform, NativePlatform)(bspEnabled := false)
 
 lazy val demo = project
   .in(file("demo"))
