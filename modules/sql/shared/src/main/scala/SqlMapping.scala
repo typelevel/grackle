@@ -718,10 +718,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
     val fieldTpe = fieldContext.tpe
     (fieldMapping(context, fieldName), parent) match {
-      case (Some(_: SqlJson), sc: SqlCursor) =>
+      case (Some(sj: SqlJson), sc: SqlCursor) =>
         sc.asTable.flatMap { table =>
           def mkCirceCursor(f: Json): Result[Cursor] =
-            CirceCursor(fieldContext, focus = f, parent = Some(parent), env = parent.env).success
+            CirceCursor(fieldContext, focus = f, parent = Some(parent), env = parent.env, opaque = sj.opaque).success
           sc.mapped.selectAtomicField(context, fieldName, table).flatMap(_ match {
             case Some(j: Json) if fieldTpe.isNullable => mkCirceCursor(j)
             case None => mkCirceCursor(Json.Null)
@@ -776,7 +776,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     def apply(fieldName: String, joins: Join*): SqlObject = apply(fieldName, joins.toList)
   }
 
-  case class SqlJson(fieldName: String, columnRef: ColumnRef)(
+  case class SqlJson(fieldName: String, columnRef: ColumnRef, opaque: Boolean = false)(
     implicit val pos: SourcePos
   ) extends SqlFieldMapping {
     def hidden: Boolean = false
@@ -868,8 +868,8 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
   def columnsForLeaf(context: Context, fieldName: String): Result[List[SqlColumn]] =
     fieldMapping(context, fieldName) match {
       case Some(SqlField(_, cr, _, _, _, _)) => List(SqlColumn.TableColumn(context, cr, fieldName :: context.resultPath)).success
-      case Some(SqlJson(_, cr)) => List(SqlColumn.TableColumn(context, cr, fieldName :: context.resultPath)).success
-      case Some(CursorFieldJson(_, _, required, _)) =>
+      case Some(SqlJson(_, cr, _)) => List(SqlColumn.TableColumn(context, cr, fieldName :: context.resultPath)).success
+      case Some(CursorFieldJson(_, _, required, _, _)) =>
         required.flatTraverse(r => columnsForLeaf(context, r))
       case Some(CursorField(_, _, _, required, _)) =>
         required.flatTraverse(r => columnsForLeaf(context, r))
@@ -896,7 +896,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
   def columnForAtomicField(context: Context, fieldName: String): Result[SqlColumn] = {
     fieldMapping(context, fieldName) match {
       case Some(SqlField(_, cr, _, _, _, _)) => SqlColumn.TableColumn(context, cr, fieldName :: context.resultPath).success
-      case Some(SqlJson(_, cr)) => SqlColumn.TableColumn(context, cr, fieldName :: context.resultPath).success
+      case Some(SqlJson(_, cr, _)) => SqlColumn.TableColumn(context, cr, fieldName :: context.resultPath).success
       case _ => Result.internalError(s"No column for atomic field '$fieldName' in context $context")
     }
   }

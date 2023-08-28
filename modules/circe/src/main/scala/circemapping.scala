@@ -23,55 +23,67 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
 
   // Syntax to allow Circe-specific root effects
   implicit class CirceMappingRootEffectSyntax(self: RootEffect.type) {
-    def computeJson(fieldName: String)(effect: (Query, Path, Env) => F[Result[Json]])(implicit pos: SourcePos): RootEffect =
-      self.computeCursor(fieldName)((q, p, e) => effect(q, p, e).map(_.map(circeCursor(p, e, _))))
+    def computeJson(fieldName: String, opaque: Boolean = false)(effect: (Query, Path, Env) => F[Result[Json]])(implicit pos: SourcePos): RootEffect =
+      self.computeCursor(fieldName)((q, p, e) => effect(q, p, e).map(_.map(circeCursor(p, e, _, opaque))))
     
-    def computeEncodable[A](fieldName: String)(effect: (Query, Path, Env) => F[Result[A]])(implicit pos: SourcePos, enc: Encoder[A]): RootEffect =
-      computeJson(fieldName)((q, p, e) => effect(q, p, e).map(_.map(enc(_))))
+    def computeEncodable[A](fieldName: String, opaque: Boolean = false)(effect: (Query, Path, Env) => F[Result[A]])(implicit pos: SourcePos, enc: Encoder[A]): RootEffect =
+      computeJson(fieldName, opaque)((q, p, e) => effect(q, p, e).map(_.map(enc(_))))
   }
 
   implicit class CirceMappingRootStreamSyntax(self: RootStream.type) {
-    def computeJson(fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[Json]])(implicit pos: SourcePos): RootStream =
-      self.computeCursor(fieldName)((q, p, e) => effect(q, p, e).map(_.map(circeCursor(p, e, _))))
+    def computeJson(fieldName: String, opaque: Boolean = false)(effect: (Query, Path, Env) => Stream[F, Result[Json]])(implicit pos: SourcePos): RootStream =
+      self.computeCursor(fieldName)((q, p, e) => effect(q, p, e).map(_.map(circeCursor(p, e, _, opaque))))
 
-    def computeEncodable[A](fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[A]])(implicit pos: SourcePos, enc: Encoder[A]): RootStream =
-      computeJson(fieldName)((q, p, e) => effect(q, p, e).map(_.map(enc(_))))
+    def computeEncodable[A](fieldName: String, opaque: Boolean = false)(effect: (Query, Path, Env) => Stream[F, Result[A]])(implicit pos: SourcePos, enc: Encoder[A]): RootStream =
+      computeJson(fieldName, opaque)((q, p, e) => effect(q, p, e).map(_.map(enc(_))))
   }
 
-  def circeCursor(path: Path, env: Env, value: Json): Cursor =
+  def circeCursor(path: Path, env: Env, value: Json, opaque: Boolean = false): Cursor =
     if(path.isRoot)
-      CirceCursor(Context(path.rootTpe), value, None, env)
+      CirceCursor(Context(path.rootTpe), value, None, env, opaque)
     else
-      DeferredCursor(path, (context, parent) => CirceCursor(context, value, Some(parent), env).success)
+      DeferredCursor(path, (context, parent) => CirceCursor(context, value, Some(parent), env, opaque).success)
 
   override def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
     val context = parent.context
     val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
-    (fieldMapping(context, fieldName), parent.focus) match {
-      case (Some(CirceField(_, json, _)), _) =>
-        CirceCursor(fieldContext, json, Some(parent), parent.env).success
-      case (Some(CursorFieldJson(_, f, _, _)), _) =>
-        f(parent).map(res => CirceCursor(fieldContext, focus = res, parent = Some(parent), env = parent.env))
-      case (None|Some(_: EffectMapping), json: Json) =>
-        val f = json.asObject.flatMap(_(fieldName))
-        f match {
-          case None if fieldContext.tpe.isNullable => CirceCursor(fieldContext, Json.Null, Some(parent), parent.env).success
-          case Some(json) => CirceCursor(fieldContext, json, Some(parent), parent.env).success
-          case _ =>
-            Result.failure(s"No field '$fieldName' for type ${context.tpe}")
-        }
-      case _ =>
-        super.mkCursorForField(parent, fieldName, resultName)
+
+    // Create a cursor for the requested field by selecting it from `json`.
+    def jsonField(json: Json, opaque: Boolean): Result[Cursor] = {
+      val f = json.asObject.flatMap(_(fieldName))
+      f match {
+        case None if fieldContext.tpe.isNullable => CirceCursor(fieldContext, Json.Null, Some(parent), parent.env, opaque).success
+        case Some(json) => CirceCursor(fieldContext, json, Some(parent), parent.env, opaque).success
+        case _ => Result.failure(s"No field '$fieldName' of type ${context.tpe} in json blob: ${json.noSpaces}")
+      }
     }
+
+    parent match {
+      // If the parent is a CirceCursor and this is an opaque cursor (i.e., the JSON is a terminal
+      // result and we mever consider other possible mappings once we're here) then immediately
+      // return a new cursor focused on the requested JSON field. Otherwise we drop through and
+      // delegate to the explicit type mapping for this field if there is one.
+      case CirceCursor(_, json, _, _ , true) => jsonField(json, true)
+      case _ =>
+        (fieldMapping(context, fieldName), parent.focus) match {
+          case (Some(CirceField(_, json, _, opaque)), _) =>
+            CirceCursor(fieldContext, json, Some(parent), parent.env, opaque).success
+          case (Some(CursorFieldJson(_, f, _, _, opaque)), _) =>
+            f(parent).map(res => CirceCursor(fieldContext, focus = res, parent = Some(parent), env = parent.env, opaque))
+          case (None|Some(_: EffectMapping), json: Json) => jsonField(json, false)
+          case _ => super.mkCursorForField(parent, fieldName, resultName)
+        }
+    }
+
   }
 
   sealed trait CirceFieldMapping extends FieldMapping {
     def withParent(tpe: Type): FieldMapping = this
   }
 
-  case class CirceField(fieldName: String, value: Json, hidden: Boolean = false)(implicit val pos: SourcePos) extends CirceFieldMapping
+  case class CirceField(fieldName: String, value: Json, hidden: Boolean = false, opaque: Boolean = false)(implicit val pos: SourcePos) extends CirceFieldMapping
 
-  case class CursorFieldJson(fieldName: String, f: Cursor => Result[Json], required: List[String], hidden: Boolean = false)(
+  case class CursorFieldJson(fieldName: String, f: Cursor => Result[Json], required: List[String], hidden: Boolean = false, opaque: Boolean = false)(
     implicit val pos: SourcePos
   ) extends CirceFieldMapping
 
@@ -79,12 +91,13 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
     context: Context,
     focus:  Json,
     parent: Option[Cursor],
-    env:    Env
+    env:    Env,
+    opaque: Boolean = false,
   ) extends Cursor {
     def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
     def mkChild(context: Context = context, focus: Json = focus): CirceCursor =
-      CirceCursor(context, focus, Some(this), Env.empty)
+      CirceCursor(context, focus, Some(this), Env.empty, opaque)
 
     def isLeaf: Boolean =
       tpe.dealias match {
