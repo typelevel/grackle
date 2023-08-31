@@ -61,7 +61,7 @@ final class AttributesSuite extends CatsEffectSuite {
       {
         "errors" : [
           {
-            "message" : "Unknown field 'tagCountVA' in select"
+            "message" : "No field 'tagCountVA' for type Item"
           }
         ]
       }
@@ -86,7 +86,7 @@ final class AttributesSuite extends CatsEffectSuite {
       {
         "errors" : [
           {
-            "message" : "Unknown field 'tagCountCA' in select"
+            "message" : "No field 'tagCountCA' for type Item"
           }
         ]
       }

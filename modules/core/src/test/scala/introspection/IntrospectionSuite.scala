@@ -19,6 +19,11 @@ final class IntrospectionSuite extends CatsEffectSuite {
     case _ => name.startsWith("__")
   }
 
+  def standardDirectiveName(name: String): Boolean = name match {
+    case "skip" | "include" | "deprecated" => true
+    case _ => name.startsWith("__")
+  }
+
   implicit class ACursorOps(self: ACursor) {
     def filterArray(f: Json => Boolean): ACursor = {
       def go(ac: ACursor, i: Int = 0): ACursor = {
@@ -32,13 +37,16 @@ final class IntrospectionSuite extends CatsEffectSuite {
     }
   }
 
-  def stripStandardTypes(result: Json): Option[Json] =
+  def stripStandardElements(result: Json): Option[Json] =
     result
       .hcursor
       .downField("data")
       .downField("__schema")
       .downField("types")
       .filterArray(_.hcursor.downField("name").as[String].exists(!standardTypeName(_)))
+      .up
+      .downField("directives")
+      .filterArray(_.hcursor.downField("name").as[String].exists(!standardDirectiveName(_)))
       .top // .root doesn't work in 0.13
 
   test("simple type query") {
@@ -854,7 +862,7 @@ final class IntrospectionSuite extends CatsEffectSuite {
       }
     """
 
-    val res = TestMapping.compileAndRun(query).map(stripStandardTypes)
+    val res = TestMapping.compileAndRun(query).map(stripStandardElements)
 
     assertIO(res, Some(expected))
   }
@@ -1183,7 +1191,7 @@ final class IntrospectionSuite extends CatsEffectSuite {
       }
     """
 
-    val res = SmallMapping.compileAndRun(query).map(stripStandardTypes)
+    val res = SmallMapping.compileAndRun(query).map(stripStandardElements)
 
     assertIO(res, Some(expected))
   }
@@ -1311,7 +1319,7 @@ final class IntrospectionSuite extends CatsEffectSuite {
       {
         "errors" : [
           {
-            "message" : "Unknown field '__type' in 'Query'"
+            "message" : "No field '__type' for type Query"
           }
         ]
       }

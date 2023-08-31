@@ -70,12 +70,8 @@ trait SqlGraphMapping[F[_]] extends SqlTestMapping[F] {
       )
     )
 
-  override val selectElaborator: SelectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("node", List(Binding("id", IntValue(id))), child) =>
-        Select("node", Nil, Unique(Filter(Eql(NodeType / "id", Const(id)), child))).success
-
-      case other => other.success
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "node", List(Binding("id", IntValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(NodeType / "id", Const(id)), child)))
+  }
 }

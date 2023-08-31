@@ -199,12 +199,10 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
     }
   }
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("films", Nil, child) =>
-        Select("films", Nil, Filter(Eql[EntityType](FilmType / "entityType", Const(EntityType.Film)), child)).success
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "films", Nil) =>
+      Elab.transformChild(child => Filter(Eql[EntityType](FilmType / "entityType", Const(EntityType.Film)), child))
+  }
 
   sealed trait EntityType extends Product with Serializable
   object EntityType {

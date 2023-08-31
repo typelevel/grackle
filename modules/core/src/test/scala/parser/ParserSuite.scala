@@ -264,7 +264,71 @@ final class ParserSuite extends CatsEffectSuite {
 
     val expected =
       Operation(Query, Some(Name("getZuckProfile")),
-        List(VariableDefinition(Name("devicePicSize"), Named(Name("Int")), None)),
+        List(VariableDefinition(Name("devicePicSize"), Named(Name("Int")), None, Nil)),
+        Nil,
+        List(
+          Field(None, Name("user"), List((Name("id"), IntValue(4))), Nil,
+            List(
+              Field(None, Name("id"), Nil, Nil, Nil),
+              Field(None, Name("name"), Nil, Nil, Nil),
+              Field(None, Name("profilePic"), List((Name("size"), Variable(Name("devicePicSize")))), Nil, Nil)
+            )
+          )
+        )
+      )
+
+    GraphQLParser.Document.parseAll(query).toOption match {
+      case Some(List(q)) => assertEquals(q, expected)
+      case _ => assert(false)
+    }
+  }
+
+  test("variables with default value") {
+    val query = """
+      query getZuckProfile($devicePicSize: Int = 10) {
+        user(id: 4) {
+          id
+          name
+          profilePic(size: $devicePicSize)
+        }
+      }
+    """
+
+    val expected =
+      Operation(Query, Some(Name("getZuckProfile")),
+        List(VariableDefinition(Name("devicePicSize"), Named(Name("Int")), Some(IntValue(10)), Nil)),
+        Nil,
+        List(
+          Field(None, Name("user"), List((Name("id"), IntValue(4))), Nil,
+            List(
+              Field(None, Name("id"), Nil, Nil, Nil),
+              Field(None, Name("name"), Nil, Nil, Nil),
+              Field(None, Name("profilePic"), List((Name("size"), Variable(Name("devicePicSize")))), Nil, Nil)
+            )
+          )
+        )
+      )
+
+    GraphQLParser.Document.parseAll(query).toOption match {
+      case Some(List(q)) => assertEquals(q, expected)
+      case _ => assert(false)
+    }
+  }
+
+  test("variables with directive") {
+    val query = """
+      query getZuckProfile($devicePicSize: Int @dir) {
+        user(id: 4) {
+          id
+          name
+          profilePic(size: $devicePicSize)
+        }
+      }
+    """
+
+    val expected =
+      Operation(Query, Some(Name("getZuckProfile")),
+        List(VariableDefinition(Name("devicePicSize"), Named(Name("Int")), None, List(Directive(Name("dir"), Nil)))),
         Nil,
         List(
           Field(None, Name("user"), List((Name("id"), IntValue(4))), Nil,
@@ -393,7 +457,7 @@ final class ParserSuite extends CatsEffectSuite {
 
   }
 
-  test("fragment with directive") {
+  test("fragment with standard directive") {
     val query = """
       query frag($expanded: Boolean){
         character(id: 1000) {
@@ -409,7 +473,7 @@ final class ParserSuite extends CatsEffectSuite {
       Operation(
         Query,
         Some(Name("frag")),
-        List(VariableDefinition(Name("expanded"),Named(Name("Boolean")),None)),
+        List(VariableDefinition(Name("expanded"),Named(Name("Boolean")),None, Nil)),
         Nil,
         List(
           Field(None, Name("character"), List((Name("id"), IntValue(1000))), Nil,
@@ -429,7 +493,44 @@ final class ParserSuite extends CatsEffectSuite {
       case Some(List(q)) => assertEquals(q, expected)
       case _ => assert(false)
     }
+  }
 
+  test("fragment with custorm directive") {
+    val query = """
+      query {
+        character(id: 1000) {
+          name
+          ... @dir {
+            age
+          }
+        }
+      }
+    """
+
+    val expected =
+      Operation(
+        Query,
+        None,
+        Nil,
+        Nil,
+        List(
+          Field(None, Name("character"), List((Name("id"), IntValue(1000))), Nil,
+            List(
+              Field(None, Name("name"), Nil, Nil, Nil),
+              InlineFragment(
+                None,
+                List(Directive(Name("dir"), Nil)),
+                List(Field(None,Name("age"),List(),List(),List()))
+              )
+            )
+          )
+        )
+      )
+
+    GraphQLParser.Document.parseAll(query).toOption match {
+      case Some(List(q)) => assertEquals(q, expected)
+      case _ => assert(false)
+    }
   }
 
   test("value literals") {

@@ -42,7 +42,7 @@ class GenericEffectMapping[F[_]: Sync](ref: SignallingRef[F, Int]) extends Gener
       fieldMappings =
         List(
           // Compute a ValueCursor
-          RootEffect.computeCursor("foo")((_, p, e) =>
+          RootEffect.computeCursor("foo")((p, e) =>
             ref.update(_+1).as(
               genericCursor(p, e, Struct(42, "hi"))
             )

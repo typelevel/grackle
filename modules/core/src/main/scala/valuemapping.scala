@@ -11,7 +11,7 @@ import io.circe.Json
 import org.tpolecat.sourcepos.SourcePos
 
 import syntax._
-import Cursor.{Context, DeferredCursor, Env}
+import Cursor.{DeferredCursor}
 
 abstract class ValueMapping[F[_]](implicit val M: MonadThrow[F]) extends Mapping[F] with ValueMappingLike[F]
 

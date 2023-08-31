@@ -167,70 +167,65 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
       )
     )
 
-  override val selectElaborator = new SelectElaborator(Map(
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "country", List(Binding("code", StringValue(code)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(CountryType / "code", Const(code)), child)))
 
-    QueryType -> {
+    case (QueryType, "city", List(Binding("id", IntValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(CityType / "id", Const(id)), child)))
 
-      case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Filter(Eql(CountryType / "code", Const(code)), child))).success
+    case (QueryType, "countries", List(Binding("limit", IntValue(num)), Binding("offset", IntValue(off)), Binding("minPopulation", IntValue(min)), Binding("byPopulation", BooleanValue(byPop)))) =>
+      def limit(query: Query): Query =
+        if (num < 1) query
+        else Limit(num, query)
 
-      case Select("city", List(Binding("id", IntValue(id))), child) =>
-        Select("city", Nil, Unique(Filter(Eql(CityType / "id", Const(id)), child))).success
+      def offset(query: Query): Query =
+        if (off < 1) query
+        else Offset(off, query)
 
-      case Select("countries", List(Binding("limit", IntValue(num)), Binding("offset", IntValue(off)), Binding("minPopulation", IntValue(min)), Binding("byPopulation", BooleanValue(byPop))), child) =>
-        def limit(query: Query): Query =
-          if (num < 1) query
-          else Limit(num, query)
+      def order(query: Query): Query = {
+        if (byPop)
+          OrderBy(OrderSelections(List(OrderSelection[Int](CountryType / "population"))), query)
+        else if (num > 0 || off > 0)
+          OrderBy(OrderSelections(List(OrderSelection[String](CountryType / "code"))), query)
+        else query
+      }
 
-        def offset(query: Query): Query =
-          if (off < 1) query
-          else Offset(off, query)
+      def filter(query: Query): Query =
+        if (min == 0) query
+        else Filter(GtEql(CountryType / "population", Const(min)), query)
 
-        def order(query: Query): Query = {
-          if (byPop)
-            OrderBy(OrderSelections(List(OrderSelection[Int](CountryType / "population"))), query)
-          else if (num > 0 || off > 0)
-            OrderBy(OrderSelections(List(OrderSelection[String](CountryType / "code"))), query)
-          else query
-        }
+      Elab.transformChild(child => limit(offset(order(filter(child)))))
 
-        def filter(query: Query): Query =
-          if (min == 0) query
-          else Filter(GtEql(CountryType / "population", Const(min)), query)
+    case (QueryType, "cities", List(Binding("namePattern", StringValue(namePattern)))) =>
+      if (namePattern == "%")
+        Elab.unit
+      else
+        Elab.transformChild(child => Filter(Like(CityType / "name", namePattern, true), child))
 
-        Select("countries", Nil, limit(offset(order(filter(child))))).success
+    case (QueryType, "language", List(Binding("language", StringValue(language)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(LanguageType / "language", Const(language)), child)))
 
-      case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
-        if (namePattern == "%")
-          Select("cities", Nil, child).success
-        else
-          Select("cities", Nil, Filter(Like(CityType / "name", namePattern, true), child)).success
+    case (QueryType, "search", List(Binding("minPopulation", IntValue(min)), Binding("indepSince", IntValue(year)))) =>
+      Elab.transformChild(child =>
+        Filter(
+          And(
+            Not(Lt(CountryType / "population", Const(min))),
+            Not(Lt(CountryType / "indepyear", Const(Option(year))))
+          ),
+          child
+        )
+      )
 
-      case Select("language", List(Binding("language", StringValue(language))), child) =>
-        Select("language", Nil, Unique(Filter(Eql(LanguageType / "language", Const(language)), child))).success
+    case (QueryType, "search2", List(Binding("indep", BooleanValue(indep)), Binding("limit", IntValue(num)))) =>
+      Elab.transformChild(child => Limit(num, Filter(IsNull[Int](CountryType / "indepyear", isNull = !indep), child)))
 
-      case Select("search", List(Binding("minPopulation", IntValue(min)), Binding("indepSince", IntValue(year))), child) =>
-        Select("search", Nil,
-          Filter(
-            And(
-              Not(Lt(CountryType / "population", Const(min))),
-              Not(Lt(CountryType / "indepyear", Const(Option(year))))
-            ),
-            child
-          )
-        ).success
+    case (CountryType, "numCities", List(Binding("namePattern", AbsentValue))) =>
+      Elab.transformChild(_ => Count(Select("cities", Select("name"))))
 
-      case Select("search2", List(Binding("indep", BooleanValue(indep)), Binding("limit", IntValue(num))), child) =>
-        Select("search2", Nil, Limit(num, Filter(IsNull[Int](CountryType / "indepyear", isNull = !indep), child))).success
-    },
-    CountryType -> {
-      case Select("numCities", List(Binding("namePattern", AbsentValue)), Empty) =>
-        Count("numCities", Select("cities", Nil, Select("name", Nil, Empty))).success
-
-      case Select("numCities", List(Binding("namePattern", StringValue(namePattern))), Empty) =>
-        Count("numCities", Select("cities", Nil, Filter(Like(CityType / "name", namePattern, true), Select("name", Nil, Empty)))).success
-    }
-  ))
+    case (CountryType, "numCities", List(Binding("namePattern", StringValue(namePattern)))) =>
+      Elab.transformChild(_ => Count(Select("cities", Filter(Like(CityType / "name", namePattern, true), Select("name")))))
+  }
 }
 
 object WorldMapping extends DoobieMappingCompanion {

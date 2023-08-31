@@ -73,22 +73,22 @@ trait StarWarsMapping[F[_]] extends GenericMapping[F] { self: StarWarsData[F] =>
     )
 
   // #elaborator
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      // The hero selector takes an Episode argument and yields a single value. We use the
-      // Unique operator to pick out the target using the FieldEquals predicate.
-      case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
-        Episode.values.find(_.toString == e.name).map { episode =>
-          Select("hero", Nil, Unique(Filter(Eql(CharacterType / "id", Const(hero(episode).id)), child))).success
-        }.getOrElse(Result.failure(s"Unknown episode '${e.name}'"))
+  override val selectElaborator = SelectElaborator {
+    // The hero selector takes an Episode argument and yields a single value. We transform
+    // the nested child to use the Filter and Unique operators to pick out the target using
+    // the Eql predicate.
+    case (QueryType, "hero", List(Binding("episode", EnumValue(e)))) =>
+      for {
+        episode <- Elab.liftR(Episode.values.find(_.toString == e).toResult(s"Unknown episode '$e'"))
+        _       <- Elab.transformChild(child => Unique(Filter(Eql(CharacterType / "id", Const(hero(episode).id)), child)))
+      } yield ()
 
-      // The character, human and droid selectors all take a single ID argument and yield a
-      // single value (if any) or null. We use the Unique operator to pick out the target
-      // using the FieldEquals predicate.
-      case Select(f@("character" | "human" | "droid"), List(Binding("id", IDValue(id))), child) =>
-        Select(f, Nil, Unique(Filter(Eql(CharacterType / "id", Const(id)), child))).success
-    }
-  ))
+    // The character, human and droid selectors all take a single ID argument and yield a
+    // single value (if any) or null. We transform the nested child to use the Unique and
+    // Filter operators to pick out the target using the Eql predicate.
+    case (QueryType, "character" | "human" | "droid", List(Binding("id", IDValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(CharacterType / "id", Const(id)), child)))
+  }
   // #elaborator
 }
 

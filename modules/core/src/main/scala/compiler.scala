@@ -4,10 +4,12 @@
 package edu.gemini.grackle
 
 import scala.annotation.tailrec
+import scala.reflect.ClassTag
 
-import cats.parse.{LocationMap, Parser}
+import cats.data.StateT
 import cats.implicits._
 import io.circe.Json
+import org.tpolecat.typename.{ TypeName, typeName }
 
 import syntax._
 import Query._, Predicate._, Value._, UntypedOperation._
@@ -18,289 +20,150 @@ import ScalarType._
  * GraphQL query parser
  */
 object QueryParser {
-  import Ast.{ Type => _, Value => _, _ }, OperationDefinition._, Selection._
+  import Ast.{ Directive => _, Type => _, Value => _, _ }, OperationDefinition._, Selection._
 
   /**
-   *  Parse a query String to a query algebra term.
+   *  Parse a String to query algebra operations and fragments.
    *
-   *  Yields a Query value on the right and accumulates errors on the left.
+   *  GraphQL errors and warnings are accumulated in the result.
    */
-  def parseText(text: String, name: Option[String] = None): Result[UntypedOperation] = {
-    def toResult[T](pr: Either[Parser.Error, T]): Result[T] =
-      Result.fromEither(pr.leftMap { e =>
-        val lm = LocationMap(text)
-        lm.toLineCol(e.failedAtOffset) match {
-          case Some((row, col)) =>
-            lm.getLine(row) match {
-              case Some(line) =>
-                s"""Parse error at line $row column $col
-                   |$line
-                   |${List.fill(col)(" ").mkString}^""".stripMargin
-              case None => "Malformed query" //This is probably a bug in Cats Parse as it has given us the (row, col) index
-            }
-          case None => "Truncated query"
-        }
-      })
+  def parseText(text: String): Result[(List[UntypedOperation], List[UntypedFragment])] =
+    for {
+      doc <- GraphQLParser.toResult(text, GraphQLParser.Document.parseAll(text))
+      res <- parseDocument(doc)
+      _   <- Result.failure("At least one operation required").whenA(res._1.isEmpty)
+    } yield res
+
+  /**
+   *  Parse a document AST to query algebra operations and fragments.
+   *
+   *  GraphQL errors and warnings are accumulated in the result.
+   */
+  def parseDocument(doc: Document): Result[(List[UntypedOperation], List[UntypedFragment])] = {
+    val ops0 = doc.collect { case op: OperationDefinition => op }
+    val fragments0 = doc.collect { case frag: FragmentDefinition => frag }
 
     for {
-      doc   <- toResult(GraphQLParser.Document.parseAll(text))
-      query <- parseDocument(doc, name)
-    } yield query
+      ops    <- ops0.traverse {
+                  case op: Operation => parseOperation(op)
+                  case qs: QueryShorthand => parseQueryShorthand(qs)
+                }
+      frags  <- fragments0.traverse { frag =>
+                  val tpnme = frag.typeCondition.name
+                  for {
+                    sels <- parseSelections(frag.selectionSet)
+                    dirs <- parseDirectives(frag.directives)
+                  } yield UntypedFragment(frag.name.value, tpnme, dirs, sels)
+                }
+    } yield (ops, frags)
   }
 
-  def parseDocument(doc: Document, name: Option[String]): Result[UntypedOperation] = {
-    val ops = doc.collect { case op: OperationDefinition => op }
-    val fragments = doc.collect { case frag: FragmentDefinition => (frag.name.value, frag) }.toMap
-
-    (ops, name) match {
-      case (Nil, _) => Result.failure("At least one operation required")
-      case (List(op: Operation), None) => parseOperation(op, fragments)
-      case (List(qs: QueryShorthand), None) => parseQueryShorthand(qs, fragments)
-      case (_, None) =>
-        Result.failure("Operation name required to select unique operation")
-      case (ops, _) if ops.exists { case _: QueryShorthand => true ; case _ => false } =>
-        Result.failure("Query shorthand cannot be combined with multiple operations")
-      case (ops, Some(name)) =>
-        ops.filter { case Operation(_, Some(Name(`name`)), _, _, _) => true ; case _ => false } match {
-          case List(op: Operation) => parseOperation(op, fragments)
-          case Nil =>
-            Result.failure(s"No operation named '$name'")
-          case _ =>
-            Result.failure(s"Multiple operations named '$name'")
-        }
-    }
-  }
-
-  def parseOperation(op: Operation, fragments: Map[String, FragmentDefinition]): Result[UntypedOperation] = {
-    val Operation(opType, _, vds, _, sels) = op
-    val q = parseSelections(sels, None, fragments)
-    val vs = vds.map {
-      case VariableDefinition(nme, tpe, _) => UntypedVarDef(nme.value, tpe, None)
-    }
-    q.map(q =>
+  /**
+   *  Parse an operation AST to a query algebra operation.
+   *
+   *  GraphQL errors and warnings are accumulated in the result.
+   */
+  def parseOperation(op: Operation): Result[UntypedOperation] = {
+    val Operation(opType, name, vds, dirs0, sels) = op
+    for {
+      vs   <- parseVariableDefinitions(vds)
+      q    <- parseSelections(sels)
+      dirs <- parseDirectives(dirs0)
+    } yield {
+      val name0 = name.map(_.value)
       opType match {
-        case OperationType.Query => UntypedQuery(q, vs)
-        case OperationType.Mutation => UntypedMutation(q, vs)
-        case OperationType.Subscription => UntypedSubscription(q, vs)
+        case OperationType.Query => UntypedQuery(name0, q, vs, dirs)
+        case OperationType.Mutation => UntypedMutation(name0, q, vs, dirs)
+        case OperationType.Subscription => UntypedSubscription(name0, q, vs, dirs)
       }
-    )
+    }
   }
 
-  def parseQueryShorthand(qs: QueryShorthand, fragments: Map[String, FragmentDefinition]): Result[UntypedOperation] =
-    parseSelections(qs.selectionSet, None, fragments).map(q => UntypedQuery(q, Nil))
+  /**
+    * Parse variable definition ASTs to query algebra variable definitions.
+    *
+    * GraphQL errors and warnings are accumulated in the result.
+    */
+  def parseVariableDefinitions(vds: List[VariableDefinition]): Result[List[UntypedVarDef]] =
+    vds.traverse {
+      case VariableDefinition(Name(nme), tpe, dv0, dirs0) =>
+        for {
+          dv   <- dv0.traverse(SchemaParser.parseValue)
+          dirs <- parseDirectives(dirs0)
+        } yield UntypedVarDef(nme, tpe, dv, dirs)
+    }
 
-  def parseSelections(sels: List[Selection], typeCondition: Option[String], fragments: Map[String, FragmentDefinition]): Result[Query] =
-    sels.traverse(parseSelection(_, typeCondition, fragments)).map { sels0 =>
+  /**
+    * Parse a query shorthand AST to query algebra operation.
+    *
+    * GraphQL errors and warnings are accumulated in the result.
+    */
+  def parseQueryShorthand(qs: QueryShorthand): Result[UntypedOperation] =
+    parseSelections(qs.selectionSet).map(q => UntypedQuery(None, q, Nil, Nil))
+
+  /**
+    * Parse selection ASTs to query algebra terms.
+    *
+    * GraphQL errors and warnings are accumulated in the result
+    */
+  def parseSelections(sels: List[Selection]): Result[Query] =
+    sels.traverse(parseSelection).map { sels0 =>
       if (sels0.sizeCompare(1) == 0) sels0.head else Group(sels0)
     }
 
-  def parseSelection(sel: Selection, typeCondition: Option[String], fragments: Map[String, FragmentDefinition]): Result[Query] = sel match {
+  /**
+    * Parse a selection AST to a query algebra term.
+    *
+    * GraphQL errors and warnings are accumulated in the result.
+    */
+  def parseSelection(sel: Selection): Result[Query] = sel match {
     case Field(alias, name, args, directives, sels) =>
       for {
         args0 <- parseArgs(args)
-        sels0 <- parseSelections(sels, None, fragments)
-        skip  <- parseSkipInclude(directives)
+        sels0 <- parseSelections(sels)
+        dirs  <- parseDirectives(directives)
       } yield {
-        val sel0 =
-          if (sels.isEmpty) Select(name.value, args0, Empty)
-          else Select(name.value, args0, sels0)
-        val sel1 = alias match {
-          case Some(Name(nme)) => Rename(nme, sel0)
-          case None => sel0
-        }
-        val sel2 = typeCondition match {
-          case Some(tpnme) => UntypedNarrow(tpnme, sel1)
-          case _ => sel1
-        }
-        val sel3 = skip match {
-          case Some((si, value)) => Skip(si, value, sel2)
-          case _ => sel2
-        }
-        sel3
+        val nme = name.value
+        val alias0 = alias.map(_.value).flatMap(n => if (n == nme) None else Some(n))
+        if (sels.isEmpty) UntypedSelect(nme, alias0, args0, dirs, Empty)
+        else UntypedSelect(nme, alias0, args0, dirs, sels0)
       }
 
     case FragmentSpread(Name(name), directives) =>
       for {
-        frag  <- fragments.get(name).toResult(s"Undefined fragment '$name'")
-        skip  <- parseSkipInclude(directives)
-        sels0 <- parseSelections(frag.selectionSet, Some(frag.typeCondition.name), fragments)
-      } yield {
-        val sels = skip match {
-          case Some((si, value)) => Skip(si, value, sels0)
-          case _ => sels0
-        }
-        sels
-      }
+        dirs <- parseDirectives(directives)
+      } yield UntypedFragmentSpread(name, dirs)
 
-    case InlineFragment(Some(Ast.Type.Named(Name(tpnme))), directives, sels) =>
+    case InlineFragment(typeCondition, directives, sels) =>
       for {
-        skip  <- parseSkipInclude(directives)
-        sels0 <- parseSelections(sels, Some(tpnme), fragments)
-      } yield {
-        val sels = skip match {
-          case Some((si, value)) => Skip(si, value, sels0)
-          case _ => sels0
-        }
-        sels
-      }
-
-    case _ =>
-      Result.failure("Field or fragment spread required")
+        dirs  <- parseDirectives(directives)
+        sels0 <- parseSelections(sels)
+      } yield UntypedInlineFragment(typeCondition.map(_.name), dirs, sels0)
   }
 
-  def parseSkipInclude(directives: List[Directive]): Result[Option[(Boolean, Value)]] =
-    directives.collect { case dir@Directive(Name("skip"|"include"), _) => dir } match {
-      case Nil => None.success
-      case Directive(Name(si), List((Name("if"), value))) :: Nil => parseValue(value).map(v => Some((si == "skip", v)))
-      case Directive(Name(si), _) :: Nil => Result.failure(s"$si must have a single Boolean 'if' argument")
-      case _ => Result.failure(s"Only a single skip/include allowed at a given location")
-    }
+  /**
+    * Parse directive ASTs to query algebra directives.
+    *
+    * GraphQL errors and warnings are accumulated in the result.
+    */
+  def parseDirectives(directives: List[Ast.Directive]): Result[List[Directive]] =
+    directives.traverse(SchemaParser.mkDirective)
 
+  /**
+    * Parse argument ASTs to query algebra bindings.
+    *
+    * GraphQL errors and warnings are accumulated in the result.
+    */
   def parseArgs(args: List[(Name, Ast.Value)]): Result[List[Binding]] =
     args.traverse((parseArg _).tupled)
 
+  /**
+    * Parse an argument AST to a query algebra binding.
+    *
+    * GraphQL errors and warnings are accumulated in the result.
+    */
   def parseArg(name: Name, value: Ast.Value): Result[Binding] =
-    parseValue(value).map(v => Binding(name.value, v))
-
-  def parseValue(value: Ast.Value): Result[Value] = {
-    value match {
-      case Ast.Value.IntValue(i) => IntValue(i).success
-      case Ast.Value.FloatValue(d) => FloatValue(d).success
-      case Ast.Value.StringValue(s) => StringValue(s).success
-      case Ast.Value.BooleanValue(b) => BooleanValue(b).success
-      case Ast.Value.EnumValue(e) => UntypedEnumValue(e.value).success
-      case Ast.Value.Variable(v) => UntypedVariableValue(v.value).success
-      case Ast.Value.NullValue => NullValue.success
-      case Ast.Value.ListValue(vs) => vs.traverse(parseValue).map(ListValue(_))
-      case Ast.Value.ObjectValue(fs) =>
-        fs.traverse { case (name, value) =>
-          parseValue(value).map(v => (name.value, v))
-        }.map(ObjectValue(_))
-    }
-  }
-}
-
-object QueryMinimizer {
-  import Ast._
-
-  def minimizeText(text: String): Either[String, String] = {
-    for {
-      doc <- GraphQLParser.Document.parseAll(text).leftMap(_.expected.toList.mkString(","))
-    } yield minimizeDocument(doc)
-  }
-
-  def minimizeDocument(doc: Document): String = {
-    import OperationDefinition._
-    import OperationType._
-    import Selection._
-    import Value._
-
-    def renderDefinition(defn: Definition): String =
-      defn match {
-        case e: ExecutableDefinition => renderExecutableDefinition(e)
-        case _ => ""
-      }
-
-    def renderExecutableDefinition(ex: ExecutableDefinition): String =
-      ex match {
-        case op: OperationDefinition => renderOperationDefinition(op)
-        case frag: FragmentDefinition => renderFragmentDefinition(frag)
-      }
-
-    def renderOperationDefinition(op: OperationDefinition): String =
-      op match {
-        case qs: QueryShorthand => renderSelectionSet(qs.selectionSet)
-        case op: Operation => renderOperation(op)
-      }
-
-    def renderOperation(op: Operation): String =
-      renderOperationType(op.operationType) +
-      op.name.map(nme => s" ${nme.value}").getOrElse("") +
-      renderVariableDefns(op.variables)+
-      renderDirectives(op.directives)+
-      renderSelectionSet(op.selectionSet)
-
-    def renderOperationType(op: OperationType): String =
-      op match {
-        case Query => "query"
-        case Mutation => "mutation"
-        case Subscription => "subscription"
-      }
-
-    def renderDirectives(dirs: List[Directive]): String =
-      dirs.map { case Directive(name, args) => s"@${name.value}${renderArguments(args)}" }.mkString
-
-    def renderVariableDefns(vars: List[VariableDefinition]): String =
-      vars match {
-        case Nil => ""
-        case _ =>
-          vars.map {
-            case VariableDefinition(name, tpe, default) =>
-              s"$$${name.value}:${tpe.name}${default.map(v => s"=${renderValue(v)}").getOrElse("")}"
-          }.mkString("(", ",", ")")
-      }
-
-    def renderSelectionSet(sels: List[Selection]): String =
-      sels match {
-        case Nil => ""
-        case _ => sels.map(renderSelection).mkString("{", ",", "}")
-      }
-
-    def renderSelection(sel: Selection): String =
-      sel match {
-        case f: Field => renderField(f)
-        case s: FragmentSpread => renderFragmentSpread(s)
-        case i: InlineFragment => renderInlineFragment(i)
-      }
-
-    def renderField(f: Field) = {
-      f.alias.map(a => s"${a.value}:").getOrElse("")+
-      f.name.value+
-      renderArguments(f.arguments)+
-      renderDirectives(f.directives)+
-      renderSelectionSet(f.selectionSet)
-    }
-
-    def renderArguments(args: List[(Name, Value)]): String =
-      args match {
-        case Nil => ""
-        case _ => args.map { case (n, v) => s"${n.value}:${renderValue(v)}" }.mkString("(", ",", ")")
-      }
-
-    def renderInputObject(args: List[(Name, Value)]): String =
-      args match {
-        case Nil => ""
-        case _ => args.map { case (n, v) => s"${n.value}:${renderValue(v)}" }.mkString("{", ",", "}")
-      }
-
-    def renderTypeCondition(tpe: Type): String =
-      s"on ${tpe.name}"
-
-    def renderFragmentDefinition(frag: FragmentDefinition): String =
-      s"fragment ${frag.name.value} ${renderTypeCondition(frag.typeCondition)}${renderDirectives(frag.directives)}${renderSelectionSet(frag.selectionSet)}"
-
-    def renderFragmentSpread(spread: FragmentSpread): String =
-      s"...${spread.name.value}${renderDirectives(spread.directives)}"
-
-    def renderInlineFragment(frag: InlineFragment): String =
-      s"...${frag.typeCondition.map(renderTypeCondition).getOrElse("")}${renderDirectives(frag.directives)}${renderSelectionSet(frag.selectionSet)}"
-
-    def renderValue(v: Value): String =
-      v match {
-        case Variable(name) => s"$$${name.value}"
-        case IntValue(value) => value.toString
-        case FloatValue(value) => value.toString
-        case StringValue(value) => s""""$value""""
-        case BooleanValue(value) => value.toString
-        case NullValue => "null"
-        case EnumValue(name) => name.value
-        case ListValue(values) => values.map(renderValue).mkString("[", ",", "]")
-        case ObjectValue(fields) => renderInputObject(fields)
-      }
-
-    doc.map(renderDefinition).mkString(",")
-  }
-
+    SchemaParser.parseValue(value).map(v => Binding(name.value, v))
 }
 
 /**
@@ -317,30 +180,82 @@ class QueryCompiler(schema: Schema, phases: List[Phase]) {
    * Compiles the GraphQL query `text` to a query algebra term which
    * can be directly executed.
    *
-   * Any errors are accumulated on the left.
+   * GraphQL errors and warnings are accumulated in the result.
    */
-  def compile(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full): Result[Operation] =
-    QueryParser.parseText(text, name).flatMap(compileUntyped(_, untypedVars, introspectionLevel))
-
-  def compileUntyped(parsed: UntypedOperation, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full): Result[Operation] = {
-
-    val allPhases =
-      IntrospectionElaborator(introspectionLevel).toList ++ (VariablesAndSkipElaborator :: phases)
-
-    for {
-      varDefs <- compileVarDefs(parsed.variables)
-      vars    <- compileVars(varDefs, untypedVars)
-      rootTpe <- parsed.rootTpe(schema)
-      query   <- allPhases.foldLeftM(parsed.query) { (acc, phase) => phase.transform(acc, vars, schema, rootTpe) }
-    } yield Operation(query, rootTpe)
-  }
-
-  def compileVarDefs(untypedVarDefs: UntypedVarDefs): Result[VarDefs] =
-    untypedVarDefs.traverse {
-      case UntypedVarDef(name, untypedTpe, default) =>
-        compileType(untypedTpe).map(tpe => InputValue(name, None, tpe, default))
+  def compile(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): Result[Operation] =
+    QueryParser.parseText(text).flatMap { case (ops, frags) =>
+      (ops, name) match {
+        case (Nil, _) =>
+          Result.failure("At least one operation required")
+        case (List(op), None) =>
+          compileOperation(op, untypedVars, frags, introspectionLevel, env)
+        case (_, None) =>
+          Result.failure("Operation name required to select unique operation")
+        case (ops, _) if ops.exists(_.name.isEmpty) =>
+          Result.failure("Query shorthand cannot be combined with multiple operations")
+        case (ops, name) =>
+          ops.filter(_.name == name) match {
+            case List(op) =>
+              compileOperation(op, untypedVars, frags, introspectionLevel, env)
+            case Nil =>
+              Result.failure(s"No operation named '$name'")
+            case _ =>
+              Result.failure(s"Multiple operations named '$name'")
+          }
+      }
     }
 
+  /**
+    * Compiles the provided operation AST to a query algebra term
+    * which can be directly executed.
+    *
+    * GraphQL errors and warnings are accumulated in the result.
+    */
+  def compileOperation(op: UntypedOperation, untypedVars: Option[Json], frags: List[UntypedFragment], introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): Result[Operation] = {
+    val allPhases =
+      IntrospectionElaborator(introspectionLevel).toList ++ (VariablesSkipAndFragmentElaborator :: phases)
+
+    for {
+      varDefs <- compileVarDefs(op.variables)
+      vars    <- compileVars(varDefs, untypedVars)
+      _       <- Directive.validateDirectivesForQuery(schema, op, frags, vars)
+      rootTpe <- op.rootTpe(schema)
+      res     <- (
+                   for {
+                     query <- allPhases.foldLeftM(op.query) { (acc, phase) => phase.transform(acc) }
+                   } yield Operation(query, rootTpe, op.directives)
+                 ).runA(
+                   ElabState(
+                     None,
+                     schema,
+                     Context(rootTpe),
+                     vars,
+                     frags.map(f => (f.name, f)).toMap,
+                     op.query,
+                     env,
+                     List.empty,
+                     Elab.pure
+                   )
+                 )
+    } yield res
+  }
+
+  /**
+    * Compiles variable definition ASTs to variable definitions for the target schema.
+    *
+    * GraphQL errors and warnings are accumulated in the result.
+    */
+  def compileVarDefs(untypedVarDefs: UntypedVarDefs): Result[VarDefs] =
+    untypedVarDefs.traverse {
+      case UntypedVarDef(name, untypedTpe, default, dirs) =>
+        compileType(untypedTpe).map(tpe => InputValue(name, None, tpe, default, dirs))
+    }
+
+  /**
+    * Compiles raw query variables to variables for the target schema.
+    *
+    * GraphQL errors and warnings are accumulated in the result.
+    */
   def compileVars(varDefs: VarDefs, untypedVars: Option[Json]): Result[Vars] =
     untypedVars match {
       case None => Map.empty.success
@@ -349,17 +264,22 @@ class QueryCompiler(schema: Schema, phases: List[Phase]) {
           case None =>
             Result.failure(s"Variables must be represented as a Json object")
           case Some(obj) =>
-            varDefs.traverse(iv => checkVarValue(iv, obj(iv.name)).map(v => (iv.name, (iv.tpe, v)))).map(_.toMap)
+            varDefs.traverse(iv => checkVarValue(iv, obj(iv.name), "variable values").map(v => (iv.name, (iv.tpe, v)))).map(_.toMap)
         }
     }
 
+  /**
+    * Compiles a type AST to a type in the target schema.
+    *
+    * GraphQL errors and warnings are accumulated in the result.
+    */
   def compileType(tpe: Ast.Type): Result[Type] = {
     def loop(tpe: Ast.Type, nonNull: Boolean): Result[Type] = tpe match {
       case Ast.Type.NonNull(Left(named)) => loop(named, true)
       case Ast.Type.NonNull(Right(list)) => loop(list, true)
       case Ast.Type.List(elem) => loop(elem, false).map(e => if (nonNull) ListType(e) else NullableType(ListType(e)))
       case Ast.Type.Named(name) => schema.definition(name.value) match {
-        case None => Result.failure(s"Undefined typed '${name.value}'")
+        case None => Result.failure(s"Undefined type '${name.value}'")
         case Some(tpe) => (if (nonNull) tpe else NullableType(tpe)).success
       }
     }
@@ -377,77 +297,264 @@ object QueryCompiler {
 
   import IntrospectionLevel._
 
+  /**
+    * Elaboration monad.
+    *
+    * Supports threading of state through the elaboration of a query. Provides,
+    * + access to the schema, context, variables and fragments of a query.
+    * + ability to transform the children of Selects to supply semantics for field arguments.
+    * + ability to add contextual data to the resulting query both to support propagation of
+    *   context to the elaboration of children, and to to drive run time behaviour.
+    * + ability to add selects for additional attributes to the resulting query.
+    * + ability to test existence and properties of neighbour nodes of the node being
+    *   elaborated.
+    * + ability to report errors and warnings during elaboration.
+    */
+  type Elab[T] = StateT[Result, ElabState, T]
+  object Elab {
+    def unit: Elab[Unit] = StateT.pure(())
+    def pure[T](t: T): Elab[T] = StateT.pure(t)
+    def liftR[T](rt: Result[T]): Elab[T] = StateT.liftF(rt)
+
+    /** The scheam of the query being elaborated */
+    def schema: Elab[Schema] = StateT.inspect(_.schema)
+    /** The context of the node currently being elaborated */
+    def context: Elab[Context] = StateT.inspect(_.context)
+    /** The variables of the query being elaborated */
+    def vars: Elab[Vars] = StateT.inspect(_.vars)
+    /** The fragments of the query being elaborated */
+    def fragments: Elab[Map[String, UntypedFragment]] = StateT.inspect(_.fragments)
+    /** The fragment with the supplied name, if defined, failing otherwise */
+    def fragment(nme: String): Elab[UntypedFragment] =
+      StateT.inspectF(_.fragments.get(nme).toResult(s"Fragment '$nme' is not defined"))
+    /** `true` if the node currently being elaborated has a child with the supplied name */
+    def hasField(name: String): Elab[Boolean] = StateT.inspect(_.hasField(name))
+    /** The alias, if any, of the child with the supplied name */
+    def fieldAlias(name: String): Elab[Option[String]] = StateT.inspect(_.fieldAlias(name))
+    /** `true` if the node currently being elaborated has a sibling with the supplied name */
+    def hasSibling(name: String): Elab[Boolean] = StateT.inspect(_.hasSibling(name))
+    /** The result name of the node currently being elaborated */
+    def resultName: Elab[Option[String]] = StateT.inspect(_.resultName)
+
+    /** Binds the supplied value to the supplied name in the elaboration environment */
+    def env(nme: String, value: Any): Elab[Unit] = env(List(nme -> value))
+    /** Binds the supplied names and values in the elaboration environment */
+    def env(kv: (String, Any), kvs: (String, Any)*): Elab[Unit] = env(kv +: kvs.toSeq)
+    /** Binds the supplied names and values in the elaboration environment */
+    def env(kvs: Seq[(String, Any)]): Elab[Unit] = StateT.modify(_.env(kvs))
+    /** Adds all the bindings of the supplied environment to the elaboration environment */
+    def env(other: Env): Elab[Unit] = StateT.modify(_.env(other))
+    /** The value bound to the supplied name in the elaboration environment, if any */
+    def env[T: ClassTag](nme: String): Elab[Option[T]] = StateT.inspect(_.env[T](nme))
+    /** The value bound to the supplied name in the elaboration environment, if any, failing otherwise */
+    def envE[T: ClassTag: TypeName](nme: String): Elab[T] =
+      env(nme).flatMap(v => Elab.liftR(v.toResultOrError(s"Key '$nme' of type ${typeName[T]} was not found in $this")))
+    /** The subset of the elaboration environment defined directly at this node */
+    def localEnv: Elab[Env] = StateT.inspect(_.localEnv)
+
+    /** Applies the supplied transformation to the child of the node currently being elaborated */
+    def transformChild(f: Query => Elab[Query]): Elab[Unit] = StateT.modify(_.addChildTransform(f))
+    /** Applies the supplied transformation to the child of the node currently being elaborated */
+    def transformChild(f: Query => Query)(implicit dummy: DummyImplicit): Elab[Unit] = transformChild(q => Elab.pure(f(q)))
+    /** Applies the supplied transformation to the child of the node currently being elaborated */
+    def transformChild(f: Query => Result[Query])(implicit dummy1: DummyImplicit, dummy2: DummyImplicit): Elab[Unit] = transformChild(q => Elab.liftR(f(q)))
+    /** The transformation to be applied to the child of the node currently being elaborated */
+    def transform: Elab[Query => Elab[Query]] = StateT.inspect(_.childTransform)
+    /** Add the supplied attributed and corresponding query, if any, to the query being elaborated */
+    def addAttribute(name: String, query: Query = Empty): Elab[Unit] = StateT.modify(_.addAttribute(name, query))
+    /** The attributes which have been added to the query being elaborated */
+    def attributes: Elab[List[(String, Query)]] = StateT.inspect(_.attributes)
+
+    /** Report the supplied GraphQL warning during elaboration */
+    def warning(msg: String): Elab[Unit] = StateT(s => Result.warning[(ElabState, Unit)](msg, (s, ())))
+    /** Report the supplied GraphQL warning during elaboration */
+    def warning(err: Problem): Elab[Unit] = StateT(s => Result.warning[(ElabState, Unit)](err, (s, ())))
+    /** Report the supplied GraphQL error during elaboration */
+    def failure[T](msg: String): Elab[T] = StateT(_ => Result.failure[(ElabState, T)](msg))
+    /** Report the supplied GraphQL error during elaboration */
+    def failure[T](err: Problem): Elab[T] = StateT(_ => Result.failure[(ElabState, T)](err))
+    /** Report the supplied internal error during elaboration */
+    def internalError[T](msg: String): Elab[T] = StateT(_ => Result.internalError[(ElabState, T)](msg))
+    /** Report the supplied internal error during elaboration */
+    def internalError[T](err: Throwable): Elab[T] = StateT(_ => Result.internalError[(ElabState, T)](err))
+
+    /** Save the current elaboration state */
+    def push: Elab[Unit] = StateT.modify(_.push)
+    /** Save the current elaboration state and switch to the supplied context and query */
+    def push(context: Context, query: Query): Elab[Unit] = StateT.modify(_.push(context, query))
+    /** Save the current elaboration state and switch to the supplied schema, context and query */
+    def push(schema: Schema, context: Context, query: Query): Elab[Unit] = StateT.modify(_.push(schema, context, query))
+    /** Restore the previous elaboration state */
+    def pop: Elab[Unit] = StateT.modifyF(s => s.parent.toResultOrError("Cannot pop root state"))
+  }
+
+  /**
+    * The state managed by the elaboration monad.
+    */
+  case class ElabState(
+    parent: Option[ElabState],
+    schema: Schema,
+    context: Context,
+    vars: Vars,
+    fragments: Map[String, UntypedFragment],
+    query: Query,
+    localEnv: Env,
+    attributes: List[(String, Query)],
+    childTransform: Query => Elab[Query]
+  ) {
+    def hasField(fieldName: String): Boolean = Query.hasField(query, fieldName)
+    def fieldAlias(fieldName: String): Option[String] = Query.fieldAlias(query, fieldName)
+    def hasSibling(fieldName: String): Boolean = parent.exists(s => Query.hasField(s.query, fieldName))
+    def resultName: Option[String] = Query.ungroup(query).headOption.flatMap(Query.resultName)
+    def env(kvs: Seq[(String, Any)]): ElabState = copy(localEnv = localEnv.add(kvs: _*))
+    def env(other: Env): ElabState = copy(localEnv = localEnv.add(other))
+    def env[T: ClassTag](nme: String): Option[T] = localEnv.get(nme).orElse(parent.flatMap(_.env(nme)))
+    def addAttribute(name: String, query: Query = Empty): ElabState = copy(attributes = (name, query) :: attributes)
+    def addChildTransform(f: Query => Elab[Query]): ElabState = copy(childTransform = childTransform.andThen(_.flatMap(f)))
+    def push: ElabState = copy(parent = Some(this), localEnv = Env.empty, attributes = Nil, childTransform = Elab.pure)
+    def push(context: Context, query: Query): ElabState =
+      copy(parent = Some(this), context = context, query = query, localEnv = Env.empty, attributes = Nil, childTransform = Elab.pure)
+    def push(schema: Schema, context: Context, query: Query): ElabState =
+      copy(parent = Some(this), schema = schema, context = context, query = query, localEnv = Env.empty, attributes = Nil, childTransform = Elab.pure)
+  }
+
   /** A QueryCompiler phase. */
   trait Phase {
     /**
-     * Transform the supplied query algebra term `query` with expected type
-     * `tpe`.
+     * Transform the supplied query algebra term `query`.
      */
-    def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
+    def transform(query: Query): Elab[Query] =
       query match {
-        case s@Select(fieldName, _, child)    =>
-          (for {
-            obj      <- tpe.underlyingObject
-            childTpe <- obj.field(fieldName)
-          } yield {
-            val isLeaf = childTpe.isUnderlyingLeaf
-            if (isLeaf && child != Empty)
-              Result.failure(s"Leaf field '$fieldName' of $obj must have an empty subselection set")
-            else if (!isLeaf && child == Empty)
-              Result.failure(s"Non-leaf field '$fieldName' of $obj must have a non-empty subselection set")
-            else
-              transform(child, vars, schema, childTpe).map(ec => s.copy(child = ec))
-          }).getOrElse(Result.failure(s"Unknown field '$fieldName' in select"))
+        case s@UntypedSelect(fieldName, alias, _, _, child) =>
+          transformSelect(fieldName, alias, child).map(ec => s.copy(child = ec))
 
-        case UntypedNarrow(tpnme, child) =>
-          (for {
-            subtpe <- schema.definition(tpnme)
-          } yield {
-            transform(child, vars, schema, subtpe).map { ec =>
-              if (tpe.underlyingObject.map(_ <:< subtpe).getOrElse(false)) ec else Narrow(schema.ref(tpnme), ec)
-            }
-          }).getOrElse(Result.failure(s"Unknown type '$tpnme' in type condition"))
+        case s@Select(fieldName, alias, child) =>
+          transformSelect(fieldName, alias, child).map(ec => s.copy(child = ec))
 
-        case i@Introspect(_, child) if tpe =:= schema.queryType =>
-          transform(child, vars, Introspection.schema, Introspection.schema.queryType).map(ec => i.copy(child = ec))
+        case n@Narrow(subtpe, child)  =>
+          for {
+            c  <- Elab.context
+            _  <- Elab.push(c.asType(subtpe), child)
+            ec <- transform(child)
+            _  <- Elab.pop
+          } yield n.copy(child = ec)
+
+        case f@UntypedFragmentSpread(_, _) => Elab.pure(f)
+        case i@UntypedInlineFragment(None, _, child) =>
+          transform(child).map(ec => i.copy(child = ec))
+        case i@UntypedInlineFragment(Some(tpnme), _, child) =>
+          for {
+            s      <- Elab.schema
+            c      <- Elab.context
+            subtpe <- Elab.liftR(Result.fromOption(s.definition(tpnme), s"Unknown type '$tpnme' in type condition"))
+            _      <- Elab.push(c.asType(subtpe), child)
+            ec     <- transform(child)
+            _      <- Elab.pop
+          } yield i.copy(child = ec)
 
         case i@Introspect(_, child) =>
-          val typenameTpe = ObjectType(s"__Typename", None, List(Field("__typename", None, Nil, StringType, false, None)), Nil)
-          transform(child, vars, Introspection.schema, typenameTpe).map(ec => i.copy(child = ec))
+          for {
+            s    <- Elab.schema
+            c    <- Elab.context
+            iTpe =  if(c.tpe =:= s.queryType) Introspection.schema.queryType else TypenameType
+            _    <- Elab.push(Introspection.schema, c.asType(iTpe), child)
+            ec   <- transform(child)
+            _    <- Elab.pop
+          } yield i.copy(child = ec)
 
-        case n@Narrow(subtpe, child)  => transform(child, vars, schema, subtpe).map(ec => n.copy(child = ec))
-        case w@Wrap(_, child)         => transform(child, vars, schema, tpe).map(ec => w.copy(child = ec))
-        case r@Rename(_, child)       => transform(child, vars, schema, tpe).map(ec => r.copy(child = ec))
-        case c@Count(_, child)        => transform(child, vars, schema, tpe).map(ec => c.copy(child = ec))
-        case g@Group(children)        => children.traverse(q => transform(q, vars, schema, tpe)).map(eqs => g.copy(queries = eqs))
-        case u@Unique(child)          => transform(child, vars, schema, tpe.nonNull.list).map(ec => u.copy(child = ec))
-        case f@Filter(_, child)       => tpe.item.toResult(s"Filter of non-List type $tpe").flatMap(item => transform(child, vars, schema, item).map(ec => f.copy(child = ec)))
-        case c@Component(_, _, child) => transform(child, vars, schema, tpe).map(ec => c.copy(child = ec))
-        case e@Effect(_, child)       => transform(child, vars, schema, tpe).map(ec => e.copy(child = ec))
-        case s@Skip(_, _, child)      => transform(child, vars, schema, tpe).map(ec => s.copy(child = ec))
-        case l@Limit(_, child)        => transform(child, vars, schema, tpe).map(ec => l.copy(child = ec))
-        case o@Offset(_, child)       => transform(child, vars, schema, tpe).map(ec => o.copy(child = ec))
-        case o@OrderBy(_, child)      => transform(child, vars, schema, tpe).map(ec => o.copy(child = ec))
-        case e@Environment(_, child)  => transform(child, vars, schema, tpe).map(ec => e.copy(child = ec))
-        case t@TransformCursor(_, child) => transform(child, vars, schema, tpe).map(ec => t.copy(child = ec))
-        case Skipped                  => Skipped.success
-        case Empty                    => Empty.success
+        case u@Unique(child) =>
+          for {
+            c  <- Elab.context
+            _  <- Elab.push(c.asType(c.tpe.nonNull.list), child)
+            ec <- transform(child)
+            _  <- Elab.pop
+          } yield u.copy(child = ec)
+
+        case f@Filter(_, child) =>
+          for {
+            c    <- Elab.context
+            item <- Elab.liftR(c.tpe.item.toResultOrError(s"Filter of non-List type ${c.tpe}"))
+            _    <- Elab.push(c.asType(item), child)
+            ec   <- transform(child)
+            _    <- Elab.pop
+          } yield f.copy(child = ec)
+
+        case n@Count(child) =>
+          for {
+            c  <- Elab.context
+            pc <- Elab.liftR(c.parent.toResultOrError(s"Count node has no parent"))
+            _  <- Elab.push(pc, child)
+            ec <- transform(child)
+            _  <- Elab.pop
+          } yield n.copy(child = ec)
+
+        case g@Group(children) =>
+          children.traverse { c =>
+            for {
+              _  <- Elab.push
+              tc <- transform(c)
+              _  <- Elab.pop
+            } yield tc
+          }.map(eqs => g.copy(queries = eqs))
+
+        case c@Component(_, _, child) => transform(child).map(ec => c.copy(child = ec))
+        case e@Effect(_, child)       => transform(child).map(ec => e.copy(child = ec))
+        case l@Limit(_, child)        => transform(child).map(ec => l.copy(child = ec))
+        case o@Offset(_, child)       => transform(child).map(ec => o.copy(child = ec))
+        case o@OrderBy(_, child)      => transform(child).map(ec => o.copy(child = ec))
+        case e@Environment(_, child)  => transform(child).map(ec => e.copy(child = ec))
+        case t@TransformCursor(_, child) => transform(child).map(ec => t.copy(child = ec))
+        case Empty                    => Elab.pure(Empty)
       }
+
+    def transformSelect(fieldName: String, alias: Option[String], child: Query): Elab[Query] =
+      for {
+        c        <- Elab.context
+        _        <- validateSubselection(fieldName, child)
+        childCtx <- Elab.liftR(c.forField(fieldName, alias))
+        _        <- Elab.push(childCtx, child)
+        ec       <- transform(child)
+        _        <- Elab.pop
+      } yield ec
+
+    def validateSubselection(fieldName: String, child: Query): Elab[Unit] =
+      for {
+        c        <- Elab.context
+        obj      <- Elab.liftR(c.tpe.underlyingObject.toResultOrError(s"Expected object type, found ${c.tpe}"))
+        childCtx <- Elab.liftR(c.forField(fieldName, None))
+        tpe      =  childCtx.tpe
+        _        <- {
+                      val isLeaf = tpe.isUnderlyingLeaf
+                      if (isLeaf && child != Empty)
+                        Elab.failure(s"Leaf field '$fieldName' of $obj must have an empty subselection set")
+                      else if (!isLeaf && child == Empty)
+                        Elab.failure(s"Non-leaf field '$fieldName' of $obj must have a non-empty subselection set")
+                      else
+                        Elab.pure(())
+                    }
+      } yield ()
+
+    val TypenameType = ObjectType(s"__Typename", None, List(Field("__typename", None, Nil, StringType, Nil)), Nil, Nil)
   }
 
+  /**
+   * A phase which elaborates GraphQL introspection queries into the query algrebra.
+   */
   class IntrospectionElaborator(level: IntrospectionLevel) extends Phase {
-    override def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
+    override def transform(query: Query): Elab[Query] =
       query match {
-        case s@PossiblyRenamedSelect(Select(fieldName @ ("__typename" | "__schema" | "__type"), _, _), _) =>
+        case s@UntypedSelect(fieldName @ ("__typename" | "__schema" | "__type"), _, _, _, _) =>
           (fieldName, level) match {
             case ("__typename", Disabled) =>
-              Result.failure("Introspection is disabled")
+              Elab.failure("Introspection is disabled")
             case ("__schema" | "__type", TypenameOnly | Disabled) =>
-              Result.failure("Introspection is disabled")
+              Elab.failure("Introspection is disabled")
             case _ =>
-              Introspect(schema, s).success
+              for {
+                schema <- Elab.schema
+              } yield Introspect(schema, s)
           }
-        case _ => super.transform(query, vars, schema, tpe)
+        case _ => super.transform(query)
       }
   }
 
@@ -459,62 +566,123 @@ object QueryCompiler {
       }
   }
 
-  object VariablesAndSkipElaborator extends Phase {
-    override def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
+  /**
+   * A phase which elaborates variables, directives, fragment spreads
+   * and inline fragments.
+   *
+   * 1. Query variable values are substituted for all variable
+   *    references.
+   *
+   * 2. `skip` and `include` directives are handled during this phase
+   *    and the guarded subqueries are retained or removed as
+   *    appropriate.
+   *
+   * 3. Fragment spread and inline fragments are expanded.
+   *
+   * 4. types narrowing coercions by resolving the target type
+   *    against the schema.
+   *
+   * 5. verifies that leaves have an empty subselection set and that
+   *    structured types have a non-empty subselection set.
+   */
+  object VariablesSkipAndFragmentElaborator extends Phase {
+    override def transform(query: Query): Elab[Query] =
       query match {
         case Group(children) =>
-          children.traverse(q => transform(q, vars, schema, tpe)).map { eqs =>
-            eqs.filterNot(_ == Skipped) match {
-              case Nil => Skipped
+          children.traverse(q => transform(q)).map { eqs =>
+            eqs.filterNot(_ == Empty) match {
+              case Nil => Empty
               case eq :: Nil => eq
               case eqs => Group(eqs)
             }
           }
-        case Select(fieldName, args, child) =>
-          tpe.withUnderlyingField(fieldName) { childTpe =>
+        case sel@UntypedSelect(fieldName, alias, args, dirs, child) =>
+          isSkipped(dirs).ifM(
+            Elab.pure(Empty),
             for {
-              elaboratedChild <- transform(child, vars, schema, childTpe)
-              elaboratedArgs  <- args.traverse(elaborateBinding(vars))
-            } yield Select(fieldName, elaboratedArgs, elaboratedChild)
-          }
+              _        <- validateSubselection(fieldName, child)
+              s        <- Elab.schema
+              c        <- Elab.context
+              childCtx <- Elab.liftR(c.forField(fieldName, alias))
+              vars     <- Elab.vars
+              eArgs    <- args.traverse(elaborateBinding(_, vars))
+              eDirs    <- Elab.liftR(Directive.elaborateDirectives(s, dirs, vars))
+              _        <- Elab.push(childCtx, child)
+              ec       <- transform(child)
+              _        <- Elab.pop
+            } yield sel.copy(args = eArgs, directives = eDirs, child = ec)
+          )
 
-        case Skip(skip, cond, child) =>
+        case UntypedFragmentSpread(nme, dirs) =>
+          isSkipped(dirs).ifM(
+            Elab.pure(Empty),
+            for {
+              s      <- Elab.schema
+              c      <- Elab.context
+              f      <- Elab.fragment(nme)
+              ctpe   <- Elab.liftR(c.tpe.underlyingObject.toResultOrError(s"Expected object type, found ${c.tpe}"))
+              subtpe <- Elab.liftR(s.definition(f.tpnme).toResult(s"Unknown type '${f.tpnme}' in type condition of fragment '$nme'"))
+              _      <- Elab.failure(s"Fragment '$nme' is not compatible with type '${c.tpe}'").whenA(!(subtpe <:< ctpe) && !(ctpe <:< subtpe))
+              _      <- Elab.push(c.asType(subtpe), f.child)
+              ec     <- transform(f.child)
+              _      <- Elab.pop
+            } yield
+              if (ctpe <:< subtpe) ec
+              else Narrow(s.ref(subtpe.name), ec)
+          )
+
+        case UntypedInlineFragment(tpnme0, dirs, child) =>
+          isSkipped(dirs).ifM(
+            Elab.pure(Empty),
+            for {
+              s      <- Elab.schema
+              c      <- Elab.context
+              ctpe   <- Elab.liftR(c.tpe.underlyingObject.toResultOrError(s"Expected object type, found ${c.tpe}"))
+              subtpe <- tpnme0 match {
+                          case None =>
+                            Elab.pure(ctpe)
+                          case Some(tpnme) =>
+                            Elab.liftR(s.definition(tpnme).toResult(s"Unknown type '$tpnme' in type condition inline fragment"))
+                        }
+              _      <- Elab.failure(s"Inline fragment with type condition '$subtpe' is not compatible with type '$ctpe'").whenA(!(subtpe <:< ctpe) && !(ctpe <:< subtpe))
+              _      <- Elab.push(c.asType(subtpe), child)
+              ec     <- transform(child)
+              _      <- Elab.pop
+            } yield
+              if (ctpe <:< subtpe) ec
+              else Narrow(s.ref(subtpe.name), ec)
+          )
+
+        case _ => super.transform(query)
+      }
+
+    def elaborateBinding(b: Binding, vars: Vars): Elab[Binding] =
+      Elab.liftR(Value.elaborateValue(b.value, vars).map(ev => b.copy(value = ev)))
+
+    def isSkipped(dirs: List[Directive]): Elab[Boolean] =
+      dirs.filter(d => d.name == "skip" || d.name == "include") match {
+        case Nil => Elab.pure(false)
+        case List(Directive(nme, List(Binding("if", value)))) =>
           for {
-            c  <- extractCond(vars, cond)
-            elaboratedChild <- if(c == skip) Skipped.success else transform(child, vars, schema, tpe)
-          } yield elaboratedChild
-
-        case _ => super.transform(query, vars, schema, tpe)
+            c <- extractCond(value)
+          } yield (nme == "skip" && c) || (nme == "include" && !c)
+        case List(Directive(nme, _)) => Elab.failure(s"Directive '$nme' must have a single Boolean 'if' argument")
+        case _ => Elab.failure("skip/include directives must be unique")
       }
 
-    def elaborateBinding(vars: Vars)(b: Binding): Result[Binding] =
-      elaborateValue(vars)(b.value).map(ev => b.copy(value = ev))
-
-    def elaborateValue(vars: Vars)(value: Value): Result[Value] =
+    def extractCond(value: Value): Elab[Boolean] =
       value match {
-        case UntypedVariableValue(varName) =>
-          vars.get(varName) match {
-            case Some((_, value)) => value.success
-            case None => Result.failure(s"Undefined variable '$varName'")
-          }
-        case ObjectValue(fields) =>
-            val (keys, values) = fields.unzip
-            values.traverse(elaborateValue(vars)).map(evs => ObjectValue(keys.zip(evs)))
-        case ListValue(elems) => elems.traverse(elaborateValue(vars)).map(ListValue.apply)
-        case other => other.success
-      }
-
-
-    def extractCond(vars: Vars, value: Value): Result[Boolean] =
-      value match {
-        case UntypedVariableValue(varName) =>
-          vars.get(varName) match {
-            case Some((tpe, BooleanValue(value))) if tpe.nonNull =:= BooleanType => value.success
-            case Some((_, _)) => Result.failure(s"Argument of skip/include must be boolean")
-            case None => Result.failure(s"Undefined variable '$varName'")
-          }
-        case BooleanValue(value) => value.success
-        case _ => Result.failure(s"Argument of skip/include must be boolean")
+        case VariableRef(varName) =>
+          for {
+            v  <- Elab.vars
+            tv <- Elab.liftR(Result.fromOption(v.get(varName), s"Undefined variable '$varName'"))
+            b  <- tv match {
+                    case (tpe, BooleanValue(value)) if tpe.nonNull =:= BooleanType => Elab.pure(value)
+                    case _ => Elab.failure(s"Argument of skip/include must be boolean")
+                  }
+          } yield b
+        case BooleanValue(value) => Elab.pure(value)
+        case _ => Elab.failure(s"Argument of skip/include must be boolean")
       }
   }
 
@@ -535,108 +703,112 @@ object QueryCompiler {
    *
    * 2. eliminates Select arguments by delegating to a model-specific
    *    `PartialFunction` which is responsible for translating `Select`
-   *    nodes into a form which is directly interpretable, replacing
-   *    them with a `Filter` or `Unique` node with a `Predicate` which
-   *    is parameterized by the arguments, eg.
+   *    nodes into a form which is directly interpretable, for example,
+   *    replacing them with a `Filter` or `Unique` node with a
+   *    `Predicate` which is parameterized by the arguments, ie.,
    *
    *    ```
-   *    Select("character", List(IDBinding("id", "1000")), child)
+   *    UntypedSelect("character", None, List(IDBinding("id", "1000")), Nil, child)
    *    ```
    *    might be translated to,
    *    ```
-   *    Filter(FieldEquals("id", "1000"), child)
+   *    Select("character, None, Filter(FieldEquals("id", "1000"), child))
    *    ```
-   *
-   * 3. types narrowing coercions by resolving the target type
-   *    against the schema.
-   *
-   * 4. verifies that leaves have an empty subselection set and that
-   *    structured types have a non-empty subselection set.
-   *
-   * 5. eliminates Skipped nodes.
+   * 3. GraphQL introspection query field arguments are elaborated.
    */
-  class SelectElaborator(mapping: Map[TypeRef, PartialFunction[Select, Result[Query]]]) extends Phase {
-    override def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
+  trait SelectElaborator extends Phase {
+    override def transform(query: Query): Elab[Query] =
       query match {
-        case Select(fieldName, args, child) =>
-          tpe.withUnderlyingField(fieldName) { childTpe =>
-            val mapping0 = if (schema eq Introspection.schema) introspectionMapping else mapping
-            val elaborator: Select => Result[Query] =
-              (for {
-                obj <- tpe.underlyingObject
-                ref <- schema.ref(obj)
-                e   <- mapping0.get(ref)
-              } yield (s: Select) => if (e.isDefinedAt(s)) e(s) else s.success).getOrElse((s: Select) => s.success)
+        case sel@UntypedSelect(fieldName, resultName, args, dirs, child) =>
+          for {
+            c        <- Elab.context
+            s        <- Elab.schema
+            childCtx <- Elab.liftR(c.forField(fieldName, resultName))
+            obj      <- Elab.liftR(c.tpe.underlyingObject.toResultOrError(s"Expected object type, found ${c.tpe}"))
+            field    <- obj match {
+                          case twf: TypeWithFields =>
+                            Elab.liftR(twf.fieldInfo(fieldName).toResult(s"No field '$fieldName' for type ${obj.underlying}"))
+                          case _ => Elab.failure(s"Type $obj is not an object or interface type")
+                        }
+            eArgs    <- Elab.liftR(elaborateFieldArgs(obj, field, args))
+            ref      <- Elab.liftR(s.ref(obj).orElse(introspectionRef(obj)).toResultOrError(s"Type $obj not found in schema"))
+            _        <- if (s eq Introspection.schema) elaborateIntrospection(ref, fieldName, eArgs)
+                        else select(ref, fieldName, eArgs, dirs)
+            elab     <- Elab.transform
+            env      <- Elab.localEnv
+            attrs    <- Elab.attributes
+            _        <- Elab.push(childCtx, child)
+            ec       <- transform(child)
+            _        <- Elab.pop
+            e2       <- elab(ec)
+          } yield {
+            val e1 = Select(sel.name, sel.alias, e2)
+            val e0 =
+              if(attrs.isEmpty) e1
+              else Group((e1 :: attrs.map { case (nme, child) => Select(nme, child) }).flatMap(Query.ungroup))
 
-            val obj = tpe.underlyingObject
-            val isLeaf = childTpe.isUnderlyingLeaf
-            if (isLeaf && child != Empty)
-              Result.failure(s"Leaf field '$fieldName' of $obj must have an empty subselection set")
-            else if (!isLeaf && child == Empty)
-              Result.failure(s"Non-leaf field '$fieldName' of $obj must have a non-empty subselection set")
-            else
-              for {
-                elaboratedChild <- transform(child, vars, schema, childTpe)
-                elaboratedArgs <- elaborateArgs(tpe, fieldName, args)
-                elaborated <- elaborator(Select(fieldName, elaboratedArgs, elaboratedChild))
-              } yield elaborated
+            if (env.isEmpty) e0
+            else Environment(env, e0)
           }
 
-        case r: Rename =>
-          super.transform(query, vars, schema, tpe).map(_ match {
-            case Rename(nme, Environment(e, child)) => Environment(e, Rename(nme, child))
-            case Rename(nme, Group(queries)) =>
-              val Some((baseName, _)) = Query.rootName(r): @unchecked
-              val renamed =
-                queries.map {
-                  case s@Select(`baseName`, _, _) => Rename(nme, s)
-                  case c@Count(`baseName`, _) => Rename(nme, c)
-                  case other => other
-                }
-              Group(renamed)
-            case q => q
-          })
-
-        case Skipped => Empty.success
-
-        case _ => super.transform(query, vars, schema, tpe)
+        case _ => super.transform(query)
       }
 
-    def elaborateArgs(tpe: Type, fieldName: String, args: List[Binding]): Result[List[Binding]] =
-      tpe.underlyingObject match {
-        case Some(twf: TypeWithFields) =>
-          twf.fieldInfo(fieldName) match {
-            case Some(field) =>
-              val infos = field.args
-              val unknownArgs = args.filterNot(arg => infos.exists(_.name == arg.name))
-              if (unknownArgs.nonEmpty)
-                Result.failure(s"Unknown argument(s) ${unknownArgs.map(s => s"'${s.name}'").mkString("", ", ", "")} in field $fieldName of type ${twf.name}")
-              else {
-                val argMap = args.groupMapReduce(_.name)(_.value)((x, _) => x)
-                infos.traverse(info => checkValue(info, argMap.get(info.name)).map(v => Binding(info.name, v)))
-              }
-            case _ => Result.failure(s"No field '$fieldName' in type $tpe")
-          }
-        case _ => Result.failure(s"Type $tpe is not an object or interface type")
+    def select(ref: TypeRef, name: String, args: List[Binding], directives: List[Directive]): Elab[Unit]
+
+    val QueryTypeRef = Introspection.schema.ref("Query")
+    val TypeTypeRef = Introspection.schema.ref("__Type")
+    val FieldTypeRef = Introspection.schema.ref("__Field")
+    val EnumValueTypeRef = Introspection.schema.ref("__EnumValue")
+
+    def introspectionRef(tpe: Type): Option[TypeRef] =
+      Introspection.schema.ref(tpe).orElse(tpe.asNamed.flatMap(
+        _.name match {
+          case "__Typename" => Some(Introspection.schema.ref("__Typename"))
+          case _ => None
+        }
+      ))
+
+    def elaborateIntrospection(ref: TypeRef, name: String, args: List[Binding]): Elab[Unit] =
+      (ref, name, args) match {
+        case (QueryTypeRef, "__type", List(Binding("name", StringValue(name)))) =>
+          Elab.transformChild(child => Unique(Filter(Eql(TypeTypeRef / "name", Const(Option(name))), child)))
+
+        case (TypeTypeRef, "fields", List(Binding("includeDeprecated", BooleanValue(include)))) =>
+          Elab.transformChild(child => if (include) child else Filter(Eql(FieldTypeRef / "isDeprecated", Const(false)), child))
+        case (TypeTypeRef, "enumValues", List(Binding("includeDeprecated", BooleanValue(include)))) =>
+          Elab.transformChild(child => if (include) child else Filter(Eql(EnumValueTypeRef / "isDeprecated", Const(false)), child))
+
+        case _ =>
+          Elab.unit
       }
+
+    def elaborateFieldArgs(tpe: NamedType, field: Field, args: List[Binding]): Result[List[Binding]] = {
+      val infos = field.args
+      val unknownArgs = args.filterNot(arg => infos.exists(_.name == arg.name))
+      if (unknownArgs.nonEmpty)
+        Result.failure(s"Unknown argument(s) ${unknownArgs.map(s => s"'${s.name}'").mkString("", ", ", "")} in field ${field.name} of type ${tpe.name}")
+      else {
+        val argMap = args.groupMapReduce(_.name)(_.value)((x, _) => x)
+        infos.traverse(info => checkValue(info, argMap.get(info.name), s"field '${field.name}' of type '$tpe'").map(v => Binding(info.name, v)))
+      }
+    }
   }
 
-  val introspectionMapping: Map[TypeRef, PartialFunction[Select, Result[Query]]] = {
-    val TypeType = Introspection.schema.ref("__Type")
-    val FieldType = Introspection.schema.ref("__Field")
-    val EnumValueType = Introspection.schema.ref("__EnumValue")
-    Map(
-      Introspection.schema.ref("Query") -> {
-        case sel@Select("__type", List(Binding("name", StringValue(name))), _) =>
-          sel.eliminateArgs(child => Unique(Filter(Eql(TypeType / "name", Const(Option(name))), child))).success
-      },
-      Introspection.schema.ref("__Type") -> {
-        case sel@Select("fields", List(Binding("includeDeprecated", BooleanValue(include))), _) =>
-          sel.eliminateArgs(child => if (include) child else Filter(Eql(FieldType / "isDeprecated", Const(false)), child)).success
-        case sel@Select("enumValues", List(Binding("includeDeprecated", BooleanValue(include))), _) =>
-          sel.eliminateArgs(child => if (include) child else Filter(Eql(EnumValueType / "isDeprecated", Const(false)), child)).success
+  object SelectElaborator {
+    /**
+     * Construct a `SelectElaborator` given a partial function which is called for each
+     * Select` node in the query.
+     */
+    def apply(sel: PartialFunction[(TypeRef, String, List[Binding]), Elab[Unit]]): SelectElaborator =
+      new SelectElaborator {
+        def select(ref: TypeRef, name: String, args: List[Binding], directives: List[Directive]): Elab[Unit] =
+          if(sel.isDefinedAt((ref, name, args))) sel((ref, name, args))
+          else Elab.unit
       }
-    )
+
+    /** A select elaborator which discards all field arguments */
+    def identity: SelectElaborator = SelectElaborator(_ => Elab.unit)
   }
 
   /**
@@ -644,19 +816,18 @@ object QueryCompiler {
    * composed mappings.
    *
    * This phase transforms the input query by assigning subtrees to component
-   * mappings as specified by the supplied `mapping`.
+   * mappings as specified by the supplied `cmapping`.
    *
-   * The mapping has `Type` and field name pairs as keys and component id and
+   * The mapping has `Type` and field name pairs as keys and mapping and
    * join function pairs as values. When the traversal of the input query
    * visits a `Select` node with type `Type.field name` it will replace the
    * `Select` with a `Component` node comprising,
    *
-   * 1. the component id of the interpreter which will be responsible for
-   *    evaluating the subquery.
+   * 1. the mapping which will be responsible for evaluating the subquery.
    * 2. A join function which will be called during interpretation with,
    *
-   *    i)  the cursor at that point in evaluation.
-   *    ii) The deferred subquery.
+   *    i) The deferred subquery.
+   *    ii)  the cursor at that point in evaluation.
    *
    *    This join function is responsible for computing the continuation
    *    query which will be evaluated by the responsible interpreter.
@@ -666,24 +837,27 @@ object QueryCompiler {
    *    from the parent query.
    */
   class ComponentElaborator[F[_]] private (cmapping: Map[(Type, String), (Mapping[F], (Query, Cursor) => Result[Query])]) extends Phase {
-    override def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
+    override def transform(query: Query): Elab[Query] =
       query match {
-        case PossiblyRenamedSelect(Select(fieldName, args, child), resultName) =>
-          (for {
-            obj      <- tpe.underlyingObject
-            childTpe =  obj.field(fieldName).getOrElse(ScalarType.AttributeType)
-          } yield {
-            transform(child, vars, schema, childTpe).map { elaboratedChild =>
-              schema.ref(obj).flatMap(ref => cmapping.get((ref, fieldName))) match {
-                case Some((mapping, join)) =>
-                  Wrap(resultName, Component(mapping, join, PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)))
-                case None =>
-                  PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)
-              }
+        case s@Select(fieldName, resultName, child) =>
+          for {
+            c        <- Elab.context
+            obj      <- Elab.liftR(c.tpe.underlyingObject.toResultOrError(s"Type ${c.tpe} is not an object or interface type"))
+            childCtx =  c.forFieldOrAttribute(fieldName, resultName)
+            _        <- Elab.push(childCtx, child)
+            ec       <- transform(child)
+            _        <- Elab.pop
+            schema   <- Elab.schema
+            ref      =  schema.ref(obj.name)
+          } yield
+            cmapping.get((ref, fieldName)) match {
+              case Some((component, join)) =>
+                Component(component, join, s.copy(child = ec))
+              case None =>
+                s.copy(child = ec)
             }
-          }).getOrElse(Result.failure(s"Type $tpe has no field '$fieldName'"))
 
-        case _ => super.transform(query, vars, schema, tpe)
+        case _ => super.transform(query)
       }
   }
 
@@ -696,25 +870,44 @@ object QueryCompiler {
       new ComponentElaborator(mappings.map(m => ((m.tpe, m.fieldName), (m.mapping, m.join))).toMap)
   }
 
-  class EffectElaborator[F[_]] private (cmapping: Map[(Type, String), EffectHandler[F]]) extends Phase {
-    override def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
+  /**
+   * A compiler phase which partitions a query for execution which may invoke
+   * multiple effect handlers.
+   *
+   * This phase transforms the input query by assigning subtrees to effect
+   * handlers as specified by the supplied `emapping`.
+   *
+   * The mapping has `Type` and field name pairs as keys and effect handlers
+   * as values. When the traversal of the input query visits a `Select` node
+   * with type `Type.field name` it will replace the
+   * `Select` with an `Effect` node comprising,
+   *
+   * 1. the effect handler which will be responsible for running the effect
+   *    and evaluating the subquery against its result.
+   * 2. the subquery which will be evaluated by the effect handler.
+   */
+  class EffectElaborator[F[_]] private (emapping: Map[(Type, String), EffectHandler[F]]) extends Phase {
+    override def transform(query: Query): Elab[Query] =
       query match {
-        case PossiblyRenamedSelect(Select(fieldName, args, child), resultName) =>
-          (for {
-            obj      <- tpe.underlyingObject
-            childTpe =  obj.field(fieldName).getOrElse(ScalarType.AttributeType)
-          } yield {
-            transform(child, vars, schema, childTpe).map { elaboratedChild =>
-              schema.ref(obj).flatMap(ref => cmapping.get((ref, fieldName))) match {
-                case Some(handler) =>
-                  Wrap(resultName, Effect(handler, PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)))
-                case None =>
-                  PossiblyRenamedSelect(Select(fieldName, args, elaboratedChild), resultName)
-              }
+        case s@Select(fieldName, resultName, child) =>
+          for {
+            c        <- Elab.context
+            obj      <- Elab.liftR(c.tpe.underlyingObject.toResultOrError(s"Type ${c.tpe} is not an object or interface type"))
+            childCtx =  c.forFieldOrAttribute(fieldName, resultName)
+            _        <- Elab.push(childCtx, child)
+            ec       <- transform(child)
+            _        <- Elab.pop
+            schema   <- Elab.schema
+            ref      =  schema.ref(obj.name)
+          } yield
+            emapping.get((ref, fieldName)) match {
+              case Some(handler) =>
+                Effect(handler, s.copy(child = ec))
+              case None =>
+                s.copy(child = ec)
             }
-          }).getOrElse(Result.failure(s"Type $tpe has no field '$fieldName'"))
 
-        case _ => super.transform(query, vars, schema, tpe)
+        case _ => super.transform(query)
       }
   }
 
@@ -725,53 +918,58 @@ object QueryCompiler {
       new EffectElaborator(mappings.map(m => ((m.tpe, m.fieldName), m.handler)).toMap)
   }
 
+  /**
+    * A compiler phase which estimates the size of a query and applies width
+    * and depth limits.
+    */
   class QuerySizeValidator(maxDepth: Int, maxWidth: Int) extends Phase {
-    override def transform(query: Query, vars: Vars, schema: Schema, tpe: Type): Result[Query] =
-      querySize(query) match {
-        case (depth, _) if depth > maxDepth => Result.failure(s"Query is too deep: depth is $depth levels, maximum is $maxDepth")
-        case (_, width) if width > maxWidth => Result.failure(s"Query is too wide: width is $width leaves, maximum is $maxWidth")
-        case (depth, width) if depth > maxDepth && width > maxWidth => Result.failure(s"Query is too complex: width/depth is $width/$depth leaves/levels, maximum is $maxWidth/$maxDepth")
-        case (_, _) => query.success
+    override def transform(query: Query): Elab[Query] =
+      Elab.fragments.flatMap { frags =>
+        querySize(query, frags) match {
+          case (depth, _) if depth > maxDepth => Elab.failure(s"Query is too deep: depth is $depth levels, maximum is $maxDepth")
+          case (_, width) if width > maxWidth => Elab.failure(s"Query is too wide: width is $width leaves, maximum is $maxWidth")
+          case (depth, width) if depth > maxDepth && width > maxWidth => Elab.failure(s"Query is too complex: width/depth is $width/$depth leaves/levels, maximum is $maxWidth/$maxDepth")
+          case (_, _) => Elab.pure(query)
+        }
       }
 
-    def querySize(query: Query): (Int, Int) = {
-      def handleGroupedQueries(childQueries: List[Query], depth: Int, width: Int): (Int, Int) = {
-        val fragmentQueries = childQueries.diff(childQueries.collect { case n: Narrow => n })
-        val childSizes =
-          if (fragmentQueries.isEmpty) childQueries.map(gq => loop(gq, depth, width, true))
-          else childQueries.map(gq => loop(gq, depth + 1, width, true))
-
-        val childDepths = (childSizes.map(size => size._1)).max
-        val childWidths = childSizes.map(_._2).sum
-        (childDepths, childWidths)
+    def querySize(query: Query, frags: Map[String, UntypedFragment]): (Int, Int) = {
+      def handleGroup(g: Group, depth: Int, width: Int): (Int, Int) = {
+        val dws = Query.ungroup(g).map(loop(_, depth, width))
+        val (depths, widths) = dws.unzip
+        (depths.max, widths.sum)
       }
+
       @tailrec
-      def loop(q: Query, depth: Int, width: Int, group: Boolean): (Int, Int) =
+      def loop(q: Query, depth: Int, width: Int): (Int, Int) =
         q match {
-          case Select(_, _, Empty) => if (group) (depth, width + 1) else (depth + 1, width + 1)
-          case Count(_, _) => if (group) (depth, width + 1) else (depth + 1, width + 1)
-          case Select(_, _, child) => if (group) loop(child, depth, width, false) else loop(child, depth + 1, width, false)
-          case Group(queries) => handleGroupedQueries(queries, depth, width)
-          case Component(_, _, child) => loop(child, depth, width, false)
-          case Effect(_, child) => loop(child, depth, width, false)
-          case Environment(_, child) => loop(child, depth, width, false)
+          case UntypedSelect(_, _, _, _, Empty) => (depth + 1, width + 1)
+          case Select(_, _, Empty) => (depth + 1, width + 1)
+          case Count(_) => (depth + 1, width + 1)
+          case UntypedSelect(_, _, _, _, child) => loop(child, depth + 1, width)
+          case Select(_, _, child) => loop(child, depth + 1, width)
+          case g: Group => handleGroup(g, depth, width)
+          case Component(_, _, child) => loop(child, depth, width)
+          case Effect(_, child) => loop(child, depth, width)
+          case Environment(_, child) => loop(child, depth, width)
           case Empty => (depth, width)
-          case Filter(_, child) => loop(child, depth, width, false)
+          case Filter(_, child) => loop(child, depth, width)
           case Introspect(_, _) => (depth, width)
-          case Limit(_, child) => loop(child, depth, width, false)
-          case Offset(_, child) => loop(child, depth, width, false)
-          case Narrow(_, child) => loop(child, depth, width, true)
-          case OrderBy(_, child) => loop(child, depth, width, false)
-          case Rename(_, child) => loop(child, depth, width, false)
-          case Skip(_, _, child) => loop(child, depth, width, false)
-          case Skipped => (depth, width)
-          case TransformCursor(_, child) => loop(child, depth, width, false)
-          case Unique(child) => loop(child, depth, width, false)
-          case UntypedNarrow(_, child) => loop(child, depth, width, false)
-          case Wrap(_, child) => loop(child, depth, width, false)
+          case Limit(_, child) => loop(child, depth, width)
+          case Offset(_, child) => loop(child, depth, width)
+          case Narrow(_, child) => loop(child, depth, width)
+          case OrderBy(_, child) => loop(child, depth, width)
+          case TransformCursor(_, child) => loop(child, depth, width)
+          case Unique(child) => loop(child, depth, width)
+          case UntypedFragmentSpread(nme, _) =>
+            frags.get(nme) match {
+              case Some(frag) => loop(frag.child, depth, width)
+              case None => (depth, width)
+            }
+          case UntypedInlineFragment(_, _, child) => loop(child, depth, width)
         }
 
-      loop(query, 0, 0, false)
+      loop(query, 0, 0)
     }
   }
 }

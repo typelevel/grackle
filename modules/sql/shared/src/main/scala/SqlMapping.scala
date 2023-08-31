@@ -15,7 +15,6 @@ import io.circe.Json
 import org.tpolecat.sourcepos.SourcePos
 
 import syntax._
-import Cursor.{Context, Env}
 import Predicate._
 import Query._
 import circe.CirceMappingLike
@@ -625,23 +624,24 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         // Preserve OrderBy
         case o: OrderBy => o.copy(child = loop(o.child, context))
 
-        case PossiblyRenamedSelect(s@Select(fieldName, _, _), resultName) =>
-          val fieldContext = context.forField(fieldName, resultName).getOrElse(throw new SqlMappingException(s"No field '$fieldName' of type ${context.tpe}"))
-          PossiblyRenamedSelect(s.copy(child = loop(s.child, fieldContext)), resultName)
-        case Count(countName, _) =>
-          if(context.tpe.underlying.hasField(countName)) Select(countName, Nil, Empty)
+        case s@Select(fieldName, _, Count(_)) =>
+          if(context.tpe.underlying.hasField(fieldName)) s.copy(child = Empty)
           else Empty
+
+        case s@Select(fieldName, resultName, _) =>
+          val fieldContext = context.forField(fieldName, resultName).getOrElse(throw new SqlMappingException(s"No field '$fieldName' of type ${context.tpe}"))
+          s.copy(child = loop(s.child, fieldContext))
+
+        case s@UntypedSelect(fieldName, resultName, _, _, _) =>
+          val fieldContext = context.forField(fieldName, resultName).getOrElse(throw new SqlMappingException(s"No field '$fieldName' of type ${context.tpe}"))
+          s.copy(child = loop(s.child, fieldContext))
 
         case Group(queries) => Group(queries.map(q => loop(q, context)).filterNot(_ == Empty))
         case u: Unique => u.copy(child = loop(u.child, context.asType(context.tpe.list)))
         case e: Environment => e.copy(child = loop(e.child, context))
-        case w: Wrap => w.copy(child = loop(w.child, context))
-        case r: Rename => r.copy(child = loop(r.child, context))
         case t: TransformCursor => t.copy(child = loop(t.child, context))
-        case u: UntypedNarrow => u.copy(child = loop(u.child, context))
         case n@Narrow(subtpe, _) => n.copy(child = loop(n.child, context.asType(subtpe)))
-        case s: Skip => s.copy(child = loop(s.child, context))
-        case other@(_: Component[_] | _: Effect[_] | Empty | _: Introspect | _: Select | Skipped) => other
+        case other@(_: Component[_] | _: Effect[_] | Empty | _: Introspect | _: Select | _: Count | _: UntypedFragmentSpread | _: UntypedInlineFragment) => other
       }
 
     Result.catchNonFatal {
@@ -2863,7 +2863,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
         q match {
           // Leaf or Json element: no subobjects
-          case PossiblyRenamedSelect(Select(fieldName, _, child), _) if child == Empty || isJsonb(context, fieldName) =>
+          case Select(fieldName, _, child) if child == Empty || isJsonb(context, fieldName) =>
             columnsForLeaf(context, fieldName).flatMap {
               case Nil => EmptySqlQuery.success
               case cols =>
@@ -2876,8 +2876,48 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                   SqlSelect(context, Nil, parentTable, (cols ++ extraCols).distinct, extraJoins, Nil, Nil, None, None, Nil, true, false)
               }
 
+          case Select(fieldName, _, Count(child)) =>
+            def childContext(q: Query): Result[Context] =
+              q match {
+                case Select(fieldName, resultName, _) =>
+                  context.forField(fieldName, resultName)
+                case FilterOrderByOffsetLimit(_, _, _, _, child) =>
+                  childContext(child)
+                case _ => Result.internalError(s"No context for count of ${child}")
+              }
+
+            for {
+              fieldContext <- childContext(child)
+              countCol     <- columnForAtomicField(context, fieldName)
+              sq           <- loop(child, context, parentConstraints, exposeJoins)
+              parentTable  <- parentTableForType(context)
+              res <-
+                sq match {
+                  case sq: SqlSelect =>
+                    sq.joins match {
+                      case hd :: tl =>
+                        val keyCols = keyColumnsForType(fieldContext)
+                        val parentCols0 = hd.colsOf(parentTable)
+                        val wheres = hd.on.map { case (p, c) => Eql(c.toTerm, p.toTerm) }
+                        val ssq = sq.copy(table = hd.child, cols = SqlColumn.CountColumn(countCol.in(hd.child), keyCols.map(_.in(hd.child))) :: Nil, joins = tl, wheres = wheres)
+                        val ssqCol = SqlColumn.SubqueryColumn(countCol, ssq)
+                        SqlSelect(context, Nil, parentTable, (ssqCol :: parentCols0).distinct, Nil, Nil, Nil, None, None, Nil, true, false).success
+                      case _ =>
+                        val keyCols = keyColumnsForType(fieldContext)
+                        val countTable = sq.table
+                        val ssq = sq.copy(cols = SqlColumn.CountColumn(countCol.in(countTable), keyCols.map(_.in(countTable))) :: Nil)
+                        val ssqCol = SqlColumn.SubqueryColumn(countCol, ssq)
+                        SqlSelect(context, Nil, parentTable, ssqCol :: Nil, Nil, Nil, Nil, None, None, Nil, true, false).success
+                    }
+                  case _ =>
+                    Result.internalError("Implementation restriction: cannot count an SQL union")
+                }
+            } yield res
+
+          case _: Count => Result.internalError("Count node must be a child of a Select node")
+
           // Non-leaf non-Json element: compile subobject queries
-          case PossiblyRenamedSelect(Select(fieldName, _, child), resultName) =>
+          case s@Select(fieldName, resultName, child) =>
             context.forField(fieldName, resultName).flatMap { fieldContext =>
               if(schema.isRootType(context.tpe)) loop(child, fieldContext, Nil, false)
               else if(!isLocallyMapped(context, q)) EmptySqlQuery.success
@@ -2887,7 +2927,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 val extraCols = keyCols ++ constraintCols
                 for {
                   parentTable        <- parentTableForType(context)
-                  parentConstraints0 <- parentConstraintsFromJoins(context, fieldName, resultName)
+                  parentConstraints0 <- parentConstraintsFromJoins(context, fieldName, s.resultName)
                   extraJoins         <- parentConstraintsToSqlJoins(parentTable, parentConstraints)
                   res <-
                     loop(child, fieldContext, parentConstraints0, false).flatMap { sq =>
@@ -2903,7 +2943,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               }
             }
 
-          case Effect(_, PossiblyRenamedSelect(Select(fieldName, _, _), _)) =>
+          case Effect(_, Select(fieldName, _, _)) =>
             columnsForLeaf(context, fieldName).flatMap {
               case Nil => EmptySqlQuery.success
               case cols =>
@@ -2921,7 +2961,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               def loop(query: Query): Boolean =
                 query match {
                   case Empty => true
-                  case PossiblyRenamedSelect(Select(_, _, Empty), _) => true
+                  case Select(_, _, Empty) => true
                   case Group(children) => children.forall(loop)
                   case _ => false
                 }
@@ -3001,50 +3041,6 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
           case Group(queries) => group(queries)
 
-          case Wrap(_, child) =>
-            loop(child, context, parentConstraints, exposeJoins)
-
-          case Count(countName, child) =>
-            def childContext(q: Query): Result[Context] =
-              q match {
-                case PossiblyRenamedSelect(Select(fieldName, _, _), resultName) =>
-                  context.forField(fieldName, resultName)
-                case FilterOrderByOffsetLimit(_, _, _, _, child) =>
-                  childContext(child)
-                case _ => Result.internalError(s"No context for count of ${child}")
-              }
-
-            for {
-              fieldContext <- childContext(child)
-              countCol     <- columnForAtomicField(context, countName)
-              sq           <- loop(child, context, parentConstraints, exposeJoins)
-              parentTable  <- parentTableForType(context)
-              res <-
-                sq match {
-                  case sq: SqlSelect =>
-                    sq.joins match {
-                      case hd :: tl =>
-                        val keyCols = keyColumnsForType(fieldContext)
-                        val parentCols0 = hd.colsOf(parentTable)
-                        val wheres = hd.on.map { case (p, c) => Eql(c.toTerm, p.toTerm) }
-                        val ssq = sq.copy(table = hd.child, cols = SqlColumn.CountColumn(countCol.in(hd.child), keyCols.map(_.in(hd.child))) :: Nil, joins = tl, wheres = wheres)
-                        val ssqCol = SqlColumn.SubqueryColumn(countCol, ssq)
-                        SqlSelect(context, Nil, parentTable, (ssqCol :: parentCols0).distinct, Nil, Nil, Nil, None, None, Nil, true, false).success
-                      case _ =>
-                        val keyCols = keyColumnsForType(fieldContext)
-                        val countTable = sq.table
-                        val ssq = sq.copy(cols = SqlColumn.CountColumn(countCol.in(countTable), keyCols.map(_.in(countTable))) :: Nil)
-                        val ssqCol = SqlColumn.SubqueryColumn(countCol, ssq)
-                        SqlSelect(context, Nil, parentTable, ssqCol :: Nil, Nil, Nil, Nil, None, None, Nil, true, false).success
-                    }
-                  case _ =>
-                    Result.internalError("Implementation restriction: cannot count an SQL union")
-                }
-            } yield res
-
-          case Rename(_, child) =>
-            loop(child, context, parentConstraints, exposeJoins)
-
           case Unique(child) =>
             loop(child, context.asType(context.tpe.nonNull.list), parentConstraints, exposeJoins).map {
               case node => node.withContext(context, Nil, Nil)
@@ -3120,7 +3116,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           case TransformCursor(_, child) =>
             loop(child, context, parentConstraints, exposeJoins)
 
-          case Empty | Skipped | Query.Component(_, _, _) | Query.Effect(_, _) | (_: UntypedNarrow) | (_: Skip) | (_: Select) =>
+          case Empty | Query.Component(_, _, _) | Query.Effect(_, _) | (_: UntypedSelect) | (_: UntypedFragmentSpread) | (_: UntypedInlineFragment) | (_: Select) =>
             EmptySqlQuery.success
         }
       }

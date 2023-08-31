@@ -12,8 +12,8 @@ import io.circe.generic.semiauto.deriveEncoder
 import edu.gemini.grackle._
 import sql.Like
 import syntax._
-import Cursor.Env
-import Query._, Predicate._, Value._
+import Query._
+import Predicate._, Value._
 import QueryCompiler._
 
 class CurrencyService[F[_] : Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[F, Int]) {
@@ -204,7 +204,7 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
       val distinctCodes = queries.flatMap(_._2.fieldAs[String]("code2").toList).distinct
 
       val children = queries.flatMap {
-        case (PossiblyRenamedSelect(Select(name, _, child), alias), parentCursor) =>
+        case (Select(name, alias, child), parentCursor) =>
           parentCursor.context.forField(name, alias).toList.map(ctx => (ctx, child, parentCursor))
         case _ => Nil
       }
@@ -241,15 +241,15 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
     val toCode = Map("BR" -> "BRA", "GB" -> "GBR", "NL" -> "NLD")
     def runEffects(queries: List[(Query, Cursor)]): F[Result[List[(Query, Cursor)]]] = {
       runGrouped(queries) {
-        case (PossiblyRenamedSelect(Select("country", _, child), alias), cursors, indices) =>
+        case (Select("country", alias, child), cursors, indices) =>
           val codes = cursors.flatMap(_.fieldAs[Json]("countryCode").toOption.flatMap(_.asString).toList).map(toCode)
-          val combinedQuery = PossiblyRenamedSelect(Select("country", Nil, Filter(In(CountryType / "code", codes), child)), alias)
+          val combinedQuery = Select("country", alias, Filter(In(CountryType / "code", codes), child))
 
           (for {
             cursor <- ResultT(sqlCursor(combinedQuery, Env.empty))
           } yield {
             codes.map { code =>
-              (PossiblyRenamedSelect(Select("country", Nil, Unique(Filter(Eql(CountryType / "code", Const(code)), child))), alias), cursor)
+              (Select("country", alias, Unique(Filter(Eql(CountryType / "code", Const(code)), child))), cursor)
             }.zip(indices)
           }).value.widen
 
@@ -269,16 +269,14 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
     }
   }
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
-        if (namePattern == "%")
-          Select("cities", Nil, child).success
-        else
-          Select("cities", Nil, Filter(Like(CityType / "name", namePattern, true), child)).success
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "cities", List(Binding("namePattern", StringValue(namePattern)))) =>
+      if (namePattern == "%")
+        Elab.unit
+      else
+        Elab.transformChild(child => Filter(Like(CityType / "name", namePattern, true), child))
 
-      case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Filter(Eql(CountryType / "code", Const(code)), child))).success
-    }
-  ))
+    case (QueryType, "country", List(Binding("code", StringValue(code)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(CountryType / "code", Const(code)), child)))
+  }
 }

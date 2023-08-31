@@ -17,7 +17,7 @@ import grackle.test.GraphQLResponseTests.assertWeaklyEqual
 trait SqlCoalesceSuite extends CatsEffectSuite {
 
   type Fragment
-  def mapping: IO[(QueryExecutor[IO, Json], SqlStatsMonitor[IO, Fragment])]
+  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO, Fragment])]
 
   test("simple coalesced query") {
     val query = """

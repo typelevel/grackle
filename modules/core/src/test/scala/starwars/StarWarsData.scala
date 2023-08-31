@@ -10,7 +10,8 @@ import io.circe.Encoder
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
 
-import Query._, Predicate._, Value._
+import Query._
+import Predicate._, Value._
 import QueryCompiler._
 
 object StarWarsData {
@@ -202,26 +203,17 @@ object StarWarsMapping extends ValueMapping[IO] {
       LeafMapping[Episode.Value](EpisodeType)
     )
 
-  val numberOfFriends: PartialFunction[Query, Result[Query]] = {
-    case Select("numberOfFriends", Nil, Empty) =>
-      Count("numberOfFriends", Select("friends", Nil, Empty)).success
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "hero", List(Binding("episode", EnumValue(e)))) =>
+      val episode = Episode.values.find(_.toString == e).get
+      Elab.transformChild(child => Unique(Filter(Eql(CharacterType / "id", Const(hero(episode).id)), child)))
+    case (QueryType, "character" | "human" | "droid", List(Binding("id", IDValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(CharacterType / "id", Const(id)), child)))
+    case (QueryType, "characters", List(Binding("offset", IntValue(offset)), Binding("limit", IntValue(limit)))) =>
+      Elab.transformChild(child => Limit(limit, Offset(offset, child)))
+    case (CharacterType | HumanType | DroidType, "numberOfFriends", _) =>
+      Elab.transformChild(_ => Count(Select("friends")))
   }
-
-
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
-        val episode = Episode.values.find(_.toString == e.name).get
-        Select("hero", Nil, Unique(Filter(Eql(CharacterType / "id", Const(hero(episode).id)), child))).success
-      case Select(f@("character" | "human" | "droid"), List(Binding("id", IDValue(id))), child) =>
-        Select(f, Nil, Unique(Filter(Eql(CharacterType / "id", Const(id)), child))).success
-      case Select("characters", List(Binding("offset", IntValue(offset)), Binding("limit", IntValue(limit))), child) =>
-        Select("characters", Nil, Limit(limit, Offset(offset, child))).success
-    },
-    CharacterType -> numberOfFriends,
-    HumanType -> numberOfFriends,
-    DroidType -> numberOfFriends
-  ))
 
   val querySizeValidator = new QuerySizeValidator(5, 5)
 

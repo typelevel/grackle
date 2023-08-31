@@ -8,8 +8,8 @@ import munit.CatsEffectSuite
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
-import Query._, Value._
-import QueryCompiler._
+import Query._
+import Value._
 
 final class InputValuesSuite extends CatsEffectSuite {
   test("null value") {
@@ -29,9 +29,9 @@ final class InputValuesSuite extends CatsEffectSuite {
 
     val expected =
       Group(List(
-        Select("field", List(Binding("arg", AbsentValue)), Select("subfield", Nil, Empty)),
-        Select("field", List(Binding("arg", NullValue)), Select("subfield", Nil, Empty)),
-        Select("field", List(Binding("arg", IntValue(23))), Select("subfield", Nil, Empty))
+        UntypedSelect("field", None, List(Binding("arg", AbsentValue)), Nil, UntypedSelect("subfield", None, Nil, Nil, Empty)),
+        UntypedSelect("field", None, List(Binding("arg", NullValue)), Nil, UntypedSelect("subfield", None, Nil, Nil, Empty)),
+        UntypedSelect("field", None, List(Binding("arg", IntValue(23))), Nil, UntypedSelect("subfield", None, Nil, Nil, Empty))
       ))
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
@@ -53,11 +53,11 @@ final class InputValuesSuite extends CatsEffectSuite {
 
     val expected =
       Group(List(
-        Select("listField", List(Binding("arg", ListValue(Nil))),
-          Select("subfield", Nil, Empty)
+        UntypedSelect("listField", None, List(Binding("arg", ListValue(Nil))), Nil,
+          UntypedSelect("subfield", None, Nil, Nil, Empty)
         ),
-        Select("listField", List(Binding("arg", ListValue(List(StringValue("foo"),  StringValue("bar"))))),
-          Select("subfield", Nil, Empty)
+        UntypedSelect("listField", None, List(Binding("arg", ListValue(List(StringValue("foo"),  StringValue("bar"))))), Nil,
+          UntypedSelect("subfield", None, Nil, Nil, Empty)
         )
       ))
 
@@ -76,7 +76,7 @@ final class InputValuesSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Select("objectField",
+      UntypedSelect("objectField", None,
         List(Binding("arg",
           ObjectValue(List(
             ("foo", IntValue(23)),
@@ -86,7 +86,8 @@ final class InputValuesSuite extends CatsEffectSuite {
             ("nullable", AbsentValue)
           ))
         )),
-        Select("subfield", Nil, Empty)
+        Nil,
+        UntypedSelect("subfield", None, Nil, Nil, Empty)
       )
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
@@ -103,7 +104,7 @@ final class InputValuesSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = Problem("Unknown field(s) 'wibble' in input object value of type InObj")
+    val expected = Problem("Unknown field(s) 'wibble' for input object value of type InObj in field 'objectField' of type 'Query'")
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
     //println(compiled)
@@ -131,9 +132,5 @@ object InputValuesMapping extends TestMapping {
       }
     """
 
-  val QueryType = schema.ref("Query")
-
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> PartialFunction.empty
-  ))
+  override val selectElaborator = PreserveArgsElaborator
 }

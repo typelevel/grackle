@@ -4,13 +4,13 @@
 package compiler
 
 import cats.effect.IO
-import cats.implicits._
 import io.circe.literal._
 import munit.CatsEffectSuite
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
-import Query._, Predicate._, Value._
+import Query._
+import Predicate._, Value._
 import QueryCompiler._
 
 object ItemData {
@@ -69,18 +69,16 @@ object ItemMapping extends ValueMapping[IO] {
   def tagCount(c: Cursor): Result[Int] =
     c.fieldAs[List[String]]("tags").map(_.size)
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("itemByTag", List(Binding("tag", IDValue(tag))), child) =>
-        Select("itemByTag", Nil, Filter(Contains(ItemType / "tags", Const(tag)), child)).success
-      case Select("itemByTagCount", List(Binding("count", IntValue(count))), child) =>
-        Select("itemByTagCount", Nil, Filter(Eql(ItemType / "tagCount", Const(count)), child)).success
-      case Select("itemByTagCountVA", List(Binding("count", IntValue(count))), child) =>
-        Select("itemByTagCountVA", Nil, Filter(Eql(ItemType / "tagCountVA", Const(count)), child)).success
-      case Select("itemByTagCountCA", List(Binding("count", IntValue(count))), child) =>
-        Select("itemByTagCountCA", Nil, Filter(Eql(ItemType / "tagCountCA", Const(count)), child)).success
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "itemByTag", List(Binding("tag", IDValue(tag)))) =>
+      Elab.transformChild(child => Filter(Contains(ItemType / "tags", Const(tag)), child))
+    case (QueryType, "itemByTagCount", List(Binding("count", IntValue(count)))) =>
+      Elab.transformChild(child => Filter(Eql(ItemType / "tagCount", Const(count)), child))
+    case (QueryType, "itemByTagCountVA", List(Binding("count", IntValue(count)))) =>
+      Elab.transformChild(child => Filter(Eql(ItemType / "tagCountVA", Const(count)), child))
+    case (QueryType, "itemByTagCountCA", List(Binding("count", IntValue(count)))) =>
+      Elab.transformChild(child => Filter(Eql(ItemType / "tagCountCA", Const(count)), child))
+  }
 }
 
 final class PredicatesSuite extends CatsEffectSuite {

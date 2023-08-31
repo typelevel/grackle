@@ -44,7 +44,7 @@ class TestCirceEffectMapping[F[_]: Sync](ref: SignallingRef[F, Int]) extends Cir
         List(
 
           // Compute a CirceCursor
-          RootEffect.computeCursor("foo")((_, p, e) =>
+          RootEffect.computeCursor("foo")((p, e) =>
             ref.update(_+1).as(
               Result(circeCursor(p, e,
                 Json.obj(
@@ -56,7 +56,7 @@ class TestCirceEffectMapping[F[_]: Sync](ref: SignallingRef[F, Int]) extends Cir
           ),
 
           // Compute a Json, let the implementation handle the cursor
-          RootEffect.computeJson("bar")((_, _, _) =>
+          RootEffect.computeJson("bar")((_, _) =>
             ref.update(_+1).as(
               Result(Json.obj(
                 "n" -> Json.fromInt(42),
@@ -66,14 +66,14 @@ class TestCirceEffectMapping[F[_]: Sync](ref: SignallingRef[F, Int]) extends Cir
           ),
 
           // Compute an encodable value, let the implementation handle json and the cursor
-          RootEffect.computeEncodable("baz")((_, _, _) =>
+          RootEffect.computeEncodable("baz")((_, _) =>
             ref.update(_+1).as(
               Result(Struct(44, "hee"))
             )
           ),
 
           // Compute a CirceCursor focussed on the root
-          RootEffect.computeCursor("qux")((_, p, e) =>
+          RootEffect.computeCursor("qux")((p, e) =>
             ref.update(_+1).as(
               Result(circeCursor(Path(p.rootTpe), e,
                 Json.obj(

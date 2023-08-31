@@ -82,12 +82,10 @@ object MutualRecursionMapping extends GenericMapping[IO] {
       )
     )
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select(f@("programmeById" | "productionById"), List(Binding("id", IDValue(id))), child) =>
-        Select(f, Nil, Unique(Filter(Eql(ProgrammeType / "id", Const(id)), child))).success
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "programmeById" | "productionById", List(Binding("id", IDValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(ProgrammeType / "id", Const(id)), child)))
+  }
 }
 
 final class RecursionSuite extends CatsEffectSuite {

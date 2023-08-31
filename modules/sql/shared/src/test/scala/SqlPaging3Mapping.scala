@@ -3,14 +3,13 @@
 
 package edu.gemini.grackle.sql.test
 
-import cats.Order
 import cats.implicits._
 
 import edu.gemini.grackle._, syntax._
-import Cursor.{Env, ListTransformCursor}
-import Query.{Binding, Count, Empty, Environment, Group, Limit, Offset, OrderBy, OrderSelection, OrderSelections, Select, TransformCursor}
-import QueryCompiler.SelectElaborator
-import Value.IntValue
+import Cursor.ListTransformCursor
+import Query.{Binding, Count, FilterOrderByOffsetLimit, OrderSelection, Select, TransformCursor}
+import QueryCompiler.{Elab, SelectElaborator}
+import Value._
 
 // Mapping illustrating paging in "has more" style: paged results can report
 // whether there are more elements beyond the current sub list.
@@ -84,7 +83,7 @@ trait SqlPaging3Mapping[F[_]] extends SqlTestMapping[F] {
         fieldMappings =
           List(
             SqlObject("items"),
-            CursorField("hasMore", genHasMore("country", "numCountries")),
+            CursorField("hasMore", CountryPaging.genHasMore),
             SqlField("numCountries", root.numCountries, hidden = true)
           )
       ),
@@ -103,7 +102,7 @@ trait SqlPaging3Mapping[F[_]] extends SqlTestMapping[F] {
           List(
             SqlField("code", country.code, key = true, hidden = true),
             SqlObject("items", Join(country.code, city.countrycode)),
-            CursorField("hasMore", genHasMore("city", "numCities")),
+            CursorField("hasMore", CityPaging.genHasMore),
             SqlField("numCities", country.numCities, hidden = true)
           )
       ),
@@ -118,100 +117,87 @@ trait SqlPaging3Mapping[F[_]] extends SqlTestMapping[F] {
       )
     )
 
-  def genHasMore(keyPrefix: String, countField: String)(c: Cursor): Result[Boolean] = {
-    val limitKey = keyPrefix+"Limit"
-    val lastKey = keyPrefix+"Last"
-    val aliasKey = keyPrefix+"Alias"
-    if(c.envContains(limitKey)) {
+  abstract class PagingConfig(key: String, countField: String, countAttr: String, orderTerm: Term[String]) {
+    def setup(offset: Option[Int], limit: Option[Int]): Elab[Unit] =
       for {
-        limit <- c.envR[Int](limitKey)
-        alias <- c.envR[Option[String]](aliasKey)
-        items <- c.field("items", alias)
-        size  <- items.listSize
-      } yield limit < 0 || size > limit
-    } else if(c.envContains(lastKey)) {
+        hasHasMore <- Elab.hasField("hasMore")
+        hasItems   <- Elab.hasField("items")
+        resultName <- Elab.fieldAlias("items")
+        _          <- Elab.env(key -> new PagingInfo(offset, limit, hasItems, resultName, hasHasMore))
+      } yield ()
+
+    def elabItems = Elab.envE[PagingInfo](key).flatMap(_.elabItems)
+    def elabHasMore = Elab.envE[PagingInfo](key).flatMap(_.elabHasMore)
+
+    def genHasMore(c : Cursor): Result[Boolean] =
       for {
-        last <- c.envR[Int](lastKey)
-        num  <- c.fieldAs[Long](countField)
-      } yield num > last
-    } else
-      Result.internalError("Result has unexpected shape")
+        info <- c.envR[PagingInfo](key)
+        c0   <- info.genHasMore(c)
+      } yield c0
+
+    case class PagingInfo(offset: Option[Int], limit: Option[Int], hasItems: Boolean, itemsAlias: Option[String], hasHasMore: Boolean) {
+      def elabItems: Elab[Unit] =
+        Elab.transformChild { child =>
+          val lim0 = if (hasHasMore) limit.map(_+1) else limit
+          val items = FilterOrderByOffsetLimit(None, Some(List(OrderSelection(orderTerm))), offset, lim0, child)
+          if (hasHasMore) TransformCursor(genItems, items) else items
+        }
+
+      def genItems(c: Cursor): Result[Cursor] = {
+        for {
+          size  <- c.listSize
+          elems <- c.asList(Seq)
+        } yield {
+          if(limit.map(size <= _).getOrElse(true)) c
+          else ListTransformCursor(c, size-1, elems.init)
+        }
+      }
+
+      def elabHasMore: Elab[Unit] =
+        Elab.addAttribute(countField, Count(Select("items", Select(countAttr)))).whenA(!hasItems)
+
+      def genHasMore(c: Cursor): Result[Boolean] =
+        if(hasItems) {
+          for {
+            items <- c.field("items", itemsAlias)
+            size  <- items.listSize
+          } yield limit.map(size > _).getOrElse(false)
+        } else {
+          for {
+            num <- c.fieldAs[Long](countField)
+          } yield num > offset.getOrElse(0)+limit.getOrElse(num.toInt)
+        }
+    }
   }
 
-  def genItems(keyPrefix: String)(c: Cursor): Result[Cursor] = {
-    val limitKey = keyPrefix+"Limit"
-    for {
-      limit <- c.envR[Int](limitKey)
-      size  <- c.listSize
-      elems <- c.asList(Seq)
-    } yield {
-      if(size <= limit) c
-      else ListTransformCursor(c, size-1, elems.init)
+  object CountryPaging extends PagingConfig("countryPaging", "numCountries", "code", CountryType / "code")
+  object CityPaging extends PagingConfig("cityPaging", "numCities", "name", CityType / "name")
+
+  object OptIntValue {
+    def unapply(v: Value): Option[Option[Int]] = v match {
+      case IntValue(n) => Some(Some(n))
+      case AbsentValue | NullValue => Some(None)
+      case _ => None
     }
   }
 
-  def transformChild[T: Order](query: Query, keyPrefix: String, orderTerm: Term[T], off: Int, lim: Int, hasHasMore: Boolean): Result[Query] =
-    Query.mapFields(query) {
-      case Select("items", Nil, child) =>
-        def order(query: Query): Query =
-          OrderBy(OrderSelections(List(OrderSelection(orderTerm))), query)
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "countries", List(Binding("offset", OptIntValue(off)), Binding("limit", OptIntValue(lim)))) =>
+      CountryPaging.setup(off, lim)
 
-        def offset(query: Query): Query =
-          if (off < 1) query
-          else Offset(off, query)
+    case (PagedCountryType, "items", Nil) =>
+      CountryPaging.elabItems
 
-        def limit(query: Query): Query =
-          if (lim < 1) query
-          else Limit(if (hasHasMore) lim+1 else lim, query)
+    case (PagedCountryType, "hasMore", Nil) =>
+      CountryPaging.elabHasMore
 
-        if(hasHasMore)
-          Select("items", Nil, TransformCursor(genItems(keyPrefix), limit(offset(order(child))))).success
-        else
-          Select("items", Nil, limit(offset(order(child)))).success
+    case (CountryType, "cities", List(Binding("offset", OptIntValue(off)), Binding("limit", OptIntValue(lim)))) =>
+      CityPaging.setup(off, lim)
 
-      case other => other.success
-    }
+    case (PagedCityType, "items", Nil) =>
+      CityPaging.elabItems
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("countries", List(Binding("offset", IntValue(off)), Binding("limit", IntValue(lim))), child) => {
-        val hasItems = Query.hasField(child, "items")
-        val hasHasMore = Query.hasField(child, "hasMore")
-        if(hasItems) {
-          val itemAlias = Query.fieldAlias(child, "items")
-          transformChild[String](child, "country", CountryType / "code", off, lim, hasHasMore).map { child0 =>
-            Select("countries", Nil, Environment(Env[Any]("countryLimit" -> lim, "countryAlias" -> itemAlias), child0))
-          }
-        } else
-          Select("countries", Nil,
-            Environment(Env("countryLast" -> (off+lim)),
-              Group(List(
-                Count("numCountries", Select("items", Nil, Select("code", Nil, Empty))),
-                child
-              ))
-            )
-          ).success
-      }
-    },
-    CountryType -> {
-      case Select("cities", List(Binding("offset", IntValue(off)), Binding("limit", IntValue(lim))), child) => {
-        val hasItems = Query.hasField(child, "items")
-        val hasHasMore = Query.hasField(child, "hasMore")
-        if(hasItems) {
-          val itemAlias = Query.fieldAlias(child, "items")
-          transformChild[String](child, "city", CityType / "name", off, lim, hasHasMore).map { child0 =>
-            Select("cities", Nil, Environment(Env[Any]("cityLimit" -> lim, "cityAlias" -> itemAlias), child0))
-          }
-        } else
-          Select("cities", Nil,
-            Environment(Env("cityLast" -> (off+lim)),
-              Group(List(
-                Count("numCities", Select("items", Nil, Select("id", Nil, Empty))),
-                child
-              ))
-            )
-          ).success
-      }
-    }
-  ))
+    case (PagedCityType, "hasMore", Nil) =>
+      CityPaging.elabHasMore
+  }
 }

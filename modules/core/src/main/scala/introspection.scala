@@ -122,10 +122,38 @@ object Introspection {
   val __EnumValueType =  schema.ref("__EnumValue")
   val __DirectiveType =  schema.ref("__Directive")
   val __TypeKindType =  schema.ref("__TypeKind")
+  val __DirectiveLocationType =  schema.ref("__DirectiveLocation")
 
   object TypeKind extends Enumeration {
     val SCALAR, OBJECT, INTERFACE, UNION, ENUM, INPUT_OBJECT, LIST, NON_NULL = Value
     implicit val typeKindEncoder: Encoder[Value] = Encoder[String].contramap(_.toString)
+  }
+
+  implicit val directiveLocationEncoder: Encoder[Ast.DirectiveLocation] = {
+    import Ast.DirectiveLocation._
+
+    Encoder[String].contramap {
+      case QUERY                  => "QUERY"
+      case MUTATION               => "MUTATION"
+      case SUBSCRIPTION           => "SUBSCRIPTION"
+      case FIELD                  => "FIELD"
+      case FRAGMENT_DEFINITION    => "FRAGMENT_DEFINITION"
+      case FRAGMENT_SPREAD        => "FRAGMENT_SPREAD"
+      case INLINE_FRAGMENT        => "INLINE_FRAGMENT"
+      case VARIABLE_DEFINITION    => "VARIABLE_DEFINITION"
+
+      case SCHEMA                 => "SCHEMA"
+      case SCALAR                 => "SCALAR"
+      case OBJECT                 => "OBJECT"
+      case FIELD_DEFINITION       => "FIELD_DEFINITION"
+      case ARGUMENT_DEFINITION    => "ARGUMENT_DEFINITION"
+      case INTERFACE              => "INTERFACE"
+      case UNION                  => "UNION"
+      case ENUM                   => "ENUM"
+      case ENUM_VALUE             => "ENUM_VALUE"
+      case INPUT_OBJECT           => "INPUT_OBJECT"
+      case INPUT_FIELD_DEFINITION => "INPUT_FIELD_DEFINITION"
+    }
   }
 
   case class NonNullType(tpe: Type)
@@ -243,7 +271,7 @@ object Introspection {
               ValueField("defaultValue", _.defaultValue.map(SchemaRenderer.renderValue))
             )
         ),
-        ValueObjectMapping[EnumValue](
+        ValueObjectMapping[EnumValueDefinition](
           tpe = __EnumValueType,
           fieldMappings =
             List(
@@ -253,7 +281,7 @@ object Introspection {
               ValueField("deprecationReason", _.deprecationReason)
             )
         ),
-        ValueObjectMapping[Directive](
+        ValueObjectMapping[DirectiveDef](
           tpe = __DirectiveType,
           fieldMappings =
             List(
@@ -264,7 +292,8 @@ object Introspection {
               ValueField("isRepeatable", _.isRepeatable)
             )
         ),
-        LeafMapping[TypeKind.Value](__TypeKindType)
+        LeafMapping[TypeKind.Value](__TypeKindType),
+        LeafMapping[Ast.DirectiveLocation](__DirectiveLocationType)
     )
   }
 }

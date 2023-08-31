@@ -84,10 +84,8 @@ trait SqlJsonbMapping[F[_]] extends SqlTestMapping[F] {
       ),
     )
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("record", List(Binding("id", IntValue(id))), child) =>
-        Select("record", Nil, Unique(Filter(Eql(RowType / "id", Const(id)), child))).success
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "record", List(Binding("id", IntValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(RowType / "id", Const(id)), child)))
+  }
 }

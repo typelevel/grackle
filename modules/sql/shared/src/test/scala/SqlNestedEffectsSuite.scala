@@ -4,7 +4,6 @@
 package edu.gemini.grackle.sql.test
 
 import cats.effect.IO
-import io.circe.Json
 import io.circe.literal._
 import munit.CatsEffectSuite
 
@@ -13,7 +12,7 @@ import edu.gemini.grackle._
 import grackle.test.GraphQLResponseTests.{assertWeaklyEqual, assertWeaklyEqualIO}
 
 trait SqlNestedEffectsSuite extends CatsEffectSuite {
-  def mapping: IO[(CurrencyService[IO], QueryExecutor[IO, Json])]
+  def mapping: IO[(CurrencyService[IO], Mapping[IO])]
 
   test("simple effectful service call") {
     val expected = json"""
