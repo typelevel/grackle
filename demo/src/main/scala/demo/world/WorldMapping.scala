@@ -5,7 +5,6 @@ package demo.world
 
 import _root_.doobie.{Meta, Transactor}
 import cats.effect.Sync
-import cats.implicits._
 import edu.gemini.grackle.Predicate._
 import edu.gemini.grackle.Query._
 import edu.gemini.grackle.QueryCompiler._

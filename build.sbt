@@ -10,7 +10,6 @@ val doobieVersion          = "1.0.0-RC4"
 val flywayVersion          = "9.22.0"
 val fs2Version             = "3.9.1"
 val http4sVersion          = "0.23.23"
-val http4sBlazeVersion     = "0.23.15"
 val jnrUnixsocketVersion   = "0.38.20"
 val kindProjectorVersion   = "0.13.2"
 val literallyVersion       = "1.1.0"
@@ -238,8 +237,8 @@ lazy val demo = project
       "org.tpolecat"      %% "doobie-core"         % doobieVersion,
       "org.tpolecat"      %% "doobie-postgres"     % doobieVersion,
       "org.tpolecat"      %% "doobie-hikari"       % doobieVersion,
-      "org.http4s"        %% "http4s-blaze-server" % http4sBlazeVersion,
-      "org.http4s"        %% "http4s-blaze-client" % http4sBlazeVersion,
+      "org.http4s"        %% "http4s-ember-server" % http4sVersion,
+      "org.http4s"        %% "http4s-ember-client" % http4sVersion,
       "org.http4s"        %% "http4s-circe"        % http4sVersion,
       "org.http4s"        %% "http4s-dsl"          % http4sVersion,
       "org.flywaydb"      %  "flyway-core"         % flywayVersion,

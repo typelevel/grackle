@@ -9,7 +9,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 import cats.effect.{ExitCode, IO, IOApp, Resource}
-import cats.implicits._
+import cats.syntax.all._
 import demo.starwars.{StarWarsData, StarWarsMapping}
 import demo.world.WorldMapping
 import doobie.hikari.HikariTransactor
@@ -21,22 +21,17 @@ import org.flywaydb.core.Flyway
 object Main extends IOApp {
 
   def run(args: List[String]): IO[ExitCode] = {
-    container.use { connInfo =>
-      for {
-        _ <- dbMigration(connInfo)
-        _ <- transactor(connInfo).use { xa =>
-          val worldGraphQLRoutes = GraphQLService.routes(
-            "world",
-            GraphQLService.fromMapping(WorldMapping.mkMappingFromTransactor(xa))
-          )
-          val starWarsGraphQLRoutes = GraphQLService.routes[IO](
-            "starwars",
-            GraphQLService.fromMapping(new StarWarsMapping[IO] with StarWarsData[IO])
-          )
-          DemoServer.stream[IO](worldGraphQLRoutes <+> starWarsGraphQLRoutes).compile.drain
-        }
-      } yield ()
-    }.as(ExitCode.Success)
+    container.evalTap(dbMigration(_)).flatMap(transactor(_)).flatMap { xa =>
+      val worldGraphQLRoutes = GraphQLService.routes(
+        "world",
+        GraphQLService.fromMapping(WorldMapping.mkMappingFromTransactor(xa))
+      )
+      val starWarsGraphQLRoutes = GraphQLService.routes[IO](
+        "starwars",
+        GraphQLService.fromMapping(new StarWarsMapping[IO] with StarWarsData[IO])
+      )
+      DemoServer.resource(worldGraphQLRoutes <+> starWarsGraphQLRoutes)
+    }.useForever
   }
 
   case class PostgresConnectionInfo(host: String, port: Int) {
@@ -91,7 +86,7 @@ object Main extends IOApp {
 
   def dbMigration(connInfo: PostgresConnectionInfo): IO[Unit] = {
     import connInfo._
-    IO {
+    IO.blocking {
       val flyway = Flyway
         .configure()
         .dataSource(jdbcUrl, username, password)

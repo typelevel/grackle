@@ -14,15 +14,31 @@ sbt:gsp-graphql> reStart
 [info] Application demo not yet started
 [info] Starting application demo in the background ...
 demo Starting demo.Main.main()
-[success] Total time: 0 s, completed 11-Dec-2019 16:55:35
-sbt:gsp-graphql> demo [ioapp-compute-0] INFO  o.h.b.c.n.NIO1SocketServerGroup - [...]
-demo [ioapp-compute-0] INFO  o.h.s.b.BlazeServerBuilder -
-demo   _   _   _        _ _
-demo  | |_| |_| |_ _ __| | | ___
-demo  | ' \  _|  _| '_ \_  _(_-<
-demo  |_||_\__|\__| .__/ |_|/__/
-demo              |_|
-demo [ioapp-compute-0] INFO  o.h.s.b.BlazeServerBuilder - [...]
+demo[ERROR] Picked up JAVA_TOOL_OPTIONS:  -Xmx3489m
+[success] Total time: 0 s, completed Sep 3, 2023, 5:01:11 AM
+demo[ERROR] Sep 03, 2023 5:01:18 AM org.flywaydb.core.internal.license.VersionPrinter printVersionOnly
+demo[ERROR] INFO: Flyway Community Edition 9.22.0 by Redgate
+demo[ERROR] Sep 03, 2023 5:01:18 AM org.flywaydb.core.internal.license.VersionPrinter printVersion
+demo[ERROR] INFO: See release notes here: https://rd.gt/416ObMi
+demo[ERROR] Sep 03, 2023 5:01:18 AM org.flywaydb.core.internal.license.VersionPrinter printVersion
+demo[ERROR] INFO: 
+demo[ERROR] Sep 03, 2023 5:01:18 AM org.flywaydb.core.FlywayExecutor execute
+demo[ERROR] INFO: Database: jdbc:postgresql://0.0.0.0:32771/test (PostgreSQL 11.8)
+demo[ERROR] Sep 03, 2023 5:01:18 AM org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory allAppliedMigrations
+demo[ERROR] INFO: Schema history table "public"."flyway_schema_history" does not exist yet
+demo[ERROR] Sep 03, 2023 5:01:18 AM org.flywaydb.core.internal.command.DbValidate validate
+demo[ERROR] INFO: Successfully validated 1 migration (execution time 00:00.059s)
+demo[ERROR] Sep 03, 2023 5:01:18 AM org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory create
+demo[ERROR] INFO: Creating Schema History table "public"."flyway_schema_history" ...
+demo[ERROR] Sep 03, 2023 5:01:18 AM org.flywaydb.core.internal.command.DbMigrate migrateGroup
+demo[ERROR] INFO: Current version of schema "public": << Empty Schema >>
+demo[ERROR] Sep 03, 2023 5:01:18 AM org.flywaydb.core.internal.command.DbMigrate doMigrateGroup
+demo[ERROR] INFO: Migrating schema "public" to version "1 - WorldSetup"
+demo[ERROR] Sep 03, 2023 5:01:18 AM org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor printWarnings
+demo[ERROR] WARNING: DB: there is already a transaction in progress (SQL State: 25001 - Error Code: 0)
+demo[ERROR] Sep 03, 2023 5:01:18 AM org.flywaydb.core.internal.command.DbMigrate logSummary
+demo[ERROR] INFO: Successfully applied 1 migration to schema "public", now at version v1 (execution time 00:00.110s)
+demo [io-compute-2] INFO  o.h.e.s.EmberServerBuilderCompanionPlatform - Ember-Server service bound to address: [::]:8080 
 ```
 
 This application hosts the demo services for in-memory and db-backend models, as well as a web-based GraphQL client
