@@ -109,12 +109,12 @@ final class ProblemSuite extends CatsEffectSuite {
   }
 
   test("extension") {
-    val p = Problem("foo", extension = Some(JsonObject("bar" -> 42.asJson, "baz" -> List("a", "b").asJson)))
+    val p = Problem("foo", extensions = Some(JsonObject("bar" -> 42.asJson, "baz" -> List("a", "b").asJson)))
     assertEquals(
       p.asJson, json"""
         {
           "message" : "foo",
-          "extension" : {
+          "extensions" : {
             "bar" : 42,
             "baz" : [
               "a",
