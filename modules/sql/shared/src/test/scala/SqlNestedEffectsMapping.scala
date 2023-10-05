@@ -199,14 +199,13 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
     )
 
   object CurrencyQueryHandler extends EffectHandler[F] {
-    def runEffects(queries: List[(Query, Cursor)]): F[Result[List[(Query, Cursor)]]] = {
+    def runEffects(queries: List[(Query, Cursor)]): F[Result[List[Cursor]]] = {
       val countryCodes = queries.map(_._2.fieldAs[String]("code2").toOption)
       val distinctCodes = queries.flatMap(_._2.fieldAs[String]("code2").toList).distinct
 
-      val children = queries.flatMap {
-        case (Select(name, alias, child), parentCursor) =>
-          parentCursor.context.forField(name, alias).toList.map(ctx => (ctx, child, parentCursor))
-        case _ => Nil
+      val children0 = queries.traverse {
+        case (query, parentCursor) =>
+          Query.childContext(parentCursor.context, query).map(ctx => (ctx, parentCursor))
       }
 
       def unpackResults(res: Json): List[Json] =
@@ -225,39 +224,60 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
             case _ => Json.Null
         }).getOrElse(Nil)
 
-      for {
-        res <- currencyService.get(distinctCodes)
+      (for {
+        children <- ResultT(children0.pure[F])
+        res      <- ResultT(currencyService.get(distinctCodes).map(_.success))
       } yield {
         unpackResults(res).zip(children).map {
-          case (res, (ctx, child, parentCursor)) =>
-            val cursor = CirceCursor(ctx, res, Some(parentCursor), parentCursor.env)
-            (child, cursor)
+          case (res, (childContext, parentCursor)) =>
+            val cursor = CirceCursor(childContext, res, Some(parentCursor), parentCursor.env)
+            cursor
         }
-      }.success
+      }).value.widen
     }
   }
 
   object CountryQueryHandler extends EffectHandler[F] {
     val toCode = Map("BR" -> "BRA", "GB" -> "GBR", "NL" -> "NLD")
-    def runEffects(queries: List[(Query, Cursor)]): F[Result[List[(Query, Cursor)]]] = {
+    def runEffects(queries: List[(Query, Cursor)]): F[Result[List[Cursor]]] = {
+
+      def mkListCursor(cursor: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] =
+        for {
+          c  <- cursor.field(fieldName, resultName)
+          lc <- c.preunique
+        } yield lc
+
+      def extractCode(cursor: Cursor): Result[String] =
+        cursor.fieldAs[String]("code")
+
+      def partitionCursor(codes: List[String], cursor: Cursor): Result[List[Cursor]] = {
+        for {
+          cursors <- cursor.asList
+          tagged  <- cursors.traverse(c => (extractCode(c).map { code => (code, c) }))
+        } yield {
+          val m = tagged.toMap
+          codes.map(code => m(code))
+        }
+      }
+
       runGrouped(queries) {
-        case (Select("country", alias, child), cursors, indices) =>
+        case (Select(_, _, child), cursors, indices) =>
           val codes = cursors.flatMap(_.fieldAs[Json]("countryCode").toOption.flatMap(_.asString).toList).map(toCode)
-          val combinedQuery = Select("country", alias, Filter(In(CountryType / "code", codes), child))
+          val combinedQuery = Select("country", None, Filter(In(CountryType / "code", codes), child))
 
           (for {
-            cursor <- ResultT(sqlCursor(combinedQuery, Env.empty))
+            cursor  <- ResultT(sqlCursor(combinedQuery, Env.empty))
+            cursor0 <- ResultT(mkListCursor(cursor, "country", None).pure[F])
+            pcs     <- ResultT(partitionCursor(codes, cursor0).pure[F])
           } yield {
-            codes.map { code =>
-              (Select("country", alias, Unique(Filter(Eql(CountryType / "code", Const(code)), child))), cursor)
-            }.zip(indices)
+            pcs.zip(indices)
           }).value.widen
 
         case _ => Result.internalError("Continuation query has the wrong shape").pure[F].widen
       }
     }
 
-    def runGrouped(ts: List[(Query, Cursor)])(op: (Query, List[Cursor], List[Int]) => F[Result[List[((Query, Cursor), Int)]]]): F[Result[List[(Query, Cursor)]]] = {
+    def runGrouped(ts: List[(Query, Cursor)])(op: (Query, List[Cursor], List[Int]) => F[Result[List[(Cursor, Int)]]]): F[Result[List[Cursor]]] = {
       val groupedAndIndexed = ts.zipWithIndex.groupMap(_._1._1)(ti => (ti._1._2, ti._2)).toList
       val groupedResults =
         groupedAndIndexed.map { case (q, cis) =>

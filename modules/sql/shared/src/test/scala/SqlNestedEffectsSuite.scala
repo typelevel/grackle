@@ -35,7 +35,39 @@ trait SqlNestedEffectsSuite extends CatsEffectSuite {
     assertWeaklyEqualIO(res, expected)
   }
 
-  test("simple composed query") {
+  test("simple composed query (1)") {
+    val query = """
+      query {
+        country(code: "GBR") {
+          currencies {
+            code
+            exchangeRate
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "currencies": [
+              {
+                "code": "GBP",
+                "exchangeRate": 1.25
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = mapping.flatMap(_._2.compileAndRun(query))
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("simple composed query (2)") {
     val query = """
       query {
         country(code: "GBR") {

@@ -2916,6 +2916,21 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
           case _: Count => Result.internalError("Count node must be a child of a Select node")
 
+          case Select(fieldName, _, Effect(_, _)) =>
+            columnsForLeaf(context, fieldName).flatMap {
+              case Nil => EmptySqlQuery.success
+              case cols =>
+                val constraintCols = if(exposeJoins) parentConstraints.lastOption.getOrElse(Nil).map(_._2) else Nil
+                val extraCols = keyColumnsForType(context) ++ constraintCols
+                for {
+                  parentTable <- parentTableForType(context)
+                  extraJoins  <- parentConstraintsToSqlJoins(parentTable, parentConstraints)
+                } yield
+                  SqlSelect(context, Nil, parentTable, (cols ++ extraCols).distinct, extraJoins, Nil, Nil, None, None, Nil, true, false)
+              }
+
+          case Effect(_, _) => Result.internalError("Effect node must be a child of a Select node")
+
           // Non-leaf non-Json element: compile subobject queries
           case s@Select(fieldName, resultName, child) =>
             context.forField(fieldName, resultName).flatMap { fieldContext =>
@@ -2942,19 +2957,6 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 } yield res
               }
             }
-
-          case Effect(_, Select(fieldName, _, _)) =>
-            columnsForLeaf(context, fieldName).flatMap {
-              case Nil => EmptySqlQuery.success
-              case cols =>
-                val constraintCols = if(exposeJoins) parentConstraints.lastOption.getOrElse(Nil).map(_._2) else Nil
-                val extraCols = keyColumnsForType(context) ++ constraintCols
-                for {
-                  parentTable <- parentTableForType(context)
-                  extraJoins  <- parentConstraintsToSqlJoins(parentTable, parentConstraints)
-                } yield
-                  SqlSelect(context, Nil, parentTable, (cols ++ extraCols).distinct, extraJoins, Nil, Nil, None, None, Nil, true, false)
-              }
 
           case TypeCase(default, narrows) =>
             def isSimple(query: Query): Boolean = {
@@ -3116,7 +3118,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           case TransformCursor(_, child) =>
             loop(child, context, parentConstraints, exposeJoins)
 
-          case Empty | Query.Component(_, _, _) | Query.Effect(_, _) | (_: UntypedSelect) | (_: UntypedFragmentSpread) | (_: UntypedInlineFragment) | (_: Select) =>
+          case Empty | Query.Component(_, _, _) | (_: UntypedSelect) | (_: UntypedFragmentSpread) | (_: UntypedInlineFragment) | (_: Select) =>
             EmptySqlQuery.success
         }
       }

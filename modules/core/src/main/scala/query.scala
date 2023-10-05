@@ -93,7 +93,7 @@ object Query {
   }
 
   trait EffectHandler[F[_]] {
-    def runEffects(queries: List[(Query, Cursor)]): F[Result[List[(Query, Cursor)]]]
+    def runEffects(queries: List[(Query, Cursor)]): F[Result[List[Cursor]]]
   }
 
   /** Evaluates an introspection query relative to `schema` */
@@ -260,6 +260,11 @@ object Query {
       }
     loop(q)
   }
+
+  def childContext(c: Context, query: Query): Result[Context] =
+    rootName(query).toResultOrError(s"Query has the wrong shape").flatMap {
+      case (fieldName, resultName) => c.forField(fieldName, resultName)
+    }
 
   /**
     * Renames the root of `target` to match `source` if possible.

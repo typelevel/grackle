@@ -228,6 +228,11 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
                       else size(c0)
           } yield List((sel.resultName, ProtoJson.fromJson(Json.fromInt(count))))
 
+        case (sel@Select(_, _, Effect(handler, cont)), _) =>
+          for {
+            value <- ProtoJson.effect(mapping, handler.asInstanceOf[EffectHandler[F]], cont, cursor).success
+          } yield List((sel.resultName, value))
+
         case (sel@Select(fieldName, resultName, child), _) =>
           val fieldTpe = tpe.field(fieldName).getOrElse(ScalarType.AttributeType)
           for {
@@ -240,12 +245,6 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             componentName <- resultName(cont).toResultOrError("Join continuation has unexpected shape")
             value <- runValue(c, tpe, cursor)
           } yield List((componentName, ProtoJson.select(value, componentName)))
-
-        case (e@Effect(_, cont), _) =>
-          for {
-            effectName <- resultName(cont).toResultOrError("Effect continuation has unexpected shape")
-            value <- runValue(e, tpe, cursor)
-          } yield List((effectName, value))
 
         case (Group(siblings), _) =>
           siblings.flatTraverse(query => runFields(query, tpe, cursor))
@@ -409,9 +408,6 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
                 renamedCont <- alignResultName(child, cont).toResultOrError("Join continuation has unexpected shape")
               } yield ProtoJson.component(mapping, renamedCont, cursor)
           }
-
-        case (Effect(handler, cont), _) =>
-          ProtoJson.effect(mapping, handler.asInstanceOf[EffectHandler[F]], cont, cursor).success
 
         case (Unique(child), _) =>
           cursor.preunique.flatMap(c =>
@@ -629,19 +625,8 @@ object QueryInterpreter {
           case p: Json         => p
           case d: DeferredJson => subst(d)
           case ProtoObject(fields) =>
-            val newFields: Seq[(String, Json)] =
-              fields.flatMap { case (label, pvalue) =>
-                val value = loop(pvalue)
-                if (isDeferred(pvalue) && value.isObject) {
-                  value.asObject.get.toList match {
-                    case List((_, value)) => List((label, value))
-                    case other => other
-                  }
-                }
-                else List((label, value))
-              }
-            Json.fromFields(newFields)
-
+            val fields0 = fields.map { case (label, pvalue) => (label, loop(pvalue)) }
+            Json.fromFields(fields0)
           case ProtoArray(elems) =>
             val elems0 = elems.map(loop)
             Json.fromValues(elems0)
@@ -667,8 +652,9 @@ object QueryInterpreter {
                     ResultT(mapping.combineAndRun(queries))
                   case Some(handler) =>
                     for {
-                      conts <- ResultT(handler.runEffects(queries))
-                      res   <- ResultT(combineResults(conts.map { case (query, cursor) => mapping.interpreter.runValue(query, cursor.tpe, cursor) }).pure[F])
+                      cs    <- ResultT(handler.runEffects(queries))
+                      conts <- ResultT(queries.traverse { case (q, _) => Query.extractChild(q).toResultOrError("Continuation query has the wrong shape") }.pure[F])
+                      res   <- ResultT(combineResults((conts, cs).parMapN { case (query, cursor) => mapping.interpreter.runValue(query, cursor.tpe, cursor) }).pure[F])
                     } yield res
                 }
               next  <- ResultT(completeAll[F](pnext))

@@ -902,7 +902,7 @@ object QueryCompiler {
           } yield
             emapping.get((ref, fieldName)) match {
               case Some(handler) =>
-                Effect(handler, s.copy(child = ec))
+                Select(fieldName, resultName, Effect(handler, s.copy(child = ec)))
               case None =>
                 s.copy(child = ec)
             }
