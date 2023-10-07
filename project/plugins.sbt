@@ -1,4 +1,4 @@
-addSbtPlugin("org.typelevel"             % "sbt-typelevel"                 % "0.5.0")
+addSbtPlugin("org.typelevel"             % "sbt-typelevel"                 % "0.5.4")
 addSbtPlugin("io.spray"                  % "sbt-revolver"                  % "0.10.0")
 addSbtPlugin("com.github.sbt"            % "sbt-site-paradox"              % "1.5.0")
 addSbtPlugin("com.timushev.sbt"          % "sbt-updates"                   % "0.6.4")
