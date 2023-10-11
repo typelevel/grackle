@@ -3,7 +3,7 @@
 
 package demo.starwars
 
-import cats.implicits._
+import cats.syntax.all._
 import edu.gemini.grackle.Predicate._
 import edu.gemini.grackle.Query._
 import edu.gemini.grackle.QueryCompiler._

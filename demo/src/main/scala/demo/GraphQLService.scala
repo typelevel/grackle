@@ -4,7 +4,7 @@
 package demo
 
 import cats.effect.Concurrent
-import cats.implicits._
+import cats.syntax.all._
 import edu.gemini.grackle.Mapping
 import io.circe.{Json, ParsingFailure, parser}
 import org.http4s.circe._

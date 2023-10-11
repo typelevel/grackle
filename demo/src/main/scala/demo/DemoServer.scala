@@ -3,20 +3,21 @@
 
 package demo
 
-import cats.effect.Async
-import cats.implicits._
-import fs2.Stream
+import cats.effect.IO
+import cats.effect.Resource
+import cats.syntax.all._
+import com.comcast.ip4s._
 import org.http4s.HttpRoutes
-import org.http4s.blaze.server.BlazeServerBuilder
+import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.server.middleware.Logger
 import org.http4s.server.staticcontent.resourceServiceBuilder
 
 // #server
 object DemoServer {
-  def stream[F[_]: Async](graphQLRoutes: HttpRoutes[F]): Stream[F, Nothing] = {
+  def resource(graphQLRoutes: HttpRoutes[IO]): Resource[IO, Unit] = {
     val httpApp0 = (
       // Routes for static resources, i.e. GraphQL Playground
-      resourceServiceBuilder[F]("/assets").toRoutes <+>
+      resourceServiceBuilder[IO]("/assets").toRoutes <+>
       // GraphQL routes
       graphQLRoutes
     ).orNotFound
@@ -24,12 +25,11 @@ object DemoServer {
     val httpApp = Logger.httpApp(true, false)(httpApp0)
 
     // Spin up the server ...
-    for {
-      exitCode <- BlazeServerBuilder[F]
-        .bindHttp(8080, "0.0.0.0")
-        .withHttpApp(httpApp)
-        .serve
-    } yield exitCode
-  }.drain
+    EmberServerBuilder.default[IO]
+      .withHost(ip"0.0.0.0")
+      .withPort(port"8080")
+      .withHttpApp(httpApp)
+      .build.void
+  }
 }
 // #server
