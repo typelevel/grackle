@@ -14,7 +14,6 @@ final case class Problem(
   path: List[String] = Nil,
   extensions: Option[JsonObject] = None,
 ) {
-
   override def toString = {
 
     lazy val pathText: String =

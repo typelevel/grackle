@@ -8,7 +8,7 @@ import cats.implicits._
 import shapeless3.deriving._
 
 import syntax._
-import Cursor.{AbstractCursor, Context, Env}
+import Cursor.AbstractCursor
 
 trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: GenericMappingLike[F] =>
   trait MkObjectCursorBuilder[T] {

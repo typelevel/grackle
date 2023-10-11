@@ -173,7 +173,7 @@ trait MappingValidator {
 
   protected def validateLeafMapping(lm: LeafMapping[_]): Chain[Failure] =
     lm.tpe.dealias match {
-      case ScalarType(_, _)|(_: EnumType)|(_: ListType) =>
+      case (_: ScalarType)|(_: EnumType)|(_: ListType) =>
         Chain.empty // these are valid on construction. Nothing to do.
       case _ => Chain(InapplicableGraphQLType(lm, "Leaf Type"))
     }

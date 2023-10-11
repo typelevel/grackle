@@ -5,7 +5,6 @@ package edu.gemini.grackle.sql.test
 
 import cats.effect.IO
 import cats.implicits._
-import io.circe.Json
 import io.circe.literal._
 import munit.CatsEffectSuite
 
@@ -15,7 +14,7 @@ import grackle.test.GraphQLResponseTests.{assertNoErrorsIO, assertWeaklyEqualIO}
 
 trait SqlWorldSuite extends CatsEffectSuite {
 
-  def mapping: QueryExecutor[IO, Json]
+  def mapping: Mapping[IO]
 
   test("simple query") {
     val query = """
@@ -1585,7 +1584,7 @@ trait SqlWorldSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = if (isJS) 
+    val expected = if (isJS)
       json"""
           {
             "data" : {

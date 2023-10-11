@@ -113,10 +113,8 @@ object TestCirceMapping extends CirceMapping[IO] {
     } yield i+1).value
   }
 
-  override val selectElaborator = new SelectElaborator(Map(
-    RootType -> {
-      case Select("numChildren", Nil, Empty) =>
-        Count("numChildren", Select("children", Nil, Empty)).success
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (RootType, "numChildren", Nil) =>
+      Elab.transformChild(_ => Count(Select("children")))
+  }
 }

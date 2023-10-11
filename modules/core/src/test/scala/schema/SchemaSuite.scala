@@ -13,16 +13,16 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: undefined types: typo in the use of a Query result type") {
     val schema =
       Schema(
-      """
-        type Query {
-          episodeById(id: String!): Episod
-        }
+        """
+          type Query {
+            episodeById(id: String!): Episod
+          }
 
-        type Episode {
-          id: String!
-        }
-      """
-    )
+          type Episode {
+            id: String!
+          }
+        """
+      )
 
     schema match {
       case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("Reference to undefined type 'Episod'"))
@@ -85,7 +85,7 @@ final class SchemaSuite extends CatsEffectSuite {
     )
 
     schema match {
-      case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("Only a single deprecated allowed at a given location"))
+      case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("Directive 'deprecated' may not occur more than once"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -101,7 +101,7 @@ final class SchemaSuite extends CatsEffectSuite {
     )
 
     schema match {
-      case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("deprecated must have a single String 'reason' argument, or no arguments"))
+      case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("Unknown argument(s) 'notareason' in directive deprecated"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -133,7 +133,15 @@ final class SchemaSuite extends CatsEffectSuite {
 
     schema match {
       case Result.Failure(ps) =>
-        assertEquals(ps.map(_.message), NonEmptyChain("Reference to undefined type 'Character'", "Reference to undefined type 'Contactable'"))
+        assertEquals(
+          ps.map(_.message),
+          NonEmptyChain(
+            "Reference to undefined type 'Character'",
+            "Reference to undefined type 'Contactable'",
+            "Non-interface type 'Character' declared as implemented by type 'Human'",
+            "Non-interface type 'Contactable' declared as implemented by type 'Human'"
+          )
+        )
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }

@@ -12,8 +12,9 @@ import io.circe.Json
 import io.circe.literal._
 import munit.CatsEffectSuite
 
-import edu.gemini.grackle.{Cursor, Query, QueryCompiler, Mapping, Result, Schema, Value, ValueMapping}
+import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
+import QueryCompiler._
 
 final class SubscriptionSuite extends CatsEffectSuite {
 
@@ -40,10 +41,10 @@ final class SubscriptionSuite extends CatsEffectSuite {
       val typeMappings: List[TypeMapping] =
         List(
           ObjectMapping(QueryType, List(
-            RootEffect.computeCursor("get")((_, path, env) => ref.get.map(n => Result(valueCursor(path, env, n))))
+            RootEffect.computeCursor("get")((path, env) => ref.get.map(n => Result(valueCursor(path, env, n))))
           )),
           ObjectMapping(MutationType, List(
-            RootEffect.computeCursor("put")( (_, path, env) =>
+            RootEffect.computeCursor("put")( (path, env) =>
               env.get[Int]("n") match {
                 case None    => Result.failure(s"Implementation error: `n: Int` not found in $env").pure[IO]
                 case Some(n) => ref.set(n).map(_ => Result(valueCursor(path, env, n)))
@@ -51,18 +52,16 @@ final class SubscriptionSuite extends CatsEffectSuite {
             )
           )),
           ObjectMapping(SubscriptionType, List(
-            RootStream.computeCursor("watch")((_, path, env) =>
+            RootStream.computeCursor("watch")((path, env) =>
               ref.discrete.map(n => Result(valueCursor(path, env, n))))
           ))
         )
 
-      override val selectElaborator: QueryCompiler.SelectElaborator =
-        new QueryCompiler.SelectElaborator(Map(
-          MutationType -> {
-            case Query.Select("put", List(Query.Binding("n", Value.IntValue(n))), child) =>
-              Result(Query.Environment(Cursor.Env("n" -> n), Query.Select("put", Nil, child)))
-          }
-        ))
+      override val selectElaborator: SelectElaborator =
+        SelectElaborator {
+          case (MutationType, "put", List(Query.Binding("n", Value.IntValue(n)))) =>
+            Elab.env("n" -> n)
+        }
     }
 
   test("sanity check get") {
@@ -70,7 +69,7 @@ final class SubscriptionSuite extends CatsEffectSuite {
       for {
         ref <- SignallingRef[IO, Int](0)
         map  = mapping(ref)
-        r1  <- map.compileAndRunOne("query { get }")
+        r1  <- map.compileAndRun("query { get }")
       } yield r1
 
     assertIO(prog,
@@ -89,7 +88,7 @@ final class SubscriptionSuite extends CatsEffectSuite {
       for {
         ref <- SignallingRef[IO, Int](0)
         map  = mapping(ref)
-        r1  <- map.compileAndRunOne("mutation { put(n: 42) }")
+        r1  <- map.compileAndRun("mutation { put(n: 42) }")
       } yield r1
 
     assertIO(prog,
@@ -109,9 +108,9 @@ final class SubscriptionSuite extends CatsEffectSuite {
       for {
         ref <- SignallingRef[IO, Int](0)
         map  = mapping(ref)
-        r0  <- map.compileAndRunOne("query { get }")
-        r1  <- map.compileAndRunOne("mutation { put(n: 42) }")
-        r2  <- map.compileAndRunOne("query { get }")
+        r0  <- map.compileAndRun("query { get }")
+        r1  <- map.compileAndRun("mutation { put(n: 42) }")
+        r2  <- map.compileAndRun("query { get }")
       } yield (r0, r1, r2)
 
     assertIO(prog, ((
@@ -146,13 +145,13 @@ final class SubscriptionSuite extends CatsEffectSuite {
       for {
         ref <- SignallingRef[IO, Int](0)
         map  = mapping(ref)
-        fib <- map.compileAndRunAll("subscription { watch }").take(4).compile.toList.start
+        fib <- map.compileAndRunSubscription("subscription { watch }").take(4).compile.toList.start
         _   <- IO.sleep(100.milli) // this is the best we can do for now; I will try to improve in a followup
-        _   <- map.compileAndRunOne("mutation { put(n: 123) }")
+        _   <- map.compileAndRun("mutation { put(n: 123) }")
         _   <- IO.sleep(100.milli)
-        _   <- map.compileAndRunOne("mutation { put(n: 42) }")
+        _   <- map.compileAndRun("mutation { put(n: 42) }")
         _   <- IO.sleep(100.milli)
-        _   <- map.compileAndRunOne("mutation { put(n: 77) }")
+        _   <- map.compileAndRun("mutation { put(n: 77) }")
         _   <- IO.sleep(100.milli)
         out <- fib.join
         res <- out.embedNever

@@ -8,7 +8,8 @@ import cats.implicits._
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
-import Query._, Predicate._, Value._
+import Query._
+import Predicate._, Value._
 import QueryCompiler._
 
 /* Currency component */
@@ -61,12 +62,10 @@ object CurrencyMapping extends ValueMapping[IO] {
       )
     )
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("fx", List(Binding("code", StringValue(code))), child) =>
-        Select("fx", Nil, Unique(Filter(Eql(CurrencyType / "code", Const(code)), child))).success
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "fx", List(Binding("code", StringValue(code)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(CurrencyType / "code", Const(code)), child)))
+  }
 }
 
 /* Country component */
@@ -123,14 +122,10 @@ object CountryMapping extends ValueMapping[IO] {
       )
     )
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Filter(Eql(CurrencyMapping.CurrencyType / "code", Const(code)), child))).success
-      case Select("countries", _, child) =>
-        Select("countries", Nil, child).success
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "country", List(Binding("code", StringValue(code)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(CurrencyMapping.CurrencyType / "code", Const(code)), child)))
+  }
 }
 
 /* Composition */
@@ -158,16 +153,12 @@ object ComposedMapping extends ComposedMapping[IO] {
   val CountryType = schema.ref("Country")
   val CurrencyType = schema.ref("Currency")
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("fx", List(Binding("code", StringValue(code))), child) =>
-        Select("fx", Nil, Unique(Filter(Eql(CurrencyType / "code", Const(code)), child))).success
-      case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Filter(Eql(CountryType / "code", Const(code)), child))).success
-      case Select("countries", _, child) =>
-        Select("countries", Nil, child).success
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "fx", List(Binding("code", StringValue(code)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(CurrencyType / "code", Const(code)), child)))
+    case (QueryType, "country", List(Binding("code", StringValue(code)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(CountryType / "code", Const(code)), child)))
+  }
 
   val typeMappings =
     List(
@@ -192,7 +183,7 @@ object ComposedMapping extends ComposedMapping[IO] {
   def countryCurrencyJoin(q: Query, c: Cursor): Result[Query] =
     (c.focus, q) match {
       case (c: CountryData.Country, Select("currency", _, child)) =>
-        Select("fx", Nil, Unique(Filter(Eql(CurrencyType / "code", Const(c.currencyCode)), child))).success
+        Select("fx", Unique(Filter(Eql(CurrencyType / "code", Const(c.currencyCode)), child))).success
       case _ =>
         Result.internalError(s"Unexpected cursor focus type in countryCurrencyJoin")
     }

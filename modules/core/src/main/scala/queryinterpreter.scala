@@ -14,39 +14,28 @@ import fs2.Stream
 import io.circe.Json
 
 import syntax._
-import Cursor.{Context, Env, ListTransformCursor}
+import Cursor.ListTransformCursor
 import Query._
 import QueryInterpreter.ProtoJson
 import ProtoJson._
 
 class QueryInterpreter[F[_]](mapping: Mapping[F]) {
-  import mapping.{mkResponse, M, RootCursor, RootEffect, RootStream}
+  import mapping.{M, RootCursor, RootEffect, RootStream}
 
   /** Interpret `query` with expected type `rootTpe`.
    *
    *  The query is fully interpreted, including deferred or staged
    *  components.
    *
-   *  The resulting Json value should include standard GraphQL error
-   *  information in the case of failure.
+   *  GraphQL errors are accumulated in the result.
    */
-  def run(query: Query, rootTpe: Type, env: Env): Stream[F,Json] =
-    runRoot(query, rootTpe, env).evalMap(mkResponse)
-
-  /** Interpret `query` with expected type `rootTpe`.
-   *
-   *  The query is fully interpreted, including deferred or staged
-   *  components.
-   *
-   *  Errors are accumulated on the `Left` of the result.
-   */
-  def runRoot(query: Query, rootTpe: Type, env: Env): Stream[F,Result[Json]] = {
+  def run(query: Query, rootTpe: Type, env: Env): Stream[F, Result[Json]] = {
     val rootCursor = RootCursor(Context(rootTpe), None, env)
     val mergedResults =
       if(mapping.schema.subscriptionType.map(_ =:= rootTpe).getOrElse(false))
-        runRootStream(query, rootTpe, rootCursor)
+        runSubscription(query, rootTpe, rootCursor)
       else
-        Stream.eval(runRootEffects(query, rootTpe, rootCursor))
+        Stream.eval(runOneShot(query, rootTpe, rootCursor))
 
     (for {
       pvalue <- ResultT(mergedResults)
@@ -54,7 +43,10 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
     } yield value).value
   }
 
-  def runRootStream(query: Query, rootTpe: Type, rootCursor: Cursor): Stream[F, Result[ProtoJson]] =
+  /**
+   *  Run a subscription query yielding a stream of results.
+   */
+  def runSubscription(query: Query, rootTpe: Type, rootCursor: Cursor): Stream[F, Result[ProtoJson]] =
     ungroup(query) match {
       case Nil => Result(ProtoJson.fromJson(Json.Null)).pure[Stream[F, *]]
       case List(root) =>
@@ -65,13 +57,16 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             effect(root, rootTpe / fieldName, rootCursor.fullEnv.addFromQuery(root)).map(_.flatMap { // TODO Rework in terms of cursor
               case (q, c) => runValue(q, rootTpe, c)
             })
-        ).getOrElse(Result.failure("EffectMapping required for subscriptions").pure[Stream[F, *]])
+        ).getOrElse(Result.internalError("EffectMapping required for subscriptions").pure[Stream[F, *]])
 
       case _ =>
-        Result.failure("Only one root selection permitted for subscriptions").pure[Stream[F, *]]
+        Result.internalError("Only one root selection permitted for subscriptions").pure[Stream[F, *]]
     }
 
-  def runRootEffects(query: Query, rootTpe: Type, rootCursor: Cursor): F[Result[ProtoJson]] = {
+  /**
+   *  Run a non-subscription query yielding a single result.
+   */
+  def runOneShot(query: Query, rootTpe: Type, rootCursor: Cursor): F[Result[ProtoJson]] = {
     case class PureQuery(query: Query)
     case class EffectfulQuery(query: Query, rootEffect: RootEffect)
 
@@ -83,7 +78,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
       }
 
     if(hasRootStream)
-      Result.failure("RootStream only permitted in subscriptions").pure[F].widen
+      Result.internalError("RootStream only permitted in subscriptions").pure[F].widen
     else {
       val (effectfulQueries, pureQueries) = ungrouped.partitionMap { query =>
         (for {
@@ -195,7 +190,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
               fields <- runFields(child, tp1, c)
             } yield fields
 
-        case (Introspect(schema, PossiblyRenamedSelect(Select("__typename", Nil, Empty), resultName)), tpe: NamedType) =>
+        case (Introspect(schema, s@Select("__typename", _, Empty)), tpe: NamedType) =>
           (tpe match {
             case o: ObjectType => Some(o.name)
             case i: InterfaceType =>
@@ -209,49 +204,47 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             case _ => None
           }) match {
             case Some(name) =>
-              List((resultName, ProtoJson.fromJson(Json.fromString(name)))).success
+              List((s.resultName, ProtoJson.fromJson(Json.fromString(name)))).success
             case None =>
               Result.failure(s"'__typename' cannot be applied to non-selectable type '$tpe'")
           }
 
-        case (PossiblyRenamedSelect(sel, resultName), NullableType(tpe)) =>
+        case (sel: Select, NullableType(tpe)) =>
           cursor.asNullable.sequence.map { rc =>
             for {
               c      <- rc
               fields <- runFields(sel, tpe, c)
             } yield fields
-          }.getOrElse(List((resultName, ProtoJson.fromJson(Json.Null))).success)
+          }.getOrElse(List((sel.resultName, ProtoJson.fromJson(Json.Null))).success)
 
-        case (PossiblyRenamedSelect(Select(fieldName, _, child), resultName), _) =>
+        case (sel@Select(_, _, Count(Select(countName, _, _))), _) =>
+          def size(c: Cursor): Result[Int] =
+            if (c.isList) c.asList(Iterator).map(_.size)
+            else 1.success
+
+          for {
+            c0     <- cursor.field(countName, None)
+            count  <- if (c0.isNullable) c0.asNullable.flatMap(_.map(size).getOrElse(0.success))
+                      else size(c0)
+          } yield List((sel.resultName, ProtoJson.fromJson(Json.fromInt(count))))
+
+        case (sel@Select(_, _, Effect(handler, cont)), _) =>
+          for {
+            value <- ProtoJson.effect(mapping, handler.asInstanceOf[EffectHandler[F]], cont, cursor).success
+          } yield List((sel.resultName, value))
+
+        case (sel@Select(fieldName, resultName, child), _) =>
           val fieldTpe = tpe.field(fieldName).getOrElse(ScalarType.AttributeType)
           for {
-            c        <- cursor.field(fieldName, Some(resultName))
+            c        <- cursor.field(fieldName, resultName)
             value    <- runValue(child, fieldTpe, c)
-          } yield List((resultName, value))
+          } yield List((sel.resultName, value))
 
-        case (Rename(resultName, Wrap(_, child)), tpe) =>
-          runFields(Wrap(resultName, child), tpe, cursor)
-
-        case (Wrap(fieldName, child), tpe) =>
+        case (c@Component(_, _, cont), _) =>
           for {
-            value <- runValue(child, tpe, cursor)
-          } yield List((fieldName, value))
-
-        case (Rename(resultName, Count(_, child)), tpe) =>
-          runFields(Count(resultName, child), tpe, cursor)
-
-        case (Count(fieldName, Select(countName, _, _)), _) =>
-          cursor.field(countName, None).flatMap { c0 =>
-            if (c0.isNullable)
-              c0.asNullable.flatMap {
-                case None => 0.success
-                case Some(c1) =>
-                  if (c1.isList) c1.asList(Iterator).map(_.size)
-                  else 1.success
-              }
-            else if (c0.isList) c0.asList(Iterator).map(_.size)
-            else 1.success
-          }.map { value => List((fieldName, ProtoJson.fromJson(Json.fromInt(value)))) }
+            componentName <- resultName(cont).toResultOrError("Join continuation has unexpected shape")
+            value <- runValue(c, tpe, cursor)
+          } yield List((componentName, ProtoJson.select(value, componentName)))
 
         case (Group(siblings), _) =>
           siblings.flatTraverse(query => runFields(query, tpe, cursor))
@@ -369,17 +362,11 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
     if (!cursorCompatible(tpe, cursor.tpe))
       Result.internalError(s"Mismatched query and cursor type in runValue: $tpe ${cursor.tpe}")
     else {
-      def mkResult[T](ot: Option[T]): Result[T] = ot match {
-        case Some(t) => t.success
-        case None => Result.internalError(s"Join continuation has unexpected shape")
-      }
-
       (query, tpe.dealias) match {
         case (Environment(childEnv: Env, child: Query), tpe) =>
           runValue(child, tpe, cursor.withEnv(childEnv))
 
-        case (Wrap(_, Component(_, _, _)), ListType(tpe)) =>
-          // Keep the wrapper with the component when going under the list
+        case (Component(_, _, _), ListType(tpe)) =>
           cursor.asList(Iterator) match {
             case Result.Success(ic) =>
               val builder = Vector.newBuilder[ProtoJson]
@@ -392,37 +379,35 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
                 }
               }
               ProtoJson.fromValues(builder.result()).success
+            case Result.Warning(ps, _) => Result.Failure(ps)
             case fail@Result.Failure(_) => fail
             case err@Result.InternalError(_) => err
-            case Result.Warning(ps, _) => Result.Failure(ps)
           }
 
-        case (Wrap(fieldName, child), _) =>
-          for {
-            pvalue <- runValue(child, tpe, cursor)
-          } yield ProtoJson.fromFields(List((fieldName, pvalue)))
-
-        case (Component(mapping, join, PossiblyRenamedSelect(child, resultName)), _) =>
+        case (Component(mapping, join, child), _) =>
           join(child, cursor).flatMap {
             case Group(conts) =>
-              conts.traverse { case cont =>
-                for {
-                  componentName <- mkResult(rootName(cont).map(nme => nme._2.getOrElse(nme._1)))
-                } yield
-                  ProtoJson.select(
-                    ProtoJson.component(mapping, cont, cursor),
-                    componentName
-                  )
-              }.map(ProtoJson.fromValues)
+              for {
+                childName <- resultName(child).toResultOrError("Join child has unexpected shape")
+                elems     <- conts.traverse { case cont =>
+                              for {
+                                componentName <- resultName(cont).toResultOrError("Join continuation has unexpected shape")
+                              } yield
+                                ProtoJson.select(
+                                  ProtoJson.component(mapping, cont, cursor),
+                                  componentName
+                                )
+                              }
+              } yield
+                ProtoJson.fromFields(
+                  List(childName -> ProtoJson.fromValues(elems))
+                )
 
             case cont =>
               for {
-                renamedCont <- mkResult(renameRoot(cont, resultName))
+                renamedCont <- alignResultName(child, cont).toResultOrError("Join continuation has unexpected shape")
               } yield ProtoJson.component(mapping, renamedCont, cursor)
           }
-
-        case (Effect(handler, cont), _) =>
-          ProtoJson.effect(mapping, handler.asInstanceOf[EffectHandler[F]], cont, cursor).success
 
         case (Unique(child), _) =>
           cursor.preunique.flatMap(c =>
@@ -640,19 +625,8 @@ object QueryInterpreter {
           case p: Json         => p
           case d: DeferredJson => subst(d)
           case ProtoObject(fields) =>
-            val newFields: Seq[(String, Json)] =
-              fields.flatMap { case (label, pvalue) =>
-                val value = loop(pvalue)
-                if (isDeferred(pvalue) && value.isObject) {
-                  value.asObject.get.toList match {
-                    case List((_, value)) => List((label, value))
-                    case other => other
-                  }
-                }
-                else List((label, value))
-              }
-            Json.fromFields(newFields)
-
+            val fields0 = fields.map { case (label, pvalue) => (label, loop(pvalue)) }
+            Json.fromFields(fields0)
           case ProtoArray(elems) =>
             val elems0 = elems.map(loop)
             Json.fromValues(elems0)
@@ -678,8 +652,9 @@ object QueryInterpreter {
                     ResultT(mapping.combineAndRun(queries))
                   case Some(handler) =>
                     for {
-                      conts <- ResultT(handler.runEffects(queries))
-                      res   <- ResultT(combineResults(conts.map { case (query, cursor) => mapping.interpreter.runValue(query, cursor.tpe, cursor) }).pure[F])
+                      cs    <- ResultT(handler.runEffects(queries))
+                      conts <- ResultT(queries.traverse { case (q, _) => Query.extractChild(q).toResultOrError("Continuation query has the wrong shape") }.pure[F])
+                      res   <- ResultT(combineResults((conts, cs).parMapN { case (query, cursor) => mapping.interpreter.runValue(query, cursor.tpe, cursor) }).pure[F])
                     } yield res
                 }
               next  <- ResultT(completeAll[F](pnext))

@@ -294,7 +294,7 @@ final class CirceSuite extends CatsEffectSuite {
       {
         "errors" : [
           {
-            "message" : "Unknown field 'hidden' in select"
+            "message" : "No field 'hidden' for type Root"
           }
         ]
       }

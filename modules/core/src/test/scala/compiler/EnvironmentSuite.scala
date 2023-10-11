@@ -9,8 +9,8 @@ import munit.CatsEffectSuite
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
-import Cursor.Env
-import Query._, Value._
+import Query._
+import Value._
 import QueryCompiler._
 
 object EnvironmentMapping extends ValueMapping[IO] {
@@ -76,20 +76,14 @@ object EnvironmentMapping extends ValueMapping[IO] {
     ).toResult(s"Missing argument")
   }
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("nestedSum", List(Binding("x", IntValue(x)), Binding("y", IntValue(y))), child) =>
-        Environment(Env("x" -> x, "y" -> y), Select("nestedSum", Nil, child)).success
-    },
-    NestedType -> {
-      case Select("sum", List(Binding("x", IntValue(x)), Binding("y", IntValue(y))), child) =>
-        Environment(Env("x" -> x, "y" -> y), Select("sum", Nil, child)).success
-    },
-    NestedSumType -> {
-      case Select("nestedSum", List(Binding("x", IntValue(x)), Binding("y", IntValue(y))), child) =>
-        Environment(Env("x" -> x, "y" -> y), Select("nestedSum", Nil, child)).success
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "nestedSum", List(Binding("x", IntValue(x)), Binding("y", IntValue(y)))) =>
+      Elab.env("x" -> x, "y" -> y)
+    case (NestedType, "sum", List(Binding("x", IntValue(x)), Binding("y", IntValue(y)))) =>
+      Elab.env("x" -> x, "y" -> y)
+    case (NestedSumType, "nestedSum", List(Binding("x", IntValue(x)), Binding("y", IntValue(y)))) =>
+      Elab.env("x" -> x, "y" -> y)
+  }
 }
 
 final class EnvironmentSuite extends CatsEffectSuite {

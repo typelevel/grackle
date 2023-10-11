@@ -13,7 +13,7 @@ import shapeless.ops.coproduct.{LiftAll => CLiftAll}
 import shapeless.ops.record.Keys
 
 import syntax._
-import Cursor.{AbstractCursor, Context, Env}
+import Cursor.AbstractCursor
 import ShapelessUtils._
 
 trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: GenericMappingLike[F] =>

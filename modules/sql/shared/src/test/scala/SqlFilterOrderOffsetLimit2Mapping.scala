@@ -4,8 +4,8 @@
 package edu.gemini.grackle.sql.test
 
 import edu.gemini.grackle._, syntax._
-import Query.{Binding, Limit, Select}
-import QueryCompiler.SelectElaborator
+import Query.{Binding, Limit}
+import QueryCompiler.{Elab, SelectElaborator}
 import Value.{AbsentValue, IntValue, NullValue}
 
 trait SqlFilterOrderOffsetLimit2Mapping[F[_]] extends SqlTestMapping[F] {
@@ -115,50 +115,14 @@ trait SqlFilterOrderOffsetLimit2Mapping[F[_]] extends SqlTestMapping[F] {
       case other =>  Result.failure(s"Expected limit > 0, found $other")
     }
 
-  override val selectElaborator: SelectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("root", List(Binding("limit", limit)), child) =>
-        for {
-          lc <- mkLimit(child, limit)
-        } yield Select("root", Nil, lc)
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "root"|"containers", List(Binding("limit", limit))) =>
+      Elab.transformChild(child => mkLimit(child, limit))
 
-      case Select("containers", List(Binding("limit", limit)), child) =>
-        for {
-          lc <- mkLimit(child, limit)
-        } yield Select("containers", Nil, lc)
+    case (RootType, "containers"|"listA"|"listB", List(Binding("limit", limit))) =>
+      Elab.transformChild(child => mkLimit(child, limit))
 
-      case other => other.success
-    },
-    RootType -> {
-      case Select("containers", List(Binding("limit", limit)), child) =>
-        for {
-          lc <- mkLimit(child, limit)
-        } yield Select("containers", Nil, lc)
-
-      case Select("listA", List(Binding("limit", limit)), child) =>
-        for {
-          lc <- mkLimit(child, limit)
-        } yield Select("listA", Nil, lc)
-
-      case Select("listB", List(Binding("limit", limit)), child) =>
-        for {
-          lc <- mkLimit(child, limit)
-        } yield Select("listB", Nil, lc)
-
-      case other => other.success
-    },
-    ContainerType -> {
-      case Select("listA", List(Binding("limit", limit)), child) =>
-        for {
-          lc <- mkLimit(child, limit)
-        } yield Select("listA", Nil, lc)
-
-      case Select("listB", List(Binding("limit", limit)), child) =>
-        for {
-          lc <- mkLimit(child, limit)
-        } yield Select("listB", Nil, lc)
-
-      case other => other.success
-    }
-  ))
+    case (ContainerType, "listA"|"listB", List(Binding("limit", limit))) =>
+      Elab.transformChild(child => mkLimit(child, limit))
+  }
 }

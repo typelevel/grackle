@@ -57,6 +57,9 @@ trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
   val CountryType  = schema.ref("Country")
   val CityType     = schema.ref("City")
 
+  case class UpdatePopulation(id: Int, population: Int)
+  case class CreateCity(name: String, countryCode: String, population: Int)
+
   val typeMappings =
     List(
       ObjectMapping(
@@ -68,25 +71,17 @@ trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
       ObjectMapping(
         tpe = MutationType,
         fieldMappings = List(
-          RootEffect.computeQuery("updatePopulation")((query, _, env) =>
-            (env.get[Int]("id"), env.get[Int]("population")).tupled match {
-              case Some((id, pop)) =>
-                updatePopulation(id, pop).as(Result(query))
-              case None =>
-                Result.internalError(s"Implementation error, expected id and population in $env.").pure[F].widen
+          RootEffect.computeUnit("updatePopulation")(env =>
+            env.getR[UpdatePopulation]("updatePopulation").traverse {
+              case UpdatePopulation(id, pop) => updatePopulation(id, pop)
             }
           ),
-          RootEffect.computeQuery("createCity")((query, _, env) =>
-            (env.get[String]("name"), env.get[String]("countryCode"), env.get[Int]("population")).tupled match {
-              case Some((name, cc, pop)) =>
-                query match {
-                  case en@Environment(_, s@Select(_, _, child)) =>
-                    createCity(name, cc, pop).map { id =>
-                      Result(en.copy(child = s.copy(child = (Unique(Filter(Eql(CityType / "id", Const(id)), child))))))
-                    }
-                  case _ => Result.internalError(s"Implementation error: expected Environment node.").pure[F].widen
+          RootEffect.computeChild("createCity")((child, _, env) =>
+            env.getR[CreateCity]("createCity").flatTraverse {
+              case CreateCity(name, cc, pop) =>
+                createCity(name, cc, pop).map { id =>
+                  Unique(Filter(Eql(CityType / "id", Const(id)), child)).success
                 }
-              case None => Result.internalError(s"Implementation error: expected name, countryCode and population in $env.").pure[F].widen
             }
           )
         )
@@ -111,29 +106,17 @@ trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
       ),
     )
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("city", List(Binding("id", IntValue(id))), child) =>
-        Select("city", Nil, Unique(Filter(Eql(CityType / "id", Const(id)), child))).success
-    },
-    MutationType -> {
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "city", List(Binding("id", IntValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(CityType / "id", Const(id)), child)))
 
-      case Select("updatePopulation", List(Binding("id", IntValue(id)), Binding("population", IntValue(pop))), child) =>
-        Environment(
-          Cursor.Env("id" -> id, "population" -> pop),
-          Select("updatePopulation", Nil,
-            // We could also do this in the SqlRoot's mutation, and in fact would need to do so if
-            // the mutation generated a new id. But for now it seems easiest to do it here.
-            Unique(Filter(Eql(CityType / "id", Const(id)), child))
-          )
-        ).success
+    case (MutationType, "updatePopulation", List(Binding("id", IntValue(id)), Binding("population", IntValue(pop)))) =>
+      for {
+        _ <- Elab.env("updatePopulation", UpdatePopulation(id, pop))
+        _ <- Elab.transformChild(child => Unique(Filter(Eql(CityType / "id", Const(id)), child)))
+      } yield ()
 
-      case Select("createCity", List(Binding("name", StringValue(name)), Binding("countryCode", StringValue(code)), Binding("population", IntValue(pop))), child) =>
-          Environment(
-            Cursor.Env[Any]("name" -> name, "countryCode" -> code, "population" -> pop),
-            Select("createCity", Nil, child)
-          ).success
-
-    }
-  ))
+    case (MutationType, "createCity", List(Binding("name", StringValue(name)), Binding("countryCode", StringValue(code)), Binding("population", IntValue(pop)))) =>
+      Elab.env("createCity", CreateCity(name, code, pop))
+  }
 }

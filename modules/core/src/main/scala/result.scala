@@ -37,7 +37,13 @@ sealed trait Result[+T] {
   def flatMap[U](f: T => Result[U]): Result[U] =
     this match {
       case Result.Success(value) => f(value)
-      case Result.Warning(problems, value) => f(value).withProblems(problems)
+      case Result.Warning(problems, value) =>
+        f(value) match {
+          case Result.Success(fv) => Result.Warning(problems, fv)
+          case Result.Warning(fps, fv) => Result.Warning(problems ++ fps, fv)
+          case Result.Failure(fps) => Result.Failure(problems ++ fps)
+          case other@Result.InternalError(_) => other
+        }
       case other@Result.Failure(_) => other
       case other@Result.InternalError(_) => other
     }
@@ -154,11 +160,16 @@ object Result extends ResultInstances {
   final case class Failure(problems: NonEmptyChain[Problem]) extends Result[Nothing]
   final case class InternalError(error: Throwable) extends Result[Nothing]
 
-  val unit: Result[Unit] =
-    apply(())
-
+  /** Yields a Success with the given value. */
   def apply[A](a: A): Result[A] = Success(a)
 
+  /** Yields a Success with the given value. */
+  def pure[A](a: A): Result[A] = Success(a)
+
+  /** Yields a Success with unit value. */
+  val unit: Result[Unit] = pure(())
+
+  /** Yields a Success with the given value. */
   def success[A](a: A): Result[A] = Success(a)
 
   def warning[A](warning: Problem, value: A): Result[A] =
@@ -269,8 +280,8 @@ trait ResultInstances extends ResultInstances0 {
               fn(a) match {
                 case err@Result.InternalError(_) => err
                 case Result.Success(a)       => loop(Result.Warning(ps, a))
-                case Result.Failure(ps0)     => Result.Failure(ps0 ++ ps)
-                case Result.Warning(ps0, a)  => loop(Result.Warning(ps0 ++ ps, a))
+                case Result.Failure(ps0)     => Result.Failure(ps ++ ps0)
+                case Result.Warning(ps0, a)  => loop(Result.Warning(ps ++ ps0, a))
               }
           }
         loop(fn(a))
@@ -295,7 +306,13 @@ trait ResultInstances extends ResultInstances0 {
         def ap[A, B](ff: Result[A => B])(fa: Result[A]): Result[B] =
           fa match {
             case err@Result.InternalError(_) => err
-            case fail@Result.Failure(_)      => fail
+            case fail@Result.Failure(ps) =>
+              ff match {
+                case err@Result.InternalError(_) => err
+                case Result.Success(_)           => fail
+                case Result.Failure(ps0)         => Result.Failure(ps0 ++ ps)
+                case Result.Warning(ps0, _)       => Result.Failure(ps0 ++ ps)
+              }
             case Result.Success(a) =>
               ff match {
                 case err@Result.InternalError(_) => err

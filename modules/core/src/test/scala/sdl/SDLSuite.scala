@@ -23,9 +23,9 @@ final class SDLSuite extends CatsEffectSuite {
       List(
         SchemaDefinition(
           List(
-            RootOperationTypeDefinition(Query, Named(Name("MyQuery"))),
-            RootOperationTypeDefinition(Mutation, Named(Name("MyMutation"))),
-            RootOperationTypeDefinition(Subscription, Named(Name("MySubscription")))
+            RootOperationTypeDefinition(Query, Named(Name("MyQuery")), Nil),
+            RootOperationTypeDefinition(Mutation, Named(Name("MyMutation")), Nil),
+            RootOperationTypeDefinition(Subscription, Named(Name("MySubscription")), Nil)
           ),
           Nil
         )
@@ -195,34 +195,18 @@ final class SDLSuite extends CatsEffectSuite {
   }
 
   test("parse directive definition") {
-    val schema = """
-      "A directive"
-      directive @delegateField(name: String!) repeatable on OBJECT | INTERFACE | FIELD | FIELD_DEFINITION | ENUM | ENUM_VALUE
-    """
+    val schema =
+      """|type Query {
+         |  foo: Int
+         |}
+         |"A directive"
+         |directive @delegateField(name: String!) repeatable on OBJECT|INTERFACE|FIELD|FIELD_DEFINITION|ENUM|ENUM_VALUE
+         |""".stripMargin
 
-    val expected =
-      List(
-        DirectiveDefinition(
-          Name("delegateField"),
-          Some("A directive"),
-          List(
-            InputValueDefinition(Name("name"), None, NonNull(Left(Named(Name("String")))), None, Nil)
-          ),
-          true,
-          List(
-            DirectiveLocation.OBJECT,
-            DirectiveLocation.INTERFACE,
-            DirectiveLocation.FIELD,
-            DirectiveLocation.FIELD_DEFINITION,
-            DirectiveLocation.ENUM,
-            DirectiveLocation.ENUM_VALUE
-          )
-        )
-      )
+    val res = SchemaParser.parseText(schema)
+    val ser = res.map(_.toString)
 
-    val res = GraphQLParser.Document.parseAll(schema)
-
-    assertEquals(res, Right(expected))
+    assertEquals(ser, schema.success)
   }
 
   test("deserialize schema (1)") {

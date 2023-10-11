@@ -90,10 +90,8 @@ trait SqlCursorJsonMapping[F[_]] extends SqlTestMapping[F] {
       PrimitiveMapping(CategoryType)
     )
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("brands", List(Binding("id", IntValue(id))), child) =>
-        Select("brands", Nil, Unique(Filter(Eql(BrandType / "id", Const(id)), child))).success
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "brands", List(Binding("id", IntValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(BrandType / "id", Const(id)), child)))
+  }
 }

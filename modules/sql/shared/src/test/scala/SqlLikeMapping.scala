@@ -43,6 +43,10 @@ trait SqlLikeMapping[F[_]] extends SqlTestMapping[F] {
         fieldMappings =
           List(
             SqlObject("likes"),
+            SqlObject("likeNotNullableNotNullable"),
+            SqlObject("likeNotNullableNullable"),
+            SqlObject("likeNullableNotNullable"),
+            SqlObject("likeNullableNullable")
           )
       ),
       ObjectMapping(
@@ -81,18 +85,17 @@ trait SqlLikeMapping[F[_]] extends SqlTestMapping[F] {
       case Some(p) => Like(t, p, false)
     }
 
-  override val selectElaborator: SelectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select(f@"likeNotNullableNotNullable", List(Binding("pattern", NonNullablePattern(pattern))), child) =>
-        Rename(f, Select("likes", Nil, Filter(Like(LikeType / "notNullable", pattern, false), child))).success
-      case Select(f@"likeNotNullableNullable", List(Binding("pattern", NullablePattern(pattern))), child) =>
-        Rename(f, Select("likes", Nil, Filter(mkPredicate(LikeType / "notNullable", pattern), child))).success
-      case Select(f@"likeNullableNotNullable", List(Binding("pattern", NonNullablePattern(pattern))), child) =>
-        Rename(f, Select("likes", Nil, Filter(Like(LikeType / "nullable", pattern, false), child))).success
-      case Select(f@"likeNullableNullable", List(Binding("pattern", NullablePattern(pattern))), child) =>
-        Rename(f, Select("likes", Nil, Filter(mkPredicate(LikeType / "nullable", pattern), child))).success
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "likeNotNullableNotNullable", List(Binding("pattern", NonNullablePattern(pattern)))) =>
+      Elab.transformChild(child => Filter(Like(LikeType / "notNullable", pattern, false), child))
 
-      case other => other.success
-    }
-  ))
+    case (QueryType, "likeNotNullableNullable", List(Binding("pattern", NullablePattern(pattern)))) =>
+      Elab.transformChild(child => Filter(mkPredicate(LikeType / "notNullable", pattern), child))
+
+    case (QueryType, "likeNullableNotNullable", List(Binding("pattern", NonNullablePattern(pattern)))) =>
+      Elab.transformChild(child => Filter(Like(LikeType / "nullable", pattern, false), child))
+
+    case (QueryType, "likeNullableNullable", List(Binding("pattern", NullablePattern(pattern)))) =>
+      Elab.transformChild(child => Filter(mkPredicate(LikeType / "nullable", pattern), child))
+  }
 }

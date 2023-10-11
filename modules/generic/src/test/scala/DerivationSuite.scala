@@ -13,7 +13,6 @@ import io.circe.literal._
 import munit.CatsEffectSuite
 
 import edu.gemini.grackle.syntax._
-import Cursor.Context
 import Query._, Predicate._, Value._
 import QueryCompiler._
 import ScalarType._
@@ -203,25 +202,19 @@ object StarWarsMapping extends GenericMapping[IO] {
       )
     )
 
-  val numberOfFriends: PartialFunction[Query, Result[Query]] = {
-    case Select("numberOfFriends", Nil, Empty) =>
-      Count("numberOfFriends", Select("friends", Nil, Empty)).success
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "hero", List(Binding("episode", EnumValue(e)))) =>
+      for {
+        episode <- Elab.liftR(Episode.values.find(_.toString == e).toResult(s"Unknown episode '$e'"))
+        _       <- Elab.transformChild(child => Unique(Filter(Eql(CharacterType / "id", Const(hero(episode).id)), child)))
+      } yield ()
+
+    case (QueryType, "character" | "human" | "droid", List(Binding("id", IDValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(CharacterType / "id", Const(id)), child)))
+
+    case (CharacterType | HumanType | DroidType, "numberOfFriends", Nil) =>
+      Elab.transformChild(_ => Count(Select("friends")))
   }
-
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("hero", List(Binding("episode", TypedEnumValue(e))), child) =>
-        Episode.values.find(_.toString == e.name).map { episode =>
-          Select("hero", Nil, Unique(Filter(Eql(CharacterType / "id", Const(hero(episode).id)), child))).success
-        }.getOrElse(Result.failure(s"Unknown episode '${e.name}'"))
-
-      case Select(f@("character" | "human" | "droid"), List(Binding("id", IDValue(id))), child) =>
-        Select(f, Nil, Unique(Filter(Eql(CharacterType / "id", Const(id)), child))).success
-    },
-    CharacterType -> numberOfFriends,
-    HumanType -> numberOfFriends,
-    DroidType -> numberOfFriends
-  ))
 }
 
 import StarWarsData._, StarWarsMapping._

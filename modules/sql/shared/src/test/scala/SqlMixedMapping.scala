@@ -89,10 +89,8 @@ trait SqlMixedMapping[F[_]] extends SqlTestMapping[F] with ValueMappingLike[F] {
       Try(UUID.fromString(s.value)).toOption
   }
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("movie", List(Binding("id", UUIDValue(id))), child) =>
-        Select("movie", Nil, Unique(Filter(Eql(MovieType / "id", Const(id)), child))).success
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "movie", List(Binding("id", UUIDValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(MovieType / "id", Const(id)), child)))
+  }
 }

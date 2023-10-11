@@ -15,7 +15,8 @@ import munit.CatsEffectSuite
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
-import Query._, Predicate._, Value._
+import Query._
+import Predicate._, Value._
 import QueryCompiler._
 
 import io.circe.Encoder
@@ -168,8 +169,8 @@ object MovieMapping extends ValueMapping[IO] {
   }
 
   object GenreValue {
-    def unapply(e: TypedEnumValue): Option[Genre] =
-      Genre.fromString(e.value.name)
+    def unapply(e: EnumValue): Option[Genre] =
+      Genre.fromString(e.name)
   }
 
   object DateValue {
@@ -192,48 +193,46 @@ object MovieMapping extends ValueMapping[IO] {
       Try(Duration.parse(s.value)).toOption
   }
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("movieById", List(Binding("id", UUIDValue(id))), child) =>
-        Select("movieById", Nil, Unique(Filter(Eql(MovieType / "id", Const(id)), child))).success
-      case Select("moviesByGenre", List(Binding("genre", GenreValue(genre))), child) =>
-        Select("moviesByGenre", Nil, Filter(Eql(MovieType / "genre", Const(genre)), child)).success
-      case Select("moviesReleasedBetween", List(Binding("from", DateValue(from)), Binding("to", DateValue(to))), child) =>
-        Select("moviesReleasedBetween", Nil,
-          Filter(
-            And(
-              Not(Lt(MovieType / "releaseDate", Const(from))),
-              Lt(MovieType / "releaseDate", Const(to))
-            ),
-            child
-          )
-        ).success
-      case Select("moviesLongerThan", List(Binding("duration", IntervalValue(duration))), child) =>
-        Select("moviesLongerThan", Nil,
-          Filter(
-            Not(Lt(MovieType / "duration", Const(duration))),
-            child
-          )
-        ).success
-      case Select("moviesShownLaterThan", List(Binding("time", TimeValue(time))), child) =>
-        Select("moviesShownLaterThan", Nil,
-          Filter(
-            Not(Lt(MovieType / "showTime", Const(time))),
-            child
-          )
-        ).success
-      case Select("moviesShownBetween", List(Binding("from", DateTimeValue(from)), Binding("to", DateTimeValue(to))), child) =>
-        Select("moviesShownBetween", Nil,
-          Filter(
-            And(
-              Not(Lt(MovieType / "nextShowing", Const(from))),
-              Lt(MovieType / "nextShowing", Const(to))
-            ),
-            child
-          )
-        ).success
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "movieById", List(Binding("id", UUIDValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(MovieType / "id", Const(id)), child)))
+    case (QueryType, "moviesByGenre", List(Binding("genre", GenreValue(genre)))) =>
+      Elab.transformChild(child => Filter(Eql(MovieType / "genre", Const(genre)), child))
+    case (QueryType, "moviesReleasedBetween", List(Binding("from", DateValue(from)), Binding("to", DateValue(to)))) =>
+      Elab.transformChild(child =>
+        Filter(
+          And(
+            Not(Lt(MovieType / "releaseDate", Const(from))),
+            Lt(MovieType / "releaseDate", Const(to))
+          ),
+          child
+        )
+      )
+    case (QueryType, "moviesLongerThan", List(Binding("duration", IntervalValue(duration)))) =>
+      Elab.transformChild(child =>
+        Filter(
+          Not(Lt(MovieType / "duration", Const(duration))),
+          child
+        )
+      )
+    case (QueryType, "moviesShownLaterThan", List(Binding("time", TimeValue(time)))) =>
+      Elab.transformChild(child =>
+        Filter(
+          Not(Lt(MovieType / "showTime", Const(time))),
+          child
+        )
+      )
+    case (QueryType, "moviesShownBetween", List(Binding("from", DateTimeValue(from)), Binding("to", DateTimeValue(to)))) =>
+      Elab.transformChild(child =>
+        Filter(
+          And(
+            Not(Lt(MovieType / "nextShowing", Const(from))),
+            Lt(MovieType / "nextShowing", Const(to))
+          ),
+          child
+        )
+      )
+  }
 }
 
 final class ScalarsSuite extends CatsEffectSuite {

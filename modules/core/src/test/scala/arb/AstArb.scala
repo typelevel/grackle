@@ -93,7 +93,8 @@ trait AstArb {
         variable     <- arbitrary[Name]
         tpe          <- arbitrary[Type]
         defaultValue <- option(genValueForType(tpe))
-      } yield VariableDefinition(variable, tpe, defaultValue)
+        directives   <- shortListOf(arbitrary[Directive])
+      } yield VariableDefinition(variable, tpe, defaultValue, directives)
     }
 
   implicit lazy val arbSelectionFragmentSpread: Arbitrary[Selection.FragmentSpread] =

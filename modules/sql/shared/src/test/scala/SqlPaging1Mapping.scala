@@ -3,13 +3,11 @@
 
 package edu.gemini.grackle.sql.test
 
-import cats.Order
 import cats.implicits._
 
 import edu.gemini.grackle._, syntax._
-import Cursor.Env
-import Query.{Binding, Count, Empty, Environment, Limit, Offset, OrderBy, OrderSelection, OrderSelections, Select}
-import QueryCompiler.SelectElaborator
+import Query.{Binding, Count, FilterOrderByOffsetLimit, OrderSelection, Select}
+import QueryCompiler.{Elab, SelectElaborator}
 import Value.IntValue
 
 // Mapping illustrating paging in "counted" style: paged results can
@@ -49,7 +47,7 @@ trait SqlPaging1Mapping[F[_]] extends SqlTestMapping[F] {
       type Country {
         code: String!
         name: String!
-        cities(offset: Int, limit: Int): PagedCity!
+        cities(offset: Int!, limit: Int!): PagedCity!
       }
       type PagedCity {
         offset: Int!
@@ -81,8 +79,8 @@ trait SqlPaging1Mapping[F[_]] extends SqlTestMapping[F] {
         tpe = PagedCountryType,
         fieldMappings =
           List(
-            CursorField("offset", genValue("countryOffset"), Nil),
-            CursorField("limit", genValue("countryLimit"), Nil),
+            CursorField("offset", CountryPaging.genOffset, Nil),
+            CursorField("limit", CountryPaging.genLimit, Nil),
             SqlField("total", root.numCountries),
             SqlObject("items")
           )
@@ -102,8 +100,8 @@ trait SqlPaging1Mapping[F[_]] extends SqlTestMapping[F] {
           List(
             SqlField("code", country.code, key = true, hidden = true),
             SqlObject("items", Join(country.code, city.countrycode)),
-            CursorField("offset", genValue("cityOffset"), Nil),
-            CursorField("limit", genValue("cityLimit"), Nil),
+            CursorField("offset", CityPaging.genOffset, Nil),
+            CursorField("limit", CityPaging.genLimit, Nil),
             SqlField("total", country.numCities),
           )
       ),
@@ -121,47 +119,50 @@ trait SqlPaging1Mapping[F[_]] extends SqlTestMapping[F] {
   def genValue(key: String)(c: Cursor): Result[Int] =
     c.env[Int](key).toResultOrError(s"Missing key '$key'")
 
-  def transformChild[T: Order](query: Query, orderTerm: Term[T], off: Int, lim: Int): Result[Query] =
-    Query.mapFields(query) {
-      case Select("items", Nil, child) =>
-        def order(query: Query): Query =
-          OrderBy(OrderSelections(List(OrderSelection(orderTerm))), query)
+  abstract class PagingConfig(key: String, countAttr: String, orderTerm: Term[String]) {
+    def setup(offset: Int, limit: Int): Elab[Unit] =
+      Elab.env(key -> new PagingInfo(offset, limit))
 
-        def offset(query: Query): Query =
-          if (off < 1) query
-          else Offset(off, query)
+    def elabItems = Elab.envE[PagingInfo](key).flatMap(_.elabItems)
+    def elabTotal = Elab.envE[PagingInfo](key).flatMap(_.elabTotal)
 
-        def limit(query: Query): Query =
-          if (lim < 1) query
-          else Limit(lim, query)
+    def genOffset(c: Cursor): Result[Int] = info(c, _.offset)
+    def genLimit(c: Cursor): Result[Int] = info(c, _.limit)
 
-        Select("items", Nil, limit(offset(order(child)))).success
+    def info(c: Cursor, f: PagingInfo => Int): Result[Int] =
+      c.env[PagingInfo](key).map(f).toResultOrError(s"Missing key '$key'")
 
-      case other => other.success
-    }
-
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("countries", List(Binding("offset", IntValue(off)), Binding("limit", IntValue(lim))), child) => {
-        transformChild[String](child, CountryType / "code", off, lim).map { child0 =>
-          Select("countries", Nil, Environment(Env("countryOffset" -> off, "countryLimit" -> lim), child0))
+    case class PagingInfo(offset: Int, limit: Int) {
+      def elabItems: Elab[Unit] =
+        Elab.transformChild { child =>
+          FilterOrderByOffsetLimit(None, Some(List(OrderSelection(orderTerm))), Some(offset), Some(limit), child)
         }
-      }
-    },
-    PagedCountryType -> {
-      case Select("total", Nil, Empty) =>
-        Count("total", Select("items", Nil, Select("code", Nil, Empty))).success
-    },
-    CountryType -> {
-      case Select("cities", List(Binding("offset", IntValue(off)), Binding("limit", IntValue(lim))), child) => {
-        transformChild[String](child, CityType / "name", off, lim).map { child0 =>
-          Select("cities", Nil, Environment(Env("cityOffset" -> off, "cityLimit" -> lim), child0))
-        }
-      }
-    },
-    PagedCityType -> {
-      case Select("total", Nil, Empty) =>
-        Count("total", Select("items", Nil, Select("id", Nil, Empty))).success
+
+      def elabTotal: Elab[Unit] =
+        Elab.transformChild(_ => Count(Select("items", Select(countAttr))))
     }
-  ))
+  }
+
+  object CountryPaging extends PagingConfig("countryPaging", "code", CountryType / "code")
+  object CityPaging extends PagingConfig("cityPaging", "id", CityType / "name")
+
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "countries", List(Binding("offset", IntValue(off)), Binding("limit", IntValue(lim)))) =>
+      CountryPaging.setup(off, lim)
+
+    case (PagedCountryType, "items", Nil) =>
+      CountryPaging.elabItems
+
+    case (PagedCountryType, "total", Nil) =>
+      CountryPaging.elabTotal
+
+    case (CountryType, "cities", List(Binding("offset", IntValue(off)), Binding("limit", IntValue(lim)))) =>
+      CityPaging.setup(off, lim)
+
+    case (PagedCityType, "items", Nil) =>
+      CityPaging.elabItems
+
+    case (PagedCityType, "total", Nil) =>
+      CityPaging.elabTotal
+  }
 }

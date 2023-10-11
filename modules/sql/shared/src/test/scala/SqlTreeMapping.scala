@@ -53,12 +53,8 @@ trait SqlTreeMapping[F[_]] extends SqlTestMapping[F] {
       )
     )
 
-  override val selectElaborator: SelectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("bintree", List(Binding("id", IntValue(id))), child) =>
-        Select("bintree", Nil, Unique(Filter(Eql(BinTreeType / "id", Const(id)), child))).success
-
-      case other => other.success
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "bintree", List(Binding("id", IntValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(BinTreeType / "id", Const(id)), child)))
+  }
 }

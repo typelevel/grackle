@@ -9,7 +9,8 @@ import munit.CatsEffectSuite
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
-import Query._, Predicate._, Value._, UntypedOperation._
+import Query._
+import Predicate._, Value._, UntypedOperation._
 import QueryCompiler._, ComponentElaborator.TrivialJoin
 
 final class CompilerSuite extends CatsEffectSuite {
@@ -23,12 +24,12 @@ final class CompilerSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Select("character", List(Binding("id", StringValue("1000"))),
-        Select("name", Nil)
+      UntypedSelect("character", None, List(Binding("id", StringValue("1000"))), Nil,
+        UntypedSelect("name", None, Nil, Nil, Empty)
       )
 
-    val res = QueryParser.parseText(query)
-    assertEquals(res, Result.Success(UntypedQuery(expected, Nil)))
+    val res = QueryParser.parseText(query).map(_._1)
+    assertEquals(res, Result.Success(List(UntypedQuery(None, expected, Nil, Nil))))
   }
 
   test("simple mutation") {
@@ -43,14 +44,14 @@ final class CompilerSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Select("update_character", List(Binding("id", StringValue("1000")), Binding("name", StringValue("Luke"))),
-        Select("character", Nil,
-          Select("name", Nil)
+      UntypedSelect("update_character", None, List(Binding("id", StringValue("1000")), Binding("name", StringValue("Luke"))), Nil,
+        UntypedSelect("character", None, Nil, Nil,
+          UntypedSelect("name", None, Nil, Nil, Empty)
         )
       )
 
-    val res = QueryParser.parseText(query)
-    assertEquals(res, Result.Success(UntypedMutation(expected, Nil)))
+    val res = QueryParser.parseText(query).map(_._1)
+    assertEquals(res, Result.Success(List(UntypedMutation(None, expected, Nil, Nil))))
   }
 
   test("simple subscription") {
@@ -63,12 +64,12 @@ final class CompilerSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Select("character", List(Binding("id", StringValue("1000"))),
-        Select("name", Nil)
+      UntypedSelect("character", None, List(Binding("id", StringValue("1000"))), Nil,
+        UntypedSelect("name", None, Nil, Nil, Empty)
       )
 
-    val res = QueryParser.parseText(query)
-    assertEquals(res, Result.Success(UntypedSubscription(expected, Nil)))
+    val res = QueryParser.parseText(query).map(_._1)
+    assertEquals(res, Result.Success(List(UntypedSubscription(None, expected, Nil, Nil))))
   }
 
   test("simple nested query") {
@@ -84,17 +85,17 @@ final class CompilerSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Select(
-        "character", List(Binding("id", StringValue("1000"))),
-        Select("name", Nil) ~
-          Select(
-            "friends", Nil,
-            Select("name", Nil)
+      UntypedSelect(
+        "character", None, List(Binding("id", StringValue("1000"))), Nil,
+        UntypedSelect("name", None, Nil, Nil, Empty) ~
+          UntypedSelect(
+            "friends", None, Nil, Nil,
+            UntypedSelect("name", None, Nil, Nil, Empty)
           )
       )
 
-    val res = QueryParser.parseText(query)
-    assertEquals(res, Result.Success(UntypedQuery(expected, Nil)))
+    val res = QueryParser.parseText(query).map(_._1)
+    assertEquals(res, Result.Success(List(UntypedQuery(None, expected, Nil, Nil))))
   }
 
   test("shorthand query") {
@@ -113,19 +114,19 @@ final class CompilerSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Select(
-        "hero", List(Binding("episode", UntypedEnumValue("NEWHOPE"))),
-        Select("name", Nil, Empty) ~
-        Select("friends", Nil,
-          Select("name", Nil, Empty) ~
-          Select("friends", Nil,
-            Select("name", Nil, Empty)
+      UntypedSelect(
+        "hero", None, List(Binding("episode", EnumValue("NEWHOPE"))), Nil,
+        UntypedSelect("name", None, Nil, Nil, Empty) ~
+        UntypedSelect("friends", None, Nil, Nil,
+          UntypedSelect("name", None, Nil, Nil, Empty) ~
+          UntypedSelect("friends", None, Nil, Nil,
+            UntypedSelect("name", None, Nil, Nil, Empty)
           )
         )
       )
 
-    val res = QueryParser.parseText(query)
-    assertEquals(res, Result.Success(UntypedQuery(expected, Nil)))
+    val res = QueryParser.parseText(query).map(_._1)
+    assertEquals(res, Result.Success(List(UntypedQuery(None, expected, Nil, Nil))))
   }
 
   test("field alias") {
@@ -141,17 +142,17 @@ final class CompilerSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Select("user", List(Binding("id", IntValue(4))),
+      UntypedSelect("user", None, List(Binding("id", IntValue(4))), Nil,
         Group(List(
-          Select("id", Nil, Empty),
-          Select("name", Nil, Empty),
-          Rename("smallPic", Select("profilePic", List(Binding("size", IntValue(64))), Empty)),
-          Rename("bigPic", Select("profilePic", List(Binding("size", IntValue(1024))), Empty))
+          UntypedSelect("id", None, Nil, Nil, Empty),
+          UntypedSelect("name", None, Nil, Nil, Empty),
+          UntypedSelect("profilePic", Some("smallPic"), List(Binding("size", IntValue(64))), Nil, Empty),
+          UntypedSelect("profilePic", Some("bigPic"), List(Binding("size", IntValue(1024))), Nil, Empty)
         ))
       )
 
-    val res = QueryParser.parseText(query)
-    assertEquals(res, Result.Success(UntypedQuery(expected, Nil)))
+    val res = QueryParser.parseText(query).map(_._1)
+    assertEquals(res, Result.Success(List(UntypedQuery(None, expected, Nil, Nil))))
   }
 
   test("introspection query") {
@@ -172,15 +173,15 @@ final class CompilerSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Select(
-        "__schema", Nil,
-        Select("queryType", Nil, Select("name", Nil, Empty)) ~
-        Select("mutationType", Nil, Select("name", Nil, Empty)) ~
-        Select("subscriptionType", Nil, Select("name", Nil, Empty))
+      UntypedSelect(
+        "__schema", None, Nil, Nil,
+        UntypedSelect("queryType", None, Nil, Nil, UntypedSelect("name", None, Nil, Nil, Empty)) ~
+        UntypedSelect("mutationType", None, Nil, Nil, UntypedSelect("name", None, Nil, Nil, Empty)) ~
+        UntypedSelect("subscriptionType", None, Nil, Nil, UntypedSelect("name", None, Nil, Nil, Empty))
       )
 
-    val res = QueryParser.parseText(query)
-    assertEquals(res, Result.Success(UntypedQuery(expected, Nil)))
+    val res = QueryParser.parseText(query).map(_._1)
+    assertEquals(res, Result.Success(List(UntypedQuery(Some("IntrospectionQuery"), expected, Nil, Nil))))
   }
 
   test("simple selector elaborated query") {
@@ -197,13 +198,13 @@ final class CompilerSuite extends CatsEffectSuite {
 
     val expected =
       Select(
-        "character", Nil,
+        "character", None,
         Unique(
           Filter(Eql(AtomicMapping.CharacterType / "id", Const("1000")),
-          Select("name", Nil) ~
+          Select("name") ~
               Select(
-                "friends", Nil,
-                Select("name", Nil)
+                "friends",
+                Select("name")
               )
           )
         )
@@ -237,7 +238,7 @@ final class CompilerSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = Problem("Unknown field 'foo' in select")
+    val expected = Problem("No field 'foo' for type Character")
 
     val res = AtomicMapping.compiler.compile(query)
 
@@ -316,23 +317,17 @@ final class CompilerSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Wrap("componenta",
-        Component(ComponentA, TrivialJoin,
-          Select("componenta", Nil,
-            Select("fielda1", Nil) ~
-            Select("fielda2", Nil,
-              Wrap("componentb",
-                Component(ComponentB, TrivialJoin,
-                  Select("componentb", Nil,
-                    Select("fieldb1", Nil) ~
-                    Select("fieldb2", Nil,
-                      Wrap("componentc",
-                        Component(ComponentC, TrivialJoin,
-                          Select("componentc", Nil,
-                            Select("fieldc1", Nil)
-                          )
-                        )
-                      )
+      Component(ComponentA, TrivialJoin,
+        Select("componenta",
+          Select("fielda1") ~
+          Select("fielda2",
+            Component(ComponentB, TrivialJoin,
+              Select("componentb",
+                Select("fieldb1") ~
+                Select("fieldb2",
+                  Component(ComponentC, TrivialJoin,
+                    Select("componentc",
+                      Select("fieldc1")
                     )
                   )
                 )
@@ -407,12 +402,10 @@ object AtomicMapping extends TestMapping {
   val QueryType = schema.ref("Query")
   val CharacterType = schema.ref("Character")
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("character", List(Binding("id", StringValue(id))), child) =>
-        Select("character", Nil, Unique(Filter(Eql(CharacterType / "id", Const(id)), child))).success
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "character", List(Binding("id", StringValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(CharacterType / "id", Const(id)), child)))
+  }
 }
 trait DummyComponent extends TestMapping {
   val schema = schema"type Query { dummy: Int }"

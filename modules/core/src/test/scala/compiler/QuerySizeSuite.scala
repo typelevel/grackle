@@ -21,7 +21,7 @@ class QuerySizeSuite extends CatsEffectSuite {
     """
 
     val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
-    val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery)
+    val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery, Map.empty)
 
     assertEquals(res, ((2,1)))
   }
@@ -37,7 +37,7 @@ class QuerySizeSuite extends CatsEffectSuite {
     """
 
     val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
-    val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery)
+    val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery, Map.empty)
 
     assertEquals(res, ((2,2)))
   }
@@ -54,7 +54,7 @@ class QuerySizeSuite extends CatsEffectSuite {
     """
 
     val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
-    val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery)
+    val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery, Map.empty)
 
     assertEquals(res, ((3,1)))
   }
@@ -75,7 +75,7 @@ class QuerySizeSuite extends CatsEffectSuite {
     """
 
     val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
-    val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery)
+    val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery, Map.empty)
 
     assertEquals(res, ((4,3)))
   }
@@ -91,7 +91,7 @@ class QuerySizeSuite extends CatsEffectSuite {
     """
 
     val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
-    val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery)
+    val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery, Map.empty)
 
     assertEquals(res, ((2,1)))
   }
@@ -108,7 +108,7 @@ class QuerySizeSuite extends CatsEffectSuite {
     """
 
     val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
-    val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery)
+    val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery, Map.empty)
 
     assertEquals(res, ((2,1)))
   }
@@ -133,7 +133,7 @@ class QuerySizeSuite extends CatsEffectSuite {
     """
 
     val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
-    val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery)
+    val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery, Map.empty)
 
     assertEquals(res, ((3,5)))
   }
@@ -149,7 +149,7 @@ class QuerySizeSuite extends CatsEffectSuite {
     """
 
     val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
-    val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery)
+    val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery, Map.empty)
 
     assert(res._2 == 2)
   }
@@ -172,7 +172,7 @@ class QuerySizeSuite extends CatsEffectSuite {
     """
 
     val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
-    val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery)
+    val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery, Map.empty)
 
     assert(res._2 == 5)
   }

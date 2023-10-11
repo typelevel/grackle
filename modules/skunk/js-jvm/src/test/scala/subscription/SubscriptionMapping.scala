@@ -83,27 +83,20 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
       ObjectMapping(
         tpe = SubscriptionType,
         fieldMappings = List(
-          RootStream.computeQuery("channel")((query, _, _) =>
+          RootStream.computeChild("channel")((child, _, _) =>
             for {
               s  <- fs2.Stream.resource(pool)
               id <- s.channel(id"city_channel").listen(256).map(_.value.toInt)
-            } yield
-              query match {
-                case s@Select(_, _, child0) =>
-                  Result(s.copy(child = Unique(Filter(Eql(CityType / "id", Const(id)), child0))))
-                case _ => Result.internalError("Implementation error: expected Select")
-              }
+            } yield Unique(Filter(Eql(CityType / "id", Const(id)), child)).success
           )
         )
       )
     )
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("city", List(Binding("id", IntValue(id))), child) =>
-        Select("city", Nil, Unique(Filter(Eql(CityType / "id", Const(id)), child))).success
-    },
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "city", List(Binding("id", IntValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(CityType / "id", Const(id)), child)))
+  }
 }
 
 object SubscriptionMapping extends SkunkMappingCompanion {

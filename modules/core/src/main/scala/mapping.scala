@@ -4,6 +4,7 @@
 package edu.gemini.grackle
 
 import scala.collection.Factory
+import scala.reflect.ClassTag
 
 import cats.MonadThrow
 import cats.data.Chain
@@ -15,52 +16,43 @@ import org.tpolecat.sourcepos.SourcePos
 import org.tpolecat.typename._
 
 import syntax._
-import Cursor.{AbstractCursor, Context, Env}
-import Query.{EffectHandler, Select}
-import QueryCompiler.{ComponentElaborator, EffectElaborator, SelectElaborator, IntrospectionLevel}
+import Cursor.{AbstractCursor, ProxyCursor}
+import Query.EffectHandler
+import QueryCompiler.{ComponentElaborator, EffectElaborator, IntrospectionLevel, SelectElaborator}
 import QueryInterpreter.ProtoJson
 import IntrospectionLevel._
 
-trait QueryExecutor[F[_], T] { outer =>
-  def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty)(
-    implicit sc: Compiler[F,F]
-  ): F[T] =
-    compileAndRunOne(text, name, untypedVars, introspectionLevel, env)
-
-  def compileAndRunAll(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): Stream[F,T]
-
-  def compileAndRunOne(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty)(
-    implicit sc: Compiler[F,F]
-  ): F[T]
-}
-
-abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
+/**
+ * Represents a mapping between a GraphQL schema and an underlying abstract data source.
+ */
+abstract class Mapping[F[_]] {
   implicit val M: MonadThrow[F]
   val schema: Schema
   val typeMappings: List[TypeMapping]
 
-  def run(query: Query, rootTpe: Type, env: Env): Stream[F,Json] =
-    interpreter.run(query, rootTpe, env)
-
-  def run(op: Operation, env: Env = Env.empty): Stream[F,Json] =
-    run(op.query, op.rootTpe, env)
-
-  def compileAndRunOne(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty)(
+  /**
+    * Compile and run a single GraphQL query or mutation.
+    *
+    * Yields a JSON response containing the result of the query or mutation.
+    */
+  def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty)(
     implicit sc: Compiler[F,F]
   ): F[Json] =
-    compileAndRunAll(text, name, untypedVars, introspectionLevel, env).compile.toList.flatMap {
+    compileAndRunSubscription(text, name, untypedVars, introspectionLevel, env).compile.toList.flatMap {
       case List(j) => j.pure[F]
       case Nil     => M.raiseError(new IllegalStateException("Result stream was empty."))
       case js      => M.raiseError(new IllegalStateException(s"Result stream contained ${js.length} results; expected exactly one."))
     }
 
-  def compileAndRunAll(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): Stream[F,Json] =
-    compiler.compile(text, name, untypedVars, introspectionLevel) match {
-      case Result.Success(operation) =>
-        run(operation.query, operation.rootTpe, env)
-      case invalid =>
-        Stream.eval(mkInvalidResponse(invalid))
-    }
+  /**
+   * Compile and run a GraphQL subscription.
+   *
+   * Yields a stream of JSON responses containing the results of the subscription.
+   */
+  def compileAndRunSubscription(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): Stream[F,Json] = {
+    val compiled = compiler.compile(text, name, untypedVars, introspectionLevel, env)
+    Stream.eval(compiled.pure[F]).flatMap(_.flatTraverse(op => interpreter.run(op.query, op.rootTpe, env))).evalMap(mkResponse)
+  }
 
   /** Combine and execute multiple queries.
    *
@@ -80,7 +72,7 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
    *  method to implement their specific combinging logic.
    */
   def combineAndRun(queries: List[(Query, Cursor)]): F[Result[List[ProtoJson]]] =
-    queries.map { case (q, c) => (q, schema.queryType, c) }.traverse((interpreter.runRootEffects _).tupled).map(ProtoJson.combineResults)
+    queries.map { case (q, c) => (q, schema.queryType, c) }.traverse((interpreter.runOneShot _).tupled).map(ProtoJson.combineResults)
 
   /** Yields a `Cursor` focused on the top level operation type of the query */
   def defaultRootCursor(query: Query, tpe: Type, parentCursor: Option[Cursor]): F[Result[(Query, Cursor)]] =
@@ -127,6 +119,7 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
     }
   }
 
+  /** Yields the `TypeMapping` associated with the provided type, if any. */
   def typeMapping(tpe: NamedType): Option[TypeMapping] =
     typeMappingIndex.get(tpe.name)
 
@@ -136,6 +129,7 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
   val validator: MappingValidator =
     MappingValidator(this)
 
+  /** Yields the `ObjectMapping` associated with the provided context, if any. */
   def objectMapping(context: Context): Option[ObjectMapping] =
     context.tpe.underlyingObject.flatMap { obj =>
       obj.asNamed.flatMap(typeMapping) match {
@@ -147,6 +141,7 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
       }
     }
 
+  /** Yields the `FieldMapping` associated with `fieldName` in `context`, if any. */
   def fieldMapping(context: Context, fieldName: String): Option[FieldMapping] =
     objectMapping(context).flatMap(_.fieldMapping(fieldName)).orElse {
       context.tpe.underlyingObject match {
@@ -168,6 +163,7 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
       case rs: RootStream => rs
     }
 
+  /** Yields the `LeafMapping` associated with the provided type, if any. */
   def leafMapping[T](tpe: Type): Option[LeafMapping[T]] =
     typeMappings.collectFirst {
       case lm@LeafMapping(tpe0, _) if tpe0 =:= tpe => lm.asInstanceOf[LeafMapping[T]]
@@ -182,6 +178,7 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
     case tpe => leafMapping(tpe).isDefined
   }
 
+  /** Yields the `Encoder` associated with the provided type, if any. */
   def encoderForLeaf(tpe: Type): Option[Encoder[Any]] =
     encoderMemo.get(tpe.dealias)
 
@@ -300,25 +297,40 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
       new RootEffect(fieldName, effect)
 
     /**
-      * Yields a `RootEffect` which performs an initial effect and yields an effect-specific root cursor.
-      */
-    def computeCursor(fieldName: String)(effect: (Query, Path, Env) => F[Result[Cursor]])(implicit pos: SourcePos): RootEffect =
+     * Yields a `RootEffect` which performs an initial effect which leaves the query and default root cursor
+     * unchanged.
+     */
+    def computeUnit(fieldName: String)(effect: Env => F[Result[Unit]])(implicit pos: SourcePos): RootEffect =
       new RootEffect(
         fieldName,
-        (query, path, env) => effect(query, path, env).map(_.map(c => (query, c)))
+        (query, path, env) =>
+          (for {
+            _  <- ResultT(effect(env))
+            qc <- ResultT(defaultRootCursor(query, path.rootTpe, None))
+          } yield qc.map(_.withEnv(env))).value
+      )
+
+    /**
+      * Yields a `RootEffect` which performs an initial effect and yields an effect-specific root cursor.
+      */
+    def computeCursor(fieldName: String)(effect: (Path, Env) => F[Result[Cursor]])(implicit pos: SourcePos): RootEffect =
+      new RootEffect(
+        fieldName,
+        (query, path, env) => effect(path, env).map(_.map(c => (query, c)))
       )
 
     /**
       * Yields a `RootEffect` which performs an initial effect and yields an effect-specific query
       * which is executed with respect to the default root cursor for the corresponding `Mapping`.
       */
-    def computeQuery(fieldName: String)(effect: (Query, Path, Env) => F[Result[Query]])(implicit pos: SourcePos): RootEffect =
+    def computeChild(fieldName: String)(effect: (Query, Path, Env) => F[Result[Query]])(implicit pos: SourcePos): RootEffect =
       new RootEffect(
         fieldName,
         (query, path, env) =>
           (for {
-            q  <- ResultT(effect(query, path, env))
-            qc <- ResultT(defaultRootCursor(q, path.rootTpe, None))
+            child <- ResultT(Query.extractChild(query).toResultOrError("Root query has unexpected shape").pure[F])
+            q     <- ResultT(effect(child, path, env).map(_.flatMap(Query.substChild(query, _).toResultOrError("Root query has unexpected shape"))))
+            qc    <- ResultT(defaultRootCursor(q, path.rootTpe, None))
           } yield qc.map(_.withEnv(env))).value
       )
   }
@@ -356,10 +368,10 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
       *
       * This form of effect is typically used to implement GraphQL subscriptions.
       */
-    def computeCursor(fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[Cursor]])(implicit pos: SourcePos): RootStream =
+    def computeCursor(fieldName: String)(effect: (Path, Env) => Stream[F, Result[Cursor]])(implicit pos: SourcePos): RootStream =
       new RootStream(
         fieldName,
-        (query, path, env) => effect(query, path, env).map(_.map(c => (query, c)))
+        (query, path, env) => effect(path, env).map(_.map(c => (query, c)))
       )
 
     /**
@@ -369,18 +381,20 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
       *
       * This form of effect is typically used to implement GraphQL subscriptions.
       */
-    def computeQuery(fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[Query]])(implicit pos: SourcePos): RootStream =
+    def computeChild(fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[Query]])(implicit pos: SourcePos): RootStream =
       new RootStream(
         fieldName,
         (query, path, env) =>
-          effect(query, path, env).flatMap(rq =>
-            Stream.eval(
-              (for {
-                q  <- ResultT(rq.pure[F])
-                qc <- ResultT(defaultRootCursor(q, path.rootTpe, None))
-              } yield qc.map(_.withEnv(env))).value
+          Query.extractChild(query).fold(Stream.emit[F, Result[(Query, Cursor)]](Result.internalError("Root query has unexpected shape"))) { child =>
+            effect(child, path, env).flatMap(child0 =>
+              Stream.eval(
+                (for {
+                  q  <- ResultT(child0.flatMap(Query.substChild(query, _).toResultOrError("Root query has unexpected shape")).pure[F])
+                  qc <- ResultT(defaultRootCursor(q, path.rootTpe, None))
+                } yield qc.map(_.withEnv(env))).value
+              )
             )
-          )
+          }
       )
   }
 
@@ -422,7 +436,7 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
     def withParent(tpe: Type): Delegate = this
   }
 
-  val selectElaborator: SelectElaborator = new SelectElaborator(Map.empty[TypeRef, PartialFunction[Select, Result[Query]]])
+  val selectElaborator: SelectElaborator = SelectElaborator.identity
 
   lazy val componentElaborator = {
     val componentMappings =
@@ -526,6 +540,23 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
   }
 
   /**
+   * Proxy `Cursor` which applies a function to the focus of an underlying `LeafCursor`.
+   */
+  case class FieldTransformCursor[T : ClassTag : TypeName](underlying: Cursor, f: T => Result[T]) extends ProxyCursor(underlying) {
+    override def withEnv(env: Env): Cursor = new FieldTransformCursor(underlying.withEnv(env), f)
+    override def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
+      underlying.field(fieldName, resultName).flatMap {
+        case l: LeafCursor =>
+          for {
+            focus  <- l.as[T]
+            ffocus <- f(focus)
+          } yield l.copy(focus = ffocus)
+        case _ =>
+          Result.internalError(s"Expected leaf cursor for field $fieldName")
+      }
+  }
+
+  /**
    * Construct a GraphQL response from the possibly absent result `data`
    * and a collection of errors.
    */
@@ -545,16 +576,6 @@ abstract class Mapping[F[_]] extends QueryExecutor[F, Json] {
     result match {
       case Result.InternalError(err) => M.raiseError(err)
       case _ => mkResponse(result.toOption, result.toProblems).pure[F]
-    }
-
-  /**
-   *  Construct a GraphQL error response from a `Result`, ignoring any
-   *  right hand side in `result`.
-   */
-  def mkInvalidResponse(result: Result[Operation]): F[Json] =
-    result match {
-      case Result.InternalError(err) => M.raiseError(err)
-      case _ => mkResponse(None, result.toProblems).pure[F]
     }
 }
 

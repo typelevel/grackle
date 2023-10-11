@@ -7,8 +7,8 @@ import cats.implicits._
 
 import edu.gemini.grackle._, syntax._
 import Predicate.{Const, Eql}
-import Query.{Binding, Filter, Select}
-import QueryCompiler.SelectElaborator
+import Query.{Binding, Filter}
+import QueryCompiler._
 import Value.{BooleanValue, ObjectValue}
 
 trait SqlProjectionMapping[F[_]] extends SqlTestMapping[F] {
@@ -126,50 +126,20 @@ trait SqlProjectionMapping[F[_]] extends SqlTestMapping[F] {
     }
   }
 
-  override val selectElaborator: SelectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("level0", List(Binding("filter", filter)), child) =>
-        val f = filter match {
-          case Level0FilterValue(f) => Filter(f, child)
-          case _ => child
-        }
-        Select("level0", Nil, f).success
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "level0", List(Binding("filter", Level0FilterValue(f)))) =>
+      Elab.transformChild(child => Filter(f, child))
 
-      case Select("level1", List(Binding("filter", filter)), child) =>
-        val f = filter match {
-          case Level1FilterValue(f) => Filter(f, child)
-          case _ => child
-        }
-        Select("level1", Nil, f).success
+    case (QueryType, "level1", List(Binding("filter", Level1FilterValue(f)))) =>
+      Elab.transformChild(child => Filter(f, child))
 
-      case Select("level2", List(Binding("filter", filter)), child) =>
-        val f = filter match {
-          case Level2FilterValue(f) => Filter(f, child)
-          case _ => child
-        }
-        Select("level2", Nil, f).success
+    case (QueryType, "level2", List(Binding("filter", Level2FilterValue(f)))) =>
+      Elab.transformChild(child => Filter(f, child))
 
-      case other => other.success
-    },
-    Level0Type -> {
-      case Select("level1", List(Binding("filter", filter)), child) =>
-        val f = filter match {
-          case Level1FilterValue(f) => Filter(f, child)
-          case _ => child
-        }
-        Select("level1", Nil, f).success
+    case (Level0Type, "level1", List(Binding("filter", Level1FilterValue(f)))) =>
+      Elab.transformChild(child => Filter(f, child))
 
-      case other => other.success
-    },
-    Level1Type -> {
-      case Select("level2", List(Binding("filter", filter)), child) =>
-        val f = filter match {
-          case Level2FilterValue(f) => Filter(f, child)
-          case _ => child
-        }
-        Select("level2", Nil, f).success
-
-      case other => other.success
-    }
-  ))
+    case (Level1Type, "level2", List(Binding("filter", Level2FilterValue(f)))) =>
+      Elab.transformChild(child => Filter(f, child))
+  }
 }

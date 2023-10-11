@@ -3,12 +3,12 @@
 
 package edu.gemini.grackle.sql.test
 
-import edu.gemini.grackle.Predicate._
-import edu.gemini.grackle.Query._
-import edu.gemini.grackle.QueryCompiler.SelectElaborator
-import edu.gemini.grackle.Value._
-import edu.gemini.grackle.Result
-import edu.gemini.grackle.syntax._
+import edu.gemini.grackle._
+import Predicate._
+import Query._
+import QueryCompiler._
+import Value._
+import syntax._
 
 trait SqlEmbedding2Mapping[F[_]] extends SqlTestMapping[F] {
 
@@ -72,18 +72,11 @@ trait SqlEmbedding2Mapping[F[_]] extends SqlTestMapping[F] {
       )
     )
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("program", List(Binding("programId", StringValue(id))), child) =>
-        Result(Select("program", Nil, Unique(Filter(Eql(ProgramType / "id", Const(id)), child))))
-    },
-    ObservationSelectResultType -> {
-      case Select("matches", Nil, q) =>
-        Result(
-          Select("matches", Nil,
-            OrderBy(OrderSelections(List(OrderSelection[String](ObservationType / "id", true, true))), q)
-          )
-        )
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "program", List(Binding("programId", StringValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(ProgramType / "id", Const(id)), child)))
+
+    case (ObservationSelectResultType, "matches", Nil) =>
+      Elab.transformChild(child => OrderBy(OrderSelections(List(OrderSelection[String](ObservationType / "id", true, true))), child))
+  }
 }
