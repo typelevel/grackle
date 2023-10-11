@@ -4,7 +4,6 @@
 package edu.gemini.grackle.sql.test
 
 import cats.effect.IO
-import io.circe.Json
 import io.circe.literal._
 import munit.CatsEffectSuite
 
@@ -13,7 +12,7 @@ import edu.gemini.grackle._
 import grackle.test.GraphQLResponseTests.assertWeaklyEqualIO
 
 trait SqlPaging2Suite extends CatsEffectSuite {
-  def mapping: QueryExecutor[IO, Json]
+  def mapping: Mapping[IO]
 
   test("paging (initial)") {
     val query = """

@@ -221,28 +221,24 @@ simplifies or expands the term to bring it into a form which can be executed dir
 Grackle's query algebra consists of the following elements,
 
 ```scala
-sealed trait Query {
-  case class Select(name: String, args: List[Binding], child: Query = Empty) extends Query
-  case class Group(queries: List[Query]) extends Query
-  case class Unique(child: Query) extends Query
-  case class Filter(pred: Predicate, child: Query) extends Query
-  case class Component[F[_]](mapping: Mapping[F], join: (Query, Cursor) => Result[Query], child: Query) extends Query
-  case class Effect[F[_]](handler: EffectHandler[F], child: Query) extends Query
-  case class Introspect(schema: Schema, child: Query) extends Query
-  case class Environment(env: Env, child: Query) extends Query
-  case class Wrap(name: String, child: Query) extends Query
-  case class Rename(name: String, child: Query) extends Query
-  case class UntypedNarrow(tpnme: String, child: Query) extends Query
-  case class Narrow(subtpe: TypeRef, child: Query) extends Query
-  case class Skip(sense: Boolean, cond: Value, child: Query) extends Query
-  case class Limit(num: Int, child: Query) extends Query
-  case class Offset(num: Int, child: Query) extends Query
-  case class OrderBy(selections: OrderSelections, child: Query) extends Query
-  case class Count(name: String, child: Query) extends Query
-  case class TransformCursor(f: Cursor => Result[Cursor], child: Query) extends Query
-  case object Skipped extends Query
-  case object Empty extends Query
-}
+case class UntypedSelect(name: String, alias: Option[String], args: List[Binding], dirs: List[Directive], child: Query)
+case class Select(name: String, alias: Option[String], child: Query)
+case class Group(queries: List[Query])
+case class Unique(child: Query)
+case class Filter(pred: Predicate, child: Query)
+case class Component[F[_]](mapping: Mapping[F], join: (Query, Cursor) => Result[Query], child: Query)
+case class Effect[F[_]](handler: EffectHandler[F], child: Query)
+case class Introspect(schema: Schema, child: Query)
+case class Environment(env: Env, child: Query)
+case class UntypedFragmentSpread(name: String, directives: List[Directive])
+case class UntypedInlineFragment(tpnme: Option[String], directives: List[Directive], child: Query)
+case class Narrow(subtpe: TypeRef, child: Query)
+case class Limit(num: Int, child: Query)
+case class Offset(num: Int, child: Query)
+case class OrderBy(selections: OrderSelections, child: Query)
+case class Count(child: Query)
+case class TransformCursor(f: Cursor => Result[Cursor], child: Query)
+case object Empty
 ```
 
 A simple query like this,
@@ -258,8 +254,8 @@ query {
 is first translated into a term in the query algebra of the form,
 
 ```scala
-Select("character", List(IntBinding("id", 1000)),
-  Select("name", Nil)
+UntypedSelect("character", None, List(IntBinding("id", 1000)), Nil,
+  UntypedSelect("name", None, Nil, Nil, Empty)
 )
 ```
 
@@ -276,23 +272,23 @@ the model) is specific to this model, so we have to provide that semantic via so
 Extracting out the case for the `character` selector,
 
 ```scala
-case Select(f@("character"), List(Binding("id", IDValue(id))), child) =>
-  Select(f, Nil, Unique(Filter(Eql(CharacterType / "id", Const(id)), child))).success
-
+case (QueryType, "character", List(Binding("id", IDValue(id)))) =>
+  Elab.transformChild(child => Unique(Filter(Eql(CharacterType / "id", Const(id)), child)))
 ```
 
-we can see that this transforms the previous term as follows,
+the previous term is transformed as follows as follows,
 
 ```scala
-Select("character", Nil,
-  Unique(Eql(CharacterType / "id"), Const("1000")), Select("name", Nil))
+Select("character", None,
+  Unique(Eql(CharacterType / "id"), Const("1000")), Select("name", None, Empty))
 )
 ```
 
-Here the argument to the `character` selector has been translated into a predicate which refines the root data of the
-model to the single element which satisfies it via `Unique`. The remainder of the query (`Select("name", Nil)`) is
-then within the scope of that constraint. We have eliminated something with model-specific semantics (`character(id:
-1000)`) in favour of something universal which can be interpreted directly against the model.
+Here the original `UntypedSelect` terms have been converted to typed `Select` terms with the argument to the
+`character` selector translated into a predicate which refines the root data of the model to the single element which
+satisfies it via `Unique`. The remainder of the query (`Select("name", None, Nil)`) is then within the scope of that
+constraint. We have eliminated something with model-specific semantics (`character(id: 1000)`) in favour of something
+universal which can be interpreted directly against the model.
 
 ## The query interpreter and cursor
 
@@ -309,7 +305,7 @@ For the Star Wars model the root definitions are of the following form,
 
 @@snip [StarWarsData.scala](/demo/src/main/scala/demo/starwars/StarWarsMapping.scala) { #root }
 
-The first argument of the `GenericRoot` constructor correspond to the top-level selection of the query (see the
+The first argument of the `GenericField` constructor corresponds to the top-level selection of the query (see the
 schema above) and the second argument is the initial model value for which a `Cursor` will be derived.  When the query
 is executed, navigation will start with that `Cursor` and the corresponding GraphQL type.
 
@@ -349,6 +345,15 @@ object Main extends IOApp {
     val starWarsGraphQLRoutes = GraphQLService.routes[IO](
       "starwars",
       GraphQLService.fromGenericIdMapping(StarWarsMapping)
+    )
+    DemoServer.stream[IO](starWarsGraphQLRoutes).compile.drain
+  }
+}
+object Main extends IOApp {
+  def run(args: List[String]): IO[ExitCode] = {
+    val starWarsGraphQLRoutes = GraphQLService.routes[IO](
+      "starwars",
+      GraphQLService.fromMapping(new StarWarsMapping[IO] with StarWarsData[IO])
     )
     DemoServer.stream[IO](starWarsGraphQLRoutes).compile.drain
   }

@@ -10,7 +10,6 @@ import edu.gemini.grackle.sql.Like
 import edu.gemini.grackle.syntax._
 import io.circe.Json
 
-import Cursor.{Context, Env}
 import Query._
 import Predicate._
 import Value._
@@ -55,24 +54,31 @@ class CurrencyMapping[F[_] : Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[
   val QueryType = schema.ref("Query")
   val CurrencyType = schema.ref("Currency")
 
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "exchangeRate", List(Binding("code", StringValue(code)))) =>
+      Elab.env("code", code)
+    case (QueryType, "currencies", List(Binding("countryCodes", StringListValue(countryCodes)))) =>
+      Elab.env("countryCodes", countryCodes)
+  }
+
   val typeMappings =
     List(
       ValueObjectMapping[Unit](
         tpe = QueryType,
         fieldMappings =
           List(
-            RootEffect.computeCursor("exchangeRate") {
-              case (Select(_, List(Binding("code", StringValue(code))), _), path, env) =>
+            RootEffect.computeCursor("exchangeRate")((path, env) =>
+              env.getR[String]("code").traverse(code =>
                 countRef.update(_+1) *>
-                dataRef.get.map(data => Result(valueCursor(path, env, data.exchangeRate(code))))
-              case _ => Result.failure("Bad query").pure[F].widen
-            },
-            RootEffect.computeCursor("currencies") {
-              case (Select(_, List(Binding("countryCodes", StringListValue(countryCodes))), _), path, env) =>
+                dataRef.get.map(data => valueCursor(path, env, data.exchangeRate(code)))
+              )
+            ),
+            RootEffect.computeCursor("currencies")((path, env) =>
+              env.getR[List[String]]("countryCodes").traverse(countryCodes =>
                 countRef.update(_+1) *>
-                dataRef.get.map(data => Result(valueCursor(path, env, data.currencies(countryCodes))))
-              case _ => Result.failure("Bad query").pure[F].widen
-            }
+                dataRef.get.map(data => valueCursor(path, env, data.currencies(countryCodes)))
+              )
+            )
           )
       ),
       ValueObjectMapping[Currency](
@@ -92,7 +98,7 @@ class CurrencyMapping[F[_] : Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[
     val expandedQueries =
       queries.map {
         case (Select("currencies", _, child), c@Code(code)) =>
-          (Select("currencies", List(Binding("countryCodes", ListValue(List(StringValue(code))))), child), c)
+          (SimpleCurrencyQuery(List(code), child), c)
         case other => other
       }
 
@@ -107,7 +113,7 @@ class CurrencyMapping[F[_] : Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[
       def mkKey(q: ((Query, Cursor), String, Int)): (Query, Env, Context) =
         (q._1._1, q._1._2.fullEnv, q._1._2.context)
 
-      val grouped: List[((Select, Cursor), List[Int])] =
+      val grouped: List[((Query, Cursor), List[Int])] =
         (groupable.collect {
           case ((SimpleCurrencyQuery(code, child), cursor), i) =>
             ((child, cursor), code, i)
@@ -142,12 +148,12 @@ class CurrencyMapping[F[_] : Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[
   }
 
   object SimpleCurrencyQuery {
-    def apply(codes: List[String], child: Query): Select =
-      Select("currencies", List(Binding("countryCodes", StringListValue(codes))), child)
+    def apply(codes: List[String], child: Query): Query =
+      Environment(Env("countryCodes" -> codes), Select("currencies", child))
 
-    def unapply(sel: Select): Option[(String, Query)] =
+    def unapply(sel: Query): Option[(String, Query)] =
       sel match {
-        case Select("currencies", List(Binding("countryCodes", StringListValue(List(code)))), child)  => Some((code, child))
+        case Environment(env, Select("currencies", None, child)) => env.get[List[String]]("countryCodes").flatMap(_.headOption).map((_, child))
         case _ => None
       }
 
@@ -257,14 +263,10 @@ class SqlComposedMapping[F[_] : Sync]
       )
     )
 
-  override val selectElaborator =  new SelectElaborator(Map(
-    QueryType -> {
-      case Select("country", List(Binding("code", StringValue(code))), child) =>
-        Select("country", Nil, Unique(Filter(Eql(CountryType / "code", Const(code)), child))).success
-      case Select("countries", _, child) =>
-        Select("countries", Nil, child).success
-      case Select("cities", List(Binding("namePattern", StringValue(namePattern))), child) =>
-        Select("cities", Nil, Filter(Like(CityType / "name", namePattern, true), child)).success
-    }
-  ))
+  override val selectElaborator =  SelectElaborator {
+    case (QueryType, "country", List(Binding("code", StringValue(code)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(CountryType / "code", Const(code)), child)))
+    case (QueryType, "cities", List(Binding("namePattern", StringValue(namePattern)))) =>
+      Elab.transformChild(child => Filter(Like(CityType / "name", namePattern, true), child))
+  }
 }

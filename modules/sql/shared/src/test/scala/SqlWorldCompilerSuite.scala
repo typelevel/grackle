@@ -9,7 +9,7 @@ import io.circe.literal._
 import munit.CatsEffectSuite
 
 import edu.gemini.grackle._
-import Predicate._
+import Predicate._, Query._
 import sql.{Like, SqlStatsMonitor}
 
 import grackle.test.GraphQLResponseTests.assertWeaklyEqual
@@ -62,7 +62,7 @@ trait SqlWorldCompilerSuite extends CatsEffectSuite {
       assertEquals(stats,
         List(
           SqlStatsMonitor.SqlStats(
-            Query.Select("country", Nil, Query.Unique(Query.Filter(Eql(schema.ref("Country") / "code",Const("GBR")),Query.Select("name",List(),Query.Empty)))),
+            Select("country", Unique(Filter(Eql(schema.ref("Country") / "code",Const("GBR")), Select("name")))),
             simpleRestrictedQuerySql,
             List("GBR"),
             1,
@@ -117,7 +117,7 @@ trait SqlWorldCompilerSuite extends CatsEffectSuite {
       assertEquals(stats,
         List(
           SqlStatsMonitor.SqlStats(
-            Query.Select("cities", Nil, Query.Filter(Like(schema.ref("City") / "name","Linh%",true),Query.Select("name",List(),Query.Empty))),
+            Select("cities", Filter(Like(schema.ref("City") / "name","Linh%",true), Select("name"))),
             simpleFilteredQuerySql,
             List("Linh%"),
             3,

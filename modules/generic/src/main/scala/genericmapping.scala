@@ -8,7 +8,7 @@ import cats.MonadThrow
 import org.tpolecat.sourcepos.SourcePos
 
 import syntax._
-import Cursor.{Context, DeferredCursor, Env}
+import Cursor.DeferredCursor
 
 abstract class GenericMapping[F[_]](implicit val M: MonadThrow[F]) extends Mapping[F] with GenericMappingLike[F]
 

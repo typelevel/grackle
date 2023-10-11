@@ -8,8 +8,8 @@ import cats.implicits._
 import edu.gemini.grackle._
 import syntax._
 import Predicate.{Const, Eql}
-import Query.{Binding, Filter, Select, Unique}
-import QueryCompiler.SelectElaborator
+import Query.{Binding, Filter, Unique}
+import QueryCompiler.{Elab, SelectElaborator}
 import Value.{AbsentValue, NullValue, ObjectValue, StringValue}
 
 trait SqlFilterJoinAliasMapping[F[_]] extends SqlTestMapping[F] {
@@ -107,23 +107,11 @@ trait SqlFilterJoinAliasMapping[F[_]] extends SqlTestMapping[F] {
     }
   }
 
-  override val selectElaborator: SelectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("episode", List(Binding("id", StringValue(id))), child) =>
-        Select(
-          "episode",
-          Nil,
-          Unique(Filter(Eql(EpisodeType / "id", Const(id)), child))
-        ).success
-    },
-    EpisodeType -> {
-      case Select("images", List(Binding("filter", filter)), child) =>
-        for {
-          fc <- mkFilter(child, filter)
-        } yield Select("images", Nil, fc)
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "episode", List(Binding("id", StringValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(EpisodeType / "id", Const(id)), child)))
 
-      case other =>
-        other.success
-    }
-  ))
+    case (EpisodeType, "images", List(Binding("filter", filter))) =>
+      Elab.transformChild(child =>  mkFilter(child, filter))
+  }
 }

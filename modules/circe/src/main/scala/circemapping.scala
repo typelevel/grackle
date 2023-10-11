@@ -8,13 +8,13 @@ import scala.collection.Factory
 
 import cats.MonadThrow
 import cats.implicits._
-import fs2.Stream 
+import fs2.Stream
 import io.circe.Json
 import io.circe.Encoder
 import org.tpolecat.sourcepos.SourcePos
 
 import syntax._
-import Cursor.{Context, DeferredCursor, Env}
+import Cursor.DeferredCursor
 import ScalarType._
 
 abstract class CirceMapping[F[_]](implicit val M: MonadThrow[F]) extends Mapping[F] with CirceMappingLike[F]
@@ -23,19 +23,19 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
 
   // Syntax to allow Circe-specific root effects
   implicit class CirceMappingRootEffectSyntax(self: RootEffect.type) {
-    def computeJson(fieldName: String)(effect: (Query, Path, Env) => F[Result[Json]])(implicit pos: SourcePos): RootEffect =
-      self.computeCursor(fieldName)((q, p, e) => effect(q, p, e).map(_.map(circeCursor(p, e, _))))
-    
-    def computeEncodable[A](fieldName: String)(effect: (Query, Path, Env) => F[Result[A]])(implicit pos: SourcePos, enc: Encoder[A]): RootEffect =
-      computeJson(fieldName)((q, p, e) => effect(q, p, e).map(_.map(enc(_))))
+    def computeJson(fieldName: String)(effect: (Path, Env) => F[Result[Json]])(implicit pos: SourcePos): RootEffect =
+      self.computeCursor(fieldName)((p, e) => effect(p, e).map(_.map(circeCursor(p, e, _))))
+
+    def computeEncodable[A](fieldName: String)(effect: (Path, Env) => F[Result[A]])(implicit pos: SourcePos, enc: Encoder[A]): RootEffect =
+      computeJson(fieldName)((p, e) => effect(p, e).map(_.map(enc(_))))
   }
 
   implicit class CirceMappingRootStreamSyntax(self: RootStream.type) {
-    def computeJson(fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[Json]])(implicit pos: SourcePos): RootStream =
-      self.computeCursor(fieldName)((q, p, e) => effect(q, p, e).map(_.map(circeCursor(p, e, _))))
+    def computeJson(fieldName: String)(effect: (Path, Env) => Stream[F, Result[Json]])(implicit pos: SourcePos): RootStream =
+      self.computeCursor(fieldName)((p, e) => effect(p, e).map(_.map(circeCursor(p, e, _))))
 
-    def computeEncodable[A](fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[A]])(implicit pos: SourcePos, enc: Encoder[A]): RootStream =
-      computeJson(fieldName)((q, p, e) => effect(q, p, e).map(_.map(enc(_))))
+    def computeEncodable[A](fieldName: String)(effect: (Path, Env) => Stream[F, Result[A]])(implicit pos: SourcePos, enc: Encoder[A]): RootStream =
+      computeJson(fieldName)((p, e) => effect(p, e).map(_.map(enc(_))))
   }
 
   def circeCursor(path: Path, env: Env, value: Json): Cursor =

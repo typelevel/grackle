@@ -3,7 +3,7 @@
 
 package edu.gemini.grackle
 
-import cats.parse.{Parser, Parser0}
+import cats.parse.{LocationMap, Parser, Parser0}
 import cats.parse.Parser._
 import cats.parse.Numbers._
 import cats.parse.Rfc5234.{cr, crlf, digit, hexdig, lf}
@@ -70,8 +70,8 @@ object GraphQLParser {
 
     def directiveDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.DirectiveDefinition] =
       ((keyword("directive") *> keyword("@") *> Name) ~
-         ArgumentsDefinition ~ (keyword("repeatable").? <* keyword("on")) ~ DirectiveLocations).map {
-        case (((name, args), rpt), locs) => Ast.DirectiveDefinition(name, desc.map(_.value), args, rpt.isDefined, locs)
+         ArgumentsDefinition.? ~ (keyword("repeatable").? <* keyword("on")) ~ DirectiveLocations).map {
+        case (((name, args), rpt), locs) => Ast.DirectiveDefinition(name, desc.map(_.value), args.getOrElse(Nil), rpt.isDefined, locs)
       }
 
     SchemaDefinition |
@@ -81,8 +81,8 @@ object GraphQLParser {
   }
 
   lazy val RootOperationTypeDefinition: Parser[Ast.RootOperationTypeDefinition] =
-    (OperationType, keyword(":"), NamedType).mapN {
-      case (optpe, _, tpe) => Ast.RootOperationTypeDefinition(optpe, tpe)
+    (OperationType ~ keyword(":") ~ NamedType ~ Directives).map {
+      case (((optpe, _), tpe), dirs) => Ast.RootOperationTypeDefinition(optpe, tpe, dirs)
     }
 
 
@@ -260,8 +260,8 @@ object GraphQLParser {
     parens(VariableDefinition.rep0)
 
   lazy val VariableDefinition: Parser[Ast.VariableDefinition] =
-    ((Variable <* keyword(":")) ~ Type ~ DefaultValue.?).map {
-      case ((v, tpe), dv) => Ast.VariableDefinition(v.name, tpe, dv)
+    ((Variable <* keyword(":")) ~ Type ~ DefaultValue.? ~ Directives.?).map {
+      case (((v, tpe), dv), dirs) => Ast.VariableDefinition(v.name, tpe, dv, dirs.getOrElse(Nil))
     }
 
   lazy val Variable: Parser[Ast.Value.Variable] =
@@ -305,6 +305,22 @@ object GraphQLParser {
       case (h, t) => Ast.Name((h :: t).mkString)
     }
   }
+
+  def toResult[T](text: String, pr: Either[Parser.Error, T]): Result[T] =
+    Result.fromEither(pr.leftMap { e =>
+      val lm = LocationMap(text)
+      lm.toLineCol(e.failedAtOffset) match {
+        case Some((row, col)) =>
+          lm.getLine(row) match {
+            case Some(line) =>
+              s"""Parse error at line $row column $col
+                  |$line
+                  |${List.fill(col)(" ").mkString}^""".stripMargin
+            case None => "Malformed query" //This is probably a bug in Cats Parse as it has given us the (row, col) index
+          }
+        case None => "Truncated query"
+      }
+    })
 }
 
 object CommentedText {

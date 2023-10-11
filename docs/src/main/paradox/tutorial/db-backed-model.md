@@ -1,8 +1,7 @@
 # DB Backed Model
 
-In this tutorial we are going to implement GraphQL API of countries and cities of the world using Grackle backed by
-a database model, i.e. provide mapping for Grackle to read data from PostgreSQL and return it as result of
-GraphQL queries.
+In this tutorial we are going to implement a GraphQL API for countries and cities of the world using Grackle backed by
+a database, ie. provide a mapping for Grackle to read data from PostgreSQL and return it as result of GraphQL queries.
 
 ## Running the demo
 
@@ -91,43 +90,45 @@ Grackle represents schemas as a Scala value of type `Schema` which can be constr
 
 ## Database mapping
 
-The API is backed by mapping to database tables. Grackle contains ready to use integration
-with [doobie](https://tpolecat.github.io/doobie/) for accessing SQL database via JDBC
-and with [Skunk](https://tpolecat.github.io/skunk/) for accessing PostgreSQL via its native API. In this example
-we will use doobie.
+The API is backed by mapping to database tables. Grackle contains ready to use integration with
+[doobie](https://tpolecat.github.io/doobie/) for accessing SQL database via JDBC and with
+[Skunk](https://tpolecat.github.io/skunk/) for accessing PostgreSQL via its native API. In this example we will use
+doobie.
 
 Let's start with defining what tables and columns are available in the database model,
 
 @@snip [WorldMapping.scala](/demo/src/main/scala/demo/world/WorldMapping.scala) { #db_tables }
 
-For each column we need to provide its name and doobie codec. We should also mark if value is nullable.
+For each column we need to provide its name and doobie codec of type `Meta`. We should also mark if the value is
+nullable.
 
-We define each query as SQL query, as below,
+We define the top-level GraphQL fields as `SqlObject` mappings,
 
 @@snip [WorldMapping.scala](/demo/src/main/scala/demo/world/WorldMapping.scala) { #root }
 
-Now, we need to map each type from GraphQL schema using available columns from database,
+Now, we need to map each type from the GraphQL schema using columns from the database,
 
 @@snip [WorldMapping.scala](/demo/src/main/scala/demo/world/WorldMapping.scala) { #type_mappings }
 
-Each GraphQL must contain key. It can contain fields from one table, but it can also contain nested types which
-are translated to SQL joins using provided conditions. `Join(country.code, city.countrycode)` means joining country
-and city tables  where `code` in the country table is the same as `countrycode` in the city table.
+Each GraphQL type mapping must contain a key. It can contain fields from one table, but it can also contain nested
+types which are translated to SQL joins using the provided conditions. `Join(country.code, city.countrycode)` means
+joining country and city tables  where `code` in the country table is the same as `countrycode` in the city table.
 
 ## The query compiler and elaborator
 
-Similar as in [in-memory model]((in-memory-model.html#the-query-compiler-and-elaborator)), we need to define elaborator
-to transform query algebra terms into the form that can be then used as source of SQL queries,
+Similarly to the [in-memory model]((in-memory-model.html#the-query-compiler-and-elaborator)), we need to define an
+elaborator to transform query algebra terms into a form that can be then used to translate query algebra terms to SQL
+queries,
 
 @@snip [WorldMapping.scala](/demo/src/main/scala/demo/world/WorldMapping.scala) { #elaborator }
 
 ## Putting it all together
 
-To expose GraphQL API with http4s we will use `GraphQLService` and `DemoServer`
-from [in-memory example](in-memory-model.html#the-service).
+To expose GraphQL API with http4s we will use the `GraphQLService` and `DemoServer`
+from the [in-memory example](in-memory-model.html#the-service).
 
-We will use [testcontainers](https://github.com/testcontainers/testcontainers-scala) to run PostgreSQL database
-in the background. The final main method, which starts PostgreSQL database in docker container, creates database
+We use [testcontainers](https://github.com/testcontainers/testcontainers-scala) to run a PostgreSQL database
+in the background. The final main method, which starts a dockerized PostgreSQL database, creates the database
 schema, writes initial data and exposes GraphQL API for in-memory and db-backend models is below,
 
 @@snip [main.scala](/demo/src/main/scala/demo/Main.scala) { #main }

@@ -3,7 +3,6 @@
 
 package edu.gemini.grackle.sql.test
 
-import io.circe.Json
 import cats.effect.IO
 import io.circe.literal._
 import munit.CatsEffectSuite
@@ -14,7 +13,7 @@ import grackle.test.GraphQLResponseTests.assertWeaklyEqualIO
 
 trait SqlJsonbSuite extends CatsEffectSuite {
 
-  def mapping: QueryExecutor[IO, Json]
+  def mapping: Mapping[IO]
 
   test("simple jsonb query") {
     val query = """

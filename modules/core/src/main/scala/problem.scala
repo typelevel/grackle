@@ -12,9 +12,8 @@ final case class Problem(
   message: String,
   locations: List[(Int, Int)] = Nil,
   path: List[String] = Nil,
-  extension: Option[JsonObject] = None,
+  extensions: Option[JsonObject] = None,
 ) {
-
   override def toString = {
 
     lazy val pathText: String =
@@ -32,7 +31,7 @@ final case class Problem(
       case (false, false) => message
     }
 
-    extension.fold(s)(obj => s"$s, extension: ${obj.asJson.spaces2}")
+    extensions.fold(s)(obj => s"$s, extensions: ${obj.asJson.spaces2}")
 
   }
 
@@ -58,14 +57,14 @@ object Problem {
       if (p.path.isEmpty) Nil
       else List(("path" -> p.path.asJson))
 
-    val extensionField: List[(String, Json)] =
-      p.extension.fold(List.empty[(String, Json)])(obj => List("extension" -> obj.asJson))
+    val extensionsField: List[(String, Json)] =
+      p.extensions.fold(List.empty[(String, Json)])(obj => List("extensions" -> obj.asJson))
 
     Json.fromFields(
       "message" -> p.message.asJson ::
       locationsField                :::
       pathField                     :::
-      extensionField
+      extensionsField
     )
 
   }

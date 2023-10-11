@@ -10,7 +10,8 @@ import munit.CatsEffectSuite
 
 import edu.gemini.grackle._
 import edu.gemini.grackle.syntax._
-import Query._, Predicate._, Value._
+import Query._
+import Predicate._, Value._
 import QueryCompiler._
 
 object CollectionData {
@@ -62,12 +63,10 @@ object CollectionMapping extends ValueMapping[IO] {
       )
     )
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("collectionByName", List(Binding("name", StringValue(name))), child) =>
-        Select("collectionByName", Nil, Unique(Filter(Eql(CollectionType / "name", Const(name)), child))).success
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "collectionByName", List(Binding("name", StringValue(name)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(CollectionType / "name", Const(name)), child)))
+  }
 }
 
 object ItemData {
@@ -111,12 +110,10 @@ object ItemMapping extends ValueMapping[IO] {
       )
     )
 
-  override val selectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("itemById", List(Binding("id", IDValue(id))), child) =>
-        Select("itemById", Nil, Unique(Filter(Eql(ItemType / "id", Const(id)), child))).success
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "itemById", List(Binding("id", IDValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(ItemType / "id", Const(id)), child)))
+  }
 }
 
 object ComposedListMapping extends ComposedMapping[IO] {
@@ -164,19 +161,17 @@ object ComposedListMapping extends ComposedMapping[IO] {
       )
   )
 
-  override val selectElaborator =  new SelectElaborator(Map(
-    QueryType -> {
-      case Select("itemById", List(Binding("id", IDValue(id))), child) =>
-        Select("itemById", Nil, Unique(Filter(Eql(ItemType / "id", Const(id)), child))).success
-      case Select("collectionByName", List(Binding("name", StringValue(name))), child) =>
-        Select("collectionByName", Nil, Unique(Filter(Eql(CollectionType / "name", Const(name)), child))).success
-    }
-  ))
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "itemById", List(Binding("id", IDValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(ItemType / "id", Const(id)), child)))
+    case (QueryType, "collectionByName", List(Binding("name", StringValue(name)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(CollectionType / "name", Const(name)), child)))
+  }
 
   def collectionItemJoin(q: Query, c: Cursor): Result[Query] =
     (c.focus, q) match {
       case (c: CollectionData.Collection, Select("items", _, child)) =>
-        Group(c.itemIds.map(id => Select("itemById", Nil, Unique(Filter(Eql(ItemType / "id", Const(id)), child))))).success
+        Group(c.itemIds.map(id => Select("itemById", Unique(Filter(Eql(ItemType / "id", Const(id)), child))))).success
       case _ =>
         Result.internalError(s"Unexpected cursor focus type in collectionItemJoin")
     }

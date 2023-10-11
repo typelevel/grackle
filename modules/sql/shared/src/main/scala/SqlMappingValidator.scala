@@ -54,7 +54,7 @@ trait SqlMappingValidator extends MappingValidator {
           case NullableType(ScalarType.IDType)      if columnRef.scalaTypeName == typeName[Option[String]]  => Chain.empty
           case NullableType(ScalarType.IntType)     if columnRef.scalaTypeName == typeName[Option[Int]]     => Chain.empty
 
-          case tpe @ ScalarType(_, _) =>
+          case tpe: ScalarType =>
             typeMapping(tpe) match {
               case Some(lm: LeafMapping[_]) =>
                 if (lm.scalaTypeName == columnRef.scalaTypeName) Chain.empty

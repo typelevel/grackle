@@ -6,9 +6,7 @@ package edu.gemini.grackle.skunk.test
 import cats.effect.IO
 import skunk.codec.{all => codec}
 import skunk.implicits._
-import io.circe.Json
 
-import edu.gemini.grackle.QueryExecutor
 import edu.gemini.grackle.skunk.SkunkMonitor
 import edu.gemini.grackle.sql.SqlStatsMonitor
 
@@ -23,12 +21,12 @@ final class ArrayJoinSuite extends SkunkDatabaseSuite with SqlArrayJoinSuite {
 
 final class CoalesceSuite extends SkunkDatabaseSuite with SqlCoalesceSuite {
   type Fragment = skunk.AppliedFragment
-  def mapping: IO[(QueryExecutor[IO, Json], SqlStatsMonitor[IO,Fragment])] =
+  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO,Fragment])] =
     SkunkMonitor.statsMonitor[IO].map(mon => (new SkunkTestMapping(pool, mon) with SqlCoalesceMapping[IO], mon))
 }
 
 final class ComposedWorldSuite extends SkunkDatabaseSuite with SqlComposedWorldSuite {
-  def mapping: IO[(CurrencyMapping[IO], QueryExecutor[IO, Json])] =
+  def mapping: IO[(CurrencyMapping[IO], Mapping[IO])] =
     for {
       currencyMapping <- CurrencyMapping[IO]
     } yield (currencyMapping, new SqlComposedMapping(new SkunkTestMapping(pool) with SqlWorldMapping[IO], currencyMapping))
@@ -131,7 +129,7 @@ final class MutationSuite extends SkunkDatabaseSuite with SqlMutationSuite {
 }
 
 final class NestedEffectsSuite extends SkunkDatabaseSuite with SqlNestedEffectsSuite {
-  def mapping: IO[(CurrencyService[IO], QueryExecutor[IO, Json])] =
+  def mapping: IO[(CurrencyService[IO], Mapping[IO])] =
     for {
       currencyService0 <- CurrencyService[IO]
     } yield {

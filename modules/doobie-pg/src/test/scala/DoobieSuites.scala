@@ -6,9 +6,7 @@ package edu.gemini.grackle.doobie.test
 import cats.effect.IO
 import doobie.implicits._
 import doobie.Meta
-import io.circe.Json
 
-import edu.gemini.grackle.QueryExecutor
 import edu.gemini.grackle.doobie.postgres.DoobieMonitor
 import edu.gemini.grackle.sql.SqlStatsMonitor
 
@@ -21,12 +19,12 @@ final class ArrayJoinSuite extends DoobieDatabaseSuite with SqlArrayJoinSuite {
 
 final class CoalesceSuite extends DoobieDatabaseSuite with SqlCoalesceSuite {
   type Fragment = doobie.Fragment
-  def mapping: IO[(QueryExecutor[IO, Json], SqlStatsMonitor[IO,Fragment])] =
+  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO,Fragment])] =
     DoobieMonitor.statsMonitor[IO].map(mon => (new DoobieTestMapping(xa, mon) with SqlCoalesceMapping[IO], mon))
 }
 
 final class ComposedWorldSuite extends DoobieDatabaseSuite with SqlComposedWorldSuite {
-  def mapping: IO[(CurrencyMapping[IO], QueryExecutor[IO, Json])] =
+  def mapping: IO[(CurrencyMapping[IO], Mapping[IO])] =
     for {
       currencyMapping <- CurrencyMapping[IO]
     } yield (currencyMapping, new SqlComposedMapping(new DoobieTestMapping(xa) with SqlWorldMapping[IO], currencyMapping))
@@ -126,7 +124,7 @@ final class MutationSuite extends DoobieDatabaseSuite with SqlMutationSuite {
 }
 
 final class NestedEffectsSuite extends DoobieDatabaseSuite with SqlNestedEffectsSuite {
-  def mapping: IO[(CurrencyService[IO], QueryExecutor[IO, Json])] =
+  def mapping: IO[(CurrencyService[IO], Mapping[IO])] =
     for {
       currencyService0 <- CurrencyService[IO]
     } yield {

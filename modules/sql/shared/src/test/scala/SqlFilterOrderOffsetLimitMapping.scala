@@ -7,9 +7,9 @@ import cats.implicits._
 
 import edu.gemini.grackle._, syntax._
 import Predicate.{Const, Eql}
-import Query.{Binding, Filter, Limit, Offset, OrderBy, OrderSelection, OrderSelections, Select}
-import QueryCompiler.SelectElaborator
-import Value.{AbsentValue, IntValue, NullValue, ObjectValue, StringValue, TypedEnumValue}
+import Query.{Binding, Filter, Limit, Offset, OrderBy, OrderSelection, OrderSelections}
+import QueryCompiler.{Elab, SelectElaborator}
+import Value.{AbsentValue, EnumValue, IntValue, NullValue, ObjectValue, StringValue}
 
 trait SqlFilterOrderOffsetLimitMapping[F[_]] extends SqlTestMapping[F] {
 
@@ -77,8 +77,8 @@ trait SqlFilterOrderOffsetLimitMapping[F[_]] extends SqlTestMapping[F] {
   }
 
   object OrderValue {
-    def unapply(tev: TypedEnumValue): Option[ListOrder] =
-      ListOrder.fromGraphQLString(tev.value.name)
+    def unapply(ev: EnumValue): Option[ListOrder] =
+      ListOrder.fromGraphQLString(ev.name)
   }
 
   val typeMappings =
@@ -164,36 +164,34 @@ trait SqlFilterOrderOffsetLimitMapping[F[_]] extends SqlTestMapping[F] {
       case _ => Result.failure(s"Expected sort value, found $order")
     }
 
-  override val selectElaborator: SelectElaborator = new SelectElaborator(Map(
-    QueryType -> {
-      case Select("root", List(Binding("filter", filter), Binding("offset", offset), Binding("limit", limit)), child) =>
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "root", List(Binding("filter", filter), Binding("offset", offset), Binding("limit", limit))) =>
+      Elab.transformChild(child =>
         for {
           fc <- mkFilter(child, RootType, filter)
           oc <- mkOffset(fc, offset)
           lc <- mkLimit(oc, limit)
-        } yield Select("root", Nil, lc)
+        } yield lc
+      )
 
-      case other => other.success
-    },
-    RootType -> {
-      case Select("listA", List(Binding("filter", filter), Binding("order", order), Binding("offset", offset), Binding("limit", limit)), child) =>
+    case (RootType, "listA", List(Binding("filter", filter), Binding("order", order), Binding("offset", offset), Binding("limit", limit))) =>
+      Elab.transformChild(child =>
         for {
           fc <- mkFilter(child, ElemAType, filter)
           sc <- mkOrderBy(fc, order)(o => List(OrderSelection[Option[String]](ElemAType / "elemA", ascending = o.ascending)))
           oc <- mkOffset(sc, offset)
           lc <- mkLimit(oc, limit)
-        } yield Select("listA", Nil, lc)
+        } yield lc
+      )
 
-      case Select("listB", List(Binding("filter", filter), Binding("order", order), Binding("offset", offset), Binding("limit", limit)), child) =>
+    case (RootType, "listB", List(Binding("filter", filter), Binding("order", order), Binding("offset", offset), Binding("limit", limit))) =>
+      Elab.transformChild(child =>
         for {
           fc <- mkFilter(child, ElemBType, filter)
           sc <- mkOrderBy(fc, order)(o => List(OrderSelection[Option[Int]](ElemBType / "elemB", ascending = o.ascending)))
           oc <- mkOffset(sc, offset)
           lc <- mkLimit(oc, limit)
-        } yield Select("listB", Nil, lc)
-
-      case other =>
-        other.success
-    }
-  ))
+        } yield lc
+      )
+  }
 }

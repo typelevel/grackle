@@ -4,11 +4,12 @@
 package edu.gemini.grackle.sql.test
 
 import cats.implicits._
-import edu.gemini.grackle.Predicate.{Const, Eql}
-import edu.gemini.grackle.Query.{Binding, Filter, Select, Unique}
-import edu.gemini.grackle.syntax._
-import edu.gemini.grackle.QueryCompiler.SelectElaborator
-import edu.gemini.grackle.Value.StringValue
+import edu.gemini.grackle._
+import Predicate.{Const, Eql}
+import Query.{Binding, Filter, Unique}
+import QueryCompiler._
+import Value.StringValue
+import syntax._
 
 trait SqlSiblingListsData[F[_]] extends SqlTestMapping[F] {
 
@@ -104,14 +105,8 @@ trait SqlSiblingListsData[F[_]] extends SqlTestMapping[F] {
       )
     )
 
-  override val selectElaborator: SelectElaborator = new SelectElaborator(
-    Map(
-      QueryType -> {
-        case Select("a", List(Binding("id", StringValue(id))), child) =>
-          Select("a", Nil, Unique(Filter(Eql(AType / "id", Const(id)), child))).success
-        case other => other.success
-      }
-    )
-  )
-
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "a", List(Binding("id", StringValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(AType / "id", Const(id)), child)))
+  }
 }

@@ -13,7 +13,7 @@ import skunk.implicits._
 
 import edu.gemini.grackle.skunk.test.SkunkDatabaseSuite
 
-class SubscriptionSpec extends SkunkDatabaseSuite {
+class SubscriptionSuite extends SkunkDatabaseSuite {
 
   lazy val mapping = SubscriptionMapping.mkMapping(pool)
 
@@ -61,7 +61,7 @@ class SubscriptionSpec extends SkunkDatabaseSuite {
       for {
 
         // start a fiber that subscibes and takes the first two notifications
-        fi <- mapping.compileAndRunAll(query).take(2).compile.toList.start
+        fi <- mapping.compileAndRunSubscription(query).take(2).compile.toList.start
 
         // We're racing now, so wait a sec before starting notifications
         _  <- IO.sleep(1.second)

@@ -62,7 +62,7 @@ trait SkunkDatabaseSuite extends SqlDatabaseSuite {
 
     def list(c: Codec): Codec = {
       val cc = c._1.asInstanceOf[_root_.skunk.Codec[Any]]
-      val ty = _root_.skunk.data.Type(s"_${cc.types.head.name}", cc.types) 
+      val ty = _root_.skunk.data.Type(s"_${cc.types.head.name}", cc.types)
       val encode = (elem: Any) => cc.encode(elem).head.get
       val decode = (str: String) => cc.decode(0, List(Some(str))).left.map(_.message)
       (_root_.skunk.Codec.array(encode, decode, ty), false)

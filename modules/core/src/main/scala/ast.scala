@@ -12,11 +12,11 @@ object Ast {
   sealed trait ExecutableDefinition extends Definition
   sealed trait TypeSystemDefinition extends Definition
 
-  sealed trait OperationType
+  sealed abstract class OperationType(val name: String)
   object OperationType {
-    case object Query        extends OperationType
-    case object Mutation     extends OperationType
-    case object Subscription extends OperationType
+    case object Query        extends OperationType("query")
+    case object Mutation     extends OperationType("mutation")
+    case object Subscription extends OperationType("subscription")
   }
 
   sealed trait OperationDefinition extends ExecutableDefinition
@@ -75,7 +75,8 @@ object Ast {
     name:         Name,
     tpe:          Type,
     defaultValue: Option[Value],
-  )
+    directives:   List[Directive]
+   )
 
   sealed trait Value
   object Value {
@@ -104,7 +105,8 @@ object Ast {
 
   case class RootOperationTypeDefinition(
     operationType: OperationType,
-    tpe:           Type.Named
+    tpe:           Type.Named,
+    directives: List[Directive]
   )
 
   sealed trait TypeDefinition extends TypeSystemDefinition with Product with Serializable {

@@ -10,7 +10,7 @@ import cats.implicits._
 import io.circe.{Encoder, Json}
 
 import syntax._
-import Cursor.{AbstractCursor, Context, Env}
+import Cursor.AbstractCursor
 
 trait CursorBuilder[T] {
   def tpe: Type

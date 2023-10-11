@@ -8,10 +8,9 @@ import scala.reflect.{classTag, ClassTag}
 
 import cats.implicits._
 import io.circe.Json
-import org.tpolecat.typename.{ TypeName, typeName }
+import org.tpolecat.typename.{TypeName, typeName}
 
 import syntax._
-import Cursor.{ cast, Context, Env }
 
 /**
  * Indicates a position within an abstract data model during the interpretation
@@ -51,14 +50,15 @@ trait Cursor {
   /** Yields the cumulative environment defined at this `Cursor`. */
   def fullEnv: Env = parent.map(_.fullEnv).getOrElse(Env.empty).add(env)
 
+  /** Does the environment at this `Cursor` contain a value for the supplied key? */
   def envContains(nme: String): Boolean = env.contains(nme) || parent.map(_.envContains(nme)).getOrElse(false)
 
   /**
    * Yield the value at this `Cursor` as a value of type `T` if possible,
    * an error or the left hand side otherwise.
    */
-  def as[T: ClassTag]: Result[T] =
-    cast[T](focus).toResultOrError(s"Expected value of type ${classTag[T]} for focus of type $tpe at path $path, found $focus")
+  def as[T: ClassTag: TypeName]: Result[T] =
+    classTag[T].unapply(focus).toResultOrError(s"Expected value of type ${typeName[T]} for focus of type $tpe at path $path, found $focus")
 
   /** Is the value at this `Cursor` of a scalar or enum type? */
   def isLeaf: Boolean
@@ -139,7 +139,7 @@ trait Cursor {
    * Yield the value of the field `fieldName` of this `Cursor` as a value of
    * type `T` if possible, an error or the left hand side otherwise.
    */
-  def fieldAs[T: ClassTag](fieldName: String): Result[T] =
+  def fieldAs[T: ClassTag : TypeName](fieldName: String): Result[T] =
     field(fieldName, None).flatMap(_.as[T])
 
   /** True if this cursor is nullable and null, false otherwise. */
@@ -254,78 +254,6 @@ trait Cursor {
 }
 
 object Cursor {
-  /**
-   * Context represents a position in the output tree in terms of,
-   * 1) the path through the schema to the position
-   * 2) the path through the schema with query aliases applied
-   * 3) the type of the element at the position
-   */
-  case class Context(
-    rootTpe: Type,
-    path: List[String],
-    resultPath: List[String],
-    typePath: List[Type]
-  ) {
-    lazy val tpe: Type = typePath.headOption.getOrElse(rootTpe)
-
-    def asType(tpe: Type): Context = {
-      typePath match {
-        case Nil => copy(rootTpe = tpe)
-        case _ :: tl => copy(typePath = tpe :: tl)
-      }
-    }
-
-    def isRoot: Boolean = path.isEmpty
-
-    def parent: Option[Context] =
-      if(path.isEmpty) None
-      else Some(copy(path = path.tail, resultPath = resultPath.tail, typePath = typePath.tail))
-
-    def forField(fieldName: String, resultName: String): Result[Context] =
-      tpe.underlyingField(fieldName).map { fieldTpe =>
-        copy(path = fieldName :: path, resultPath = resultName :: resultPath, typePath = fieldTpe :: typePath)
-      }.toResultOrError(s"No field '$fieldName' for type $tpe")
-
-    def forField(fieldName: String, resultName: Option[String]): Result[Context] =
-      tpe.underlyingField(fieldName).map { fieldTpe =>
-        copy(path = fieldName :: path, resultPath = resultName.getOrElse(fieldName) :: resultPath, typePath = fieldTpe :: typePath)
-      }.toResultOrError(s"No field '$fieldName' for type $tpe")
-
-    def forPath(path1: List[String]): Result[Context] =
-      path1 match {
-        case Nil => this.success
-        case hd :: tl => forField(hd, hd).flatMap(_.forPath(tl))
-      }
-
-    def forFieldOrAttribute(fieldName: String, resultName: Option[String]): Context = {
-      val fieldTpe = tpe.underlyingField(fieldName).getOrElse(ScalarType.AttributeType)
-      copy(path = fieldName :: path, resultPath = resultName.getOrElse(fieldName) :: resultPath, typePath = fieldTpe :: typePath)
-    }
-
-    override def equals(other: Any): Boolean =
-      other match {
-        case Context(oRootTpe, oPath, oResultPath, _) =>
-          rootTpe =:= oRootTpe && resultPath == oResultPath && path == oPath
-        case _ => false
-      }
-
-    override def hashCode(): Int = resultPath.hashCode
-  }
-
-  object Context {
-    def apply(rootTpe: Type, fieldName: String, resultName: Option[String]): Option[Context] = {
-      for {
-        tpe <- rootTpe.underlyingField(fieldName)
-      } yield new Context(rootTpe, List(fieldName), List(resultName.getOrElse(fieldName)), List(tpe))
-    }
-
-    def apply(rootTpe: Type): Context = Context(rootTpe, Nil, Nil, Nil)
-
-    def apply(path: Path): Result[Context] =
-      path.path.foldLeftM(Context(path.rootTpe, Nil, Nil, Nil)) { case (acc, elem) =>
-        acc.forField(elem, None)
-      }
-  }
 
   def flatten(c: Cursor): Result[List[Cursor]] =
     if(c.isList) c.asList.flatMap(flatten)
@@ -334,66 +262,6 @@ object Cursor {
 
   def flatten(cs: List[Cursor]): Result[List[Cursor]] =
     cs.flatTraverse(flatten)
-
-  sealed trait Env {
-    def add[T](items: (String, T)*): Env
-    def add(env: Env): Env
-    def contains(name: String): Boolean
-    def get[T: ClassTag](name: String): Option[T]
-
-    def getR[A: ClassTag: TypeName](name: String): Result[A] =
-      get[A](name).toResultOrError(s"Key '$name' of type ${typeName[A]} was not found in $this")
-
-    def addFromQuery(query: Query): Env =
-      query match {
-        case Query.Environment(childEnv, child) =>
-          add(childEnv).addFromQuery(child)
-        case _ => this
-      }
-  }
-
-  object Env {
-    def empty: Env = EmptyEnv
-
-    def apply[T](items: (String, T)*): Env = NonEmptyEnv(Map(items: _*))
-
-    case object EmptyEnv extends Env {
-      def add[T](items: (String, T)*): Env = NonEmptyEnv(Map(items: _*))
-      def add(env: Env): Env = env
-      def contains(name: String): Boolean = false
-      def get[T: ClassTag](name: String): Option[T] = None
-    }
-
-    case class NonEmptyEnv(elems: Map[String, Any]) extends Env {
-      def add[T](items: (String, T)*): Env = NonEmptyEnv(elems++items)
-      def add(other: Env): Env = other match {
-        case EmptyEnv => this
-        case NonEmptyEnv(elems0) => NonEmptyEnv(elems++elems0)
-      }
-      def contains(name: String): Boolean = elems.contains(name)
-      def get[T: ClassTag](name: String): Option[T] =
-        elems.get(name).flatMap(cast[T])
-    }
-  }
-
-  private def cast[T: ClassTag](x: Any): Option[T] = {
-    val clazz = classTag[T].runtimeClass
-    if (
-      clazz.isInstance(x) ||
-      (clazz == classOf[Int] && x.isInstanceOf[java.lang.Integer]) ||
-      (clazz == classOf[Boolean] && x.isInstanceOf[java.lang.Boolean]) ||
-      (clazz == classOf[Long] && x.isInstanceOf[java.lang.Long]) ||
-      (clazz == classOf[Double] && x.isInstanceOf[java.lang.Double]) ||
-      (clazz == classOf[Byte] && x.isInstanceOf[java.lang.Byte]) ||
-      (clazz == classOf[Short] && x.isInstanceOf[java.lang.Short]) ||
-      (clazz == classOf[Char] && x.isInstanceOf[java.lang.Character]) ||
-      (clazz == classOf[Float] && x.isInstanceOf[java.lang.Float]) ||
-      (clazz == classOf[Unit] && x.isInstanceOf[scala.runtime.BoxedUnit])
-    )
-      Some(x.asInstanceOf[T])
-    else
-      None
-  }
 
   /** Abstract `Cursor` providing default implementation of most methods. */
   abstract class AbstractCursor extends Cursor {
@@ -429,7 +297,7 @@ object Cursor {
     def hasField(fieldName: String): Boolean = false
 
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
-      Result.internalError(s"No field '$fieldName' for type $tpe")
+      Result.internalError(s"No field '$fieldName' for type ${tpe.underlying}")
   }
 
   /** Proxy `Cursor` which delegates most methods to an underlying `Cursor`.. */
@@ -489,6 +357,20 @@ object Cursor {
       factory.fromSpecific(newElems).success
   }
 
+  /** Proxy `Cursor` which always yields a `NullCursor` for fields of the underlying cursor */
+  case class NullFieldCursor(underlying: Cursor) extends ProxyCursor(underlying) {
+    override def withEnv(env: Env): Cursor = new NullFieldCursor(underlying.withEnv(env))
+    override def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
+      underlying.field(fieldName, resultName).map(NullCursor(_))
+  }
+
+  /** Proxy `Cursor` which always yields null */
+  case class NullCursor(underlying: Cursor) extends ProxyCursor(underlying) {
+    override def withEnv(env: Env): Cursor = new NullCursor(underlying.withEnv(env))
+    override def isDefined: Result[Boolean] = false.success
+    override def asNullable: Result[Option[Cursor]] = None.success
+  }
+
   case class DeferredCursor(context: Context, parent: Option[Cursor], env: Env, deferredPath: List[String], mkCursor: (Context, Cursor) => Result[Cursor]) extends AbstractCursor {
     def focus: Any = Result.internalError(s"Empty cursor has no focus")
     def withEnv(env0: Env): DeferredCursor = copy(env = env.add(env0))
@@ -496,7 +378,7 @@ object Cursor {
     override def hasField(fieldName: String): Boolean = fieldName == deferredPath.head
 
     override def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
-      if(fieldName != deferredPath.head) Result.internalError(s"No field '$fieldName' for type $tpe")
+      if(fieldName != deferredPath.head) Result.internalError(s"No field '$fieldName' for type ${tpe.underlying}")
       else
         for {
           fieldContext <- context.forField(fieldName, resultName)
@@ -508,5 +390,125 @@ object Cursor {
   object DeferredCursor {
     def apply(path: Path, mkCursor: (Context, Cursor) => Result[Cursor]): Cursor =
       DeferredCursor(Context(path.rootTpe), None, Env.empty, path.path, mkCursor)
+  }
+}
+
+/**
+  * Context represents a position in the output tree in terms of,
+  * 1) the path through the schema to the position
+  * 2) the path through the schema with query aliases applied
+  * 3) the type of the element at the position
+  */
+case class Context(
+  rootTpe: Type,
+  path: List[String],
+  resultPath: List[String],
+  typePath: List[Type]
+) {
+  lazy val tpe: Type = typePath.headOption.getOrElse(rootTpe)
+
+  def asType(tpe: Type): Context = {
+    typePath match {
+      case Nil => copy(rootTpe = tpe)
+      case _ :: tl => copy(typePath = tpe :: tl)
+    }
+  }
+
+  def isRoot: Boolean = path.isEmpty
+
+  def parent: Option[Context] =
+    if(path.isEmpty) None
+    else Some(copy(path = path.tail, resultPath = resultPath.tail, typePath = typePath.tail))
+
+  def forField(fieldName: String, resultName: String): Result[Context] =
+    tpe.underlyingField(fieldName).map { fieldTpe =>
+      copy(path = fieldName :: path, resultPath = resultName :: resultPath, typePath = fieldTpe :: typePath)
+    }.toResult(s"No field '$fieldName' for type ${tpe.underlying}")
+
+  def forField(fieldName: String, resultName: Option[String]): Result[Context] =
+    tpe.underlyingField(fieldName).map { fieldTpe =>
+      copy(path = fieldName :: path, resultPath = resultName.getOrElse(fieldName) :: resultPath, typePath = fieldTpe :: typePath)
+    }.toResult(s"No field '$fieldName' for type ${tpe.underlying}")
+
+  def forPath(path1: List[String]): Result[Context] =
+    path1 match {
+      case Nil => this.success
+      case hd :: tl => forField(hd, hd).flatMap(_.forPath(tl))
+    }
+
+  def forFieldOrAttribute(fieldName: String, resultName: Option[String]): Context = {
+    val fieldTpe = tpe.underlyingField(fieldName).getOrElse(ScalarType.AttributeType)
+    copy(path = fieldName :: path, resultPath = resultName.getOrElse(fieldName) :: resultPath, typePath = fieldTpe :: typePath)
+  }
+
+  override def equals(other: Any): Boolean =
+    other match {
+      case Context(oRootTpe, oPath, oResultPath, _) =>
+        rootTpe =:= oRootTpe && resultPath == oResultPath && path == oPath
+      case _ => false
+    }
+
+  override def hashCode(): Int = resultPath.hashCode
+}
+
+object Context {
+  def apply(rootTpe: Type, fieldName: String, resultName: Option[String]): Option[Context] = {
+    for {
+      tpe <- rootTpe.underlyingField(fieldName)
+    } yield new Context(rootTpe, List(fieldName), List(resultName.getOrElse(fieldName)), List(tpe))
+  }
+
+  def apply(rootTpe: Type): Context = Context(rootTpe, Nil, Nil, Nil)
+
+  def apply(path: Path): Result[Context] =
+    path.path.foldLeftM(Context(path.rootTpe, Nil, Nil, Nil)) { case (acc, elem) =>
+      acc.forField(elem, None)
+    }
+}
+
+/**
+ * An environment for elaboration or execution of a GraphQL query.
+ */
+sealed trait Env {
+  def add[T](items: (String, T)*): Env
+  def add(env: Env): Env
+  def contains(name: String): Boolean
+  def get[T: ClassTag](name: String): Option[T]
+  def isEmpty: Boolean
+
+  def getR[A: ClassTag: TypeName](name: String): Result[A] =
+    get[A](name).toResultOrError(s"Key '$name' of type ${typeName[A]} was not found in $this")
+
+  def addFromQuery(query: Query): Env =
+    query match {
+      case Query.Environment(childEnv, child) =>
+        add(childEnv).addFromQuery(child)
+      case _ => this
+    }
+}
+
+object Env {
+  def empty: Env = EmptyEnv
+
+  def apply[T](items: (String, T)*): Env = NonEmptyEnv(Map(items: _*))
+
+  case object EmptyEnv extends Env {
+    def add[T](items: (String, T)*): Env = NonEmptyEnv(Map(items: _*))
+    def add(env: Env): Env = env
+    def contains(name: String): Boolean = false
+    def get[T: ClassTag](name: String): Option[T] = None
+    def isEmpty: Boolean = true
+  }
+
+  case class NonEmptyEnv(elems: Map[String, Any]) extends Env {
+    def add[T](items: (String, T)*): Env = NonEmptyEnv(elems++items)
+    def add(other: Env): Env = other match {
+      case EmptyEnv => this
+      case NonEmptyEnv(elems0) => NonEmptyEnv(elems++elems0)
+    }
+    def contains(name: String): Boolean = elems.contains(name)
+    def get[T: ClassTag](name: String): Option[T] =
+      elems.get(name).flatMap(classTag[T].unapply)
+    def isEmpty: Boolean = false
   }
 }

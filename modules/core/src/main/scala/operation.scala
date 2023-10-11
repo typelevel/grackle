@@ -7,20 +7,40 @@ import syntax._
 import Query._
 
 sealed trait UntypedOperation {
+  val name: Option[String]
   val query: Query
   val variables: UntypedVarDefs
+  val directives: List[Directive]
   def rootTpe(schema: Schema): Result[NamedType] =
     this match {
-      case UntypedOperation.UntypedQuery(_, _)        => schema.queryType.success
-      case UntypedOperation.UntypedMutation(_, _)     => schema.mutationType.toResult("No mutation type defined in this schema.")
-      case UntypedOperation.UntypedSubscription(_, _) => schema.subscriptionType.toResult("No subscription type defined in this schema.")
+      case _: UntypedOperation.UntypedQuery        => schema.queryType.success
+      case _: UntypedOperation.UntypedMutation     => schema.mutationType.toResult("No mutation type defined in this schema.")
+      case _: UntypedOperation.UntypedSubscription => schema.subscriptionType.toResult("No subscription type defined in this schema.")
     }
 }
 object UntypedOperation {
-  case class UntypedQuery(query: Query,  variables: UntypedVarDefs) extends UntypedOperation
-  case class UntypedMutation(query: Query,  variables: UntypedVarDefs) extends UntypedOperation
-  case class UntypedSubscription(query: Query,  variables: UntypedVarDefs) extends UntypedOperation
+  case class UntypedQuery(
+    name: Option[String],
+    query: Query,
+    variables: UntypedVarDefs,
+    directives: List[Directive]
+  ) extends UntypedOperation
+  case class UntypedMutation(
+    name: Option[String],
+    query: Query,
+    variables: UntypedVarDefs,
+    directives: List[Directive]
+  ) extends UntypedOperation
+  case class UntypedSubscription(
+    name: Option[String],
+    query: Query,
+    variables: UntypedVarDefs,
+    directives: List[Directive]
+  ) extends UntypedOperation
 }
 
-case class Operation(query: Query, rootTpe: NamedType)
-
+case class Operation(
+  query: Query,
+  rootTpe: NamedType,
+  directives: List[Directive]
+)
