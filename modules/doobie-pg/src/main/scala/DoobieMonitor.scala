@@ -1,15 +1,15 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package edu.gemini.grackle
+package grackle
 package doobie.postgres
 
 import _root_.doobie.Fragment
 import cats.Applicative
 import cats.implicits._
-import edu.gemini.grackle.QueryInterpreter.ProtoJson
+import grackle.QueryInterpreter.ProtoJson
 import org.typelevel.log4cats.Logger
-import edu.gemini.grackle.sql.SqlStatsMonitor
+import grackle.sql.SqlStatsMonitor
 import cats.effect.Ref
 import cats.effect.Sync
 

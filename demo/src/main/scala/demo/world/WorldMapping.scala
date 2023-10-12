@@ -5,14 +5,14 @@ package demo.world
 
 import _root_.doobie.{Meta, Transactor}
 import cats.effect.Sync
-import edu.gemini.grackle.Predicate._
-import edu.gemini.grackle.Query._
-import edu.gemini.grackle.QueryCompiler._
-import edu.gemini.grackle.Value._
-import edu.gemini.grackle._
-import edu.gemini.grackle.doobie.postgres.{DoobieMapping, DoobieMonitor, LoggedDoobieMappingCompanion}
-import edu.gemini.grackle.sql.Like
-import edu.gemini.grackle.syntax._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
+import grackle._
+import grackle.doobie.postgres.{DoobieMapping, DoobieMonitor, LoggedDoobieMappingCompanion}
+import grackle.sql.Like
+import grackle.syntax._
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 

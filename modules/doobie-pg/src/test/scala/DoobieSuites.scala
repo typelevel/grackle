@@ -1,17 +1,17 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package edu.gemini.grackle.doobie.test
+package grackle.doobie.test
 
 import cats.effect.IO
 import doobie.implicits._
 import doobie.Meta
 
-import edu.gemini.grackle.doobie.postgres.DoobieMonitor
-import edu.gemini.grackle.sql.SqlStatsMonitor
+import grackle.doobie.postgres.DoobieMonitor
+import grackle.sql.SqlStatsMonitor
 
-import edu.gemini.grackle.sql.test._
-import edu.gemini.grackle.Mapping
+import grackle.sql.test._
+import grackle.Mapping
 
 final class ArrayJoinSuite extends DoobieDatabaseSuite with SqlArrayJoinSuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlArrayJoinMapping[IO]

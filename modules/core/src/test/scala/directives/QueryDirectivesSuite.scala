@@ -8,8 +8,8 @@ import cats.syntax.all._
 import io.circe.literal._
 import munit.CatsEffectSuite
 
-import edu.gemini.grackle._
-import edu.gemini.grackle.syntax._
+import grackle._
+import grackle.syntax._
 import Query._, QueryCompiler._
 
 final class QueryDirectivesSuite extends CatsEffectSuite {

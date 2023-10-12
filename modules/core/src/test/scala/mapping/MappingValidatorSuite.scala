@@ -6,9 +6,9 @@ package validator
 import cats.syntax.all._
 import munit.CatsEffectSuite
 
-import edu.gemini.grackle.{ ListType, MappingValidator }
-import edu.gemini.grackle.MappingValidator.ValidationException
-import edu.gemini.grackle.syntax._
+import grackle.{ ListType, MappingValidator }
+import grackle.MappingValidator.ValidationException
+import grackle.syntax._
 
 import compiler.TestMapping
 

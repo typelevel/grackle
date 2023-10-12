@@ -1,17 +1,17 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package edu.gemini.grackle.skunk.test
+package grackle.skunk.test
 
 import cats.effect.IO
 import skunk.codec.{all => codec}
 import skunk.implicits._
 
-import edu.gemini.grackle.skunk.SkunkMonitor
-import edu.gemini.grackle.sql.SqlStatsMonitor
+import grackle.skunk.SkunkMonitor
+import grackle.sql.SqlStatsMonitor
 
-import edu.gemini.grackle.sql.test._
-import edu.gemini.grackle.Mapping
+import grackle.sql.test._
+import grackle.Mapping
 
 import org.typelevel.twiddles._
 

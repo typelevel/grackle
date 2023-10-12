@@ -1,14 +1,14 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package edu.gemini.grackle
+package grackle
 
 import cats.data.NonEmptyChain
 import cats.syntax.all._
 import org.typelevel.literally.Literally
-import edu.gemini.grackle.Ast.Document
-import edu.gemini.grackle.GraphQLParser.Document.parseAll
-import edu.gemini.grackle.Schema
+import grackle.Ast.Document
+import grackle.GraphQLParser.Document.parseAll
+import grackle.Schema
 
 trait VersionSpecificSyntax {
   implicit def toStringContextOps(sc: StringContext): StringContextOps =
@@ -28,7 +28,7 @@ object SchemaLiteral extends Literally[Schema] {
         t  => s"Internal error: ${t.getMessage}",
         ps => s"Invalid schema: ${ps.toList.distinct.mkString("\n  🐞 ", "\n  🐞 ", "\n")}",
       )
-    Schema(s).toEither.bimap(mkError, _ => c.Expr(q"_root_.edu.gemini.grackle.Schema($s).toOption.get"))
+    Schema(s).toEither.bimap(mkError, _ => c.Expr(q"_root_.grackle.Schema($s).toOption.get"))
   }
   def make(c: Context)(args: c.Expr[Any]*): c.Expr[Schema] = apply(c)(args: _*)
 }
@@ -38,7 +38,7 @@ object DocumentLiteral extends Literally[Document] {
     import c.universe._
     parseAll(s).bimap(
       pf => show"Invalid document: $pf",
-      _  => c.Expr(q"_root_.edu.gemini.grackle.GraphQLParser.Document.parseAll($s).toOption.get"),
+      _  => c.Expr(q"_root_.grackle.GraphQLParser.Document.parseAll($s).toOption.get"),
     )
   }
   def make(c: Context)(args: c.Expr[Any]*): c.Expr[Document] = apply(c)(args: _*)

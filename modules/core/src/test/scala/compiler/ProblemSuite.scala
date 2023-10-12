@@ -8,7 +8,7 @@ import io.circe.JsonObject
 import io.circe.literal._
 import munit.CatsEffectSuite
 
-import edu.gemini.grackle.Problem
+import grackle.Problem
 
 final class ProblemSuite extends CatsEffectSuite {
 

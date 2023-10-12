@@ -7,8 +7,8 @@ import cats.effect.IO
 import io.circe.literal._
 import munit.CatsEffectSuite
 
-import edu.gemini.grackle._
-import edu.gemini.grackle.syntax._
+import grackle._
+import grackle.syntax._
 import Query._
 import Predicate._, Value._
 import QueryCompiler._

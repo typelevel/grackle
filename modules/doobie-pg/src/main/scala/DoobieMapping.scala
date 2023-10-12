@@ -1,7 +1,7 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package edu.gemini.grackle
+package grackle
 package doobie.postgres
 
 import java.sql.ResultSet
@@ -16,7 +16,7 @@ import _root_.doobie.util.fragments
 import org.tpolecat.sourcepos.SourcePos
 import org.tpolecat.typename.TypeName
 
-import edu.gemini.grackle.sql._
+import grackle.sql._
 
 abstract class DoobieMapping[F[_]](
   val transactor: Transactor[F],

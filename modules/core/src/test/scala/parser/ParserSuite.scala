@@ -5,8 +5,8 @@ package parser
 
 import munit.CatsEffectSuite
 
-import edu.gemini.grackle.{ Ast, GraphQLParser }
-import edu.gemini.grackle.syntax._
+import grackle.{ Ast, GraphQLParser }
+import grackle.syntax._
 import Ast._, OperationType._, OperationDefinition._, Selection._, Value._, Type.Named
 
 final class ParserSuite extends CatsEffectSuite {

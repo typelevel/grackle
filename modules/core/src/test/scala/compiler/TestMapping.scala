@@ -6,7 +6,7 @@ package compiler
 import cats.MonadThrow
 import cats.effect.IO
 
-import edu.gemini.grackle._
+import grackle._
 
 abstract class TestMapping(implicit val M: MonadThrow[IO]) extends Mapping[IO] {
   val typeMappings: List[TypeMapping] = Nil

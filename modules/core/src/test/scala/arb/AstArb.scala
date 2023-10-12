@@ -3,7 +3,7 @@
 
 package arb
 
-import edu.gemini.grackle._
+import grackle._
 import org.scalacheck.{ Arbitrary, Gen }
 
 trait AstArb {

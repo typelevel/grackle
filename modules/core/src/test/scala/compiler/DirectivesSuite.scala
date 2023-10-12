@@ -5,8 +5,8 @@ package compiler
 
 import munit.CatsEffectSuite
 
-import edu.gemini.grackle._
-import edu.gemini.grackle.syntax._
+import grackle._
+import grackle.syntax._
 import Ast.DirectiveLocation._
 import Query._
 
