@@ -1,9 +1,9 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package edu.gemini.grackle
+package grackle
 
-import edu.gemini.grackle.sql.SqlMonitor
+import grackle.sql.SqlMonitor
 import _root_.skunk.AppliedFragment
 
 package object skunk {

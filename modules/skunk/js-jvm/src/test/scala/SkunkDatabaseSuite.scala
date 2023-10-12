@@ -1,7 +1,7 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package edu.gemini.grackle.skunk.test
+package grackle.skunk.test
 
 import java.time.Duration
 
@@ -11,9 +11,9 @@ import skunk.Session
 import skunk.codec.{ all => codec }
 import skunk.circe.codec.{ all => ccodec }
 
-import edu.gemini.grackle._, skunk._
+import grackle._, skunk._
 
-import edu.gemini.grackle.sql.test._
+import grackle.sql.test._
 
 trait SkunkDatabaseSuite extends SqlDatabaseSuite {
 

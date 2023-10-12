@@ -10,8 +10,8 @@ import cats.implicits._
 import munit.CatsEffectSuite
 
 import compiler.PreserveArgsElaborator
-import edu.gemini.grackle._
-import edu.gemini.grackle.syntax._
+import grackle._
+import grackle.syntax._
 import Query._
 
 final class DirectiveValidationSuite extends CatsEffectSuite {

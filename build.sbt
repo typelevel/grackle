@@ -29,8 +29,8 @@ val Scala3 = "3.3.1"
 ThisBuild / scalaVersion        := Scala2
 ThisBuild / crossScalaVersions  := Seq(Scala2, Scala3)
 
-ThisBuild / tlBaseVersion    := "0.14"
-ThisBuild / organization     := "edu.gemini"
+ThisBuild / tlBaseVersion    := "0.15"
+ThisBuild / organization     := "org.typelevel"
 ThisBuild / organizationName := "Association of Universities for Research in Astronomy, Inc. (AURA)"
 ThisBuild / startYear        := Some(2019)
 ThisBuild / licenses         := Seq(("BSD-3-Clause", new URL("https://opensource.org/licenses/BSD-3-Clause")))
@@ -106,7 +106,7 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .disablePlugins(RevolverPlugin)
   .settings(commonSettings)
   .settings(
-    name := "gsp-graphql-core",
+    name := "grackle-core",
     libraryDependencies ++=
       Seq(
         "org.typelevel" %%% "cats-parse"   % catsParseVersion,
@@ -131,7 +131,7 @@ lazy val circe = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .dependsOn(core)
   .settings(commonSettings)
   .settings(
-    name := "gsp-graphql-circe",
+    name := "grackle-circe",
   )
 
 lazy val buildInfo = crossProject(JVMPlatform, JSPlatform, NativePlatform)
@@ -151,7 +151,7 @@ lazy val sql = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .dependsOn(core % "test->test;compile->compile", circe, buildInfo % Test)
   .settings(commonSettings)
   .settings(
-    name := "gsp-graphql-sql",
+    name := "grackle-sql",
     libraryDependencies ++= Seq(
       "io.circe"          %%% "circe-generic"      % circeVersion % "test",
       "co.fs2"            %%% "fs2-io"             % fs2Version % "test",
@@ -175,7 +175,7 @@ lazy val doobie = project
   .dependsOn(sql.jvm % "test->test;compile->compile", circe.jvm)
   .settings(commonSettings)
   .settings(
-    name := "gsp-graphql-doobie-pg",
+    name := "grackle-doobie-pg",
     Test / fork := true,
     Test / parallelExecution := false,
     libraryDependencies ++= Seq(
@@ -194,7 +194,7 @@ lazy val skunk = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .dependsOn(sql % "test->test;compile->compile", circe)
   .settings(commonSettings)
   .settings(
-    name := "gsp-graphql-skunk",
+    name := "grackle-skunk",
     Test / parallelExecution := false,
     libraryDependencies ++= Seq(
       "org.tpolecat" %%% "skunk-core"  % skunkVersion,
@@ -216,7 +216,7 @@ lazy val generic = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .dependsOn(core)
   .settings(commonSettings)
   .settings(
-    name := "gsp-graphql-generic",
+    name := "grackle-generic",
     libraryDependencies += (
       scalaVersion.value match {
         case Scala3 => "org.typelevel" %%% "shapeless3-deriving" % shapeless3Version
@@ -230,7 +230,7 @@ lazy val demo = project
   .dependsOn(core.jvm, generic.jvm, doobie)
   .settings(commonSettings)
   .settings(
-    name := "gsp-graphql-demo",
+    name := "grackle-demo",
     libraryDependencies ++= Seq(
       "org.typelevel"     %% "log4cats-slf4j"      % log4catsVersion,
       "ch.qos.logback"    %  "logback-classic"     % logbackVersion,

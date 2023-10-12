@@ -7,8 +7,8 @@ import cats.effect.Sync
 import cats.implicits._
 import fs2.concurrent.SignallingRef
 
-import edu.gemini.grackle._
-import edu.gemini.grackle.syntax._
+import grackle._
+import grackle.syntax._
 
 class ValueEffectMapping[F[_]: Sync](ref: SignallingRef[F, Int]) extends ValueMapping[F] {
   val schema =

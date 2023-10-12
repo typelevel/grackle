@@ -6,8 +6,8 @@ package schema
 import cats.data.NonEmptyChain
 import munit.CatsEffectSuite
 
-import edu.gemini.grackle.{Result, Schema}
-import edu.gemini.grackle.syntax._
+import grackle.{Result, Schema}
+import grackle.syntax._
 
 final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: undefined types: typo in the use of a Query result type") {

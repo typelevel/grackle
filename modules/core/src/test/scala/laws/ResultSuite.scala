@@ -12,7 +12,7 @@ import munit.DisciplineSuite
 import org.scalacheck.{Arbitrary, Cogen, Gen}
 import org.scalacheck.Arbitrary.{arbitrary => getArbitrary}
 
-import edu.gemini.grackle.{Problem, Result}
+import grackle.{Problem, Result}
 
 class ResultSuite extends DisciplineSuite {
   implicit val eqThrow: Eq[Throwable] = Eq.fromUniversalEquals

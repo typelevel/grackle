@@ -4,13 +4,13 @@
 package demo.starwars
 
 import cats.syntax.all._
-import edu.gemini.grackle.Predicate._
-import edu.gemini.grackle.Query._
-import edu.gemini.grackle.QueryCompiler._
-import edu.gemini.grackle.Value._
-import edu.gemini.grackle._
-import edu.gemini.grackle.generic._
-import edu.gemini.grackle.syntax._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
+import grackle._
+import grackle.generic._
+import grackle.syntax._
 
 trait StarWarsMapping[F[_]] extends GenericMapping[F] { self: StarWarsData[F] =>
   // #schema

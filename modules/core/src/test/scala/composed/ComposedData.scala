@@ -6,8 +6,8 @@ package composed
 import cats.effect.IO
 import cats.implicits._
 
-import edu.gemini.grackle._
-import edu.gemini.grackle.syntax._
+import grackle._
+import grackle.syntax._
 import Query._
 import Predicate._, Value._
 import QueryCompiler._

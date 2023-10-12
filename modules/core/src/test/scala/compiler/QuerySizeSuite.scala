@@ -6,7 +6,7 @@ package compiler
 import cats.data.NonEmptyChain
 import munit.CatsEffectSuite
 
-import edu.gemini.grackle.{Problem, Result}
+import grackle.{Problem, Result}
 import starwars.StarWarsMapping
 
 class QuerySizeSuite extends CatsEffectSuite {

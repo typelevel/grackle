@@ -11,7 +11,7 @@ import cats.implicits._
 import _root_.doobie.util.meta.Meta
 import _root_.doobie.util.transactor.Transactor
 
-import edu.gemini.grackle._
+import grackle._
 import doobie.postgres.{DoobieMapping, DoobieMappingCompanion, DoobieMonitor}
 import sql.Like
 import syntax._

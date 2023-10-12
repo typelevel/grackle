@@ -5,7 +5,7 @@ package minimizer
 
 import munit.CatsEffectSuite
 
-import edu.gemini.grackle.{ GraphQLParser, QueryMinimizer }
+import grackle.{ GraphQLParser, QueryMinimizer }
 
 final class MinimizerSuite extends CatsEffectSuite {
   def run(query: String, expected: String, echo: Boolean = false): Unit = {

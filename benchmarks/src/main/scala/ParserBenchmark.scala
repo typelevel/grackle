@@ -28,9 +28,9 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package edu.gemini.grackle.benchmarks
+package grackle.benchmarks
 
-import edu.gemini.grackle.Schema
+import grackle.Schema
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole;
 
@@ -46,7 +46,7 @@ import scala.io.Source
  *
  * Or to run the benchmark from within sbt:
  *
- *     jmh:run -i 10 -wi 10 -f 2 -t 1 edu.gemini.grackle.benchmarks.ParserBenchmark
+ *     jmh:run -i 10 -wi 10 -f 2 -t 1 grackle.benchmarks.ParserBenchmark
  *
  * Which means "10 iterations", "10 warm-up iterations", "2 forks", "1 thread".
  * Please note that benchmarks should be usually executed at least in

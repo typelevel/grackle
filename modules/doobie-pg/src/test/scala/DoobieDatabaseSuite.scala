@@ -1,7 +1,7 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package edu.gemini.grackle.doobie.test
+package grackle.doobie.test
 
 import java.time.{Duration, LocalDate, LocalTime, OffsetDateTime}
 import java.util.UUID
@@ -12,9 +12,9 @@ import doobie.postgres.circe.jsonb.implicits._
 import doobie.{Get, Meta, Put, Transactor}
 import io.circe.Json
 
-import edu.gemini.grackle.doobie.postgres.{DoobieMapping, DoobieMonitor}
+import grackle.doobie.postgres.{DoobieMapping, DoobieMonitor}
 
-import edu.gemini.grackle.sql.test._
+import grackle.sql.test._
 
 trait DoobieDatabaseSuite extends SqlDatabaseSuite {
   // lazy vals because the container is not initialised until the test is run

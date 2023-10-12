@@ -5,8 +5,8 @@ package sdl
 
 import munit.CatsEffectSuite
 
-import edu.gemini.grackle.{ Ast, GraphQLParser, SchemaParser }
-import edu.gemini.grackle.syntax._
+import grackle.{ Ast, GraphQLParser, SchemaParser }
+import grackle.syntax._
 import Ast._, OperationType._, Type.{ List => _, _ }
 
 final class SDLSuite extends CatsEffectSuite {

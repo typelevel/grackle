@@ -3,7 +3,7 @@
 
 package compiler
 
-import edu.gemini.grackle._
+import grackle._
 import Query._
 import QueryCompiler._
 

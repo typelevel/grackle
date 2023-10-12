@@ -1,11 +1,11 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package edu.gemini.grackle.sql.test
+package grackle.sql.test
 
 import org.tpolecat.sourcepos.SourcePos
 
-import edu.gemini.grackle._
+import grackle._
 import sql.SqlMappingLike
 
 trait SqlTestMapping[F[_]] extends SqlMappingLike[F] { outer =>

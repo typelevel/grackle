@@ -1,9 +1,9 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package edu.gemini.grackle.sql.test
+package grackle.sql.test
 
-import edu.gemini.grackle.syntax._
+import grackle.syntax._
 
 trait SqlEmbeddingMapping[F[_]] extends SqlTestMapping[F] {
 

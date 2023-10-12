@@ -1,13 +1,13 @@
 // Copyright (c) 2016-2020 Association of Universities for Research in Astronomy, Inc. (AURA)
 // For license information see LICENSE or https://opensource.org/licenses/BSD-3-Clause
 
-package edu.gemini.grackle.sql.test
+package grackle.sql.test
 
 import cats.implicits._
 import io.circe.Json
 import io.circe.syntax.EncoderOps
 
-import edu.gemini.grackle._
+import grackle._
 import syntax._
 import Query._
 import Predicate._

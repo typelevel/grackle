@@ -33,5 +33,5 @@ To learn about Grackle please read the @ref:[Tutorial](tutorial/index.md) and ma
 
 - Test it out!
 - If you see a typo in the doc, click the link at the bottom and fix it!
-- If you find a bug, open an issue (or fix it and open a PR) at our [GitHub Repository](https://github.com/gemini-hlsw/gsp-graphql).
+- If you find a bug, open an issue (or fix it and open a PR) at our [GitHub Repository](https://github.com/typelevel/grackle).
 - If you want to make a larger contribution please open an issue first so we can discuss.
