@@ -53,7 +53,6 @@ ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 ThisBuild / tlBspCrossProjectPlatforms := Set(JVMPlatform)
 
 ThisBuild / tlSitePublishBranch := Some("main")
-ThisBuild / tlSiteIsTypelevelProject.withRank(KeyRanks.Invisible) := Some(TypelevelProject.Affiliate)
 
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
