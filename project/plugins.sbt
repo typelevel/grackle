@@ -1,6 +1,6 @@
 addSbtPlugin("org.typelevel"             % "sbt-typelevel"                 % "0.6.0")
+addSbtPlugin("org.typelevel"             % "sbt-typelevel-site"            % "0.6.0")
 addSbtPlugin("io.spray"                  % "sbt-revolver"                  % "0.10.0")
-addSbtPlugin("com.github.sbt"            % "sbt-site-paradox"              % "1.5.0")
 addSbtPlugin("com.timushev.sbt"          % "sbt-updates"                   % "0.6.4")
 addSbtPlugin("de.heikoseeberger"         % "sbt-header"                    % "5.10.0")
 addSbtPlugin("pl.project13.scala"        % "sbt-jmh"                       % "0.4.6")

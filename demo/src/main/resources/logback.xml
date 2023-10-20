@@ -1,11 +1,14 @@
 <configuration>
   <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
     <encoder>
-      <pattern>[%thread] %highlight(%-5level) %cyan(%logger{15}) - %msg %n</pattern>
+      <pattern>%highlight(%-5level) - %msg%n</pattern>
     </encoder>
   </appender>
 
   <root level="INFO">
     <appender-ref ref="STDOUT" />
   </root>
+
+  <logger name="org.flywaydb" level="OFF" />
+    <!-- <logger name="org.http4s" level="OFF" /> -->
 </configuration>
