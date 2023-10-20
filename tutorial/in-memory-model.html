@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+  
+  <head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="generator" content="Typelevel Laika + Helium Theme" />
+  <title>In-memory Model</title>
+  
+  <meta name="author" content="Miles Sabin"/>
+  
+  <meta name="author" content="Rob Norris"/>
+  
+  
+  <meta name="description" content="docs"/>
+  
+  
+  
+  <link rel="icon" sizes="32x32" type="image/png" href="https://typelevel.org/img/favicon.png"/>
+  
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato:400,700">
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Fira+Mono:500">
+  
+  <link rel="stylesheet" type="text/css" href="../helium/site/icofont.min.css" />
+    <link rel="stylesheet" type="text/css" href="../helium/site/laika-helium.css" />
+  <script src="../helium/site/laika-helium.js"></script>
+  
+  
+  <script> /* for avoiding page load transitions */ </script>
+</head>
+
+  <body>
+
+    <header id="top-bar" class="light-default dark-default">
+
+  <div class="row">
+    <a id="nav-icon">
+      <i class="icofont-laika navigationMenu" title="Navigation">&#xefa2;</i>
+    </a>
+    
+    
+  </div>
+
+  <a class="image-link" href="https://typelevel.org"><img src="https://typelevel.org/img/logo.svg"></a>
+
+  <div class="row links">
+    
+    <a class="icon-link svg-link" href="https://github.com/typelevel/grackle"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link glyph-link" href="https://discord.gg/XF3CXcMzqD"><i class="icofont-laika chat" title="Chat">&#xeed5;</i></a>
+    
+    <a class="icon-link svg-link" href="https://fosstodon.org/@typelevel"><span class="mastodon" title="Mastodon"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <g class="svg-shape">
+    <path d="M11.19 12.195c2.016-.24 3.77-1.475 3.99-2.603.348-1.778.32-4.339.32-4.339 0-3.47-2.286-4.488-2.286-4.488C12.062.238 10.083.017 8.027 0h-.05C5.92.017 3.942.238 2.79.765c0 0-2.285 1.017-2.285 4.488l-.002.662c-.004.64-.007 1.35.011 2.091.083 3.394.626 6.74 3.78 7.57 1.454.383 2.703.463 3.709.408 1.823-.1 2.847-.647 2.847-.647l-.06-1.317s-1.303.41-2.767.36c-1.45-.05-2.98-.156-3.215-1.928a3.614 3.614 0 0 1-.033-.496s1.424.346 3.228.428c1.103.05 2.137-.064 3.188-.189zm1.613-2.47H11.13v-4.08c0-.859-.364-1.295-1.091-1.295-.804 0-1.207.517-1.207 1.541v2.233H7.168V5.89c0-1.024-.403-1.541-1.207-1.541-.727 0-1.091.436-1.091 1.296v4.079H3.197V5.522c0-.859.22-1.541.66-2.046.456-.505 1.052-.764 1.793-.764.856 0 1.504.328 1.933.983L8 4.39l.417-.695c.429-.655 1.077-.983 1.934-.983.74 0 1.336.259 1.791.764.442.505.661 1.187.661 2.046v4.203z"/>
+  </g>
+</svg></span></a>
+    
+  </div>  
+
+</header>
+    
+    <nav id="sidebar">
+
+  <div class="row">
+    
+    <a class="icon-link svg-link" href="https://github.com/typelevel/grackle"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link glyph-link" href="https://discord.gg/XF3CXcMzqD"><i class="icofont-laika chat" title="Chat">&#xeed5;</i></a>
+    
+    <a class="icon-link svg-link" href="https://fosstodon.org/@typelevel"><span class="mastodon" title="Mastodon"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <g class="svg-shape">
+    <path d="M11.19 12.195c2.016-.24 3.77-1.475 3.99-2.603.348-1.778.32-4.339.32-4.339 0-3.47-2.286-4.488-2.286-4.488C12.062.238 10.083.017 8.027 0h-.05C5.92.017 3.942.238 2.79.765c0 0-2.285 1.017-2.285 4.488l-.002.662c-.004.64-.007 1.35.011 2.091.083 3.394.626 6.74 3.78 7.57 1.454.383 2.703.463 3.709.408 1.823-.1 2.847-.647 2.847-.647l-.06-1.317s-1.303.41-2.767.36c-1.45-.05-2.98-.156-3.215-1.928a3.614 3.614 0 0 1-.033-.496s1.424.346 3.228.428c1.103.05 2.137-.064 3.188-.189zm1.613-2.47H11.13v-4.08c0-.859-.364-1.295-1.091-1.295-.804 0-1.207.517-1.207 1.541v2.233H7.168V5.89c0-1.024-.403-1.541-1.207-1.541-.727 0-1.091.436-1.091 1.296v4.079H3.197V5.522c0-.859.22-1.541.66-2.046.456-.505 1.052-.764 1.793-.764.856 0 1.504.328 1.933.983L8 4.39l.417-.695c.429-.655 1.077-.983 1.934-.983.74 0 1.336.259 1.791.764.442.505.661 1.187.661 2.046v4.203z"/>
+  </g>
+</svg></span></a>
+    
+  </div>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="../">Grackle</a></li>
+    <li class="level1 nav-header">Tutorial</li>
+    <li class="level2 nav-leaf"><a href="intro.html">Introduction</a></li>
+    <li class="level2 active nav-leaf"><a href="#">In-memory Model</a></li>
+    <li class="level2 nav-leaf"><a href="db-backed-model.html">DB Backed Model</a></li>
+  </ul>
+
+</nav>
+
+    <div id="container">
+
+      
+<nav id="page-nav">
+  <p class="header"><a href="#">In-memory Model</a></p>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="#running-the-demo">Running the demo</a></li>
+    <li class="level1 nav-leaf"><a href="#query-examples">Query examples</a></li>
+    <li class="level1 nav-leaf"><a href="#the-schema">The Schema</a></li>
+    <li class="level1 nav-leaf"><a href="#the-scala-model">The Scala model</a></li>
+    <li class="level1 nav-leaf"><a href="#the-query-compiler-and-elaborator">The query compiler and elaborator</a></li>
+    <li class="level1 nav-leaf"><a href="#the-query-interpreter-and-cursor">The query interpreter and cursor</a></li>
+    <li class="level1 nav-leaf"><a href="#the-service">The service</a></li>
+    <li class="level1 nav-leaf"><a href="#putting-it-all-together">Putting it all together</a></li>
+  </ul>
+
+  <p class="footer"></p>
+</nav>
+
+
+      <main class="content">
+
+        <h1 id="in-memory-model" class="title">In-memory Model</h1>
+        <p>The GraphQL reference implementation defines an API over a simple data model representing characters and films from
+        the Star Wars series. Because of its appearance in the reference implementation it is used as the basis for many
+        GraphQL tutorials, and many GraphQL server implementations provide it as an example. Grackle is no exception.</p>
+        <p>In this tutorial we are going to implement the Star Wars demo using Grackle backed by an in-memory model, i.e. a
+        simple Scala data structure which captures the information required to service the GraphQL API.</p>
+        
+        <h2 id="running-the-demo" class="section"><a class="anchor-link left" href="#running-the-demo"><i class="icofont-laika link">&#xef71;</i></a>Running the demo</h2>
+        <p>The demo is packaged as submodule <code>demo</code> in the Grackle project. It is a http4s-based application which can be run
+        from the SBT REPL using <code>sbt-revolver</code>,</p>
+        <pre><code>sbt:root&gt; demo/reStart
+[info] Application demo not yet started
+[info] Starting application demo in the background ...
+demo Starting demo.Main.main()
+demo INFO  - Ember-Server service bound to address: [::]:8080</code></pre>
+        <p>This application hosts the demo services for in-memory and db-backend models, as well as a web-based GraphQL client
+        (GraphQL Playground) which can be used to interact with them. You can run the client for in-memory model in your browser
+        at <a href="http://localhost:8080/playground.html?endpoint=starwars"><a href="http://localhost:8080/playground.html?endpoint=starwars">http://localhost:8080/playground.html?endpoint=starwars</a></a>.</p>
+        
+        <h2 id="query-examples" class="section"><a class="anchor-link left" href="#query-examples"><i class="icofont-laika link">&#xef71;</i></a>Query examples</h2>
+        <p>You can use the Playground to run queries against the model. Paste the following into the query field on left,</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span>query {
+  hero(</span><span class="attribute-name">episode</span><span>: </span><span class="string-literal">EMPIRE) {</span><span>
+    name
+    appearsIn
+  }
+}</span></code></pre>
+        <p>Click the play button in the centre and you should see the following response on the right,</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span>{
+  </span><span class="attribute-name">&quot;data&quot;</span><span>: {
+    </span><span class="attribute-name">&quot;hero&quot;</span><span>: {
+      </span><span class="attribute-name">&quot;name&quot;</span><span>: </span><span class="string-literal">&quot;Luke Skywalker&quot;</span><span>,
+      </span><span class="attribute-name">&quot;appearsIn&quot;</span><span>: [
+        </span><span class="string-literal">&quot;NEWHOPE&quot;</span><span>,
+        </span><span class="string-literal">&quot;EMPIRE&quot;</span><span>,
+        </span><span class="string-literal">&quot;JEDI&quot;</span><span>
+      ]
+    }
+  }
+}</span></code></pre>
+        
+        <h2 id="the-schema" class="section"><a class="anchor-link left" href="#the-schema"><i class="icofont-laika link">&#xef71;</i></a>The Schema</h2>
+        <p>The Star Wars API is described by a GraphQL schema,</p>
+        <pre><code class="nohighlight"><span>type Query {
+  hero(</span><span class="attribute-name">episode</span><span>: </span><span class="string-literal">Episode!): Character</span><span>
+  character(</span><span class="attribute-name">id</span><span>: </span><span class="string-literal">ID!): Character</span><span>
+  human(</span><span class="attribute-name">id</span><span>: </span><span class="string-literal">ID!): Human</span><span>
+  droid(</span><span class="attribute-name">id</span><span>: </span><span class="string-literal">ID!): Droid</span><span>
+}
+
+enum Episode {
+  NEWHOPE
+  EMPIRE
+  JEDI
+}
+
+interface Character {
+  </span><span class="attribute-name">id</span><span>: </span><span class="string-literal">ID!</span><span>
+  </span><span class="attribute-name">name</span><span>: </span><span class="string-literal">String!</span><span>
+  </span><span class="attribute-name">friends</span><span>: </span><span class="string-literal">[Character]</span><span>
+  </span><span class="attribute-name">appearsIn</span><span>: </span><span class="string-literal">[Episode]!</span><span>
+}
+
+type Droid implements Character {
+  </span><span class="attribute-name">id</span><span>: </span><span class="string-literal">ID!</span><span>
+  </span><span class="attribute-name">name</span><span>: </span><span class="string-literal">String!</span><span>
+  </span><span class="attribute-name">friends</span><span>: </span><span class="string-literal">[Character]</span><span>
+  </span><span class="attribute-name">appearsIn</span><span>: </span><span class="string-literal">[Episode]!</span><span>
+  </span><span class="attribute-name">primaryFunction</span><span>: </span><span class="string-literal">String</span><span>
+}
+
+type Human implements Character {
+  </span><span class="attribute-name">id</span><span>: </span><span class="string-literal">ID!</span><span>
+  </span><span class="attribute-name">name</span><span>: </span><span class="string-literal">String!</span><span>
+  </span><span class="attribute-name">friends</span><span>: </span><span class="string-literal">[Character]</span><span>
+  </span><span class="attribute-name">appearsIn</span><span>: </span><span class="string-literal">[Episode]!</span><span>
+  </span><span class="attribute-name">homePlanet</span><span>: </span><span class="string-literal">String</span><span>
+}</span></code></pre>
+        <p>Any one of the parametrized fields in the <code>Query</code> type may be used as the top level query, with nested queries over
+        fields of the result type. The structure of the query follows the schema, and the structure of the result follows the
+        structure of the query. For example,</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span>query {
+  character(</span><span class="attribute-name">id</span><span>: </span><span class="number-literal">1002</span><span>) {
+    name
+    friends {
+      name
+    }
+  }
+}</span></code></pre>
+        <p>yields the result,</p>
+        <pre><code class="nohighlight"><span>{
+  </span><span class="attribute-name">&quot;data&quot;</span><span>: {
+    </span><span class="attribute-name">&quot;character&quot;</span><span>: {
+      </span><span class="attribute-name">&quot;name&quot;</span><span>: </span><span class="string-literal">&quot;Han Solo&quot;</span><span>,
+      </span><span class="attribute-name">&quot;friends&quot;</span><span>: [
+        {
+          </span><span class="attribute-name">&quot;name&quot;</span><span>: </span><span class="string-literal">&quot;Luke Skywalker&quot;</span><span>
+        },
+        {
+          </span><span class="attribute-name">&quot;name&quot;</span><span>: </span><span class="string-literal">&quot;Leia Organa&quot;</span><span>
+        },
+        {
+          </span><span class="attribute-name">&quot;name&quot;</span><span>: </span><span class="string-literal">&quot;R2-D2&quot;</span><span>
+        }
+      ]
+    }
+  }
+}</span></code></pre>
+        <p>Grackle represents schemas as Scala values of type <code>Schema</code> which can be constructed given a schema text,</p>
+        <pre><code class="nohighlight"><span>  </span><span class="keyword">val</span><span> </span><span class="identifier">schema</span><span> =
+    </span><span class="string-literal">schema&quot;&quot;&quot;
+      type Query {
+          hero(episode: Episode!): Character!
+          character(id: ID!): Character
+          human(id: ID!): Human
+          droid(id: ID!): Droid
+        }
+        enum Episode {
+          NEWHOPE
+          EMPIRE
+          JEDI
+        }
+        interface Character {
+          id: String!
+          name: String
+          friends: [Character!]
+          appearsIn: [Episode!]
+        }
+        type Human implements Character {
+          id: String!
+          name: String
+          friends: [Character!]
+          appearsIn: [Episode!]
+          homePlanet: String
+        }
+        type Droid implements Character {
+          id: String!
+          name: String
+          friends: [Character!]
+          appearsIn: [Episode!]
+          primaryFunction: String
+        }
+    &quot;&quot;&quot;</span></code></pre>
+        <p>The use of the <code>schema</code> string interpolator here causes the content of the string literal to be evaluated and checked
+        as a valid GraphQL schema at compile time.</p>
+        
+        <h2 id="the-scala-model" class="section"><a class="anchor-link left" href="#the-scala-model"><i class="icofont-laika link">&#xef71;</i></a>The Scala model</h2>
+        <p>The API is backed by values of an ordinary Scala data types with no Grackle dependencies,</p>
+        <pre><code class="nohighlight"><span>  </span><span class="keyword">object</span><span> </span><span class="type-name">Episode</span><span> </span><span class="keyword">extends</span><span> </span><span class="type-name">Enumeration</span><span> {
+    </span><span class="keyword">val</span><span> </span><span class="type-name">NEWHOPE</span><span>, </span><span class="type-name">EMPIRE</span><span>, </span><span class="type-name">JEDI</span><span> = </span><span class="type-name">Value</span><span>
+  }
+
+  </span><span class="keyword">sealed</span><span> </span><span class="keyword">trait</span><span> </span><span class="type-name">Character</span><span> {
+    </span><span class="keyword">def</span><span> </span><span class="declaration-name">id</span><span>: </span><span class="type-name">String</span><span>
+    </span><span class="keyword">def</span><span> </span><span class="declaration-name">name</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">String</span><span>]
+    </span><span class="keyword">def</span><span> </span><span class="declaration-name">appearsIn</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">List</span><span>[</span><span class="type-name">Episode</span><span>.</span><span class="type-name">Value</span><span>]]
+    </span><span class="keyword">def</span><span> </span><span class="declaration-name">friends</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">List</span><span>[</span><span class="type-name">String</span><span>]]
+  }
+
+  </span><span class="keyword">object</span><span> </span><span class="type-name">Character</span><span> {
+    </span><span class="keyword">implicit</span><span> </span><span class="keyword">val</span><span> </span><span class="identifier">cursorBuilder</span><span>: </span><span class="type-name">CursorBuilder</span><span>[</span><span class="type-name">Character</span><span>] =
+      </span><span class="identifier">deriveInterfaceCursorBuilder</span><span>[</span><span class="type-name">Character</span><span>](</span><span class="type-name">CharacterType</span><span>)
+  }
+
+  </span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">Human</span><span>(
+    </span><span class="identifier">id</span><span>: </span><span class="type-name">String</span><span>,
+    </span><span class="identifier">name</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">String</span><span>],
+    </span><span class="identifier">appearsIn</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">List</span><span>[</span><span class="type-name">Episode</span><span>.</span><span class="type-name">Value</span><span>]],
+    </span><span class="identifier">friends</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">List</span><span>[</span><span class="type-name">String</span><span>]],
+    </span><span class="identifier">homePlanet</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">String</span><span>]
+  ) </span><span class="keyword">extends</span><span> </span><span class="type-name">Character</span><span>
+
+  </span><span class="keyword">object</span><span> </span><span class="type-name">Human</span><span> {
+    </span><span class="keyword">implicit</span><span> </span><span class="keyword">val</span><span> </span><span class="identifier">cursorBuilder</span><span>: </span><span class="type-name">CursorBuilder</span><span>[</span><span class="type-name">Human</span><span>] =
+      </span><span class="identifier">deriveObjectCursorBuilder</span><span>[</span><span class="type-name">Human</span><span>](</span><span class="type-name">HumanType</span><span>)
+        .</span><span class="identifier">transformField</span><span>(</span><span class="string-literal">&quot;friends&quot;</span><span>)(</span><span class="identifier">resolveFriends</span><span>)
+  }
+
+  </span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">Droid</span><span>(
+    </span><span class="identifier">id</span><span>: </span><span class="type-name">String</span><span>,
+    </span><span class="identifier">name</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">String</span><span>],
+    </span><span class="identifier">appearsIn</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">List</span><span>[</span><span class="type-name">Episode</span><span>.</span><span class="type-name">Value</span><span>]],
+    </span><span class="identifier">friends</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">List</span><span>[</span><span class="type-name">String</span><span>]],
+    </span><span class="identifier">primaryFunction</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">String</span><span>]
+  ) </span><span class="keyword">extends</span><span> </span><span class="type-name">Character</span><span>
+
+  </span><span class="keyword">object</span><span> </span><span class="type-name">Droid</span><span> {
+    </span><span class="keyword">implicit</span><span> </span><span class="keyword">val</span><span> </span><span class="identifier">cursorBuilder</span><span>: </span><span class="type-name">CursorBuilder</span><span>[</span><span class="type-name">Droid</span><span>] =
+      </span><span class="identifier">deriveObjectCursorBuilder</span><span>[</span><span class="type-name">Droid</span><span>](</span><span class="type-name">DroidType</span><span>)
+        .</span><span class="identifier">transformField</span><span>(</span><span class="string-literal">&quot;friends&quot;</span><span>)(</span><span class="identifier">resolveFriends</span><span>)
+  }
+
+  </span><span class="keyword">def</span><span> </span><span class="declaration-name">resolveFriends</span><span>(</span><span class="identifier">c</span><span>: </span><span class="type-name">Character</span><span>): </span><span class="type-name">Result</span><span>[</span><span class="type-name">Option</span><span>[</span><span class="type-name">List</span><span>[</span><span class="type-name">Character</span><span>]]] =
+    </span><span class="identifier">c</span><span>.</span><span class="identifier">friends</span><span> </span><span class="keyword">match</span><span> {
+      </span><span class="keyword">case</span><span> </span><span class="type-name">None</span><span> =&gt; </span><span class="type-name">None</span><span>.</span><span class="identifier">success</span><span>
+      </span><span class="keyword">case</span><span> </span><span class="type-name">Some</span><span>(</span><span class="identifier">ids</span><span>) =&gt;
+        </span><span class="identifier">ids</span><span>.</span><span class="identifier">traverse</span><span>(</span><span class="identifier">id</span><span> =&gt;
+          </span><span class="identifier">characters</span><span>.</span><span class="identifier">find</span><span>(</span><span class="identifier">_</span><span>.</span><span class="identifier">id</span><span> == </span><span class="identifier">id</span><span>).</span><span class="identifier">toResultOrError</span><span>(</span><span class="string-literal">s&quot;Bad id &#39;</span><span class="substitution">$id</span><span class="string-literal">&#39;&quot;</span><span>)
+        ).</span><span class="identifier">map</span><span>(</span><span class="identifier">_</span><span>.</span><span class="identifier">some</span><span>)
+    }</span></code></pre>
+        <p>The data structure is slightly complicated by the need to support cycles of friendship, e.g.,</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span>query {
+  character(</span><span class="attribute-name">id</span><span>: </span><span class="number-literal">1000</span><span>) {
+    name
+    friends {
+      name
+      friends {
+        name
+      }
+    }
+  }
+}</span></code></pre>
+        <p>yields,</p>
+        <pre><code class="nohighlight"><span>{
+  </span><span class="attribute-name">&quot;data&quot;</span><span>: {
+    </span><span class="attribute-name">&quot;character&quot;</span><span>: {
+      </span><span class="attribute-name">&quot;name&quot;</span><span>: </span><span class="string-literal">&quot;Luke Skywalker&quot;</span><span>,
+      </span><span class="attribute-name">&quot;friends&quot;</span><span>: [
+        {
+          </span><span class="attribute-name">&quot;name&quot;</span><span>: </span><span class="string-literal">&quot;Han Solo&quot;</span><span>,
+          </span><span class="attribute-name">&quot;friends&quot;</span><span>: [
+            {
+              </span><span class="attribute-name">&quot;name&quot;</span><span>: </span><span class="string-literal">&quot;Luke Skywalker&quot;</span><span>
+            },
+            ...
+        }
+    }
+  }
+}</span></code></pre>
+        <p>Here the root of the result is &quot;Luke Skywalker&quot; and we loop back to Luke through the mutual friendship with Han Solo.</p>
+        <p>The data type is not itself recursive, instead friend are identified by their ids. When traversing through the list of
+        friends the <code>resolveFriends</code> method is used to locate the next <code>Character</code> value to visit.</p>
+        <pre><code class="nohighlight"><span>  </span><span class="comment">// The character database ...
+</span><span>  </span><span class="keyword">lazy</span><span> </span><span class="keyword">val</span><span> </span><span class="identifier">characters</span><span>: </span><span class="type-name">List</span><span>[</span><span class="type-name">Character</span><span>] = </span><span class="type-name">List</span><span>(
+    </span><span class="type-name">Human</span><span>(
+      </span><span class="identifier">id</span><span> = </span><span class="string-literal">&quot;1000&quot;</span><span>,
+      </span><span class="identifier">name</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="string-literal">&quot;Luke Skywalker&quot;</span><span>),
+      </span><span class="identifier">friends</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="type-name">List</span><span>(</span><span class="string-literal">&quot;1002&quot;</span><span>, </span><span class="string-literal">&quot;1003&quot;</span><span>, </span><span class="string-literal">&quot;2000&quot;</span><span>, </span><span class="string-literal">&quot;2001&quot;</span><span>)),
+      </span><span class="identifier">appearsIn</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="type-name">List</span><span>(</span><span class="type-name">Episode</span><span>.</span><span class="type-name">NEWHOPE</span><span>, </span><span class="type-name">Episode</span><span>.</span><span class="type-name">EMPIRE</span><span>, </span><span class="type-name">Episode</span><span>.</span><span class="type-name">JEDI</span><span>)),
+      </span><span class="identifier">homePlanet</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="string-literal">&quot;Tatooine&quot;</span><span>)
+    ),
+    </span><span class="type-name">Human</span><span>(
+      </span><span class="identifier">id</span><span> = </span><span class="string-literal">&quot;1001&quot;</span><span>,
+      </span><span class="identifier">name</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="string-literal">&quot;Darth Vader&quot;</span><span>),
+      </span><span class="identifier">friends</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="type-name">List</span><span>(</span><span class="string-literal">&quot;1004&quot;</span><span>)),
+      </span><span class="identifier">appearsIn</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="type-name">List</span><span>(</span><span class="type-name">Episode</span><span>.</span><span class="type-name">NEWHOPE</span><span>, </span><span class="type-name">Episode</span><span>.</span><span class="type-name">EMPIRE</span><span>, </span><span class="type-name">Episode</span><span>.</span><span class="type-name">JEDI</span><span>)),
+      </span><span class="identifier">homePlanet</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="string-literal">&quot;Tatooine&quot;</span><span>)
+    ),
+    </span><span class="type-name">Human</span><span>(
+      </span><span class="identifier">id</span><span> = </span><span class="string-literal">&quot;1002&quot;</span><span>,
+      </span><span class="identifier">name</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="string-literal">&quot;Han Solo&quot;</span><span>),
+      </span><span class="identifier">friends</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="type-name">List</span><span>(</span><span class="string-literal">&quot;1000&quot;</span><span>, </span><span class="string-literal">&quot;1003&quot;</span><span>, </span><span class="string-literal">&quot;2001&quot;</span><span>)),
+      </span><span class="identifier">appearsIn</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="type-name">List</span><span>(</span><span class="type-name">Episode</span><span>.</span><span class="type-name">NEWHOPE</span><span>, </span><span class="type-name">Episode</span><span>.</span><span class="type-name">EMPIRE</span><span>, </span><span class="type-name">Episode</span><span>.</span><span class="type-name">JEDI</span><span>)),
+      </span><span class="identifier">homePlanet</span><span> = </span><span class="type-name">None</span><span>
+    ),
+    </span><span class="type-name">Human</span><span>(
+      </span><span class="identifier">id</span><span> = </span><span class="string-literal">&quot;1003&quot;</span><span>,
+      </span><span class="identifier">name</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="string-literal">&quot;Leia Organa&quot;</span><span>),
+      </span><span class="identifier">friends</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="type-name">List</span><span>(</span><span class="string-literal">&quot;1000&quot;</span><span>, </span><span class="string-literal">&quot;1002&quot;</span><span>, </span><span class="string-literal">&quot;2000&quot;</span><span>, </span><span class="string-literal">&quot;2001&quot;</span><span>)),
+      </span><span class="identifier">appearsIn</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="type-name">List</span><span>(</span><span class="type-name">Episode</span><span>.</span><span class="type-name">NEWHOPE</span><span>, </span><span class="type-name">Episode</span><span>.</span><span class="type-name">EMPIRE</span><span>, </span><span class="type-name">Episode</span><span>.</span><span class="type-name">JEDI</span><span>)),
+      </span><span class="identifier">homePlanet</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="string-literal">&quot;Alderaan&quot;</span><span>)
+    ),
+    </span><span class="type-name">Human</span><span>(
+      </span><span class="identifier">id</span><span> = </span><span class="string-literal">&quot;1004&quot;</span><span>,
+      </span><span class="identifier">name</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="string-literal">&quot;Wilhuff Tarkin&quot;</span><span>),
+      </span><span class="identifier">friends</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="type-name">List</span><span>(</span><span class="string-literal">&quot;1001&quot;</span><span>)),
+      </span><span class="identifier">appearsIn</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="type-name">List</span><span>(</span><span class="type-name">Episode</span><span>.</span><span class="type-name">NEWHOPE</span><span>, </span><span class="type-name">Episode</span><span>.</span><span class="type-name">EMPIRE</span><span>, </span><span class="type-name">Episode</span><span>.</span><span class="type-name">JEDI</span><span>)),
+      </span><span class="identifier">homePlanet</span><span> = </span><span class="type-name">None</span><span>
+    ),
+    </span><span class="type-name">Droid</span><span>(
+      </span><span class="identifier">id</span><span> = </span><span class="string-literal">&quot;2000&quot;</span><span>,
+      </span><span class="identifier">name</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="string-literal">&quot;C-3PO&quot;</span><span>),
+      </span><span class="identifier">friends</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="type-name">List</span><span>(</span><span class="string-literal">&quot;1000&quot;</span><span>, </span><span class="string-literal">&quot;1002&quot;</span><span>, </span><span class="string-literal">&quot;1003&quot;</span><span>, </span><span class="string-literal">&quot;2001&quot;</span><span>)),
+      </span><span class="identifier">appearsIn</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="type-name">List</span><span>(</span><span class="type-name">Episode</span><span>.</span><span class="type-name">NEWHOPE</span><span>, </span><span class="type-name">Episode</span><span>.</span><span class="type-name">EMPIRE</span><span>, </span><span class="type-name">Episode</span><span>.</span><span class="type-name">JEDI</span><span>)),
+      </span><span class="identifier">primaryFunction</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="string-literal">&quot;Protocol&quot;</span><span>)
+    ),
+    </span><span class="type-name">Droid</span><span>(
+      </span><span class="identifier">id</span><span> = </span><span class="string-literal">&quot;2001&quot;</span><span>,
+      </span><span class="identifier">name</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="string-literal">&quot;R2-D2&quot;</span><span>),
+      </span><span class="identifier">friends</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="type-name">List</span><span>(</span><span class="string-literal">&quot;1000&quot;</span><span>, </span><span class="string-literal">&quot;1002&quot;</span><span>, </span><span class="string-literal">&quot;1003&quot;</span><span>)),
+      </span><span class="identifier">appearsIn</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="type-name">List</span><span>(</span><span class="type-name">Episode</span><span>.</span><span class="type-name">NEWHOPE</span><span>, </span><span class="type-name">Episode</span><span>.</span><span class="type-name">EMPIRE</span><span>, </span><span class="type-name">Episode</span><span>.</span><span class="type-name">JEDI</span><span>)),
+      </span><span class="identifier">primaryFunction</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="string-literal">&quot;Astromech&quot;</span><span>)
+    )
+  )</span></code></pre>
+        
+        <h2 id="the-query-compiler-and-elaborator" class="section"><a class="anchor-link left" href="#the-query-compiler-and-elaborator"><i class="icofont-laika link">&#xef71;</i></a>The query compiler and elaborator</h2>
+        <p>GraphQL queries are compiled into values of a Scala ADT which represents a query algebra. These query algebra terms
+        are then transformed in a variety of ways, resulting in a program which can be interpreted against the model to
+        produce the query result. The process of transforming these values is called <em>elaboration</em>, and each elaboration step
+        simplifies or expands the term to bring it into a form which can be executed directly by the query interpreter.</p>
+        <p>Grackle&#39;s query algebra consists of the following elements,</p>
+        <pre><code class="nohighlight"><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">UntypedSelect</span><span>(
+  </span><span class="identifier">name</span><span>: </span><span class="type-name">String</span><span>, </span><span class="identifier">alias</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">String</span><span>],
+  </span><span class="identifier">args</span><span>: </span><span class="type-name">List</span><span>[</span><span class="type-name">Binding</span><span>], </span><span class="identifier">directives</span><span>: </span><span class="type-name">List</span><span>[</span><span class="type-name">Directive</span><span>],
+  </span><span class="identifier">child</span><span>: </span><span class="type-name">Query</span><span>
+)
+</span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">Select</span><span>(</span><span class="identifier">name</span><span>: </span><span class="type-name">String</span><span>, </span><span class="identifier">alias</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">String</span><span>], </span><span class="identifier">child</span><span>: </span><span class="type-name">Query</span><span>)
+</span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">Group</span><span>(</span><span class="identifier">queries</span><span>: </span><span class="type-name">List</span><span>[</span><span class="type-name">Query</span><span>])
+</span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">Unique</span><span>(</span><span class="identifier">child</span><span>: </span><span class="type-name">Query</span><span>)
+</span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">Filter</span><span>(</span><span class="identifier">pred</span><span>: </span><span class="type-name">Predicate</span><span>, </span><span class="identifier">child</span><span>: </span><span class="type-name">Query</span><span>)
+</span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">Introspect</span><span>(</span><span class="identifier">schema</span><span>: </span><span class="type-name">Schema</span><span>, </span><span class="identifier">child</span><span>: </span><span class="type-name">Query</span><span>)
+</span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">Environment</span><span>(</span><span class="identifier">env</span><span>: </span><span class="type-name">Env</span><span>, </span><span class="identifier">child</span><span>: </span><span class="type-name">Query</span><span>)
+</span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">Narrow</span><span>(</span><span class="identifier">subtpe</span><span>: </span><span class="type-name">TypeRef</span><span>, </span><span class="identifier">child</span><span>: </span><span class="type-name">Query</span><span>)
+</span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">Limit</span><span>(</span><span class="identifier">num</span><span>: </span><span class="type-name">Int</span><span>, </span><span class="identifier">child</span><span>: </span><span class="type-name">Query</span><span>)
+</span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">Offset</span><span>(</span><span class="identifier">num</span><span>: </span><span class="type-name">Int</span><span>, </span><span class="identifier">child</span><span>: </span><span class="type-name">Query</span><span>)
+</span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">OrderBy</span><span>(</span><span class="identifier">selections</span><span>: </span><span class="type-name">OrderSelections</span><span>, </span><span class="identifier">child</span><span>: </span><span class="type-name">Query</span><span>)
+</span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">Count</span><span>(</span><span class="identifier">child</span><span>: </span><span class="type-name">Query</span><span>)
+</span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">TransformCursor</span><span>(</span><span class="identifier">f</span><span>: </span><span class="type-name">Cursor</span><span> =&gt; </span><span class="type-name">Result</span><span>[</span><span class="type-name">Cursor</span><span>], </span><span class="identifier">child</span><span>: </span><span class="type-name">Query</span><span>)
+</span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">Component</span><span>[</span><span class="type-name">F</span><span>[</span><span class="identifier">_</span><span>]](</span><span class="identifier">mapping</span><span>: </span><span class="type-name">Mapping</span><span>[</span><span class="type-name">F</span><span>], ...)
+</span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">Effect</span><span>[</span><span class="type-name">F</span><span>[</span><span class="identifier">_</span><span>]](</span><span class="identifier">handler</span><span>: </span><span class="type-name">EffectHandler</span><span>[</span><span class="type-name">F</span><span>], </span><span class="identifier">child</span><span>: </span><span class="type-name">Query</span><span>)
+</span><span class="keyword">case</span><span> </span><span class="keyword">object</span><span> </span><span class="type-name">Empty</span></code></pre>
+        <p>A simple query like this,</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span>query {
+  character(</span><span class="attribute-name">id</span><span>: </span><span class="number-literal">1000</span><span>) {
+    name
+  }
+}</span></code></pre>
+        <p>is first translated into a term in the query algebra of the form,</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="type-name">UntypedSelect</span><span>(</span><span class="string-literal">&quot;character&quot;</span><span>, </span><span class="type-name">None</span><span>, </span><span class="type-name">List</span><span>(</span><span class="type-name">IntBinding</span><span>(</span><span class="string-literal">&quot;id&quot;</span><span>, </span><span class="number-literal">1000</span><span>)), </span><span class="type-name">Nil</span><span>,
+  </span><span class="type-name">UntypedSelect</span><span>(</span><span class="string-literal">&quot;name&quot;</span><span>, </span><span class="type-name">None</span><span>, </span><span class="type-name">Nil</span><span>, </span><span class="type-name">Nil</span><span>, </span><span class="type-name">Empty</span><span>)
+)</span></code></pre>
+        <p>This first step is performed without reference to a GraphQL schema, hence the <code>id</code> argument is initially inferred to
+        be of GraphQL type <code>Int</code> rather than the type <code>ID</code> which the schema expects.</p>
+        <p>Following this initial translation the Star Wars example has a single elaboration step whose role is to translate the
+        selection into something executable. Elaboration uses the GraphQL schema and so is able to translate an input value
+        parsed as an <code>Int</code> into a GraphQL <code>ID</code>. The semantics associated with this (i.e. what an <code>id</code> is and how it relates to
+        the model) is specific to this model, so we have to provide that semantic via some model-specific code,</p>
+        <pre><code class="nohighlight"><span>  </span><span class="keyword">override</span><span> </span><span class="keyword">val</span><span> </span><span class="identifier">selectElaborator</span><span> = </span><span class="type-name">SelectElaborator</span><span> {
+    </span><span class="comment">// The hero selector takes an Episode argument and yields a single value. We transform
+</span><span>    </span><span class="comment">// the nested child to use the Filter and Unique operators to pick out the target using
+</span><span>    </span><span class="comment">// the Eql predicate.
+</span><span>    </span><span class="keyword">case</span><span> (</span><span class="type-name">QueryType</span><span>, </span><span class="string-literal">&quot;hero&quot;</span><span>, </span><span class="type-name">List</span><span>(</span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;episode&quot;</span><span>, </span><span class="type-name">EnumValue</span><span>(</span><span class="identifier">e</span><span>)))) =&gt;
+      </span><span class="keyword">for</span><span> {
+        </span><span class="identifier">ep</span><span> &lt;- </span><span class="type-name">Elab</span><span>.</span><span class="identifier">liftR</span><span>(
+                </span><span class="type-name">Episode</span><span>.</span><span class="identifier">values</span><span>.</span><span class="identifier">find</span><span>(</span><span class="identifier">_</span><span>.</span><span class="identifier">toString</span><span> == </span><span class="identifier">e</span><span>).</span><span class="identifier">toResult</span><span>(</span><span class="string-literal">s&quot;Unknown episode &#39;</span><span class="substitution">$e</span><span class="string-literal">&#39;&quot;</span><span>)
+              )
+        </span><span class="identifier">_</span><span>  &lt;- </span><span class="type-name">Elab</span><span>.</span><span class="identifier">transformChild</span><span> { </span><span class="identifier">child</span><span> =&gt;
+                </span><span class="type-name">Unique</span><span>(</span><span class="type-name">Filter</span><span>(</span><span class="type-name">Eql</span><span>(</span><span class="type-name">CharacterType</span><span> / </span><span class="string-literal">&quot;id&quot;</span><span>, </span><span class="type-name">Const</span><span>(</span><span class="identifier">hero</span><span>(</span><span class="identifier">ep</span><span>).</span><span class="identifier">id</span><span>)), </span><span class="identifier">child</span><span>))
+              }
+      } </span><span class="keyword">yield</span><span> ()
+
+    </span><span class="comment">// The character, human and droid selectors all take a single ID argument and yield a
+</span><span>    </span><span class="comment">// single value (if any) or null. We transform the nested child to use the Unique and
+</span><span>    </span><span class="comment">// Filter operators to pick out the target using the Eql predicate.
+</span><span>    </span><span class="keyword">case</span><span> (</span><span class="type-name">QueryType</span><span>, </span><span class="string-literal">&quot;character&quot;</span><span> | </span><span class="string-literal">&quot;human&quot;</span><span> | </span><span class="string-literal">&quot;droid&quot;</span><span>, </span><span class="type-name">List</span><span>(</span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;id&quot;</span><span>, </span><span class="type-name">IDValue</span><span>(</span><span class="identifier">id</span><span>)))) =&gt;
+      </span><span class="type-name">Elab</span><span>.</span><span class="identifier">transformChild</span><span> { </span><span class="identifier">child</span><span> =&gt;
+        </span><span class="type-name">Unique</span><span>(</span><span class="type-name">Filter</span><span>(</span><span class="type-name">Eql</span><span>(</span><span class="type-name">CharacterType</span><span> / </span><span class="string-literal">&quot;id&quot;</span><span>, </span><span class="type-name">Const</span><span>(</span><span class="identifier">id</span><span>)), </span><span class="identifier">child</span><span>))
+      }
+  }</span></code></pre>
+        <p>Extracting out the case for the <code>character</code> selector,</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">case</span><span> (</span><span class="type-name">QueryType</span><span>, </span><span class="string-literal">&quot;character&quot;</span><span>, </span><span class="type-name">List</span><span>(</span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;id&quot;</span><span>, </span><span class="type-name">IDValue</span><span>(</span><span class="identifier">id</span><span>)))) =&gt;
+  </span><span class="type-name">Elab</span><span>.</span><span class="identifier">transformChild</span><span> { </span><span class="identifier">child</span><span> =&gt;
+    </span><span class="type-name">Unique</span><span>(</span><span class="type-name">Filter</span><span>(</span><span class="type-name">Eql</span><span>(</span><span class="type-name">CharacterType</span><span> / </span><span class="string-literal">&quot;id&quot;</span><span>, </span><span class="type-name">Const</span><span>(</span><span class="identifier">id</span><span>)), </span><span class="identifier">child</span><span>))
+  }</span></code></pre>
+        <p>the previous term is transformed as follows,</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="type-name">Select</span><span>(</span><span class="string-literal">&quot;character&quot;</span><span>, </span><span class="type-name">None</span><span>,
+  </span><span class="type-name">Unique</span><span>(</span><span class="type-name">Eql</span><span>(</span><span class="type-name">CharacterType</span><span> / </span><span class="string-literal">&quot;id&quot;</span><span>), </span><span class="type-name">Const</span><span>(</span><span class="string-literal">&quot;1000&quot;</span><span>)), </span><span class="type-name">Select</span><span>(</span><span class="string-literal">&quot;name&quot;</span><span>, </span><span class="type-name">None</span><span>, </span><span class="type-name">Empty</span><span>))
+)</span></code></pre>
+        <p>Here the original <code>UntypedSelect</code> terms have been converted to typed <code>Select</code> terms with the argument to the
+        <code>character</code> selector translated into a predicate which refines the root data of the model to the single element which
+        satisfies it via <code>Unique</code>. The remainder of the query (<code>Select(&quot;name&quot;, None, Nil)</code>) is then within the scope of that
+        constraint. We have eliminated something with model-specific semantics (<code>character(id: 1000)</code>) in favour of something
+        universal which can be interpreted directly against the model.</p>
+        
+        <h2 id="the-query-interpreter-and-cursor" class="section"><a class="anchor-link left" href="#the-query-interpreter-and-cursor"><i class="icofont-laika link">&#xef71;</i></a>The query interpreter and cursor</h2>
+        <p>The data required to construct the response to a query is determined by the structure of the query and gives rise to a
+        more or less arbitrary traversal of the model. To support this Grackle provides a functional <code>Cursor</code> abstraction
+        which points into the model and can navigate through GraphQL fields, arrays and values as required by a given query.</p>
+        <p>For in-memory models where the structure of the model ADT closely matches the GraphQL schema a <code>Cursor</code> can be derived
+        automatically by a <code>GenericMapping</code> which only needs to be supplemented with a specification of the root mappings for
+        the top level fields of the GraphQL schema. The root mappings enable the query interpreter to construct an appropriate
+        initial <code>Cursor</code> for the query being evaluated.</p>
+        <p>For the Star Wars model the root definitions are of the following form,</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span>      </span><span class="type-name">ObjectMapping</span><span>(
+        </span><span class="identifier">tpe</span><span> = </span><span class="type-name">QueryType</span><span>,
+        </span><span class="identifier">fieldMappings</span><span> =
+          </span><span class="type-name">List</span><span>(
+            </span><span class="type-name">GenericField</span><span>(</span><span class="string-literal">&quot;hero&quot;</span><span>, </span><span class="identifier">characters</span><span>),
+            </span><span class="type-name">GenericField</span><span>(</span><span class="string-literal">&quot;character&quot;</span><span>, </span><span class="identifier">characters</span><span>),
+            </span><span class="type-name">GenericField</span><span>(</span><span class="string-literal">&quot;human&quot;</span><span>, </span><span class="identifier">characters</span><span>.</span><span class="identifier">collect</span><span> { </span><span class="keyword">case</span><span> </span><span class="identifier">h</span><span>: </span><span class="type-name">Human</span><span> =&gt; </span><span class="identifier">h</span><span> }),
+            </span><span class="type-name">GenericField</span><span>(</span><span class="string-literal">&quot;droid&quot;</span><span>, </span><span class="identifier">characters</span><span>.</span><span class="identifier">collect</span><span> { </span><span class="keyword">case</span><span> </span><span class="identifier">d</span><span>: </span><span class="type-name">Droid</span><span> =&gt; </span><span class="identifier">d</span><span> })
+          )
+      )</span></code></pre>
+        <p>The first argument of the <code>GenericField</code> constructor corresponds to the top-level selection of the query (see the
+        schema above) and the second argument is the initial model value for which a <code>Cursor</code> will be derived.  When the query
+        is executed, navigation will start with that <code>Cursor</code> and the corresponding GraphQL type.</p>
+        
+        <h2 id="the-service" class="section"><a class="anchor-link left" href="#the-service"><i class="icofont-laika link">&#xef71;</i></a>The service</h2>
+        <p>What we&#39;ve seen so far allows us to compile and execute GraphQL queries against our in-memory model. We now need to
+        expose that via HTTP. The following shows how we do that for http4s,</p>
+        <pre><code class="nohighlight"><span class="keyword">trait</span><span> </span><span class="type-name">GraphQLService</span><span>[</span><span class="type-name">F</span><span>[</span><span class="identifier">_</span><span>]] {
+  </span><span class="keyword">def</span><span> </span><span class="declaration-name">runQuery</span><span>(</span><span class="identifier">op</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">String</span><span>], </span><span class="identifier">vars</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">Json</span><span>], </span><span class="identifier">query</span><span>: </span><span class="type-name">String</span><span>): </span><span class="type-name">F</span><span>[</span><span class="type-name">Json</span><span>]
+}
+
+</span><span class="keyword">object</span><span> </span><span class="type-name">GraphQLService</span><span> {
+
+  </span><span class="keyword">def</span><span> </span><span class="declaration-name">fromMapping</span><span>[</span><span class="type-name">F</span><span>[</span><span class="identifier">_</span><span>]: </span><span class="type-name">Concurrent</span><span>](</span><span class="identifier">mapping</span><span>: </span><span class="type-name">Mapping</span><span>[</span><span class="type-name">F</span><span>]): </span><span class="type-name">GraphQLService</span><span>[</span><span class="type-name">F</span><span>] =
+    (</span><span class="identifier">op</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">String</span><span>], </span><span class="identifier">vars</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">Json</span><span>], </span><span class="identifier">query</span><span>: </span><span class="type-name">String</span><span>) =&gt;
+      </span><span class="identifier">mapping</span><span>.</span><span class="identifier">compileAndRun</span><span>(</span><span class="identifier">query</span><span>, </span><span class="identifier">op</span><span>, </span><span class="identifier">vars</span><span>)
+
+  </span><span class="keyword">def</span><span> </span><span class="declaration-name">routes</span><span>[</span><span class="type-name">F</span><span>[</span><span class="identifier">_</span><span>]: </span><span class="type-name">Concurrent</span><span>](</span><span class="identifier">prefix</span><span>: </span><span class="type-name">String</span><span>, </span><span class="identifier">svc</span><span>: </span><span class="type-name">GraphQLService</span><span>[</span><span class="type-name">F</span><span>]): </span><span class="type-name">HttpRoutes</span><span>[</span><span class="type-name">F</span><span>] = {
+    </span><span class="keyword">val</span><span> </span><span class="identifier">dsl</span><span> = </span><span class="keyword">new</span><span> </span><span class="type-name">Http4sDsl</span><span>[</span><span class="type-name">F</span><span>]{}
+    </span><span class="keyword">import</span><span> </span><span class="identifier">dsl</span><span>.</span><span class="identifier">_</span><span>
+
+    </span><span class="keyword">implicit</span><span> </span><span class="keyword">val</span><span> </span><span class="identifier">jsonQPDecoder</span><span>: </span><span class="type-name">QueryParamDecoder</span><span>[</span><span class="type-name">Json</span><span>] =
+      </span><span class="type-name">QueryParamDecoder</span><span>[</span><span class="type-name">String</span><span>].</span><span class="identifier">emap</span><span> { </span><span class="identifier">s</span><span> =&gt;
+        </span><span class="identifier">parser</span><span>.</span><span class="identifier">parse</span><span>(</span><span class="identifier">s</span><span>).</span><span class="identifier">leftMap</span><span> {
+          </span><span class="keyword">case</span><span> </span><span class="type-name">ParsingFailure</span><span>(</span><span class="identifier">msg</span><span>, </span><span class="identifier">_</span><span>) =&gt; </span><span class="type-name">ParseFailure</span><span>(</span><span class="string-literal">&quot;Invalid variables&quot;</span><span>, </span><span class="identifier">msg</span><span>)
+        }
+      }
+
+    </span><span class="keyword">object</span><span> </span><span class="type-name">QueryMatcher</span><span>
+      </span><span class="keyword">extends</span><span> </span><span class="type-name">QueryParamDecoderMatcher</span><span>[</span><span class="type-name">String</span><span>](</span><span class="string-literal">&quot;query&quot;</span><span>)
+    </span><span class="keyword">object</span><span> </span><span class="type-name">OperationNameMatcher</span><span>
+      </span><span class="keyword">extends</span><span> </span><span class="type-name">OptionalQueryParamDecoderMatcher</span><span>[</span><span class="type-name">String</span><span>](</span><span class="string-literal">&quot;operationName&quot;</span><span>)
+    </span><span class="keyword">object</span><span> </span><span class="type-name">VariablesMatcher</span><span>
+      </span><span class="keyword">extends</span><span> </span><span class="type-name">OptionalValidatingQueryParamDecoderMatcher</span><span>[</span><span class="type-name">Json</span><span>](</span><span class="string-literal">&quot;variables&quot;</span><span>)
+
+    </span><span class="type-name">HttpRoutes</span><span>.</span><span class="identifier">of</span><span>[</span><span class="type-name">F</span><span>] {
+      </span><span class="comment">// GraphQL query is embedded in the URI query string when queried via GET
+</span><span>      </span><span class="keyword">case</span><span> </span><span class="type-name">GET</span><span> -&gt; </span><span class="type-name">Root</span><span> / </span><span class="identifier">`prefix`</span><span> :? 
+             </span><span class="type-name">QueryMatcher</span><span>(</span><span class="identifier">query</span><span>) +&amp; </span><span class="type-name">OperationNameMatcher</span><span>(</span><span class="identifier">op</span><span>) +&amp; </span><span class="type-name">VariablesMatcher</span><span>(</span><span class="identifier">vars0</span><span>) =&gt;
+        </span><span class="identifier">vars0</span><span>.</span><span class="identifier">sequence</span><span>.</span><span class="identifier">fold</span><span>(
+          </span><span class="identifier">errors</span><span> =&gt; </span><span class="type-name">BadRequest</span><span>(</span><span class="identifier">errors</span><span>.</span><span class="identifier">map</span><span>(</span><span class="identifier">_</span><span>.</span><span class="identifier">sanitized</span><span>).</span><span class="identifier">mkString_</span><span>(</span><span class="string-literal">&quot;&quot;</span><span>, </span><span class="string-literal">&quot;,&quot;</span><span>, </span><span class="string-literal">&quot;&quot;</span><span>)),
+          </span><span class="identifier">vars</span><span> =&gt;
+            </span><span class="keyword">for</span><span> {
+              </span><span class="identifier">result</span><span> &lt;- </span><span class="identifier">svc</span><span>.</span><span class="identifier">runQuery</span><span>(</span><span class="identifier">op</span><span>, </span><span class="identifier">vars</span><span>, </span><span class="identifier">query</span><span>)
+              </span><span class="identifier">resp</span><span>   &lt;- </span><span class="type-name">Ok</span><span>(</span><span class="identifier">result</span><span>)
+            } </span><span class="keyword">yield</span><span> </span><span class="identifier">resp</span><span>
+        )
+
+      </span><span class="comment">// GraphQL query is embedded in a Json request body when queried via POST
+</span><span>      </span><span class="keyword">case</span><span> </span><span class="identifier">req</span><span> @ </span><span class="type-name">POST</span><span> -&gt; </span><span class="type-name">Root</span><span> / </span><span class="identifier">`prefix`</span><span> =&gt;
+        </span><span class="keyword">for</span><span> {
+          </span><span class="identifier">body</span><span>   &lt;- </span><span class="identifier">req</span><span>.</span><span class="identifier">as</span><span>[</span><span class="type-name">Json</span><span>]
+          </span><span class="identifier">obj</span><span>    &lt;- </span><span class="identifier">body</span><span>.</span><span class="identifier">asObject</span><span>.</span><span class="identifier">liftTo</span><span>[</span><span class="type-name">F</span><span>](
+                      </span><span class="type-name">InvalidMessageBodyFailure</span><span>(</span><span class="string-literal">&quot;Invalid GraphQL query&quot;</span><span>)
+                    )
+          </span><span class="identifier">query</span><span>  &lt;- </span><span class="identifier">obj</span><span>(</span><span class="string-literal">&quot;query&quot;</span><span>).</span><span class="identifier">flatMap</span><span>(</span><span class="identifier">_</span><span>.</span><span class="identifier">asString</span><span>).</span><span class="identifier">liftTo</span><span>[</span><span class="type-name">F</span><span>](
+                      </span><span class="type-name">InvalidMessageBodyFailure</span><span>(</span><span class="string-literal">&quot;Missing query field&quot;</span><span>)
+                    )
+          </span><span class="identifier">op</span><span>     =  </span><span class="identifier">obj</span><span>(</span><span class="string-literal">&quot;operationName&quot;</span><span>).</span><span class="identifier">flatMap</span><span>(</span><span class="identifier">_</span><span>.</span><span class="identifier">asString</span><span>)
+          </span><span class="identifier">vars</span><span>   =  </span><span class="identifier">obj</span><span>(</span><span class="string-literal">&quot;variables&quot;</span><span>)
+          </span><span class="identifier">result</span><span> &lt;- </span><span class="identifier">svc</span><span>.</span><span class="identifier">runQuery</span><span>(</span><span class="identifier">op</span><span>, </span><span class="identifier">vars</span><span>, </span><span class="identifier">query</span><span>)
+          </span><span class="identifier">resp</span><span>   &lt;- </span><span class="type-name">Ok</span><span>(</span><span class="identifier">result</span><span>)
+        } </span><span class="keyword">yield</span><span> </span><span class="identifier">resp</span><span>
+    }
+  }
+}</span></code></pre>
+        <p>The GraphQL specification supports queries both via HTTP GET and POST requests, so we provide routes for both methods.
+        For queries via GET the query is embedded in the URI query string in the form <code>... ?query=&lt;URI encoded GraphQL
+query&gt;</code>. For queries via POST, the query is embedded in a JSON value of the form,</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span>{
+  </span><span class="attribute-name">&quot;operationName&quot;</span><span>: </span><span class="string-literal">&quot;Query&quot;</span><span>,
+  </span><span class="attribute-name">&quot;query&quot;</span><span>: </span><span class="string-literal">&quot;character(id: 1000) ...&quot;</span><span>
+}</span></code></pre>
+        <p>In each of these cases we extract the operation name and query from the request and pass them to the service for
+        compilation and execution.</p>
+        <p>Many GraphQL client tools expect servers to be able to respond to a query named <code>IntrospectionQuery</code> returning a
+        representation of the GraphQL schema supported by the endpoint which they use to provide client-side highlighting,
+        validation, auto completion etc. The demo service provides this as well as normal query execution.</p>
+        
+        <h2 id="putting-it-all-together" class="section"><a class="anchor-link left" href="#putting-it-all-together"><i class="icofont-laika link">&#xef71;</i></a>Putting it all together</h2>
+        <p>Finally we need to run all of this on top of http4s. Here we have a simple <code>IOApp</code> running an <code>EmberServer</code> with the
+        <code>StarWarsService</code> defined above, and a <code>ResourceService</code> to serve the GraphQL Playground web client,</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">object</span><span> </span><span class="type-name">Main</span><span> </span><span class="keyword">extends</span><span> </span><span class="type-name">IOApp</span><span> {
+  </span><span class="keyword">def</span><span> </span><span class="declaration-name">run</span><span>(</span><span class="identifier">args</span><span>: </span><span class="type-name">List</span><span>[</span><span class="type-name">String</span><span>]): </span><span class="type-name">IO</span><span>[</span><span class="type-name">ExitCode</span><span>] = {
+    </span><span class="keyword">val</span><span> </span><span class="identifier">starWarsGraphQLRoutes</span><span> = </span><span class="type-name">GraphQLService</span><span>.</span><span class="identifier">routes</span><span>[</span><span class="type-name">IO</span><span>](
+      </span><span class="string-literal">&quot;starwars&quot;</span><span>,
+      </span><span class="type-name">GraphQLService</span><span>.</span><span class="identifier">fromMapping</span><span>(</span><span class="keyword">new</span><span> </span><span class="type-name">StarWarsMapping</span><span>[</span><span class="type-name">IO</span><span>] </span><span class="keyword">with</span><span> </span><span class="type-name">StarWarsData</span><span>[</span><span class="type-name">IO</span><span>])
+    )
+    </span><span class="type-name">DemoServer</span><span>.</span><span class="identifier">resource</span><span>(</span><span class="identifier">starWarsGraphQLRoutes</span><span>).</span><span class="identifier">useForever</span><span>
+  }
+}</span></code></pre>
+        <pre><code class="nohighlight"><span class="keyword">object</span><span> </span><span class="type-name">DemoServer</span><span> {
+  </span><span class="keyword">def</span><span> </span><span class="declaration-name">resource</span><span>(</span><span class="identifier">graphQLRoutes</span><span>: </span><span class="type-name">HttpRoutes</span><span>[</span><span class="type-name">IO</span><span>]): </span><span class="type-name">Resource</span><span>[</span><span class="type-name">IO</span><span>, </span><span class="type-name">Unit</span><span>] = {
+    </span><span class="keyword">val</span><span> </span><span class="identifier">httpApp0</span><span> = (
+      </span><span class="comment">// Routes for static resources, i.e. GraphQL Playground
+</span><span>      </span><span class="identifier">resourceServiceBuilder</span><span>[</span><span class="type-name">IO</span><span>](</span><span class="string-literal">&quot;/assets&quot;</span><span>).</span><span class="identifier">toRoutes</span><span> &lt;+&gt;
+      </span><span class="comment">// GraphQL routes
+</span><span>      </span><span class="identifier">graphQLRoutes</span><span>
+    ).</span><span class="identifier">orNotFound</span><span>
+
+    </span><span class="keyword">val</span><span> </span><span class="identifier">httpApp</span><span> = </span><span class="type-name">Logger</span><span>.</span><span class="identifier">httpApp</span><span>(</span><span class="boolean-literal">true</span><span>, </span><span class="boolean-literal">false</span><span>)(</span><span class="identifier">httpApp0</span><span>)
+
+    </span><span class="comment">// Spin up the server ...
+</span><span>    </span><span class="type-name">EmberServerBuilder</span><span>.</span><span class="keyword">default</span><span>[</span><span class="type-name">IO</span><span>]
+      .</span><span class="identifier">withHost</span><span>(</span><span class="string-literal">ip&quot;0.0.0.0&quot;</span><span>)
+      .</span><span class="identifier">withPort</span><span>(</span><span class="string-literal">port&quot;8080&quot;</span><span>)
+      .</span><span class="identifier">withHttpApp</span><span>(</span><span class="identifier">httpApp</span><span>)
+      .</span><span class="identifier">build</span><span>.</span><span class="identifier">void</span><span>
+  }
+}</span></code></pre>
+
+        
+<hr class="footer-rule"/>
+<footer>
+  grackle is a <a href="https://typelevel.org/">Typelevel</a> project distributed under the <a href="https://www.apache.org/licenses/LICENSE-2.0.txt">Apache-2.0</a> license.
+</footer>
+
+
+      </main>
+
+    </div>
+
+  </body>
+
+</html>
