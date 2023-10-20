@@ -91,15 +91,21 @@ trait StarWarsMapping[F[_]] extends GenericMapping[F] { self: StarWarsData[F] =>
     // the Eql predicate.
     case (QueryType, "hero", List(Binding("episode", EnumValue(e)))) =>
       for {
-        episode <- Elab.liftR(Episode.values.find(_.toString == e).toResult(s"Unknown episode '$e'"))
-        _       <- Elab.transformChild(child => Unique(Filter(Eql(CharacterType / "id", Const(hero(episode).id)), child)))
+        ep <- Elab.liftR(
+                Episode.values.find(_.toString == e).toResult(s"Unknown episode '$e'")
+              )
+        _  <- Elab.transformChild { child =>
+                Unique(Filter(Eql(CharacterType / "id", Const(hero(ep).id)), child))
+              }
       } yield ()
 
     // The character, human and droid selectors all take a single ID argument and yield a
     // single value (if any) or null. We transform the nested child to use the Unique and
     // Filter operators to pick out the target using the Eql predicate.
     case (QueryType, "character" | "human" | "droid", List(Binding("id", IDValue(id)))) =>
-      Elab.transformChild(child => Unique(Filter(Eql(CharacterType / "id", Const(id)), child)))
+      Elab.transformChild { child =>
+        Unique(Filter(Eql(CharacterType / "id", Const(id)), child))
+      }
   }
   // #elaborator
 }
@@ -157,7 +163,9 @@ trait StarWarsData[F[_]] extends GenericMapping[F] { self: StarWarsMapping[F] =>
     c.friends match {
       case None => None.success
       case Some(ids) =>
-        ids.traverse(id => characters.find(_.id == id).toResultOrError(s"Bad id '$id'")).map(_.some)
+        ids.traverse(id =>
+          characters.find(_.id == id).toResultOrError(s"Bad id '$id'")
+        ).map(_.some)
     }
 
   // #model_types

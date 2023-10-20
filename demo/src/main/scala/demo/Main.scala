@@ -31,9 +31,8 @@ import org.flywaydb.core.Flyway
 
 // #main
 object Main extends IOApp {
-
   def run(args: List[String]): IO[ExitCode] = {
-    container.evalTap(dbMigration(_)).flatMap(transactor(_)).flatMap { xa =>
+    DBSetup.run { xa =>
       val worldGraphQLRoutes = GraphQLService.routes(
         "world",
         GraphQLService.fromMapping(WorldMapping.mkMappingFromTransactor(xa))
@@ -43,8 +42,14 @@ object Main extends IOApp {
         GraphQLService.fromMapping(new StarWarsMapping[IO] with StarWarsData[IO])
       )
       DemoServer.resource(worldGraphQLRoutes <+> starWarsGraphQLRoutes)
-    }.useForever
+    }
   }
+}
+// #main
+
+object DBSetup {
+  def run(body: HikariTransactor[IO] => Resource[IO, Unit]): IO[Nothing] = 
+    container.evalTap(dbMigration(_)).flatMap(transactor(_)).flatMap(body).useForever
 
   case class PostgresConnectionInfo(host: String, port: Int) {
     val driverClassName = "org.postgresql.Driver"
@@ -106,4 +111,3 @@ object Main extends IOApp {
     }.void
   }
 }
-// #main

@@ -28,12 +28,13 @@ val Scala2 = "2.13.12"
 val Scala3 = "3.3.1"
 ThisBuild / scalaVersion        := Scala2
 ThisBuild / crossScalaVersions  := Seq(Scala2, Scala3)
+ThisBuild / tlJdkRelease        := Some(11)
 
 ThisBuild / tlBaseVersion    := "0.15"
 ThisBuild / organization     := "org.typelevel"
 ThisBuild / organizationName := "Association of Universities for Research in Astronomy, Inc. (AURA)"
 ThisBuild / startYear        := Some(2019)
-ThisBuild / licenses         := Seq(("BSD-3-Clause", new URL("https://opensource.org/licenses/BSD-3-Clause")))
+ThisBuild / licenses         := Seq(License.Apache2)
 ThisBuild / developers       := List(
   Developer("milessabin", "Miles Sabin", "miles@milessabin.com", url("http://milessabin.com/blog")),
   Developer("tpolecat",   "Rob Norris",  "rnorris@gemini.edu",   url("http://www.tpolecat.org")),
@@ -50,6 +51,8 @@ ThisBuild / githubWorkflowBuild     ~= { steps =>
 }
 ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 ThisBuild / tlBspCrossProjectPlatforms := Set(JVMPlatform)
+
+ThisBuild / tlSitePublishBranch := Some("main")
 
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
@@ -81,15 +84,7 @@ lazy val commonSettings = Seq(
        |See the License for the specific language governing permissions and
        |limitations under the License.
        |""".stripMargin
-  )),
-  // Temporary workaround for https://github.com/lampepfl/dotty/issues/15927
-  Compile / doc / sources := {
-      val old = (Compile / doc / sources).value
-      scalaVersion.value match {
-        case Scala3 => Seq()
-        case Scala2 => old
-      }
-    }
+  ))
 )
 
 lazy val modules: List[CompositeProject] = List(
@@ -99,6 +94,7 @@ lazy val modules: List[CompositeProject] = List(
   doobie,
   skunk,
   generic,
+  docs,
   demo,
   benchmarks,
   profile
@@ -107,9 +103,6 @@ lazy val modules: List[CompositeProject] = List(
 lazy val root = tlCrossRootProject
   .aggregate(modules:_*)
   .disablePlugins(RevolverPlugin)
-  .settings(
-    makeSite := { (docs / makeSite).value }
-  )
 
 lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
@@ -262,11 +255,11 @@ lazy val demo = project
 lazy val benchmarks = project
   .in(file("benchmarks"))
   .dependsOn(core.jvm)
-  .enablePlugins(NoPublishPlugin, JmhPlugin)
+  .enablePlugins(NoPublishPlugin, AutomateHeaderPlugin, JmhPlugin)
 
 lazy val profile = project
   .in(file("profile"))
-  .enablePlugins(NoPublishPlugin)
+  .enablePlugins(NoPublishPlugin, AutomateHeaderPlugin)
   .dependsOn(core.jvm)
   .dependsOn(doobie)
   .settings(commonSettings)
@@ -286,16 +279,11 @@ lazy val profile = project
   )
 
 lazy val docs = project
-  .in(file("docs"))
-  .enablePlugins(SitePreviewPlugin, ParadoxSitePlugin)
+  .in(file("modules/docs"))
+  .enablePlugins(TypelevelSitePlugin, AutomateHeaderPlugin)
+  .settings(commonSettings)
   .settings(
-    paradoxTheme         := Some(builtinParadoxTheme("generic")),
-    previewLaunchBrowser := false,
-    paradoxProperties ++= Map(
-      "scala-versions"          -> (core.jvm / crossScalaVersions).value.map(CrossVersion.partialVersion).flatten.map(_._2).mkString("2.", "/", ""),
-      "org"                     -> organization.value,
-      "scala.binary.version"    -> s"2.${CrossVersion.partialVersion(scalaVersion.value).get._2}",
-      "core-dep"                -> s"${(core.jvm / name).value}_2.${CrossVersion.partialVersion(scalaVersion.value).get._2}",
-      "version"                 -> version.value
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-effect" % catsEffectVersion
     )
   )

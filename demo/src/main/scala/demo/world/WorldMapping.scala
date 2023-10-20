@@ -72,7 +72,8 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
         cities(namePattern: String = "%"): [City!]
         city(id: Int): City
         country(code: String): Country
-        countries(limit: Int = -1, offset: Int = 0, minPopulation: Int = 0, byPopulation: Boolean = false): [Country!]
+        countries(limit: Int = -1, offset: Int = 0, minPopulation: Int = 0,
+                  byPopulation: Boolean = false): [Country!]
         language(language: String): Language
         search(minPopulation: Int!, indepSince: Int!): [Country!]!
         search2(indep: Boolean!, limit: Int!): [Country!]!
@@ -184,7 +185,9 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
   // #elaborator
   override val selectElaborator = SelectElaborator {
     case (QueryType, "country", List(Binding("code", StringValue(code)))) =>
-      Elab.transformChild(child => Unique(Filter(Eql(CountryType / "code", Const(code)), child)))
+      Elab.transformChild { child =>
+        Unique(Filter(Eql(CountryType / "code", Const(code)), child))
+      }
 
     case (QueryType, "city", List(Binding("id", IntValue(id)))) =>
       Elab.transformChild(child => Unique(Filter(Eql(CityType / "id", Const(id)), child)))
@@ -208,9 +211,15 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
 
       def order(query: Query): Query = {
         if (byPop)
-          OrderBy(OrderSelections(List(OrderSelection[Int](CountryType / "population"))), query)
+          OrderBy(
+            OrderSelections(List(OrderSelection[Int](CountryType / "population"))),
+            query
+          )
         else if (num > 0 || off > 0)
-          OrderBy(OrderSelections(List(OrderSelection[String](CountryType / "code"))), query)
+          OrderBy(
+            OrderSelections(List(OrderSelection[String](CountryType / "code"))),
+            query
+          )
         else query
       }
 
@@ -224,12 +233,21 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
       if (namePattern == "%")
         Elab.unit
       else
-        Elab.transformChild(child => Filter(Like(CityType / "name", namePattern, true), child))
+        Elab.transformChild { child =>
+          Filter(Like(CityType / "name", namePattern, true), child)
+        }
 
     case (QueryType, "language", List(Binding("language", StringValue(language)))) =>
-      Elab.transformChild(child => Unique(Filter(Eql(LanguageType / "language", Const(language)), child)))
+      Elab.transformChild { child =>
+        Unique(Filter(Eql(LanguageType / "language", Const(language)), child))
+      }
 
-    case (QueryType, "search", List(Binding("minPopulation", IntValue(min)), Binding("indepSince", IntValue(year)))) =>
+    case (QueryType, "search",
+           List(
+             Binding("minPopulation", IntValue(min)),
+             Binding("indepSince", IntValue(year))
+            )
+          ) =>
       Elab.transformChild(child =>
         Filter(
           And(
@@ -240,14 +258,30 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
         )
       )
 
-    case (QueryType, "search2", List(Binding("indep", BooleanValue(indep)), Binding("limit", IntValue(num)))) =>
-      Elab.transformChild(child => Limit(num, Filter(IsNull[Int](CountryType / "indepyear", isNull = !indep), child)))
+    case (QueryType, "search2",
+           List(
+             Binding("indep", BooleanValue(indep)),
+             Binding("limit", IntValue(num))
+           )
+         ) =>
+      Elab.transformChild { child =>
+        Limit(num, Filter(IsNull[Int](CountryType / "indepyear", isNull = !indep), child))
+      }
 
     case (CountryType, "numCities", List(Binding("namePattern", AbsentValue))) =>
-      Elab.transformChild(_ => Count(Select("cities", Select("name"))))
+      Elab.transformChild { _ =>
+        Count(Select("cities", Select("name")))
+      }
 
-    case (CountryType, "numCities", List(Binding("namePattern", StringValue(namePattern)))) =>
-      Elab.transformChild(_ => Count(Select("cities", Filter(Like(CityType / "name", namePattern, true), Select("name")))))
+    case (CountryType, "numCities",
+           List(Binding("namePattern", StringValue(namePattern)))) =>
+      Elab.transformChild { _ =>
+        Count(
+          Select("cities",
+            Filter(Like(CityType / "name", namePattern, true), Select("name"))
+          )
+        )
+      }
   }
   // #elaborator
 }
