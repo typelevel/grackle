@@ -95,6 +95,7 @@ lazy val modules: List[CompositeProject] = List(
   skunk,
   generic,
   docs,
+  unidocs,
   demo,
   benchmarks,
   profile
@@ -285,5 +286,20 @@ lazy val docs = project
   .settings(
     libraryDependencies ++= Seq(
       "org.typelevel" %% "cats-effect" % catsEffectVersion
+    )
+  )
+
+lazy val unidocs = project
+  .in(file("unidocs"))
+  .enablePlugins(TypelevelUnidocPlugin)
+  .settings(
+    name := "grackle-docs",
+    ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(
+      core.jvm,
+      circe.jvm,
+      sql.jvm,
+      doobie,
+      skunk.jvm,
+      generic.jvm,
     )
   )
