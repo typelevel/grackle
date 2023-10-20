@@ -280,8 +280,7 @@ lazy val profile = project
 
 lazy val docs = project
   .in(file("modules/docs"))
-  .enablePlugins(NoPublishPlugin, AutomateHeaderPlugin)
-  .enablePlugins(TypelevelSitePlugin)
+  .enablePlugins(TypelevelSitePlugin, AutomateHeaderPlugin)
   .settings(commonSettings)
   .settings(
     libraryDependencies ++= Seq(
