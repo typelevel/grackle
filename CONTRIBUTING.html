@@ -6,7 +6,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="generator" content="Typelevel Laika + Helium Theme" />
-  <title>Grackle</title>
+  <title>Contributing</title>
   
   <meta name="author" content="Miles Sabin"/>
   
@@ -99,8 +99,8 @@
   </div>
 
   <ul class="nav-list">
-    <li class="level1 active nav-leaf"><a href="#">Grackle</a></li>
-    <li class="level1 nav-leaf"><a href="CONTRIBUTING.html">Contributing</a></li>
+    <li class="level1 nav-leaf"><a href="index.html">Grackle</a></li>
+    <li class="level1 active nav-leaf"><a href="#">Contributing</a></li>
     <li class="level1 nav-header">Tutorial</li>
     <li class="level2 nav-leaf"><a href="tutorial/intro.html">Introduction</a></li>
     <li class="level2 nav-leaf"><a href="tutorial/in-memory-model.html">In-memory Model</a></li>
@@ -113,13 +113,14 @@
 
       
 <nav id="page-nav">
-  <p class="header"><a href="#">Grackle</a></p>
+  <p class="header"><a href="#">Contributing</a></p>
 
   <ul class="nav-list">
-    <li class="level1 nav-leaf"><a href="#overview">Overview</a></li>
-    <li class="level1 nav-leaf"><a href="#getting-started">Getting Started</a></li>
-    <li class="level1 nav-leaf"><a href="#community">Community</a></li>
-    <li class="level1 nav-leaf"><a href="#contributing">Contributing</a></li>
+    <li class="level1 nav-leaf"><a href="#how-to-submit-a-change">How to submit a change</a></li>
+    <li class="level1 nav-node"><a href="#building-the-project-locally">Building the project locally</a></li>
+    <li class="level2 nav-leaf"><a href="#prerequisites">Prerequisites</a></li>
+    <li class="level2 nav-leaf"><a href="#build-process">Build process</a></li>
+    <li class="level2 nav-leaf"><a href="#testing">Testing</a></li>
   </ul>
 
   <p class="footer"></p>
@@ -128,61 +129,9 @@
 
       <main class="content">
 
-        <h1 id="grackle" class="title">Grackle</h1>
-        
-        <h2 id="overview" class="section"><a class="anchor-link left" href="#overview"><i class="icofont-laika link">&#xef71;</i></a>Overview</h2>
-        <p>Grackle is a <a href="https://graphql.org">GraphQL</a> server written in functional <a href="https://www.scala-lang.org">Scala</a>, built on
-        the <a href="https://typelevel.org">Typelevel</a> stack.</p>
-        <p>It&#39;s powered by <a href="https://typelevel.org/cats">cats</a>, <a href="https://typelevel.org/cats-effect/">cats-effect</a>,
-        <a href="https://github.com/typelevel/fs2">fs2</a> and <a href="https://http4s.org/">http4s</a>, and supports GraphQL queries, mutations and
-        subscriptions.</p>
-        <p>It has an abstract model of data sources implemented in terms of declarative mappings between GraphQL schemas and
-        backing data, and cursors into that data. It supports in-memory, DB-backed, and effectful data sources.</p>
-        <p>Grackle is structured as a compiler/interpreter. Queries are type-checked against a GraphQL schema and compiled into
-        an internal query algebra. The query algebra may be further compiled in a backend-specific way to materialize data. In
-        particular it can be compiled to efficient SQL and in that regard currently supports Postgres via
-        <a href="https://tpolecat.github.io/doobie/">Doobie</a> or <a href="https://typelevel.org/skunk/">Skunk</a>.</p>
-        <p>Grackle is an <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache 2.0 licensed</a> Typelevel project and is available
-        for Scala 2/3 and for <a href="https://www.scala-js.org/">Scala.js</a> and <a href="https://scala-native.org/en/stable/">Scala Native</a>.</p>
-        <p>Work has been generously sponsored by
-        <a href="https://www.aura-astronomy.org/centers/nsfs-oir-lab/gemini-observatory/">Aura/Gemini</a> and <a href="https://itv.com">ITV</a> over
-        the last four years.</p>
-        
-        <h2 id="getting-started" class="section"><a class="anchor-link left" href="#getting-started"><i class="icofont-laika link">&#xef71;</i></a>Getting Started</h2>
-        <ul>
-          <li>See the <a href="https://typelevel.org/grackle">tutorial</a> and accompanying <a href="https://github.com/typelevel/grackle/tree/main/demo/src/main">demo</a>.</li>
-          <li>Online Scaladoc is available <a href="https://javadoc.io/doc/org.typelevel/grackle-core_2.13">here</a>.</li>
-          <li>Ask us anything the in <strong>#grackle</strong> channel on the Typelevel <a href="https://discord.gg/GYD4J9w8EK">discord server</a>.</li>
-        </ul>
-        <p>To add Grackle to your project you should add the following to your <code>build.sbt</code>,</p>
-        <pre><code class="nohighlight"><span class="comment">// Required: Scala 2.13/3.3+
-</span><span class="identifier">libraryDependencies</span><span> += </span><span class="string-literal">&quot;org.typelevel&quot;</span><span> %% </span><span class="string-literal">&quot;grackle-core&quot;</span><span> % </span><span class="string-literal">&quot;0.15.0&quot;</span><span>
-
-</span><span class="comment">// Optional: support for in-memory Json backend using circe
-</span><span class="identifier">libraryDependencies</span><span> += </span><span class="string-literal">&quot;org.typelevel&quot;</span><span> %% </span><span class="string-literal">&quot;grackle-circe&quot;</span><span> % </span><span class="string-literal">&quot;0.15.0&quot;</span><span>
-
-</span><span class="comment">// Optional: support for in-memory generic Scala backend using shapeless
-</span><span class="identifier">libraryDependencies</span><span> += </span><span class="string-literal">&quot;org.typelevel&quot;</span><span> %% </span><span class="string-literal">&quot;grackle-generic&quot;</span><span> % </span><span class="string-literal">&quot;0.15.0&quot;</span><span>
-
-</span><span class="comment">// Optional: support for Postgres backend via Doobie (JVM only)
-</span><span class="identifier">libraryDependencies</span><span> += </span><span class="string-literal">&quot;org.typelevel&quot;</span><span> %% </span><span class="string-literal">&quot;grackle-doobie-pg&quot;</span><span> % </span><span class="string-literal">&quot;0.15.0&quot;</span><span>
-
-</span><span class="comment">// Optional: support for Postgres backend via Skunk
-</span><span class="identifier">libraryDependencies</span><span> += </span><span class="string-literal">&quot;org.typelevel&quot;</span><span> %% </span><span class="string-literal">&quot;grackle-skunk&quot;</span><span> % </span><span class="string-literal">&quot;0.15.0&quot;</span></code></pre>
-        
-        <h2 id="community" class="section"><a class="anchor-link left" href="#community"><i class="icofont-laika link">&#xef71;</i></a>Community</h2>
-        <p>Grackle is proud to be a <a href="https://typelevel.org/">Typelevel</a> project.  We are committed to providing a friendly, safe
-        and welcoming environment for all, and ask that the community adhere to the <a href="https://www.scala-lang.org/conduct/">Scala Code of
-        Conduct</a> in all venues.</p>
-        <p>Conversations around Grackle are currently happening on <a href="https://github.com/typelevel/grackle/issues">GitHub issues</a>, <a href="https://github.com/typelevel/grackle/pulls">PR
-        discussions</a>, and <a href="https://discord.gg/GYD4J9w8EK">discord</a>.</p>
-        <p>The Typelevel <a href="https://discord.gg/GYD4J9w8EK">discord</a> has a <strong>#grackle</strong> channel, as well as channels for related
-        projects channels such as <strong>#cats</strong>, <strong>#cats-effect</strong>, <strong>#fs2</strong>, <strong>#doobie</strong> and <strong>#skunk</strong>. If you&#39;re new to the Typelevel
-        ecosystem the <strong>#beginners</strong> channel might also be useful.  Please join us!</p>
-        
-        <h2 id="contributing" class="section"><a class="anchor-link left" href="#contributing"><i class="icofont-laika link">&#xef71;</i></a>Contributing</h2>
-        <p>This project exists thanks to <a href="https://github.com/typelevel/grackle/graphs/contributors">all the people who
-        contribute</a>.</p>
+        <h1 id="contributing" class="title">Contributing</h1>
+        <p>Thanks for taking interest in helping us develop Grackle! If you want to contribute to the project, you can find some
+        helpful information here.</p>
         <p>We welcome all kinds of contribution, including but not limited to,</p>
         <ul>
           <li>documentation improvements, explanatory images/diagrams, fixes in typos, useful links</li>
@@ -193,7 +142,98 @@
         incorrect, it&#39;s a perfect opportunity to make a change to it!</p>
         <p>If at any point you run into problems, you can always ask a question on the <strong>#grackle</strong> channel on the Typelevel
         <a href="https://discord.gg/GYD4J9w8EK">discord server</a>.</p>
-        <p>More information, including on how to build locally and submit pull requests, can be found <a href="CONTRIBUTING.html">here</a>.</p>
+        
+        <h2 id="how-to-submit-a-change" class="section"><a class="anchor-link left" href="#how-to-submit-a-change"><i class="icofont-laika link">&#xef71;</i></a>How to submit a change</h2>
+        <p>If you see something worth adding, make the relevant changes in a fork of the source code and submit a <a href="https://github.com/typelevel/grackle/pulls">pull
+        request</a> to the project. If you don&#39;t know what you could help with, take a look at <a href="https://github.com/typelevel/grackle/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22">the issues marked
+        as &quot;good first issue&quot;</a> or ask on <a href="https://discord.gg/GYD4J9w8EK">discord</a>.</p>
+        <p>Any contributions are expected to be made in the form of pull requests to the Grackle <a href="https://github.com/typelevel/grackle/pulls">repository</a>.
+        Usually it takes one approval for a change to be merged. If it takes too long to get it approved, feel free to ask on
+        <a href="https://discord.gg/GYD4J9w8EK">Discord</a>.</p>
+        <p>Grackle is licensed under the Apache Software License 2.0. Opening a pull request is to be considered affirmative
+        consent to incorporate your changes into the project, granting an unrestricted license to Typelevel to distribute and
+        derive new work from your changes, as per the contribution terms of ASL 2.0. You also affirm that you own the rights
+        to the code you are contributing. All contributors retain the copyright to their own work.</p>
+        <p>Remember to follow the <a href="https://github.com/typelevel/grackle/blob/main/CODE_OF_CONDUCT.md">code of conduct</a> in online and offline discourse.</p>
+        
+        <h2 id="building-the-project-locally" class="section"><a class="anchor-link left" href="#building-the-project-locally"><i class="icofont-laika link">&#xef71;</i></a>Building the project locally</h2>
+        
+        <h3 id="prerequisites" class="section"><a class="anchor-link left" href="#prerequisites"><i class="icofont-laika link">&#xef71;</i></a>Prerequisites</h3>
+        <p>You&#39;ll need JDK 11+, <a href="https://www.scala-sbt.org">sbt</a>, <a href="https://www.docker.com/">Docker</a> (for running DB tests) and <a href="https://nodejs.org/en/">Node.js</a> (for running Scala.js
+        tests).</p>
+        <p>We use several sbt plugins to build and check the project, including <a href="https://github.com/lightbend/mima">MiMa (Migration Manager)</a> and. The
+        <a href="https://typelevel.org/sbt-typelevel/">sbt-typelevel</a> plugin does the bulk of the SBT configuration.</p>
+        
+        <h3 id="build-process" class="section"><a class="anchor-link left" href="#build-process"><i class="icofont-laika link">&#xef71;</i></a>Build process</h3>
+        <p>To compile the code for the whole repository, you can start an interactive sbt shell:</p>
+        <pre><code class="nohighlight"><span>% sbt                                                                                                        
+[info] welcome to sbt </span><span class="number-literal">1.9.7</span><span> (GraalVM Community Java </span><span class="number-literal">17.0.8</span><span>)
+[info] loading settings </span><span class="keyword">for</span><span> project global-plugins from sbt-updates.sbt ...
+[info] loading global plugins from /home/miles/.sbt/</span><span class="number-literal">1.0</span><span>/plugins
+[info] loading settings </span><span class="keyword">for</span><span> project grackle-build-build-build-build from metals.sbt ...
+[info] loading project definition from /home/miles/projects/grackle/project/project/project/project
+[info] loading settings </span><span class="keyword">for</span><span> project grackle-build-build-build from metals.sbt ...
+[info] loading project definition from /home/miles/projects/grackle/project/project/project
+[success] Generated .bloop/grackle-build-build-build.json
+[success] Total </span><span class="keyword">time</span><span>: </span><span class="number-literal">2</span><span> s, completed </span><span class="number-literal">25</span><span> Oct </span><span class="number-literal">2023</span><span>, </span><span class="number-literal">12</span><span>:</span><span class="number-literal">55</span><span>:</span><span class="number-literal">45</span><span>
+[info] loading settings </span><span class="keyword">for</span><span> project grackle-build-build from metals.sbt,plugins.sbt ...
+[info] loading project definition from /home/miles/projects/grackle/project/project
+[success] Generated .bloop/grackle-build-build.json
+[success] Total </span><span class="keyword">time</span><span>: </span><span class="number-literal">1</span><span> s, completed </span><span class="number-literal">25</span><span> Oct </span><span class="number-literal">2023</span><span>, </span><span class="number-literal">12</span><span>:</span><span class="number-literal">55</span><span>:</span><span class="number-literal">46</span><span>
+[info] loading settings </span><span class="keyword">for</span><span> project grackle-build from metals.sbt,plugins.sbt ...
+[info] loading project definition from /home/miles/projects/grackle/project
+[info] loading settings </span><span class="keyword">for</span><span> project root from build.sbt ...
+[info] resolving key references (</span><span class="number-literal">29638</span><span> settings) ...
+[info] </span><span class="identifier">set</span><span> scmInfo to https://github.com/typelevel/grackle
+[info] </span><span class="identifier">set</span><span> current project to root (</span><span class="keyword">in</span><span> build file:/home/miles/projects/grackle/)
+[info] sbt server started at local:///home/miles/.sbt/</span><span class="number-literal">1.0</span><span>/server/9b2532ef9aeebb6c666d/sock
+[info] started sbt server
+sbt:root&gt; </span></code></pre>
+        <p>Inside the shell, you can compile the sources for the currently selected Scala version using the <code>compile</code> command. To
+        compile the code for all Scala versions enabled in the build, use <code>+compile</code>. To include tests, <code>Test/compile</code> or
+        <code>+Test/compile</code>, accordingly.</p>
+        
+        <h3 id="testing" class="section"><a class="anchor-link left" href="#testing"><i class="icofont-laika link">&#xef71;</i></a>Testing</h3>
+        <p>To test the code, you can run the <code>test</code> command in sbt. If you want the tests on a single platform, you can use
+        <code>rootJVM/test</code>, <code>rootJS/test</code>, or <code>rootNative/test</code> instead.</p>
+        <p>It is possible to run a single test suite from a project on a single platform by <a href="https://www.scala-sbt.org/1.x/docs/Testing.html#testOnly">executing a more specific
+        task</a>, like <code>coreJVM/testOnly compiler.ScalarsSuite</code>.</p>
+        <p>You can list all available projects by executing the <code>projects</code> task:</p>
+        <pre><code class="sbt">sbt:root&gt; projects
+[info] In file:/home/miles/projects/grackle/
+[info]     benchmarks
+[info]     buildInfoJS
+[info]     buildInfoJVM
+[info]     buildInfoNative
+[info]     circeJS
+[info]     circeJVM
+[info]     circeNative
+[info]     coreJS
+[info]     coreJVM
+[info]     coreNative
+[info]     demo
+[info]     docs
+[info]     doobie
+[info]     genericJS
+[info]     genericJVM
+[info]     genericNative
+[info]     profile
+[info]   * root
+[info]     rootJS
+[info]     rootJVM
+[info]     rootNative
+[info]     skunkJS
+[info]     skunkJVM
+[info]     skunkNative
+[info]     sqlJS
+[info]     sqlJVM
+[info]     sqlNative
+[info]     unidocs</code></pre>
+        <p>Before submitting a change for review, it&#39;s worth running some extra checks that will be triggered in Continuous
+        Integration:</p>
+        <pre class="keep-together pdf epub"><code class="sbt">sbt:root&gt; prePR</code></pre>
+        <p>If you run into any problems with tests, binary compatibility or other issues, feel free to ask questions on
+        <a href="https://discord.gg/GYD4J9w8EK">discord</a>.</p>
 
         
 <hr class="footer-rule"/>
