@@ -22,10 +22,8 @@ object Ast {
   sealed trait Definition
 
   sealed trait ExecutableDefinition extends Definition
-  sealed trait TypeSystemDefinitionOrExtension extends Definition
-
-  sealed trait TypeSystemDefinition extends TypeSystemDefinitionOrExtension
-  sealed trait TypeSystemExtension extends TypeSystemDefinitionOrExtension
+  sealed trait TypeSystemDefinition extends Definition
+  sealed trait TypeSystemExtension extends Definition
 
   sealed trait TypeExtension extends TypeSystemExtension
 
