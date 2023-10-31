@@ -50,32 +50,32 @@ trait Schema {
     extendee match {
         case TypeRef(_, _) => throw new RuntimeException("Invariant violated")
         case st: ScalarType => st // Scalar extensions presently do nothing as directives are not supported
-        case InterfaceType(name, description, fields, interfaces) => {
+        case InterfaceType(name, description, fields, interfaces, directives) => {
           val exts = toApply.collect { case ie: InterfaceExtension => ie }
           val newFields = exts.flatMap(_.fields)
           val newInterfaces = exts.flatMap(_.interfaces)
-          InterfaceType(name, description, fields ++ newFields, interfaces ++ newInterfaces)
+          InterfaceType(name, description, fields ++ newFields, interfaces ++ newInterfaces, directives)
         }
-        case ObjectType(name, description, fields, interfaces) => {
+        case ObjectType(name, description, fields, interfaces, directives) => {
           val exts = toApply.collect { case oe: ObjectExtension => oe }
           val newFields = exts.flatMap(_.fields)
           val newInterfaces = exts.flatMap(_.interfaces)
-          ObjectType(name, description, fields ++ newFields, interfaces ++ newInterfaces)
+          ObjectType(name, description, fields ++ newFields, interfaces ++ newInterfaces, directives)
         }
-        case UnionType(name, description, members) => {
+        case UnionType(name, description, members, directives) => {
           val exts = toApply.collect { case ue: UnionExtension => ue }
           val newMembers = exts.flatMap(_.members)
-          UnionType(name, description, members ++ newMembers)
+          UnionType(name, description, members ++ newMembers, directives)
         }
-        case EnumType(name, description, enumValues) => {
+        case EnumType(name, description, enumValues, directives) => {
           val exts = toApply.collect { case ee: EnumExtension => ee }
           val newValues = exts.flatMap(_.enumValues)
-          EnumType(name, description, enumValues ++ newValues)
+          EnumType(name, description, enumValues ++ newValues, directives)
         }
-        case InputObjectType(name, description, inputFields) => {
+        case InputObjectType(name, description, inputFields, directives) => {
           val exts = toApply.collect { case ioe: InputObjectExtension => ioe }
           val newFields = exts.flatMap(_.inputFields)
-          InputObjectType(name, description, inputFields ++ newFields)
+          InputObjectType(name, description, inputFields ++ newFields, directives)
         }
       }
   }
@@ -635,7 +635,7 @@ sealed trait WithFields {
   def fields: List[Field]
   def interfaces: List[NamedType]
 
-  override def fieldInfo(name: String): Option[Field] = fields.find(_.name == name)
+  def fieldInfo(name: String): Option[Field] = fields.find(_.name == name)
 }
 
 /**
@@ -643,7 +643,9 @@ sealed trait WithFields {
  *
  * This includes object types and inferface types.
  */
-sealed trait TypeWithFields extends NamedType with WithFields
+sealed trait TypeWithFields extends NamedType with WithFields {
+  override def fieldInfo(name: String): Option[Field] = fields.find(_.name == name) // delegate to WithFields?
+}
 
 /**
   * Scalar extensions allow additional directives to be applied to a pre-existing Scalar type
@@ -664,7 +666,7 @@ case class InterfaceType(
   fields: List[Field],
   interfaces: List[NamedType],
   directives: List[Directive]
-) extends Type with TypeWithFields {
+) extends TypeWithFields {
   override def isInterface: Boolean = true
 }
 
@@ -686,7 +688,14 @@ case class ObjectType(
   fields: List[Field],
   interfaces: List[NamedType],
   directives: List[Directive]
-) extends Type with TypeWithFields
+) extends TypeWithFields
+
+/**
+ * Object extensions allow additional fields to be added to a pre-existing object type
+ * 
+ * @see https://spec.graphql.org/draft/#sec-Object-Extensions
+ **/
+case class ObjectExtension(extended: String, description: Option[String], fields: List[Field], interfaces: List[NamedType]) extends TypeExtension with WithFields
 
 /**
  * Unions are an abstract type where no common fields are declared. The possible types of a union
@@ -734,7 +743,7 @@ case class EnumType(
  * 
  * @see https://spec.graphql.org/draft/#sec-Enum-Extensions
  **/
-case class EnumExtension(extended: String, description: Option[String], enumValues: List[EnumValue]) extends TypeExtension
+case class EnumExtension(extended: String, description: Option[String], enumValues: List[EnumValueDefinition]) extends TypeExtension
 
 /**
  * The `EnumValue` type represents one of possible values of an enum.
@@ -1250,7 +1259,7 @@ object Directive {
  */
 object SchemaParser {
 
-  import Ast.{Directive => _, EnumValueDefinition => _, Type => _, Value => _, _}
+  import Ast.{Directive => _, EnumValueDefinition => _, Type => AstType, TypeExtension => AstTypeExtension, Value => _, _}
 
   /**
    * Parse a query String to a query algebra term.
@@ -1272,11 +1281,13 @@ object SchemaParser {
       override def schemaType: NamedType = schemaType1.getOrElse(super.schemaType)
 
       var directives: List[DirectiveDef] = Nil
+      var extensions: List[TypeExtension] = Nil
 
-      def complete(types0: List[NamedType], schemaType0: Option[NamedType], directives0: List[DirectiveDef]): Unit = {
-        types = types0
+      def complete(types0: List[NamedType], schemaType0: Option[NamedType], directives0: List[DirectiveDef], extensions0: List[TypeExtension]): Unit = {
+        unExtendedTypes = types0
         schemaType1 = schemaType0
         directives = directives0 ++ DirectiveDef.builtIns
+        extensions = extensions0
       }
     }
 
@@ -1284,9 +1295,10 @@ object SchemaParser {
     val dirDefns: List[DirectiveDefinition] = doc.collect { case dir: DirectiveDefinition => dir }
     for {
       types      <- mkTypeDefs(schema, typeDefns)
+      extensions <- mkExtensions(schema, doc, types)
       directives <- mkDirectiveDefs(schema, dirDefns)
       schemaType <- mkSchemaType(schema, doc)
-      _          =  schema.complete(types, schemaType, directives)
+      _          =  schema.complete(types, schemaType, directives, extensions)
       _          <- Result.fromProblems(SchemaValidator.validateSchema(schema, typeDefns))
     } yield schema
   }
@@ -1326,6 +1338,37 @@ object SchemaParser {
 
       case _ => Result.failure("At most one schema definition permitted")
     }
+  }
+
+  def mkExtensions(schema: Schema, doc: Document, unExtended: List[NamedType]): Result[List[TypeExtension]] = {
+    val extDefs: List[AstTypeExtension] = doc.collect { case tpe: AstTypeExtension => tpe } // Move this to parseDocument
+    val extensions = extDefs.traverse {
+      case InputObjectTypeExtension(AstType.Named(Name(name)), description, _, fields0) =>
+        for {
+          fields <- fields0.traverse(mkInputValue(schema))
+        } yield InputObjectExtension(name, description, fields)
+      case ObjectTypeExtension(AstType.Named(Name(name)), description, fields0, ifs0, _) =>
+        for {
+          fields <- fields0.traverse(mkField(schema))
+          ifs = ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+        } yield ObjectExtension(name, description, fields, ifs)
+      case ScalarTypeExtension(AstType.Named(Name(name)), description, _) =>
+        ScalarExtension(name, description).success
+      case UnionTypeExtension(AstType.Named(Name(name)), description, _, members0) =>
+        val members = members0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+        UnionExtension(name, description, members).success
+      case EnumTypeExtension(AstType.Named(Name(name)), description, _, values0) =>
+        for {
+          values <- values0.traverse(mkEnumValue)
+        } yield EnumExtension(name, description, values)
+      case InterfaceTypeExtension(AstType.Named(Name(name)), description, fields0, ifs0, _) =>
+        for {
+          fields <- fields0.traverse(mkField(schema))
+          ifs = ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+        } yield InterfaceExtension(name, description, fields, ifs)
+    }
+
+    SchemaValidator.validateExtensions(extensions, unExtended)
   }
 
   def mkTypeDefs(schema: Schema, defns: List[TypeDefinition]): Result[List[NamedType]] =
@@ -1552,6 +1595,57 @@ object SchemaValidator {
     val impls = schema.types.collect { case impl: TypeWithFields => impl }
     impls.flatMap(validateImplementor)
   }
+
+  // TODO: This should return List[Problem]
+  import cats.data.NonEmptyChain
+  def validateExtensions(extensions: Result[List[TypeExtension]], unextended: List[NamedType]): Result[List[TypeExtension]] = {
+    extensions match {
+      case Result.Failure(_) => extensions
+      case Result.InternalError(_) => extensions
+      case Result.Success(exts) => NonEmptyChain.fromSeq(checkExtensionTypes(exts, unextended)).fold(extensions)(problems => extensions.withProblems(problems))
+      case Result.Warning(_, exts) => NonEmptyChain.fromSeq(checkExtensionTypes(exts, unextended)).fold(extensions)(problems => extensions.withProblems(problems))
+    }
+  }
+
+  def checkExtensionTypes(extensions: List[TypeExtension], unextended: List[NamedType]): List[Problem] = {
+    extensions.mapFilter { extension =>
+      val notFound = Some(Problem(s"Unable apply extension to non-existent ${extension.extended}"))
+      unextended.find(_.name == extension.extended).fold[Option[Problem]](notFound) { subject =>
+        def wrongTypeExtended(typ: String) = Problem(s"Attempted to apply $typ extension to ${subject.name} but it is not a $typ").some
+
+        extension match {
+          case _: ScalarExtension => subject match {
+            case _: ScalarType => None
+            case TypeRef(_, _) => {
+              wrongTypeExtended("ref")
+            }
+            case _ => wrongTypeExtended("Scalar")
+          }
+          case _: InterfaceExtension => subject match {
+            case _: InterfaceType => None
+            case _ => wrongTypeExtended("Interface")
+          }
+          case _: ObjectExtension => subject match {
+            case _: ObjectType => None
+            case TypeRef(_, _) => { wrongTypeExtended("ref") }
+            case _ => wrongTypeExtended("Object")
+          }
+          case _: UnionExtension => subject match {
+            case _: UnionType => None
+            case _ => wrongTypeExtended("Union")
+          }
+          case _: EnumExtension => subject match {
+            case _: EnumType => None
+            case _ => wrongTypeExtended("Enum")
+          }
+          case _: InputObjectExtension => subject match {
+            case _: InputObjectType => None
+            case _ => wrongTypeExtended("Input Object")
+          }
+        }
+      }
+    }
+  }
 }
 
 object SchemaRenderer {
@@ -1606,15 +1700,14 @@ object SchemaRenderer {
     s"@$name$args"
   }
 
-  def renderTypeDefn(tpe: NamedType): String = {
-    def renderField(f: Field): String = {
-      val Field(nme, _, args, tpe, dirs0) = f
-      val dirs = renderDirectives(dirs0)
-      if (args.isEmpty)
-        s"$nme: ${renderType(tpe)}$dirs"
-      else
-        s"$nme(${args.map(renderInputValue).mkString(", ")}): ${renderType(tpe)}$dirs"
-    }
+  def renderField(f: Field): String = {
+    val Field(nme, _, args, tpe, dirs0) = f
+    val dirs = renderDirectives(dirs0)
+    if (args.isEmpty)
+      s"$nme: ${renderType(tpe)}$dirs"
+    else
+      s"$nme(${args.map(renderInputValue).mkString(", ")}): ${renderType(tpe)}$dirs"
+  }
 
   def renderExtension(extension: TypeExtension): String = {
     extension match {
@@ -1636,7 +1729,7 @@ object SchemaRenderer {
 
       case EnumExtension(extended, _, enumValues) => 
         s"""|extend enum ${extended} {
-            |  ${enumValues.map(renderEnumValue).mkString("\n  ")}
+            |  ${enumValues.map(renderEnumValueDefinition).mkString("\n  ")}
             |}""".stripMargin
 
       case InputObjectExtension(extended, _, inputFields) => 

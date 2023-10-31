@@ -345,17 +345,18 @@ final class SchemaSuite extends CatsEffectSuite {
   test("object extension") {
     val schema = Schema(
       """
-          type Human {
-            url: String
-          }
+        type Human {
+          url: String
+        }
 
         extend type Human {
-                id: ID!
-               }
-        """)
+          id: ID!
+        }
+      """
+    )
 
     schema match {
-      case Ior.Right(a) => assert(a.types.head.hasField("id"))
+      case Result.Success(a) => assert(a.types.head.hasField("id"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -364,29 +365,29 @@ final class SchemaSuite extends CatsEffectSuite {
     val schema = Schema(
       """
         type Episode {
-           id: String!
-         }
+          id: String!
+        }
 
-         extend scalar Episode
+        extend scalar Episode
       """
     )
 
     schema match {
-      case Both(a, _) =>
+      case Result.Warning(a, _) =>
         assert(a.map(_.message) == NonEmptyChain("Attempted to apply Scalar extension to Episode but it is not a Scalar"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
 
-    test("schema validation: extension on non-existent type") {
+  test("schema validation: extension on non-existent type") {
     val schema = Schema(
       """
-         extend scalar Episode
+        extend scalar Episode
       """
     )
 
     schema match {
-      case Both(a, _) =>
+      case Result.Warning(a, _) =>
         assert(a.map(_.message) == NonEmptyChain("Unable apply extension to non-existent Episode"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }

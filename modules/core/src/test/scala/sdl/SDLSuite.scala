@@ -338,7 +338,7 @@ final class SDLSuite extends CatsEffectSuite {
 
     val expected =
       List(
-        SchemaExtension(List(RootOperationTypeDefinition(OperationType.Query, Named(Name("Query")))), Nil)
+        SchemaExtension(List(RootOperationTypeDefinition(OperationType.Query, Named(Name("Query")), Nil)), Nil)
       )
 
     val res = GraphQLParser.Document.parseAll(schema).toOption
