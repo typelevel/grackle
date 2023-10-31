@@ -125,7 +125,7 @@ object GraphQLParser {
         ((keyword("enum") *> NamedType) ~ Directives.? ~ EnumValuesDefinition).map {
           case (((name), dirs), values) => Ast.EnumTypeExtension(name, desc.map(_.value), dirs.getOrElse(Nil), values)
         }
-      
+
       def inputObjectTypeExtension(desc: Option[Ast.Value.StringValue]): Parser[Ast.InputObjectTypeExtension] =
         ((keyword("input") *> NamedType) ~ Directives.? ~ InputFieldsDefinition).map {
           case (((name), dirs), fields) => Ast.InputObjectTypeExtension(name, desc.map(_.value), dirs.getOrElse(Nil), fields)
@@ -141,8 +141,6 @@ object GraphQLParser {
 
     keyword("extend") *> (SchemaExtension |
     Description.?.with1.flatMap(typeExtension))
-
-    
   }
 
   lazy val RootOperationTypeDefinition: Parser[Ast.RootOperationTypeDefinition] =

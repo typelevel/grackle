@@ -508,7 +508,7 @@ sealed trait NamedType extends Type {
 
 /**
  * A GraphQL type extension
- */ 
+ */
 sealed trait TypeExtension {
   def extended: String
   def description: Option[String]
@@ -649,7 +649,7 @@ sealed trait TypeWithFields extends NamedType with WithFields {
 
 /**
   * Scalar extensions allow additional directives to be applied to a pre-existing Scalar type
-  * 
+  *
   * @see https://spec.graphql.org/draft/#sec-Scalar-Extensions
   */
 case class ScalarExtension(extended: String, description: Option[String]) extends TypeExtension
@@ -672,7 +672,7 @@ case class InterfaceType(
 
 /**
  * Interface extensions allow additional fields to be added to a pre-existing interface type
- * 
+ *
  * @see https://spec.graphql.org/draft/#sec-Interface-Extensions
  **/
 case class InterfaceExtension(extended: String, description: Option[String], fields: List[Field], interfaces: List[NamedType]) extends TypeExtension with WithFields
@@ -692,7 +692,7 @@ case class ObjectType(
 
 /**
  * Object extensions allow additional fields to be added to a pre-existing object type
- * 
+ *
  * @see https://spec.graphql.org/draft/#sec-Object-Extensions
  **/
 case class ObjectExtension(extended: String, description: Option[String], fields: List[Field], interfaces: List[NamedType]) extends TypeExtension with WithFields
@@ -716,7 +716,7 @@ case class UnionType(
 
 /**
  * Union extensions allow additional members to be added to a pre-existing union type
- * 
+ *
  * @see https://spec.graphql.org/draft/#sec-Union-Extensions
  **/
 case class UnionExtension(extended: String, description: Option[String], members: List[NamedType]) extends TypeExtension
@@ -740,7 +740,7 @@ case class EnumType(
 
 /**
  * Enum extensions allow additional values to be added to a pre-existing enum type
- * 
+ *
  * @see https://spec.graphql.org/draft/#sec-Enum-Extensions
  **/
 case class EnumExtension(extended: String, description: Option[String], enumValues: List[EnumValueDefinition]) extends TypeExtension
@@ -782,7 +782,7 @@ case class InputObjectType(
 
 /**
  * Input Object extensions allow additional fields to be added to a pre-existing Input Object type
- * 
+ *
  * @see https://spec.graphql.org/draft/#sec-Input-Object-Extensions
  **/
 case class InputObjectExtension(extended: String, description: Option[String], inputFields: List[InputValue]) extends TypeExtension
@@ -1713,26 +1713,26 @@ object SchemaRenderer {
     extension match {
       case ScalarExtension(extended, _) => s"extend scalar ${extended}"
       case ObjectExtension(extended, _, fields, ifs0) =>
-        val ifs = if (ifs0.isEmpty) "" else " implements " + ifs0.map(_.name).mkString("&") 
+        val ifs = if (ifs0.isEmpty) "" else " implements " + ifs0.map(_.name).mkString("&")
         s"""|extend type ${extended}$ifs {
             |  ${fields.map(renderField).mkString("\n  ")}
             |}""".stripMargin
 
-      case InterfaceExtension(extended, _, fields, ifs0) => 
+      case InterfaceExtension(extended, _, fields, ifs0) =>
         val ifs = if (ifs0.isEmpty) "" else " implements " + ifs0.map(_.name).mkString("&")
         s"""|extend interface ${extended}$ifs {
             |  ${fields.map(renderField).mkString("\n  ")}
             |}""".stripMargin
 
-      case UnionExtension(extended, _, members) => 
+      case UnionExtension(extended, _, members) =>
         s"extend union ${extended} = ${members.map(_.name).mkString(" | ")}"
 
-      case EnumExtension(extended, _, enumValues) => 
+      case EnumExtension(extended, _, enumValues) =>
         s"""|extend enum ${extended} {
             |  ${enumValues.map(renderEnumValueDefinition).mkString("\n  ")}
             |}""".stripMargin
 
-      case InputObjectExtension(extended, _, inputFields) => 
+      case InputObjectExtension(extended, _, inputFields) =>
         s"""|extend input ${extended} {
             |  ${inputFields.map(renderInputValue).mkString("\n  ")}
             |}""".stripMargin
