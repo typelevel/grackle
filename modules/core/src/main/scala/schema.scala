@@ -41,7 +41,7 @@ trait Schema {
   /** The types defined by this `Schema` with any extensions applied. */
   lazy val types: List[NamedType] = {
     baseTypes.map { tpe =>
-      val exts = extensions.filter(_.extended == tpe.dealias.name)
+      val exts = extensions.filter(_.baseType == tpe.dealias.name)
       if (exts.isEmpty) {tpe} else { extendType(tpe, exts) }
     }
   }
@@ -510,7 +510,7 @@ sealed trait NamedType extends Type {
  * A GraphQL type extension
  */
 sealed trait TypeExtension {
-  def extended: String
+  def baseType: String
   def description: Option[String]
 }
 
@@ -627,24 +627,15 @@ object ScalarType {
 }
 
 /**
- * A type or extension with fields.
- *
- * This includes object and inferface types and extensions.
- */
-sealed trait WithFields {
-  def fields: List[Field]
-  def interfaces: List[NamedType]
-
-  def fieldInfo(name: String): Option[Field] = fields.find(_.name == name)
-}
-
-/**
  * A type with fields.
  *
  * This includes object types and inferface types.
  */
-sealed trait TypeWithFields extends NamedType with WithFields {
-  override def fieldInfo(name: String): Option[Field] = fields.find(_.name == name) // delegate to WithFields?
+sealed trait TypeWithFields extends NamedType {
+  def fields: List[Field]
+  def interfaces: List[NamedType]
+
+  override def fieldInfo(name: String): Option[Field] = fields.find(_.name == name)
 }
 
 /**
@@ -652,7 +643,10 @@ sealed trait TypeWithFields extends NamedType with WithFields {
   *
   * @see https://spec.graphql.org/draft/#sec-Scalar-Extensions
   */
-case class ScalarExtension(extended: String, description: Option[String]) extends TypeExtension
+case class ScalarExtension(
+  baseType: String,
+  description: Option[String]
+) extends TypeExtension
 
 /**
  * Interfaces are an abstract type where there are common fields declared. Any type that
@@ -675,7 +669,12 @@ case class InterfaceType(
  *
  * @see https://spec.graphql.org/draft/#sec-Interface-Extensions
  **/
-case class InterfaceExtension(extended: String, description: Option[String], fields: List[Field], interfaces: List[NamedType]) extends TypeExtension with WithFields
+case class InterfaceExtension(
+  baseType: String,
+  description: Option[String],
+  fields: List[Field],
+  interfaces: List[NamedType]
+) extends TypeExtension
 
 /**
  * Object types represent concrete instantiations of sets of fields.
@@ -695,7 +694,12 @@ case class ObjectType(
  *
  * @see https://spec.graphql.org/draft/#sec-Object-Extensions
  **/
-case class ObjectExtension(extended: String, description: Option[String], fields: List[Field], interfaces: List[NamedType]) extends TypeExtension with WithFields
+case class ObjectExtension(
+  baseType: String,
+  description: Option[String],
+  fields: List[Field],
+  interfaces: List[NamedType]
+) extends TypeExtension
 
 /**
  * Unions are an abstract type where no common fields are declared. The possible types of a union
@@ -719,7 +723,11 @@ case class UnionType(
  *
  * @see https://spec.graphql.org/draft/#sec-Union-Extensions
  **/
-case class UnionExtension(extended: String, description: Option[String], members: List[NamedType]) extends TypeExtension
+case class UnionExtension(
+  baseType: String,
+  description: Option[String],
+  members: List[NamedType]
+) extends TypeExtension
 
 /**
  * Enums are special scalars that can only have a defined set of values.
@@ -743,7 +751,11 @@ case class EnumType(
  *
  * @see https://spec.graphql.org/draft/#sec-Enum-Extensions
  **/
-case class EnumExtension(extended: String, description: Option[String], enumValues: List[EnumValueDefinition]) extends TypeExtension
+case class EnumExtension(
+  baseType: String,
+  description: Option[String],
+  enumValues: List[EnumValueDefinition]
+) extends TypeExtension
 
 /**
  * The `EnumValue` type represents one of possible values of an enum.
@@ -785,7 +797,11 @@ case class InputObjectType(
  *
  * @see https://spec.graphql.org/draft/#sec-Input-Object-Extensions
  **/
-case class InputObjectExtension(extended: String, description: Option[String], inputFields: List[InputValue]) extends TypeExtension
+case class InputObjectExtension(
+  baseType: String,
+  description: Option[String],
+  inputFields: List[InputValue]
+) extends TypeExtension
 
 /**
  * Lists represent sequences of values in GraphQL. A List type is a type modifier: it wraps
@@ -1609,8 +1625,8 @@ object SchemaValidator {
 
   def checkExtensionTypes(extensions: List[TypeExtension], unextended: List[NamedType]): List[Problem] = {
     extensions.mapFilter { extension =>
-      val notFound = Some(Problem(s"Unable apply extension to non-existent ${extension.extended}"))
-      unextended.find(_.name == extension.extended).fold[Option[Problem]](notFound) { subject =>
+      val notFound = Some(Problem(s"Unable apply extension to non-existent ${extension.baseType}"))
+      unextended.find(_.name == extension.baseType).fold[Option[Problem]](notFound) { subject =>
         def wrongTypeExtended(typ: String) = Problem(s"Attempted to apply $typ extension to ${subject.name} but it is not a $typ").some
 
         extension match {
