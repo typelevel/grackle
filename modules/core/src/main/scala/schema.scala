@@ -36,11 +36,11 @@ trait Schema {
   def pos: SourcePos
 
   /** The types defined by this `Schema` prior to any extensions. */
-  def unExtendedTypes: List[NamedType]
+  def baseTypes: List[NamedType]
 
   /** The types defined by this `Schema` with any extensions applied. */
   lazy val types: List[NamedType] = {
-    unExtendedTypes.map { tpe =>
+    baseTypes.map { tpe =>
       val exts = extensions.filter(_.extended == tpe.dealias.name)
       if (exts.isEmpty) {tpe} else { extendType(tpe, exts) }
     }
@@ -141,10 +141,10 @@ trait Schema {
   def definition(name: String): Option[NamedType] =
     typeIndex.get(name).orElse(ScalarType.builtIn(name)).map(_.dealias)
 
-  private lazy val typeIndex = unExtendedTypes.map(tpe => (tpe.name, tpe)).toMap
+  private lazy val typeIndex = types.map(tpe => (tpe.name, tpe)).toMap
 
   def ref(tp: Type): Option[TypeRef] = tp match {
-    case nt: NamedType if unExtendedTypes.exists(_.name == nt.name) => Some(ref(nt.name))
+    case nt: NamedType if types.exists(_.name == nt.name) => Some(ref(nt.name))
     case _ => None
   }
 
@@ -1274,7 +1274,7 @@ object SchemaParser {
 
   def parseDocument(doc: Document)(implicit sourcePos: SourcePos): Result[Schema] = {
     object schema extends Schema {
-      var unExtendedTypes: List[NamedType] = Nil
+      var baseTypes: List[NamedType] = Nil
       var schemaType1: Option[NamedType] = null
       var pos: SourcePos = sourcePos
 
@@ -1284,7 +1284,7 @@ object SchemaParser {
       var extensions: List[TypeExtension] = Nil
 
       def complete(types0: List[NamedType], schemaType0: Option[NamedType], directives0: List[DirectiveDef], extensions0: List[TypeExtension]): Unit = {
-        unExtendedTypes = types0
+        baseTypes = types0
         schemaType1 = schemaType0
         directives = directives0 ++ DirectiveDef.builtIns
         extensions = extensions0
@@ -1340,7 +1340,7 @@ object SchemaParser {
     }
   }
 
-  def mkExtensions(schema: Schema, doc: Document, unExtended: List[NamedType]): Result[List[TypeExtension]] = {
+  def mkExtensions(schema: Schema, doc: Document, baseTypes: List[NamedType]): Result[List[TypeExtension]] = {
     val extDefs: List[AstTypeExtension] = doc.collect { case tpe: AstTypeExtension => tpe } // Move this to parseDocument
     val extensions = extDefs.traverse {
       case InputObjectTypeExtension(AstType.Named(Name(name)), description, _, fields0) =>
@@ -1368,7 +1368,7 @@ object SchemaParser {
         } yield InterfaceExtension(name, description, fields, ifs)
     }
 
-    SchemaValidator.validateExtensions(extensions, unExtended)
+    SchemaValidator.validateExtensions(extensions, baseTypes)
   }
 
   def mkTypeDefs(schema: Schema, defns: List[TypeDefinition]): Result[List[NamedType]] =
