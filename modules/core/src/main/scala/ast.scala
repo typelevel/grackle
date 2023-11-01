@@ -25,7 +25,9 @@ object Ast {
   sealed trait TypeSystemDefinition extends Definition
   sealed trait TypeSystemExtension extends Definition
 
-  sealed trait TypeExtension extends TypeSystemExtension
+  sealed trait TypeExtension extends TypeSystemExtension {
+    def baseType: Type.Named
+  }
 
   sealed abstract class OperationType(val name: String)
   object OperationType {
@@ -209,13 +211,13 @@ object Ast {
   ) extends TypeSystemDefinition
 
   case class ScalarTypeExtension(
-    name: Type.Named,
+    baseType: Type.Named,
     description: Option[String],
     directives: List[Directive]
   ) extends TypeExtension
 
   case class ObjectTypeExtension(
-    name: Type.Named,
+    baseType: Type.Named,
     description: Option[String],
     fields: List[FieldDefinition],
     interfaces: List[Type.Named],
@@ -223,7 +225,7 @@ object Ast {
   ) extends TypeExtension
 
   case class InterfaceTypeExtension(
-    name: Type.Named,
+    baseType: Type.Named,
     description: Option[String],
     fields: List[FieldDefinition],
     interfaces: List[Type.Named],
@@ -231,21 +233,21 @@ object Ast {
   ) extends TypeExtension
 
   case class UnionTypeExtension(
-    name: Type.Named,
+    baseType: Type.Named,
     description: Option[String],
     directives: List[Directive],
     members: List[Type.Named]
   ) extends TypeExtension
 
   case class EnumTypeExtension(
-    name: Type.Named,
+    baseType: Type.Named,
     description: Option[String],
     directives: List[Directive],
     values: List[EnumValueDefinition]
   ) extends TypeExtension
 
   case class InputObjectTypeExtension(
-    name: Type.Named,
+    baseType: Type.Named,
     description: Option[String],
     directives: List[Directive],
     fields: List[InputValueDefinition],

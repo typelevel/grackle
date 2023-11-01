@@ -1275,7 +1275,7 @@ object Directive {
  */
 object SchemaParser {
 
-  import Ast.{Directive => _, EnumValueDefinition => _, Type => AstType, TypeExtension => AstTypeExtension, Value => _, _}
+  import Ast.{Directive => _, EnumValueDefinition => _, Type => _, TypeExtension => _, Value => _, _}
 
   /**
    * Parse a query String to a query algebra term.
@@ -1309,13 +1309,15 @@ object SchemaParser {
 
     val typeDefns: List[TypeDefinition] = doc.collect { case tpe: TypeDefinition => tpe }
     val dirDefns: List[DirectiveDefinition] = doc.collect { case dir: DirectiveDefinition => dir }
+    val extnDefns: List[Ast.TypeExtension] = doc.collect { case tpe: Ast.TypeExtension => tpe }
+
     for {
-      types      <- mkTypeDefs(schema, typeDefns)
-      extensions <- mkExtensions(schema, doc, types)
+      baseTypes  <- mkTypeDefs(schema, typeDefns)
+      extensions <- mkExtensions(schema, extnDefns)
       directives <- mkDirectiveDefs(schema, dirDefns)
       schemaType <- mkSchemaType(schema, doc)
-      _          =  schema.complete(types, schemaType, directives, extensions)
-      _          <- Result.fromProblems(SchemaValidator.validateSchema(schema, typeDefns))
+      _          =  schema.complete(baseTypes, schemaType, directives, extensions)
+      _          <- Result.fromProblems(SchemaValidator.validateSchema(schema, typeDefns, extnDefns))
     } yield schema
   }
 
@@ -1356,36 +1358,35 @@ object SchemaParser {
     }
   }
 
-  def mkExtensions(schema: Schema, doc: Document, baseTypes: List[NamedType]): Result[List[TypeExtension]] = {
-    val extDefs: List[AstTypeExtension] = doc.collect { case tpe: AstTypeExtension => tpe } // Move this to parseDocument
-    val extensions = extDefs.traverse {
-      case InputObjectTypeExtension(AstType.Named(Name(name)), description, _, fields0) =>
+  def mkExtensions(schema: Schema, extnDefns: List[Ast.TypeExtension]): Result[List[TypeExtension]] =
+    extnDefns.traverse(mkExtension(schema))
+
+  def mkExtension(schema: Schema)(ed: Ast.TypeExtension): Result[TypeExtension] =
+    ed match {
+      case InputObjectTypeExtension(Ast.Type.Named(Name(name)), description, _, fields0) =>
         for {
           fields <- fields0.traverse(mkInputValue(schema))
         } yield InputObjectExtension(name, description, fields)
-      case ObjectTypeExtension(AstType.Named(Name(name)), description, fields0, ifs0, _) =>
+      case ObjectTypeExtension(Ast.Type.Named(Name(name)), description, fields0, ifs0, _) =>
         for {
           fields <- fields0.traverse(mkField(schema))
           ifs = ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
         } yield ObjectExtension(name, description, fields, ifs)
-      case ScalarTypeExtension(AstType.Named(Name(name)), description, _) =>
+      case ScalarTypeExtension(Ast.Type.Named(Name(name)), description, _) =>
         ScalarExtension(name, description).success
-      case UnionTypeExtension(AstType.Named(Name(name)), description, _, members0) =>
+      case UnionTypeExtension(Ast.Type.Named(Name(name)), description, _, members0) =>
         val members = members0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
         UnionExtension(name, description, members).success
-      case EnumTypeExtension(AstType.Named(Name(name)), description, _, values0) =>
+      case EnumTypeExtension(Ast.Type.Named(Name(name)), description, _, values0) =>
         for {
           values <- values0.traverse(mkEnumValue)
         } yield EnumExtension(name, description, values)
-      case InterfaceTypeExtension(AstType.Named(Name(name)), description, fields0, ifs0, _) =>
+      case InterfaceTypeExtension(Ast.Type.Named(Name(name)), description, fields0, ifs0, _) =>
         for {
           fields <- fields0.traverse(mkField(schema))
           ifs = ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
         } yield InterfaceExtension(name, description, fields, ifs)
     }
-
-    SchemaValidator.validateExtensions(extensions, baseTypes)
-  }
 
   def mkTypeDefs(schema: Schema, defns: List[TypeDefinition]): Result[List[NamedType]] =
     defns.traverse(mkTypeDef(schema))
@@ -1518,11 +1519,12 @@ object SchemaParser {
 object SchemaValidator {
   import SchemaRenderer.renderType
 
-  def validateSchema(schema: Schema, defns: List[TypeDefinition]): List[Problem] =
+  def validateSchema(schema: Schema, defns: List[TypeDefinition], extnDefns: List[Ast.TypeExtension]): List[Problem] =
     validateReferences(schema, defns) ++
     validateUniqueDefns(schema) ++
     validateUniqueEnumValues(schema) ++
     validateImplementations(schema) ++
+    validateExtensions(defns, extnDefns) ++
     Directive.validateDirectivesForSchema(schema)
 
   def validateReferences(schema: Schema, defns: List[TypeDefinition]): List[Problem] = {
@@ -1612,52 +1614,43 @@ object SchemaValidator {
     impls.flatMap(validateImplementor)
   }
 
-  // TODO: This should return List[Problem]
-  import cats.data.NonEmptyChain
-  def validateExtensions(extensions: Result[List[TypeExtension]], unextended: List[NamedType]): Result[List[TypeExtension]] = {
-    extensions match {
-      case Result.Failure(_) => extensions
-      case Result.InternalError(_) => extensions
-      case Result.Success(exts) => NonEmptyChain.fromSeq(checkExtensionTypes(exts, unextended)).fold(extensions)(problems => extensions.withProblems(problems))
-      case Result.Warning(_, exts) => NonEmptyChain.fromSeq(checkExtensionTypes(exts, unextended)).fold(extensions)(problems => extensions.withProblems(problems))
-    }
-  }
-
-  def checkExtensionTypes(extensions: List[TypeExtension], unextended: List[NamedType]): List[Problem] = {
-    extensions.mapFilter { extension =>
-      val notFound = Some(Problem(s"Unable apply extension to non-existent ${extension.baseType}"))
-      unextended.find(_.name == extension.baseType).fold[Option[Problem]](notFound) { subject =>
-        def wrongTypeExtended(typ: String) = Problem(s"Attempted to apply $typ extension to ${subject.name} but it is not a $typ").some
+  def validateExtensions(defns: List[TypeDefinition], extnDefns: List[Ast.TypeExtension]): List[Problem] = {
+    extnDefns.mapFilter { extension =>
+      val notFound = Some(Problem(s"Unable apply extension to non-existent ${extension.baseType.name}"))
+      defns.find(_.name == extension.baseType.astName).fold[Option[Problem]](notFound) { baseType =>
+        def wrongTypeExtended(typ: String) = Problem(s"Attempted to apply $typ extension to ${baseType.name.value} but it is not a $typ").some
 
         extension match {
-          case _: ScalarExtension => subject match {
-            case _: ScalarType => None
-            case TypeRef(_, _) => {
-              wrongTypeExtended("ref")
+          case _: Ast.ScalarTypeExtension =>
+            baseType match {
+              case _: Ast.ScalarTypeDefinition => None
+              case _ => wrongTypeExtended("Scalar")
+          }
+          case _: Ast.InterfaceTypeExtension =>
+            baseType match {
+              case _: Ast.InterfaceTypeDefinition => None
+              case _ => wrongTypeExtended("Interface")
             }
-            case _ => wrongTypeExtended("Scalar")
-          }
-          case _: InterfaceExtension => subject match {
-            case _: InterfaceType => None
-            case _ => wrongTypeExtended("Interface")
-          }
-          case _: ObjectExtension => subject match {
-            case _: ObjectType => None
-            case TypeRef(_, _) => { wrongTypeExtended("ref") }
-            case _ => wrongTypeExtended("Object")
-          }
-          case _: UnionExtension => subject match {
-            case _: UnionType => None
-            case _ => wrongTypeExtended("Union")
-          }
-          case _: EnumExtension => subject match {
-            case _: EnumType => None
-            case _ => wrongTypeExtended("Enum")
-          }
-          case _: InputObjectExtension => subject match {
-            case _: InputObjectType => None
-            case _ => wrongTypeExtended("Input Object")
-          }
+          case _: Ast.ObjectTypeExtension =>
+            baseType match {
+              case _: Ast.ObjectTypeDefinition => None
+              case _ => wrongTypeExtended("Object")
+            }
+          case _: Ast.UnionTypeExtension =>
+            baseType match {
+              case _: Ast.UnionTypeDefinition => None
+              case _ => wrongTypeExtended("Union")
+            }
+          case _: Ast.EnumTypeExtension =>
+            baseType match {
+              case _: Ast.EnumTypeDefinition => None
+              case _ => wrongTypeExtended("Enum")
+            }
+          case _: Ast.InputObjectTypeExtension =>
+            baseType match {
+              case _: Ast.InputObjectTypeDefinition => None
+              case _ => wrongTypeExtended("Input Object")
+            }
         }
       }
     }
