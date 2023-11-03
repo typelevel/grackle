@@ -1796,24 +1796,33 @@ object SchemaValidator {
 
 object SchemaRenderer {
   def renderSchema(schema: Schema): String = {
-    def mkRootDef(fieldName: String)(tpe: NamedType): String =
-      s"$fieldName: ${tpe.name}"
-
-    val fields =
-      mkRootDef("query")(schema.queryType) ::
-        List(
-          schema.mutationType.map(mkRootDef("mutation")),
-          schema.subscriptionType.map(mkRootDef("subscription"))
-        ).flatten
-
     val schemaDefn = {
-      val dirs0 = schema.schemaType.directives
-      if (fields.sizeCompare(1) == 0 && schema.queryType =:= schema.ref("Query") && dirs0.isEmpty) ""
+      val dirs0 = schema.baseSchemaType.directives
+      if (
+        schema.queryType.name == "Query" &&
+        schema.mutationType.map(_.name == "Mutation").getOrElse(true) &&
+        schema.subscriptionType.map(_.name == "Subscription").getOrElse(true) &&
+        dirs0.isEmpty
+      ) ""
       else {
+        val fields =
+          schema.baseSchemaType match {
+            case twf: TypeWithFields => twf.fields.map(renderField)
+            case _ => Nil
+          }
+
         val dirs = renderDirectives(dirs0)
         fields.mkString(s"schema$dirs {\n  ", "\n  ", "\n}\n")
       }
     }
+
+    val schemaExtnDefns =
+      if(schema.schemaExtensions.isEmpty) ""
+      else "\n"+schema.schemaExtensions.map(renderSchemaExtension).mkString("\n")
+
+    val typeExtnDefns =
+      if(schema.typeExtensions.isEmpty) ""
+      else "\n"+schema.typeExtensions.map(renderTypeExtension).mkString("\n")
 
     val dirDefns = {
       val nonBuiltInDefns =
@@ -1827,7 +1836,9 @@ object SchemaRenderer {
     }
 
     schemaDefn ++
-      schema.types.map(renderTypeDefn).mkString("\n") ++
+      schema.baseTypes.map(renderTypeDefn).mkString("\n") ++
+      schemaExtnDefns ++
+      typeExtnDefns ++
       dirDefns
   }
 
@@ -1855,41 +1866,78 @@ object SchemaRenderer {
       s"$nme(${args.map(renderInputValue).mkString(", ")}): ${renderType(tpe)}$dirs"
   }
 
-  def renderExtension(extension: TypeExtension): String = {
+  def renderSchemaExtension(extension: SchemaExtension): String = {
+    val SchemaExtension(ops0, dirs0) = extension
+    val dirs = renderDirectives(dirs0)
+    val ops =
+      if (ops0.isEmpty) ""
+      else
+        s"""| {
+            |  ${ops0.map(renderField).mkString("\n  ")}
+            |}""".stripMargin
+
+    s"extend schema$dirs$ops"
+  }
+
+  def renderTypeExtension(extension: TypeExtension): String = {
     extension match {
       case ScalarExtension(nme, dirs0) =>
         val dirs = renderDirectives(dirs0)
         s"extend scalar $nme$dirs"
 
-      case ObjectExtension(nme, fields, ifs0, dirs0) =>
+      case ObjectExtension(nme, fields0, ifs0, dirs0) =>
         val ifs = if (ifs0.isEmpty) "" else " implements " + ifs0.map(_.name).mkString("&")
         val dirs = renderDirectives(dirs0)
-        s"""|extend type $nme$ifs$dirs {
-            |  ${fields.map(renderField).mkString("\n  ")}
-            |}""".stripMargin
+        val fields =
+          if(fields0.isEmpty) ""
+          else 
+            s"""| {
+                |  ${fields0.map(renderField).mkString("\n  ")}
+                |}""".stripMargin
 
-      case InterfaceExtension(nme, fields, ifs0, dirs0) =>
+        s"extend type $nme$ifs$dirs$fields"
+
+      case InterfaceExtension(nme, fields0, ifs0, dirs0) =>
         val ifs = if (ifs0.isEmpty) "" else " implements " + ifs0.map(_.name).mkString("&")
         val dirs = renderDirectives(dirs0)
-        s"""|extend interface $nme$ifs$dirs {
-            |  ${fields.map(renderField).mkString("\n  ")}
-            |}""".stripMargin
+        val fields =
+          if(fields0.isEmpty) ""
+          else 
+            s"""| {
+                |  ${fields0.map(renderField).mkString("\n  ")}
+                |}""".stripMargin
 
-      case UnionExtension(nme, members, dirs0) =>
-        val dirs = renderDirectives(dirs0)
-        s"extend union $nme$dirs = ${members.map(_.name).mkString(" | ")}"
+        s"extend interface $nme$ifs$dirs$fields"
 
-      case EnumExtension(nme, enumValues, dirs0) =>
+      case UnionExtension(nme, members0, dirs0) =>
         val dirs = renderDirectives(dirs0)
-        s"""|extend enum $nme$dirs {
-            |  ${enumValues.map(renderEnumValueDefinition).mkString("\n  ")}
-            |}""".stripMargin
+        val members =
+          if(members0.isEmpty) ""
+          else s" = ${members0.map(_.name).mkString(" | ")}"
 
-      case InputObjectExtension(nme, inputFields, dirs0) =>
+        s"extend union $nme$dirs$members"
+
+      case EnumExtension(nme, values0, dirs0) =>
         val dirs = renderDirectives(dirs0)
-        s"""|extend input $nme$dirs {
-            |  ${inputFields.map(renderInputValue).mkString("\n  ")}
-            |}""".stripMargin
+        val values =
+          if(values0.isEmpty) ""
+          else 
+            s"""| {
+                |  ${values0.map(renderEnumValueDefinition).mkString("\n  ")}
+                |}""".stripMargin
+
+        s"extend enum $nme$dirs$values"
+
+      case InputObjectExtension(nme, fields0, dirs0) =>
+        val dirs = renderDirectives(dirs0)
+        val fields =
+          if(fields0.isEmpty) ""
+          else 
+            s"""| {
+                |  ${fields0.map(renderInputValue).mkString("\n  ")}
+                |}""".stripMargin
+
+        s"extend input $nme$dirs$fields"
     }
   }
 

@@ -312,4 +312,111 @@ final class SDLSuite extends CatsEffectSuite {
 
     assertEquals(ser, schema.success)
   }
+
+  test("round-trip extensions") {
+    val schema =
+      """|schema {
+         |  query: MyQuery
+         |}
+         |type MyQuery {
+         |  foo(s: Scalar, i: Input, e: Enum): Union
+         |}
+         |type Mutation {
+         |  bar: Int
+         |}
+         |scalar Scalar
+         |interface Intrf {
+         |  bar: String
+         |}
+         |type Obj implements Intrf {
+         |  bar: String
+         |}
+         |union Union = Intrf | Obj
+         |enum Enum {
+         |  A
+         |  B
+         |}
+         |input Input {
+         |  baz: Float
+         |}
+         |type Quux {
+         |  quux: String
+         |}
+         |extend schema @Sch {
+         |  mutation: Mutation
+         |}
+         |extend scalar Scalar @Sca
+         |extend interface Intrf @Intrf {
+         |  baz: Boolean
+         |}
+         |extend type Obj @Obj {
+         |  baz: Boolean
+         |  quux: String
+         |}
+         |extend union Union @Uni = Quux
+         |extend enum Enum @Enu {
+         |  C
+         |}
+         |extend input Input @Inp {
+         |  foo: Int
+         |}
+         |directive @Sch on SCHEMA
+         |directive @Sca on SCALAR
+         |directive @Obj on OBJECT
+         |directive @Intrf on INTERFACE
+         |directive @Uni on UNION
+         |directive @Enu on ENUM
+         |directive @Inp on INPUT_OBJECT
+         |""".stripMargin
+
+    val res = SchemaParser.parseText(schema)
+    val ser = res.map(_.toString)
+
+    assertEquals(ser, schema.success)
+  }
+
+  test("round-trip extensions (no fields or members") {
+    val schema =
+      """|schema {
+         |  query: MyQuery
+         |}
+         |type MyQuery {
+         |  foo(s: Scalar, i: Input, e: Enum): Union
+         |}
+         |scalar Scalar
+         |interface Intrf {
+         |  bar: String
+         |}
+         |type Obj implements Intrf {
+         |  bar: String
+         |}
+         |union Union = Intrf | Obj
+         |enum Enum {
+         |  A
+         |  B
+         |}
+         |input Input {
+         |  baz: Float
+         |}
+         |extend schema @Sch
+         |extend scalar Scalar @Sca
+         |extend interface Intrf @Intrf
+         |extend type Obj @Obj
+         |extend union Union @Uni
+         |extend enum Enum @Enu
+         |extend input Input @Inp
+         |directive @Sch on SCHEMA
+         |directive @Sca on SCALAR
+         |directive @Obj on OBJECT
+         |directive @Intrf on INTERFACE
+         |directive @Uni on UNION
+         |directive @Enu on ENUM
+         |directive @Inp on INPUT_OBJECT
+         |""".stripMargin
+
+    val res = SchemaParser.parseText(schema)
+    val ser = res.map(_.toString)
+
+    assertEquals(ser, schema.success)
+  }
 }
