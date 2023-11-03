@@ -39,52 +39,18 @@ trait Schema {
   def baseTypes: List[NamedType]
 
   /** The types defined by this `Schema` with any extensions applied. */
-  lazy val types: List[NamedType] = {
-    baseTypes.map { tpe =>
-      val exts = extensions.filter(_.baseType == tpe.dealias.name)
-      if (exts.isEmpty) {tpe} else { extendType(tpe, exts) }
-    }
-  }
-
-  private def extendType(extendee: NamedType, toApply: List[TypeExtension]): NamedType = {
-    extendee match {
-        case TypeRef(_, _) => throw new RuntimeException("Invariant violated")
-        case st: ScalarType => st // Scalar extensions presently do nothing as directives are not supported
-        case InterfaceType(name, description, fields, interfaces, directives) => {
-          val exts = toApply.collect { case ie: InterfaceExtension => ie }
-          val newFields = exts.flatMap(_.fields)
-          val newInterfaces = exts.flatMap(_.interfaces)
-          InterfaceType(name, description, fields ++ newFields, interfaces ++ newInterfaces, directives)
-        }
-        case ObjectType(name, description, fields, interfaces, directives) => {
-          val exts = toApply.collect { case oe: ObjectExtension => oe }
-          val newFields = exts.flatMap(_.fields)
-          val newInterfaces = exts.flatMap(_.interfaces)
-          ObjectType(name, description, fields ++ newFields, interfaces ++ newInterfaces, directives)
-        }
-        case UnionType(name, description, members, directives) => {
-          val exts = toApply.collect { case ue: UnionExtension => ue }
-          val newMembers = exts.flatMap(_.members)
-          UnionType(name, description, members ++ newMembers, directives)
-        }
-        case EnumType(name, description, enumValues, directives) => {
-          val exts = toApply.collect { case ee: EnumExtension => ee }
-          val newValues = exts.flatMap(_.enumValues)
-          EnumType(name, description, enumValues ++ newValues, directives)
-        }
-        case InputObjectType(name, description, inputFields, directives) => {
-          val exts = toApply.collect { case ioe: InputObjectExtension => ioe }
-          val newFields = exts.flatMap(_.inputFields)
-          InputObjectType(name, description, inputFields ++ newFields, directives)
-        }
-      }
-  }
+  lazy val types: List[NamedType] =
+    if (typeExtensions.isEmpty) baseTypes
+    else baseTypes.map(extendType(typeExtensions))
 
   /** The directives defined by this `Schema`. */
   def directives: List[DirectiveDef]
 
-  /** */
-  def extensions: List[TypeExtension]
+  /** The schema extensions defined by this `Schema` */
+  def schemaExtensions: List[SchemaExtension]
+
+  /** The type extensions defined by this `Schema` */
+  def typeExtensions: List[TypeExtension]
 
   /** A reference by name to a type defined by this `Schema`.
    *
@@ -148,13 +114,17 @@ trait Schema {
     case _ => None
   }
 
+  def baseSchemaType: NamedType = definition("Schema").getOrElse(defaultSchemaType)
+
   /**
    * The schema type.
    *
    * Either the explicitly defined type named `"Schema"` or the default
    * schema type if not defined.
    */
-  def schemaType: NamedType = definition("Schema").getOrElse(defaultSchemaType)
+  lazy val schemaType: NamedType =
+    if (schemaExtensions.isEmpty) baseSchemaType
+    else extendSchemaType(schemaExtensions, baseSchemaType)
 
   /** The type of queries defined by this `Schema`*/
   def queryType: NamedType = schemaType.field("query").flatMap(_.nonNull.asNamed).get
@@ -178,12 +148,93 @@ trait Schema {
   }
 
   override def toString = SchemaRenderer.renderSchema(this)
+
+  private def extendType(extns: List[TypeExtension])(baseType: NamedType): NamedType = {
+    baseType match {
+      case ScalarType(name, description, directives) =>
+        val exts = extns.collect { case se@ScalarExtension(`name`, _) => se }
+        if (exts.isEmpty) baseType
+        else {
+          val newDirectives = exts.flatMap(_.directives)
+          ScalarType(name, description, directives ++ newDirectives)
+        }
+
+      case InterfaceType(name, description, fields, interfaces, directives) =>
+        val exts = extns.collect { case ie@InterfaceExtension(`name`, _, _, _) => ie }
+        if (exts.isEmpty) baseType
+        else {
+          val newFields = exts.flatMap(_.fields)
+          val newInterfaces = exts.flatMap(_.interfaces)
+          val newDirectives = exts.flatMap(_.directives)
+          InterfaceType(name, description, fields ++ newFields, interfaces ++ newInterfaces, directives ++ newDirectives)
+        }
+
+      case ObjectType(name, description, fields, interfaces, directives) =>
+        val exts = extns.collect { case oe@ObjectExtension(`name`, _, _, _) => oe }
+        if (exts.isEmpty) baseType
+        else {
+          val newFields = exts.flatMap(_.fields)
+          val newInterfaces = exts.flatMap(_.interfaces)
+          val newDirectives = exts.flatMap(_.directives)
+          ObjectType(name, description, fields ++ newFields, interfaces ++ newInterfaces, directives ++ newDirectives)
+        }
+
+      case UnionType(name, description, members, directives) =>
+        val exts = extns.collect { case ue@UnionExtension(`name`, _, _) => ue }
+        if (exts.isEmpty) baseType
+        else {
+          val newMembers = exts.flatMap(_.members)
+          val newDirectives = exts.flatMap(_.directives)
+          UnionType(name, description, members ++ newMembers, directives ++ newDirectives)
+        }
+
+      case EnumType(name, description, enumValues, directives) =>
+        val exts = extns.collect { case ee@EnumExtension(`name`, _, _) => ee }
+        if (exts.isEmpty) baseType
+        else {
+          val newValues = exts.flatMap(_.enumValues)
+          val newDirectives = exts.flatMap(_.directives)
+          EnumType(name, description, enumValues ++ newValues, directives ++ newDirectives)
+        }
+
+      case InputObjectType(name, description, inputFields, directives) =>
+        val exts = extns.collect { case ioe@InputObjectExtension(`name`, _, _) => ioe }
+        if (exts.isEmpty) baseType
+        else {
+          val newFields = exts.flatMap(_.inputFields)
+          val newDirectives = exts.flatMap(_.directives)
+          InputObjectType(name, description, inputFields ++ newFields, directives ++ newDirectives)
+        }
+
+      case tr: TypeRef =>
+        // This case should never be hit, however, it is the correct behaviour to return
+        // the ref as is. If the underlying type is present it will be extended, if not
+        // there will be an error reported elsewhere.
+        tr
+    }
+  }
+
+  private def extendSchemaType(extns: List[SchemaExtension], schemaType: NamedType): NamedType = {
+    schemaType match {
+      case ObjectType(name, description, fields, interfaces, directives) =>
+        val newFields = extns.flatMap(_.rootOperations)
+        val newDirectives = extns.flatMap(_.directives)
+        ObjectType(name, description, fields ++ newFields, interfaces, directives ++ newDirectives)
+
+      case _ => schemaType
+    }
+  }
 }
 
 object Schema {
   def apply(schemaText: String)(implicit pos: SourcePos): Result[Schema] =
     SchemaParser.parseText(schemaText)
 }
+
+case class SchemaExtension(
+  rootOperations: List[Field],
+  directives: List[Directive]
+)
 
 /**
  * A GraphQL type definition.
@@ -511,7 +562,6 @@ sealed trait NamedType extends Type {
  */
 sealed trait TypeExtension {
   def baseType: String
-  def description: Option[String]
 }
 
 /**
@@ -645,7 +695,7 @@ sealed trait TypeWithFields extends NamedType {
   */
 case class ScalarExtension(
   baseType: String,
-  description: Option[String]
+  directives: List[Directive]
 ) extends TypeExtension
 
 /**
@@ -671,9 +721,9 @@ case class InterfaceType(
  **/
 case class InterfaceExtension(
   baseType: String,
-  description: Option[String],
   fields: List[Field],
-  interfaces: List[NamedType]
+  interfaces: List[NamedType],
+  directives: List[Directive]
 ) extends TypeExtension
 
 /**
@@ -696,9 +746,9 @@ case class ObjectType(
  **/
 case class ObjectExtension(
   baseType: String,
-  description: Option[String],
   fields: List[Field],
-  interfaces: List[NamedType]
+  interfaces: List[NamedType],
+  directives: List[Directive]
 ) extends TypeExtension
 
 /**
@@ -725,8 +775,8 @@ case class UnionType(
  **/
 case class UnionExtension(
   baseType: String,
-  description: Option[String],
-  members: List[NamedType]
+  members: List[NamedType],
+  directives: List[Directive]
 ) extends TypeExtension
 
 /**
@@ -753,8 +803,8 @@ case class EnumType(
  **/
 case class EnumExtension(
   baseType: String,
-  description: Option[String],
-  enumValues: List[EnumValueDefinition]
+  enumValues: List[EnumValueDefinition],
+  directives: List[Directive]
 ) extends TypeExtension
 
 /**
@@ -799,8 +849,8 @@ case class InputObjectType(
  **/
 case class InputObjectExtension(
   baseType: String,
-  description: Option[String],
-  inputFields: List[InputValue]
+  inputFields: List[InputValue],
+  directives: List[Directive]
 ) extends TypeExtension
 
 /**
@@ -1275,7 +1325,7 @@ object Directive {
  */
 object SchemaParser {
 
-  import Ast.{Directive => _, EnumValueDefinition => _, Type => _, TypeExtension => _, Value => _, _}
+  import Ast.{Directive => _, EnumValueDefinition => _, SchemaExtension => _, Type => _, TypeExtension => _, Value => _, _}
 
   /**
    * Parse a query String to a query algebra term.
@@ -1291,47 +1341,42 @@ object SchemaParser {
   def parseDocument(doc: Document)(implicit sourcePos: SourcePos): Result[Schema] = {
     object schema extends Schema {
       var baseTypes: List[NamedType] = Nil
-      var schemaType1: Option[NamedType] = null
+      var baseSchemaType1: Option[NamedType] = null
       var pos: SourcePos = sourcePos
 
-      override def schemaType: NamedType = schemaType1.getOrElse(super.schemaType)
+      override def baseSchemaType: NamedType = baseSchemaType1.getOrElse(super.baseSchemaType)
 
       var directives: List[DirectiveDef] = Nil
-      var extensions: List[TypeExtension] = Nil
+      var schemaExtensions: List[SchemaExtension] = Nil
+      var typeExtensions: List[TypeExtension] = Nil
 
-      def complete(types0: List[NamedType], schemaType0: Option[NamedType], directives0: List[DirectiveDef], extensions0: List[TypeExtension]): Unit = {
+      def complete(types0: List[NamedType], baseSchemaType0: Option[NamedType], directives0: List[DirectiveDef], schemaExtensions0: List[SchemaExtension], typeExtensions0: List[TypeExtension]): Unit = {
         baseTypes = types0
-        schemaType1 = schemaType0
+        baseSchemaType1 = baseSchemaType0
         directives = directives0 ++ DirectiveDef.builtIns
-        extensions = extensions0
+        schemaExtensions = schemaExtensions0
+        typeExtensions = typeExtensions0
       }
     }
 
+    val schemaExtnDefns: List[Ast.SchemaExtension] = doc.collect { case tpe: Ast.SchemaExtension => tpe }
     val typeDefns: List[TypeDefinition] = doc.collect { case tpe: TypeDefinition => tpe }
     val dirDefns: List[DirectiveDefinition] = doc.collect { case dir: DirectiveDefinition => dir }
     val extnDefns: List[Ast.TypeExtension] = doc.collect { case tpe: Ast.TypeExtension => tpe }
 
     for {
-      baseTypes  <- mkTypeDefs(schema, typeDefns)
-      extensions <- mkExtensions(schema, extnDefns)
-      directives <- mkDirectiveDefs(schema, dirDefns)
-      schemaType <- mkSchemaType(schema, doc)
-      _          =  schema.complete(baseTypes, schemaType, directives, extensions)
-      _          <- Result.fromProblems(SchemaValidator.validateSchema(schema, typeDefns, extnDefns))
+      baseTypes   <- mkTypeDefs(schema, typeDefns)
+      schemaExtns <- mkSchemaExtensions(schema, schemaExtnDefns)
+      typeExtns   <- mkExtensions(schema, extnDefns)
+      directives  <- mkDirectiveDefs(schema, dirDefns)
+      schemaType  <- mkSchemaType(schema, doc)
+      _           =  schema.complete(baseTypes, schemaType, directives, schemaExtns, typeExtns)
+      _           <- Result.fromProblems(SchemaValidator.validateSchema(schema, typeDefns, extnDefns))
     } yield schema
   }
 
   // explicit Schema type, if any
   def mkSchemaType(schema: Schema, doc: Document): Result[Option[NamedType]] = {
-    def mkRootOperationType(rootTpe: RootOperationTypeDefinition): Result[Field] = {
-      val RootOperationTypeDefinition(optype, tpe, dirs0) = rootTpe
-      for {
-        dirs <- dirs0.traverse(mkDirective)
-        tpe  <- mkType(schema)(tpe)
-        _    <- Result.failure(s"Root operation types must be named types, found '$tpe'").whenA(!tpe.nonNull.isNamed)
-      } yield Field(optype.name, None, Nil, tpe, dirs)
-    }
-
     def build(dirs: List[Directive], ops: List[Field]): NamedType = {
       val query = ops.find(_.name == "query").getOrElse(Field("query", None, Nil, defaultQueryType, Nil))
       ObjectType(
@@ -1350,7 +1395,7 @@ object SchemaParser {
       case Nil => None.success
       case SchemaDefinition(rootOpTpes, dirs0) :: Nil =>
         for {
-          ops <- rootOpTpes.traverse(mkRootOperationType)
+          ops  <- rootOpTpes.traverse(mkRootOperation(schema))
           dirs <- dirs0.traverse(mkDirective)
         } yield Some(build(dirs, ops))
 
@@ -1358,34 +1403,62 @@ object SchemaParser {
     }
   }
 
+  def mkSchemaExtensions(schema: Schema, extnDefns: List[Ast.SchemaExtension]): Result[List[SchemaExtension]] =
+    extnDefns.traverse(mkSchemaExtension(schema))
+
+  def mkSchemaExtension(schema: Schema)(se: Ast.SchemaExtension): Result[SchemaExtension] = {
+    val Ast.SchemaExtension(rootOpTpes, dirs0) = se
+    for {
+      ops  <- rootOpTpes.traverse(mkRootOperation(schema))
+      dirs <- dirs0.traverse(mkDirective)
+    } yield SchemaExtension(ops, dirs)
+  }
+
+  def mkRootOperation(schema: Schema)(rootTpe: RootOperationTypeDefinition): Result[Field] = {
+    val RootOperationTypeDefinition(optype, tpe, dirs0) = rootTpe
+    for {
+      dirs <- dirs0.traverse(mkDirective)
+      tpe  <- mkType(schema)(tpe)
+      _    <- Result.failure(s"Root operation types must be named types, found '$tpe'").whenA(!tpe.nonNull.isNamed)
+    } yield Field(optype.name, None, Nil, tpe, dirs)
+  }
+
   def mkExtensions(schema: Schema, extnDefns: List[Ast.TypeExtension]): Result[List[TypeExtension]] =
     extnDefns.traverse(mkExtension(schema))
 
   def mkExtension(schema: Schema)(ed: Ast.TypeExtension): Result[TypeExtension] =
     ed match {
-      case InputObjectTypeExtension(Ast.Type.Named(Name(name)), description, _, fields0) =>
+      case ScalarTypeExtension(Ast.Type.Named(Name(name)), dirs0) =>
+        for {
+          dirs   <- dirs0.traverse(mkDirective)
+        } yield ScalarExtension(name, dirs)
+      case InterfaceTypeExtension(Ast.Type.Named(Name(name)), fields0, ifs0, dirs0) =>
+        for {
+          fields <- fields0.traverse(mkField(schema))
+          ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+          dirs   <- dirs0.traverse(mkDirective)
+        } yield InterfaceExtension(name, fields, ifs, dirs)
+      case ObjectTypeExtension(Ast.Type.Named(Name(name)), fields0, ifs0, dirs0) =>
+        for {
+          fields <- fields0.traverse(mkField(schema))
+          ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+          dirs   <- dirs0.traverse(mkDirective)
+        } yield ObjectExtension(name, fields, ifs, dirs)
+      case UnionTypeExtension(Ast.Type.Named(Name(name)), dirs0, members0) =>
+        for {
+          dirs    <- dirs0.traverse(mkDirective)
+          members =  members0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+        } yield UnionExtension(name, members, dirs)
+      case EnumTypeExtension(Ast.Type.Named(Name(name)), dirs0, values0) =>
+        for {
+          values  <- values0.traverse(mkEnumValue)
+          dirs    <- dirs0.traverse(mkDirective)
+        } yield EnumExtension(name, values, dirs)
+      case InputObjectTypeExtension(Ast.Type.Named(Name(name)), dirs0, fields0) =>
         for {
           fields <- fields0.traverse(mkInputValue(schema))
-        } yield InputObjectExtension(name, description, fields)
-      case ObjectTypeExtension(Ast.Type.Named(Name(name)), description, fields0, ifs0, _) =>
-        for {
-          fields <- fields0.traverse(mkField(schema))
-          ifs = ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
-        } yield ObjectExtension(name, description, fields, ifs)
-      case ScalarTypeExtension(Ast.Type.Named(Name(name)), description, _) =>
-        ScalarExtension(name, description).success
-      case UnionTypeExtension(Ast.Type.Named(Name(name)), description, _, members0) =>
-        val members = members0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
-        UnionExtension(name, description, members).success
-      case EnumTypeExtension(Ast.Type.Named(Name(name)), description, _, values0) =>
-        for {
-          values <- values0.traverse(mkEnumValue)
-        } yield EnumExtension(name, description, values)
-      case InterfaceTypeExtension(Ast.Type.Named(Name(name)), description, fields0, ifs0, _) =>
-        for {
-          fields <- fields0.traverse(mkField(schema))
-          ifs = ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
-        } yield InterfaceExtension(name, description, fields, ifs)
+          dirs   <- dirs0.traverse(mkDirective)
+        } yield InputObjectExtension(name, fields, dirs)
     }
 
   def mkTypeDefs(schema: Schema, defns: List[TypeDefinition]): Result[List[NamedType]] =
@@ -1519,12 +1592,14 @@ object SchemaParser {
 object SchemaValidator {
   import SchemaRenderer.renderType
 
-  def validateSchema(schema: Schema, defns: List[TypeDefinition], extnDefns: List[Ast.TypeExtension]): List[Problem] =
+  def validateSchema(schema: Schema, defns: List[TypeDefinition], typeExtnDefns: List[Ast.TypeExtension]): List[Problem] =
     validateReferences(schema, defns) ++
     validateUniqueDefns(schema) ++
+    validateUniqueFields(schema) ++
+    validateUnionMembers(schema) ++
     validateUniqueEnumValues(schema) ++
     validateImplementations(schema) ++
-    validateExtensions(defns, extnDefns) ++
+    validateTypeExtensions(defns, typeExtnDefns) ++
     Directive.validateDirectivesForSchema(schema)
 
   def validateReferences(schema: Schema, defns: List[TypeDefinition]): List[Problem] = {
@@ -1538,10 +1613,10 @@ object SchemaValidator {
 
     def referencedTypes(defns: List[TypeDefinition]): List[String] = {
       defns.flatMap {
-        case ObjectTypeDefinition(_, _, fields, interfaces, _) =>
-          (fields.flatMap(_.args.map(_.tpe)) ++ fields.map(_.tpe) ++ interfaces).map(underlyingName)
-        case InterfaceTypeDefinition(_, _, fields, interfaces, _) =>
-          (fields.flatMap(_.args.map(_.tpe)) ++ fields.map(_.tpe) ++ interfaces).map(underlyingName)
+        case ObjectTypeDefinition(_, _, fields, _, _) =>
+          (fields.flatMap(_.args.map(_.tpe)) ++ fields.map(_.tpe)).map(underlyingName)
+        case InterfaceTypeDefinition(_, _, fields, _, _) =>
+          (fields.flatMap(_.args.map(_.tpe)) ++ fields.map(_.tpe)).map(underlyingName)
         case u: UnionTypeDefinition =>
           u.members.map(underlyingName)
         case _ => Nil
@@ -1566,14 +1641,74 @@ object SchemaValidator {
     }
   }
 
+  def validateUniqueFields(schema: Schema): List[Problem] = {
+    val withFields = schema.types.collect {
+      case wf: TypeWithFields => wf
+    }
+
+    val inputObjs = schema.types.collect {
+      case io: InputObjectType => io
+    }
+
+    withFields.flatMap { tpe =>
+      val dupes = tpe.fields.groupBy(_.name).collect {
+        case (nme, fields) if fields.length > 1 => nme
+      }.toSet
+
+      tpe.fields.map(_.name).distinct.collect {
+        case nme if dupes.contains(nme) => Problem(s"Duplicate definition of field '$nme' for type '${tpe.name}'")
+      }
+    } ++
+    inputObjs.flatMap { tpe =>
+      val dupes = tpe.inputFields.groupBy(_.name).collect {
+        case (nme, fields) if fields.length > 1 => nme
+      }.toSet
+
+      tpe.inputFields.map(_.name).distinct.collect {
+        case nme if dupes.contains(nme) => Problem(s"Duplicate definition of field '$nme' for type '${tpe.name}'")
+      }
+    }
+  }
+
+  def validateUnionMembers(schema: Schema): List[Problem] = {
+    val unions = schema.types.collect {
+      case u: UnionType => u
+    }
+
+    unions.flatMap { tpe =>
+      val dupes = tpe.members.groupBy(_.name).collect {
+        case (nme, vs) if vs.length > 1 => nme
+      }.toSet
+
+      tpe.members.map(_.name).distinct.collect {
+        case nme if dupes.contains(nme) => Problem(s"Duplicate inclusion of union member '$nme' for type '${tpe.name}'")
+      } ++
+      tpe.members.flatMap { member =>
+        schema.definition(member.name) match {
+          case None => List(Problem(s"Undefined type '${member.name}' included in union '${tpe.name}'"))
+          case Some(mtpe) =>
+            mtpe match {
+              case (_: ObjectType) | (_: InterfaceType) => Nil
+              case _ => List(Problem(s"Non-object type '${member.name}' included in union '${tpe.name}'"))
+            }
+        }
+      }
+    }
+  }
+
   def validateUniqueEnumValues(schema: Schema): List[Problem] = {
     val enums = schema.types.collect {
       case e: EnumType => e
     }
 
-    enums.flatMap { e =>
-      val duplicateValues = e.enumValues.groupBy(_.name).collect { case (nme, vs) if vs.length > 1 => nme }.toList
-      duplicateValues.map(dupe => Problem(s"Duplicate definition of enum value '$dupe' for Enum type '${e.name}'"))
+    enums.flatMap { tpe =>
+      val dupes = tpe.enumValues.groupBy(_.name).collect {
+        case (nme, vs) if vs.length > 1 => nme
+      }.toSet
+
+      tpe.enumValues.map(_.name).distinct.collect {
+        case nme if dupes.contains(nme) => Problem(s"Duplicate definition of enum value '$nme' for type '${tpe.name}'")
+      }
     }
   }
 
@@ -1605,6 +1740,8 @@ object SchemaValidator {
               rp ++ ap
             }.getOrElse(List(Problem(s"Field '${ifField.name}' from interface '${iface.name}' is not defined by implementing type '$name'")))
           }
+        case undefined: TypeRef =>
+          List(Problem(s"Undefined type '${undefined.name}' declared as implemented by type '$name'"))
         case other =>
           List(Problem(s"Non-interface type '${other.name}' declared as implemented by type '$name'"))
       })
@@ -1614,7 +1751,7 @@ object SchemaValidator {
     impls.flatMap(validateImplementor)
   }
 
-  def validateExtensions(defns: List[TypeDefinition], extnDefns: List[Ast.TypeExtension]): List[Problem] = {
+  def validateTypeExtensions(defns: List[TypeDefinition], extnDefns: List[Ast.TypeExtension]): List[Problem] = {
     extnDefns.mapFilter { extension =>
       val notFound = Some(Problem(s"Unable apply extension to non-existent ${extension.baseType.name}"))
       defns.find(_.name == extension.baseType.astName).fold[Option[Problem]](notFound) { baseType =>
@@ -1720,29 +1857,37 @@ object SchemaRenderer {
 
   def renderExtension(extension: TypeExtension): String = {
     extension match {
-      case ScalarExtension(extended, _) => s"extend scalar ${extended}"
-      case ObjectExtension(extended, _, fields, ifs0) =>
+      case ScalarExtension(nme, dirs0) =>
+        val dirs = renderDirectives(dirs0)
+        s"extend scalar $nme$dirs"
+
+      case ObjectExtension(nme, fields, ifs0, dirs0) =>
         val ifs = if (ifs0.isEmpty) "" else " implements " + ifs0.map(_.name).mkString("&")
-        s"""|extend type ${extended}$ifs {
+        val dirs = renderDirectives(dirs0)
+        s"""|extend type $nme$ifs$dirs {
             |  ${fields.map(renderField).mkString("\n  ")}
             |}""".stripMargin
 
-      case InterfaceExtension(extended, _, fields, ifs0) =>
+      case InterfaceExtension(nme, fields, ifs0, dirs0) =>
         val ifs = if (ifs0.isEmpty) "" else " implements " + ifs0.map(_.name).mkString("&")
-        s"""|extend interface ${extended}$ifs {
+        val dirs = renderDirectives(dirs0)
+        s"""|extend interface $nme$ifs$dirs {
             |  ${fields.map(renderField).mkString("\n  ")}
             |}""".stripMargin
 
-      case UnionExtension(extended, _, members) =>
-        s"extend union ${extended} = ${members.map(_.name).mkString(" | ")}"
+      case UnionExtension(nme, members, dirs0) =>
+        val dirs = renderDirectives(dirs0)
+        s"extend union $nme$dirs = ${members.map(_.name).mkString(" | ")}"
 
-      case EnumExtension(extended, _, enumValues) =>
-        s"""|extend enum ${extended} {
+      case EnumExtension(nme, enumValues, dirs0) =>
+        val dirs = renderDirectives(dirs0)
+        s"""|extend enum $nme$dirs {
             |  ${enumValues.map(renderEnumValueDefinition).mkString("\n  ")}
             |}""".stripMargin
 
-      case InputObjectExtension(extended, _, inputFields) =>
-        s"""|extend input ${extended} {
+      case InputObjectExtension(nme, inputFields, dirs0) =>
+        val dirs = renderDirectives(dirs0)
+        s"""|extend input $nme$dirs {
             |  ${inputFields.map(renderInputValue).mkString("\n  ")}
             |}""".stripMargin
     }

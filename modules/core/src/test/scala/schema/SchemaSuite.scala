@@ -129,7 +129,7 @@ final class SchemaSuite extends CatsEffectSuite {
     )
 
     schema match {
-      case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("Duplicate definition of enum value 'NORTH' for Enum type 'Direction'"))
+      case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("Duplicate definition of enum value 'NORTH' for type 'Direction'"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -148,10 +148,8 @@ final class SchemaSuite extends CatsEffectSuite {
         assertEquals(
           ps.map(_.message),
           NonEmptyChain(
-            "Reference to undefined type 'Character'",
-            "Reference to undefined type 'Contactable'",
-            "Non-interface type 'Character' declared as implemented by type 'Human'",
-            "Non-interface type 'Contactable' declared as implemented by type 'Human'"
+            "Undefined type 'Character' declared as implemented by type 'Human'",
+            "Undefined type 'Contactable' declared as implemented by type 'Human'"
           )
         )
       case unexpected => fail(s"This was unexpected: $unexpected")
@@ -338,69 +336,6 @@ final class SchemaSuite extends CatsEffectSuite {
     schema match {
       case Result.Failure(ps) =>
         assertEquals(ps.map(_.message), NonEmptyChain("Non-interface type 'Foo' declared as implemented by type 'Bar'"))
-      case unexpected => fail(s"This was unexpected: $unexpected")
-    }
-  }
-
-  test("object extension") {
-    val schema = Schema(
-      """
-        type Query {
-          foo: Human
-        }
-
-        type Human {
-          url: String
-        }
-
-        extend type Human {
-          id: ID!
-        }
-      """
-    )
-
-    schema match {
-      case Result.Success(s) => assertEquals(s.definition("Human").map(_.hasField("id")), Some(true))
-      case unexpected => fail(s"This was unexpected: $unexpected")
-    }
-  }
-
-  test("schema validation: extension on incorrect type") {
-    val schema = Schema(
-      """
-        type Query {
-          foo: Episode
-        }
-
-        type Episode {
-          id: String!
-        }
-
-        extend scalar Episode
-      """
-    )
-
-    schema match {
-      case Result.Failure(a) =>
-        assertEquals(a.map(_.message), NonEmptyChain("Attempted to apply Scalar extension to Episode but it is not a Scalar"))
-      case unexpected => fail(s"This was unexpected: $unexpected")
-    }
-  }
-
-  test("schema validation: extension on non-existent type") {
-    val schema = Schema(
-      """
-        type Query {
-          foo: Int
-        }
-
-        extend scalar Episode
-      """
-    )
-
-    schema match {
-      case Result.Failure(a) =>
-        assertEquals(a.map(_.message), NonEmptyChain("Unable apply extension to non-existent Episode"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }

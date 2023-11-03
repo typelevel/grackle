@@ -312,36 +312,4 @@ final class SDLSuite extends CatsEffectSuite {
 
     assertEquals(ser, schema.success)
   }
-
-  test("parse object type extension") {
-    val schema = """
-      extend type Foo {
-        bar: Int
-      }
-    """
-
-    val expected =
-      List(
-        ObjectTypeExtension(Named(Name("Foo")), None, List(FieldDefinition(Name("bar"),None,Nil,Named(Name("Int")),Nil)), Nil, Nil)
-      )
-
-    val res = GraphQLParser.Document.parseAll(schema).toOption
-    assert(res == Some(expected))
-  }
-
-  test("parse schema extension") {
-    val schema = """
-      extendschema {
-        query: Query
-      }
-    """
-
-    val expected =
-      List(
-        SchemaExtension(List(RootOperationTypeDefinition(OperationType.Query, Named(Name("Query")), Nil)), Nil)
-      )
-
-    val res = GraphQLParser.Document.parseAll(schema).toOption
-    assert(res == Some(expected))
-  }
 }

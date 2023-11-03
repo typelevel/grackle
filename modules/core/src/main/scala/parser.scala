@@ -95,52 +95,51 @@ object GraphQLParser {
   lazy val TypeSystemExtension: Parser[Ast.TypeSystemExtension] = {
 
     val SchemaExtension: Parser[Ast.SchemaExtension] =
-      ((keyword("schema") *> Directives.?) ~ braces(RootOperationTypeDefinition.rep0)).map {
-        case (dirs, rootdefs) => Ast.SchemaExtension(rootdefs, dirs.getOrElse(Nil))
+      ((keyword("schema") *> Directives.?) ~ braces(RootOperationTypeDefinition.rep0).?).map {
+        case (dirs, rootdefs) => Ast.SchemaExtension(rootdefs.getOrElse(Nil), dirs.getOrElse(Nil))
       }
 
-    def typeExtension(desc: Option[Ast.Value.StringValue]): Parser[Ast.TypeExtension] = {
+    val TypeExtension: Parser[Ast.TypeExtension] = {
 
-      def scalarTypeExtension(desc: Option[Ast.Value.StringValue]): Parser[Ast.ScalarTypeExtension] =
+      val ScalarTypeExtension: Parser[Ast.ScalarTypeExtension] =
         ((keyword("scalar") *> NamedType) ~ Directives.?).map {
-          case (((name), dirs)) => Ast.ScalarTypeExtension(name, desc.map(_.value), dirs.getOrElse(Nil))
+          case (((name), dirs)) => Ast.ScalarTypeExtension(name, dirs.getOrElse(Nil))
         }
 
-      def objectTypeExtension(desc: Option[Ast.Value.StringValue]): Parser[Ast.ObjectTypeExtension] =
-        ((keyword("type") *> NamedType) ~ ImplementsInterfaces.? ~ Directives.? ~ FieldsDefinition).map {
-          case (((name, ifs), dirs), fields) => Ast.ObjectTypeExtension(name, desc.map(_.value), fields, ifs.getOrElse(Nil), dirs.getOrElse(Nil))
+      val ObjectTypeExtension: Parser[Ast.ObjectTypeExtension] =
+        ((keyword("type") *> NamedType) ~ ImplementsInterfaces.? ~ Directives.? ~ FieldsDefinition.?).map {
+          case (((name, ifs), dirs), fields) => Ast.ObjectTypeExtension(name, fields.getOrElse(Nil), ifs.getOrElse(Nil), dirs.getOrElse(Nil))
         }
 
-      def interfaceTypeExtension(desc: Option[Ast.Value.StringValue]): Parser[Ast.InterfaceTypeExtension] =
-        ((keyword("interface") *> NamedType) ~ ImplementsInterfaces.? ~ Directives.? ~ FieldsDefinition).map {
-          case (((name, ifs), dirs), fields) => Ast.InterfaceTypeExtension(name, desc.map(_.value), fields, ifs.getOrElse(Nil), dirs.getOrElse(Nil))
+      val InterfaceTypeExtension: Parser[Ast.InterfaceTypeExtension] =
+        ((keyword("interface") *> NamedType) ~ ImplementsInterfaces.? ~ Directives.? ~ FieldsDefinition.?).map {
+          case (((name, ifs), dirs), fields) => Ast.InterfaceTypeExtension(name, fields.getOrElse(Nil), ifs.getOrElse(Nil), dirs.getOrElse(Nil))
         }
 
-      def unionTypeExtension(desc: Option[Ast.Value.StringValue]): Parser[Ast.UnionTypeExtension] =
-        ((keyword("union") *> NamedType) ~ Directives.? ~ UnionMemberTypes).map {
-          case (((name), dirs), members) => Ast.UnionTypeExtension(name, desc.map(_.value), dirs.getOrElse(Nil), members)
+      val UnionTypeExtension: Parser[Ast.UnionTypeExtension] =
+        ((keyword("union") *> NamedType) ~ Directives.? ~ UnionMemberTypes.?).map {
+          case (((name), dirs), members) => Ast.UnionTypeExtension(name, dirs.getOrElse(Nil), members.getOrElse(Nil))
         }
 
-      def enumTypeExtension(desc: Option[Ast.Value.StringValue]): Parser[Ast.EnumTypeExtension] =
-        ((keyword("enum") *> NamedType) ~ Directives.? ~ EnumValuesDefinition).map {
-          case (((name), dirs), values) => Ast.EnumTypeExtension(name, desc.map(_.value), dirs.getOrElse(Nil), values)
+      val EnumTypeExtension: Parser[Ast.EnumTypeExtension] =
+        ((keyword("enum") *> NamedType) ~ Directives.? ~ EnumValuesDefinition.?).map {
+          case (((name), dirs), values) => Ast.EnumTypeExtension(name, dirs.getOrElse(Nil), values.getOrElse(Nil))
         }
 
-      def inputObjectTypeExtension(desc: Option[Ast.Value.StringValue]): Parser[Ast.InputObjectTypeExtension] =
-        ((keyword("input") *> NamedType) ~ Directives.? ~ InputFieldsDefinition).map {
-          case (((name), dirs), fields) => Ast.InputObjectTypeExtension(name, desc.map(_.value), dirs.getOrElse(Nil), fields)
+      val InputObjectTypeExtension: Parser[Ast.InputObjectTypeExtension] =
+        ((keyword("input") *> NamedType) ~ Directives.? ~ InputFieldsDefinition.?).map {
+          case (((name), dirs), fields) => Ast.InputObjectTypeExtension(name, dirs.getOrElse(Nil), fields.getOrElse(Nil))
         }
 
-      scalarTypeExtension(desc)|
-        objectTypeExtension(desc)|
-        interfaceTypeExtension(desc)|
-        unionTypeExtension(desc)|
-        enumTypeExtension(desc)|
-        inputObjectTypeExtension(desc)
+      ScalarTypeExtension|
+      ObjectTypeExtension|
+      InterfaceTypeExtension|
+      UnionTypeExtension|
+      EnumTypeExtension|
+      InputObjectTypeExtension
     }
 
-    keyword("extend") *> (SchemaExtension |
-    Description.?.with1.flatMap(typeExtension))
+    keyword("extend") *> (SchemaExtension | TypeExtension)
   }
 
   lazy val RootOperationTypeDefinition: Parser[Ast.RootOperationTypeDefinition] =

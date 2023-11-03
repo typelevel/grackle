@@ -212,13 +212,11 @@ object Ast {
 
   case class ScalarTypeExtension(
     baseType: Type.Named,
-    description: Option[String],
     directives: List[Directive]
   ) extends TypeExtension
 
   case class ObjectTypeExtension(
     baseType: Type.Named,
-    description: Option[String],
     fields: List[FieldDefinition],
     interfaces: List[Type.Named],
     directives: List[Directive]
@@ -226,7 +224,6 @@ object Ast {
 
   case class InterfaceTypeExtension(
     baseType: Type.Named,
-    description: Option[String],
     fields: List[FieldDefinition],
     interfaces: List[Type.Named],
     directives: List[Directive]
@@ -234,21 +231,18 @@ object Ast {
 
   case class UnionTypeExtension(
     baseType: Type.Named,
-    description: Option[String],
     directives: List[Directive],
     members: List[Type.Named]
   ) extends TypeExtension
 
   case class EnumTypeExtension(
     baseType: Type.Named,
-    description: Option[String],
     directives: List[Directive],
     values: List[EnumValueDefinition]
   ) extends TypeExtension
 
   case class InputObjectTypeExtension(
     baseType: Type.Named,
-    description: Option[String],
     directives: List[Directive],
     fields: List[InputValueDefinition],
   ) extends TypeExtension
