@@ -30,7 +30,7 @@ ThisBuild / scalaVersion        := Scala2
 ThisBuild / crossScalaVersions  := Seq(Scala2, Scala3)
 ThisBuild / tlJdkRelease        := Some(11)
 
-ThisBuild / tlBaseVersion    := "0.15"
+ThisBuild / tlBaseVersion    := "0.16"
 ThisBuild / organization     := "org.typelevel"
 ThisBuild / organizationName := "Association of Universities for Research in Astronomy, Inc. (AURA)"
 ThisBuild / startYear        := Some(2019)
