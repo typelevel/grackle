@@ -32,7 +32,7 @@ object GraphQLParser {
     (whitespace.void | comment).rep0 *> Definition.rep0 <* Parser.end
 
   lazy val Definition: Parser[Ast.Definition] =
-    ExecutableDefinition | TypeSystemDefinition // | TypeSystemExtension
+    ExecutableDefinition | TypeSystemDefinition | TypeSystemExtension
 
   lazy val TypeSystemDefinition: Parser[Ast.TypeSystemDefinition] = {
     val SchemaDefinition: Parser[Ast.SchemaDefinition] =
@@ -90,6 +90,56 @@ object GraphQLParser {
       Description.?.with1.flatMap { desc =>
         typeDefinition(desc) | directiveDefinition(desc)
       }
+  }
+
+  lazy val TypeSystemExtension: Parser[Ast.TypeSystemExtension] = {
+
+    val SchemaExtension: Parser[Ast.SchemaExtension] =
+      ((keyword("schema") *> Directives.?) ~ braces(RootOperationTypeDefinition.rep0).?).map {
+        case (dirs, rootdefs) => Ast.SchemaExtension(rootdefs.getOrElse(Nil), dirs.getOrElse(Nil))
+      }
+
+    val TypeExtension: Parser[Ast.TypeExtension] = {
+
+      val ScalarTypeExtension: Parser[Ast.ScalarTypeExtension] =
+        ((keyword("scalar") *> NamedType) ~ Directives.?).map {
+          case (((name), dirs)) => Ast.ScalarTypeExtension(name, dirs.getOrElse(Nil))
+        }
+
+      val ObjectTypeExtension: Parser[Ast.ObjectTypeExtension] =
+        ((keyword("type") *> NamedType) ~ ImplementsInterfaces.? ~ Directives.? ~ FieldsDefinition.?).map {
+          case (((name, ifs), dirs), fields) => Ast.ObjectTypeExtension(name, fields.getOrElse(Nil), ifs.getOrElse(Nil), dirs.getOrElse(Nil))
+        }
+
+      val InterfaceTypeExtension: Parser[Ast.InterfaceTypeExtension] =
+        ((keyword("interface") *> NamedType) ~ ImplementsInterfaces.? ~ Directives.? ~ FieldsDefinition.?).map {
+          case (((name, ifs), dirs), fields) => Ast.InterfaceTypeExtension(name, fields.getOrElse(Nil), ifs.getOrElse(Nil), dirs.getOrElse(Nil))
+        }
+
+      val UnionTypeExtension: Parser[Ast.UnionTypeExtension] =
+        ((keyword("union") *> NamedType) ~ Directives.? ~ UnionMemberTypes.?).map {
+          case (((name), dirs), members) => Ast.UnionTypeExtension(name, dirs.getOrElse(Nil), members.getOrElse(Nil))
+        }
+
+      val EnumTypeExtension: Parser[Ast.EnumTypeExtension] =
+        ((keyword("enum") *> NamedType) ~ Directives.? ~ EnumValuesDefinition.?).map {
+          case (((name), dirs), values) => Ast.EnumTypeExtension(name, dirs.getOrElse(Nil), values.getOrElse(Nil))
+        }
+
+      val InputObjectTypeExtension: Parser[Ast.InputObjectTypeExtension] =
+        ((keyword("input") *> NamedType) ~ Directives.? ~ InputFieldsDefinition.?).map {
+          case (((name), dirs), fields) => Ast.InputObjectTypeExtension(name, dirs.getOrElse(Nil), fields.getOrElse(Nil))
+        }
+
+      ScalarTypeExtension|
+      ObjectTypeExtension|
+      InterfaceTypeExtension|
+      UnionTypeExtension|
+      EnumTypeExtension|
+      InputObjectTypeExtension
+    }
+
+    keyword("extend") *> (SchemaExtension | TypeExtension)
   }
 
   lazy val RootOperationTypeDefinition: Parser[Ast.RootOperationTypeDefinition] =

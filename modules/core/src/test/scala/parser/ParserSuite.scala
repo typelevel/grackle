@@ -579,4 +579,35 @@ final class ParserSuite extends CatsEffectSuite {
     assertParse("\"\"\"    \n\n   first\n   \tλ\n  123\n\n\n   \t\n\n\"\"\"", StringValue(" first\n \tλ\n123"))
   }
 
+  test("parse object type extension") {
+    val schema = """
+      extend type Foo {
+        bar: Int
+      }
+    """
+
+    val expected =
+      List(
+        ObjectTypeExtension(Named(Name("Foo")), List(FieldDefinition(Name("bar"),None,Nil,Named(Name("Int")),Nil)), Nil, Nil)
+      )
+
+    val res = GraphQLParser.Document.parseAll(schema).toOption
+    assert(res == Some(expected))
+  }
+
+  test("parse schema extension") {
+    val schema = """
+      extend schema {
+        query: Query
+      }
+    """
+
+    val expected =
+      List(
+        SchemaExtension(List(RootOperationTypeDefinition(OperationType.Query, Named(Name("Query")), Nil)), Nil)
+      )
+
+    val res = GraphQLParser.Document.parseAll(schema).toOption
+    assert(res == Some(expected))
+  }
 }

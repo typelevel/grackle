@@ -23,6 +23,11 @@ object Ast {
 
   sealed trait ExecutableDefinition extends Definition
   sealed trait TypeSystemDefinition extends Definition
+  sealed trait TypeSystemExtension extends Definition
+
+  sealed trait TypeExtension extends TypeSystemExtension {
+    def baseType: Type.Named
+  }
 
   sealed abstract class OperationType(val name: String)
   object OperationType {
@@ -115,6 +120,11 @@ object Ast {
     directives:         List[Directive]
   ) extends TypeSystemDefinition
 
+  case class SchemaExtension(
+    rootOperationTypes: List[RootOperationTypeDefinition],
+    directives:         List[Directive]
+  ) extends TypeSystemExtension
+
   case class RootOperationTypeDefinition(
     operationType: OperationType,
     tpe:           Type.Named,
@@ -199,6 +209,43 @@ object Ast {
     repeatable: Boolean,
     locations: List[DirectiveLocation]
   ) extends TypeSystemDefinition
+
+  case class ScalarTypeExtension(
+    baseType: Type.Named,
+    directives: List[Directive]
+  ) extends TypeExtension
+
+  case class ObjectTypeExtension(
+    baseType: Type.Named,
+    fields: List[FieldDefinition],
+    interfaces: List[Type.Named],
+    directives: List[Directive]
+  ) extends TypeExtension
+
+  case class InterfaceTypeExtension(
+    baseType: Type.Named,
+    fields: List[FieldDefinition],
+    interfaces: List[Type.Named],
+    directives: List[Directive]
+  ) extends TypeExtension
+
+  case class UnionTypeExtension(
+    baseType: Type.Named,
+    directives: List[Directive],
+    members: List[Type.Named]
+  ) extends TypeExtension
+
+  case class EnumTypeExtension(
+    baseType: Type.Named,
+    directives: List[Directive],
+    values: List[EnumValueDefinition]
+  ) extends TypeExtension
+
+  case class InputObjectTypeExtension(
+    baseType: Type.Named,
+    directives: List[Directive],
+    fields: List[InputValueDefinition],
+  ) extends TypeExtension
 
   sealed trait DirectiveLocation
   object DirectiveLocation {

@@ -129,7 +129,7 @@ final class SchemaSuite extends CatsEffectSuite {
     )
 
     schema match {
-      case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("Duplicate definition of enum value 'NORTH' for Enum type 'Direction'"))
+      case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("Duplicate definition of enum value 'NORTH' for type 'Direction'"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -148,10 +148,8 @@ final class SchemaSuite extends CatsEffectSuite {
         assertEquals(
           ps.map(_.message),
           NonEmptyChain(
-            "Reference to undefined type 'Character'",
-            "Reference to undefined type 'Contactable'",
-            "Non-interface type 'Character' declared as implemented by type 'Human'",
-            "Non-interface type 'Contactable' declared as implemented by type 'Human'"
+            "Undefined type 'Character' declared as implemented by type 'Human'",
+            "Undefined type 'Contactable' declared as implemented by type 'Human'"
           )
         )
       case unexpected => fail(s"This was unexpected: $unexpected")
