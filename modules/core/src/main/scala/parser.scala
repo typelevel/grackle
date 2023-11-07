@@ -29,7 +29,7 @@ object GraphQLParser {
   val nameInitial    = ('A' to 'Z') ++ ('a' to 'z') ++ Seq('_')
   val nameSubsequent = nameInitial ++ ('0' to '9')
 
-  def keyword(s: String) = token(string(s) <* not(charIn(nameSubsequent)).backtrack)
+  def keyword(s: String) = token(string(s) <* not(charIn(nameSubsequent)))
 
   def punctuation(s: String) = token(string(s))
 
