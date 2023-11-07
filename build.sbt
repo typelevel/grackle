@@ -2,7 +2,7 @@ import nl.zolotko.sbt.jfr.{JfrRecording, JfrRecorderOptions}
 import scala.concurrent.duration.DurationInt
 
 val catsVersion            = "2.10.0"
-val catsParseVersion       = "0.3.10"
+val catsParseVersion       = "1.0.0"
 val catsEffectVersion      = "3.5.2"
 val circeVersion           = "0.14.6"
 val disciplineMunitVersion = "2.0.0-M3"
@@ -53,6 +53,8 @@ ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 ThisBuild / tlBspCrossProjectPlatforms := Set(JVMPlatform)
 
 ThisBuild / tlSitePublishBranch := Some("main")
+
+ThisBuild / libraryDependencySchemes += "org.typelevel" %% "cats-parse" % "always"
 
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
