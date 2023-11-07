@@ -54,8 +54,6 @@ ThisBuild / tlBspCrossProjectPlatforms := Set(JVMPlatform)
 
 ThisBuild / tlSitePublishBranch := Some("main")
 
-ThisBuild / libraryDependencySchemes += "org.typelevel" %% "cats-parse" % "always"
-
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
   libraryDependencies ++= Seq(
@@ -239,6 +237,7 @@ lazy val demo = project
   .settings(commonSettings)
   .settings(
     name := "grackle-demo",
+    libraryDependencySchemes += "org.typelevel" %% "cats-parse" % "always", // Workaround until http4s updates to 1.0.0 as well
     libraryDependencies ++= Seq(
       "org.typelevel"     %% "log4cats-slf4j"      % log4catsVersion,
       "ch.qos.logback"    %  "logback-classic"     % logbackVersion,
