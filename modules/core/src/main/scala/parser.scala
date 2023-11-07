@@ -26,7 +26,12 @@ import scala.util.matching.Regex
 
 object GraphQLParser {
 
-  def keyword(s: String) = token(string(s))
+  val nameInitial    = ('A' to 'Z') ++ ('a' to 'z') ++ Seq('_')
+  val nameSubsequent = nameInitial ++ ('0' to '9')
+
+  def keyword(s: String) = token(string(s) <* not(charIn(nameSubsequent)).backtrack)
+
+  def punctuation(s: String) = token(string(s))
 
   lazy val Document: Parser0[Ast.Document] =
     (whitespace.void | comment).rep0 *> Definition.rep0 <* Parser.end
@@ -81,7 +86,7 @@ object GraphQLParser {
     }
 
     def directiveDefinition(desc: Option[Ast.Value.StringValue]): Parser[Ast.DirectiveDefinition] =
-      ((keyword("directive") *> keyword("@") *> Name) ~
+      ((keyword("directive") *> punctuation("@") *> Name) ~
          ArgumentsDefinition.? ~ (keyword("repeatable").? <* keyword("on")) ~ DirectiveLocations).map {
         case (((name, args), rpt), locs) => Ast.DirectiveDefinition(name, desc.map(_.value), args.getOrElse(Nil), rpt.isDefined, locs)
       }
@@ -143,7 +148,7 @@ object GraphQLParser {
   }
 
   lazy val RootOperationTypeDefinition: Parser[Ast.RootOperationTypeDefinition] =
-    (OperationType ~ keyword(":") ~ NamedType ~ Directives).map {
+    (OperationType ~ punctuation(":") ~ NamedType ~ Directives).map {
       case (((optpe, _), tpe), dirs) => Ast.RootOperationTypeDefinition(optpe, tpe, dirs)
     }
 
@@ -151,13 +156,13 @@ object GraphQLParser {
   lazy val Description = StringValue
 
   lazy val ImplementsInterfaces =
-    (keyword("implements") ~ keyword("&").?) *> NamedType.repSep0(keyword("&"))
+    (keyword("implements") ~ punctuation("&").?) *> NamedType.repSep0(punctuation("&"))
 
   lazy val FieldsDefinition: Parser[List[Ast.FieldDefinition]] =
     braces(FieldDefinition.rep0)
 
   lazy val FieldDefinition: Parser[Ast.FieldDefinition] =
-    (Description.?.with1 ~ Name ~ ArgumentsDefinition.? ~ keyword(":") ~ Type ~ Directives.?).map {
+    (Description.?.with1 ~ Name ~ ArgumentsDefinition.? ~ punctuation(":") ~ Type ~ Directives.?).map {
       case (((((desc, name), args), _), tpe), dirs) => Ast.FieldDefinition(name, desc.map(_.value), args.getOrElse(Nil), tpe, dirs.getOrElse(Nil))
     }
 
@@ -168,12 +173,12 @@ object GraphQLParser {
     braces(InputValueDefinition.rep0)
 
   lazy val InputValueDefinition: Parser[Ast.InputValueDefinition] =
-    (Description.?.with1 ~ (Name <* keyword(":")) ~ Type ~ DefaultValue.? ~ Directives.?).map {
+    (Description.?.with1 ~ (Name <* punctuation(":")) ~ Type ~ DefaultValue.? ~ Directives.?).map {
       case ((((desc, name), tpe), dv), dirs) => Ast.InputValueDefinition(name, desc.map(_.value), tpe, dv, dirs.getOrElse(Nil))
     }
 
   lazy val UnionMemberTypes: Parser[List[Ast.Type.Named]] =
-    (keyword("=") *> keyword("|").?) *> NamedType.repSep0(keyword("|"))
+    (punctuation("=") *> punctuation("|").?) *> NamedType.repSep0(punctuation("|"))
 
   lazy val EnumValuesDefinition: Parser[List[Ast.EnumValueDefinition]] =
     braces(EnumValueDefinition.rep0)
@@ -184,7 +189,7 @@ object GraphQLParser {
     }
 
   lazy val DirectiveLocations: Parser0[List[Ast.DirectiveLocation]] =
-    keyword("|").? *> DirectiveLocation.repSep0(keyword("|"))
+    punctuation("|").? *> DirectiveLocation.repSep0(punctuation("|"))
 
   lazy val DirectiveLocation: Parser[Ast.DirectiveLocation] =
     keyword("QUERY")       .as(Ast.DirectiveLocation.QUERY) |
@@ -229,7 +234,7 @@ object GraphQLParser {
   lazy val SelectionSet: Parser[List[Ast.Selection]] = recursive[List[Ast.Selection]] { rec =>
 
     val Alias: Parser[Ast.Name] =
-      Name <* keyword(":")
+      Name <* punctuation(":")
 
     val Field: Parser[Ast.Selection.Field] =
       (Alias.backtrack.?.with1 ~ Name ~ Arguments.? ~ Directives ~ rec.?).map {
@@ -246,7 +251,7 @@ object GraphQLParser {
 
     val Selection: Parser[Ast.Selection] =
       Field |
-      (keyword("...") *> (InlineFragment | FragmentSpread))
+      (punctuation("...") *> (InlineFragment | FragmentSpread))
 
     braces(Selection.rep0)
   }
@@ -255,7 +260,7 @@ object GraphQLParser {
     parens(Argument.rep0)
 
   lazy val Argument: Parser[(Ast.Name, Ast.Value)] =
-    (Name <* keyword(":")) ~ Value
+    (Name <* punctuation(":")) ~ Value
 
   lazy val FragmentName: Parser[Ast.Name] =
     not(string("on")).with1 *> Name
@@ -300,7 +305,7 @@ object GraphQLParser {
       token(booleanLiteral).map(Ast.Value.BooleanValue.apply)
 
     val ObjectField: Parser[(Ast.Name, Ast.Value)] =
-      (Name <* keyword(":")) ~ rec
+      (Name <* punctuation(":")) ~ rec
 
     val ObjectValue: Parser[Ast.Value.ObjectValue] =
       braces(ObjectField.rep0).map(Ast.Value.ObjectValue.apply)
@@ -322,27 +327,27 @@ object GraphQLParser {
     parens(VariableDefinition.rep0)
 
   lazy val VariableDefinition: Parser[Ast.VariableDefinition] =
-    ((Variable <* keyword(":")) ~ Type ~ DefaultValue.? ~ Directives.?).map {
+    ((Variable <* punctuation(":")) ~ Type ~ DefaultValue.? ~ Directives.?).map {
       case (((v, tpe), dv), dirs) => Ast.VariableDefinition(v.name, tpe, dv, dirs.getOrElse(Nil))
     }
 
   lazy val Variable: Parser[Ast.Value.Variable] =
-    keyword("$") *> Name.map(Ast.Value.Variable.apply)
+    punctuation("$") *> Name.map(Ast.Value.Variable.apply)
 
   lazy val DefaultValue: Parser[Ast.Value] =
-    keyword("=") *> Value
+    punctuation("=") *> Value
 
   lazy val Type: Parser[Ast.Type] = recursive[Ast.Type] { rec =>
 
     lazy val ListType: Parser[Ast.Type.List] =
       squareBrackets(rec).map(Ast.Type.List.apply)
 
-    val namedMaybeNull: Parser[Ast.Type] = (NamedType ~ keyword("!").?).map {
+    val namedMaybeNull: Parser[Ast.Type] = (NamedType ~ punctuation("!").?).map {
       case (t, None) => t
       case (t, _) => Ast.Type.NonNull(Left(t))
     }
 
-    val listMaybeNull: Parser[Ast.Type] = (ListType ~ keyword("!").?).map {
+    val listMaybeNull: Parser[Ast.Type] = (ListType ~ punctuation("!").?).map {
       case (t, None) => t
       case (t, _) => Ast.Type.NonNull(Right(t))
     }
@@ -357,16 +362,12 @@ object GraphQLParser {
     Directive.rep0
 
   lazy val Directive: Parser[Ast.Directive] =
-    keyword("@") *> (Name ~ Arguments.?).map { case (n, ods) => Ast.Directive(n, ods.orEmpty)}
+    punctuation("@") *> (Name ~ Arguments.?).map { case (n, ods) => Ast.Directive(n, ods.orEmpty)}
 
-  lazy val Name: Parser[Ast.Name] = {
-    val initial    = ('A' to 'Z') ++ ('a' to 'z') ++ Seq('_')
-    val subsequent = initial ++ ('0' to '9')
-
-    token(charIn(initial) ~ charIn(subsequent).rep0).map {
+  lazy val Name: Parser[Ast.Name] =
+    token(charIn(nameInitial) ~ charIn(nameSubsequent).rep0).map {
       case (h, t) => Ast.Name((h :: t).mkString)
     }
-  }
 
   def toResult[T](text: String, pr: Either[Parser.Error, T]): Result[T] =
     Result.fromEither(pr.leftMap { e =>
