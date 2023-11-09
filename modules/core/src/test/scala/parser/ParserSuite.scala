@@ -15,9 +15,10 @@
 
 package parser
 
+import cats.data.NonEmptyChain
 import munit.CatsEffectSuite
 
-import grackle.{ Ast, GraphQLParser }
+import grackle.{Ast, GraphQLParser, Problem, Result}
 import grackle.syntax._
 import Ast._, OperationType._, OperationDefinition._, Selection._, Value._, Type.Named
 
@@ -609,5 +610,46 @@ final class ParserSuite extends CatsEffectSuite {
 
     val res = GraphQLParser.Document.parseAll(schema).toOption
     assert(res == Some(expected))
+  }
+
+  test("keywords parsed non-greedily (1)") {
+    val schema =
+      """|extend type Name {
+         |  value:String
+         |}""".stripMargin
+
+    val expected =
+      List(
+        ObjectTypeExtension(
+          Named(Name("Name")),
+          List(
+            FieldDefinition(Name("value"), None, Nil, Named(Name("String")), Nil)
+          ),
+          Nil,
+          Nil
+        )
+      )
+
+    val res = GraphQLParser.Document.parseAll(schema).toOption
+    assertEquals(res, Some(expected))
+  }
+
+  test("keywords parsed non-greedily (2)") {
+    val schema =
+      """|extendtypeName {
+         |  value:String
+         |}""".stripMargin
+
+    val expected =
+      NonEmptyChain(
+        Problem(
+          """|Parse error at line 0 column 6
+            |extendtypeName {
+            |      ^""".stripMargin
+        )
+      )
+
+    val res = GraphQLParser.toResult(schema, GraphQLParser.Document.parseAll(schema))
+    assertEquals(res, Result.Failure(expected))
   }
 }
