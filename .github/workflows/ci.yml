@@ -268,7 +268,7 @@ jobs:
         if: matrix.java == 'temurin@11' && steps.setup-java-temurin-11.outputs.cache-hit == 'false'
         run: sbt +update
 
-      - run: sbt '++ ${{ matrix.scala }}' coverage coreJVM/test coverageReport
+      - run: sbt '++ ${{ matrix.scala }}' coverage rootJVM/test coverageReport
 
       - uses: codecov/codecov-action@v3
 
