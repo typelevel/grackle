@@ -54,7 +54,8 @@ ThisBuild / githubWorkflowAddedJobs +=
   WorkflowJob(
     id = "coverage",
     name = s"Generate coverage report (2.13 JVM only)",
-    scalas = List(Scala2),
+    scalas = Nil,
+    sbtStepPreamble = Nil,
     steps = githubWorkflowJobSetup.value.toList ++
       List(
         WorkflowStep.Sbt(List("coverage", "rootJVM/test", "coverageReport")),

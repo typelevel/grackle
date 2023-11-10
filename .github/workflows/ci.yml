@@ -246,7 +246,6 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        scala: [2.13.12]
         java: [temurin@11]
     runs-on: ${{ matrix.os }}
     steps:
@@ -268,7 +267,7 @@ jobs:
         if: matrix.java == 'temurin@11' && steps.setup-java-temurin-11.outputs.cache-hit == 'false'
         run: sbt +update
 
-      - run: sbt '++ ${{ matrix.scala }}' coverage rootJVM/test coverageReport
+      - run: sbt coverage rootJVM/test coverageReport
 
       - uses: codecov/codecov-action@v3
 
