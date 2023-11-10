@@ -4,6 +4,7 @@
 [![Maven Central](https://img.shields.io/maven-central/v/org.typelevel/grackle-core_2.13?versionPrefix=0)](https://img.shields.io/maven-central/v/org.typelevel/grackle-core_2.13?versionPrefix=0)
 [![javadoc](https://javadoc.io/badge2/org.typelevel/grackle-core_2.13/javadoc.svg)](https://javadoc.io/doc/org.typelevel/grackle-core_2.13)
 [![Typelevel library](https://img.shields.io/badge/typelevel-library-green.svg)](https://typelevel.org/projects/#grackle)
+[![codecov](https://codecov.io/gh/typelevel/grackle/branch/main/graph/badge.svg)](https://codecov.io/gh/typelevel/grackle)
 [![Discord](https://img.shields.io/discord/632277896739946517.svg?label=&logo=discord&logoColor=ffffff&color=404244&labelColor=6A7EC2)][grackle-dev]
 
 ## Overview
@@ -32,9 +33,9 @@ the last four years.
 
 ## Getting Started
 
-+ See the [tutorial](https://typelevel.org/grackle) and accompanying [demo](https://github.com/typelevel/grackle/tree/main/demo/src/main).
-+ Online Scaladoc is available [here](https://javadoc.io/doc/org.typelevel/grackle-core_2.13).
-+ Ask us anything the in **#grackle** channel on the Typelevel [discord server][grackle-dev].
+- See the [tutorial](https://typelevel.org/grackle) and accompanying [demo](https://github.com/typelevel/grackle/tree/main/demo/src/main).
+- Online Scaladoc is available [here](https://javadoc.io/doc/org.typelevel/grackle-core_2.13).
+- Ask us anything the in **#grackle** channel on the Typelevel [discord server][grackle-dev].
 
 To add Grackle to your project you should add the following to your `build.sbt`,
 
@@ -57,7 +58,7 @@ libraryDependencies += "org.typelevel" %% "grackle-skunk" % "0.15.0"
 
 ## Community
 
-Grackle is proud to be a [Typelevel](https://typelevel.org/) project.  We are committed to providing a friendly, safe
+Grackle is proud to be a [Typelevel](https://typelevel.org/) project. We are committed to providing a friendly, safe
 and welcoming environment for all, and ask that the community adhere to the [Scala Code of
 Conduct](https://www.scala-lang.org/conduct/) in all venues.
 
@@ -66,7 +67,7 @@ discussions][grackle-pulls], and [discord][grackle-dev].
 
 The Typelevel [discord][grackle-dev] has a **#grackle** channel, as well as channels for related
 projects channels such as **#cats**, **#cats-effect**, **#fs2**, **#doobie** and **#skunk**. If you're new to the Typelevel
-ecosystem the **#beginners** channel might also be useful.  Please join us!
+ecosystem the **#beginners** channel might also be useful. Please join us!
 
 ## Contributing
 
