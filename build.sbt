@@ -57,7 +57,7 @@ ThisBuild / githubWorkflowAddedJobs +=
     scalas = List(Scala2),
     steps = githubWorkflowJobSetup.value.toList ++
       List(
-        WorkflowStep.Sbt(List("coverage", "coreJVM/test", "coverageReport")),
+        WorkflowStep.Sbt(List("coverage", "rootJVM/test", "coverageReport")),
         WorkflowStep.Use(UseRef.Public("codecov", "codecov-action", "v3"))
       )
   )
