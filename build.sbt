@@ -50,6 +50,19 @@ ThisBuild / githubWorkflowBuild     ~= { steps =>
 ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 ThisBuild / tlBspCrossProjectPlatforms := Set(JVMPlatform)
 
+ThisBuild / githubWorkflowAddedJobs +=
+  WorkflowJob(
+    id = "coverage",
+    name = s"Generate coverage report (2.13 JVM only)",
+    scalas = List(Scala2),
+    steps = githubWorkflowJobSetup.value.toList ++
+      List(
+        WorkflowStep.Sbt(List("coverage", "coreJVM/test", "coverageReport")),
+        WorkflowStep.Use(UseRef.Public("codecov", "codecov-action", "v3"))
+      )
+  )
+
+
 ThisBuild / tlSitePublishBranch := Some("main")
 
 lazy val commonSettings = Seq(
