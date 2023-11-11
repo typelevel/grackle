@@ -28,8 +28,8 @@ Grackle is an [Apache 2.0 licensed](https://www.apache.org/licenses/LICENSE-2.0)
 for Scala 2/3 and for [Scala.js](https://www.scala-js.org/) and [Scala Native](https://scala-native.org/en/stable/).
 
 Work has been generously sponsored by
-[Aura/Gemini](https://www.aura-astronomy.org/centers/nsfs-oir-lab/gemini-observatory/) and [ITV](https://itv.com) over
-the last four years.
+[Aura/Gemini](https://www.aura-astronomy.org/centers/nsfs-oir-lab/gemini-observatory/) and [ITV](https://www.itv.com)
+over the last four years.
 
 ## Getting Started
 
