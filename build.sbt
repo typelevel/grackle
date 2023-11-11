@@ -305,7 +305,8 @@ lazy val docs = project
   .settings(
     libraryDependencies ++= Seq(
       "org.typelevel" %% "cats-effect" % catsEffectVersion
-    )
+    ),
+    coverageEnabled := false,
   )
 
 lazy val unidocs = project
@@ -313,6 +314,7 @@ lazy val unidocs = project
   .enablePlugins(TypelevelUnidocPlugin)
   .settings(
     name := "grackle-docs",
+    coverageEnabled := false,
     ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(
       core.jvm,
       circe.jvm,
