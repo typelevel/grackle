@@ -249,6 +249,7 @@ lazy val demo = project
   .settings(commonSettings)
   .settings(
     name := "grackle-demo",
+    coverageEnabled := false,
     libraryDependencySchemes += "org.typelevel" %% "cats-parse" % "always", // Workaround until http4s updates to 1.0.0 as well
     libraryDependencies ++= Seq(
       "org.typelevel"     %% "log4cats-slf4j"      % log4catsVersion,
@@ -271,6 +272,9 @@ lazy val benchmarks = project
   .dependsOn(core.jvm)
   .enablePlugins(NoPublishPlugin, AutomateHeaderPlugin, JmhPlugin)
   .settings(commonSettings)
+  .settings(    
+    coverageEnabled := false,
+)
 
 lazy val profile = project
   .in(file("profile"))
@@ -290,7 +294,8 @@ lazy val profile = project
         pathToGcRoots = true.some,
       )
     ),
-    fork := true
+    fork := true,
+    coverageEnabled := false,
   )
 
 lazy val docs = project
