@@ -250,7 +250,6 @@ lazy val demo = project
   .settings(
     name := "grackle-demo",
     coverageEnabled := false,
-    libraryDependencySchemes += "org.typelevel" %% "cats-parse" % "always", // Workaround until http4s updates to 1.0.0 as well
     libraryDependencies ++= Seq(
       "org.typelevel"     %% "log4cats-slf4j"      % log4catsVersion,
       "ch.qos.logback"    %  "logback-classic"     % logbackVersion,
