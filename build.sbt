@@ -9,7 +9,7 @@ val disciplineMunitVersion = "2.0.0-M3"
 val doobieVersion          = "1.0.0-RC4"
 val flywayVersion          = "10.0.1"
 val fs2Version             = "3.9.3"
-val http4sVersion          = "0.23.23"
+val http4sVersion          = "0.23.24"
 val jnrUnixsocketVersion   = "0.38.21"
 val kindProjectorVersion   = "0.13.2"
 val literallyVersion       = "1.1.0"
@@ -250,7 +250,6 @@ lazy val demo = project
   .settings(
     name := "grackle-demo",
     coverageEnabled := false,
-    libraryDependencySchemes += "org.typelevel" %% "cats-parse" % "always", // Workaround until http4s updates to 1.0.0 as well
     libraryDependencies ++= Seq(
       "org.typelevel"     %% "log4cats-slf4j"      % log4catsVersion,
       "ch.qos.logback"    %  "logback-classic"     % logbackVersion,
