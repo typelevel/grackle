@@ -1,4 +1,6 @@
-# Grackle
+```scala mdoc:passthrough
+println(grackle.docs.Output.header("@headerVariant@"))
+```
 
 ## Overview
 
@@ -21,37 +23,37 @@ Grackle is an [Apache 2.0 licensed](https://www.apache.org/licenses/LICENSE-2.0)
 for Scala 2/3 and for [Scala.js](https://www.scala-js.org/) and [Scala Native](https://scala-native.org/en/stable/).
 
 Work has been generously sponsored by
-[Aura/Gemini](https://www.aura-astronomy.org/centers/nsfs-oir-lab/gemini-observatory/) and [ITV](https://itv.com) over
-the last four years.
+[Aura/Gemini](https://www.aura-astronomy.org/centers/nsfs-oir-lab/gemini-observatory/) and [ITV](https://www.itv.com)
+over the last four years.
 
 ## Getting Started
 
-+ See the [tutorial](https://typelevel.org/grackle) and accompanying [demo](https://github.com/typelevel/grackle/tree/main/demo/src/main).
-+ Online Scaladoc is available [here](https://javadoc.io/doc/org.typelevel/grackle-core_2.13).
-+ Ask us anything the in **#grackle** channel on the Typelevel [discord server][grackle-dev].
+- See the [tutorial](https://typelevel.org/grackle) and accompanying [demo](https://github.com/typelevel/grackle/tree/main/demo/src/main).
+- Online Scaladoc is available [here](https://javadoc.io/doc/org.typelevel/grackle-core_2.13).
+- Ask us anything the in **#grackle** channel on the Typelevel [discord server][grackle-dev].
 
 To add Grackle to your project you should add the following to your `build.sbt`,
 
 ```scala
 // Required: Scala 2.13/3.3+
-libraryDependencies += "org.typelevel" %% "grackle-core" % "0.15.0"
+libraryDependencies += "org.typelevel" %% "grackle-core" % "@VERSION@"
 
 // Optional: support for in-memory Json backend using circe
-libraryDependencies += "org.typelevel" %% "grackle-circe" % "0.15.0"
+libraryDependencies += "org.typelevel" %% "grackle-circe" % "@VERSION@"
 
 // Optional: support for in-memory generic Scala backend using shapeless
-libraryDependencies += "org.typelevel" %% "grackle-generic" % "0.15.0"
+libraryDependencies += "org.typelevel" %% "grackle-generic" % "@VERSION@"
 
 // Optional: support for Postgres backend via Doobie (JVM only)
-libraryDependencies += "org.typelevel" %% "grackle-doobie-pg" % "0.15.0"
+libraryDependencies += "org.typelevel" %% "grackle-doobie-pg" % "@VERSION@"
 
 // Optional: support for Postgres backend via Skunk
-libraryDependencies += "org.typelevel" %% "grackle-skunk" % "0.15.0"
+libraryDependencies += "org.typelevel" %% "grackle-skunk" % "@VERSION@"
 ```
 
 ## Community
 
-Grackle is proud to be a [Typelevel](https://typelevel.org/) project.  We are committed to providing a friendly, safe
+Grackle is proud to be a [Typelevel](https://typelevel.org/) project. We are committed to providing a friendly, safe
 and welcoming environment for all, and ask that the community adhere to the [Scala Code of
 Conduct](https://www.scala-lang.org/conduct/) in all venues.
 
@@ -59,8 +61,8 @@ Conversations around Grackle are currently happening on [GitHub issues][grackle-
 discussions][grackle-pulls], and [discord][grackle-dev].
 
 The Typelevel [discord][grackle-dev] has a **#grackle** channel, as well as channels for related
-projects channels such as **#cats**, **#cats-effect**, **#fs2**, **#doobie** and **#skunk**. If you're new to the Typelevel
-ecosystem the **#beginners** channel might also be useful.  Please join us!
+projects such as **#cats**, **#cats-effect**, **#fs2**, **#doobie** and **#skunk**. If you're new to the Typelevel
+ecosystem the **#beginners** channel might also be useful. Please join us!
 
 ## Contributing
 
