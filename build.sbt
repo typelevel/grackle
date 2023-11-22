@@ -302,9 +302,26 @@ lazy val docs = project
   .enablePlugins(TypelevelSitePlugin, AutomateHeaderPlugin)
   .settings(commonSettings)
   .settings(
+    mdocVariables ++= Map("headerVariant" -> "tutorial"),
     libraryDependencies ++= Seq(
       "org.typelevel" %% "cats-effect" % catsEffectVersion
     ),
+    coverageEnabled := false,
+  )
+
+// Run repoDocs / mdoc manually to generated README.md from docs/index.md and header.md
+lazy val repoDocs = project
+  .in(file("repo-docs"))
+  .dependsOn(core.jvm, docs)
+  .enablePlugins(MdocPlugin, NoPublishPlugin)
+  .settings(
+    mdocVariables :=
+      Map(
+        "VERSION"       -> tlLatestVersion.value.getOrElse(version.value),
+        "headerVariant" -> "repo"
+        ),
+    mdocIn  := file("docs/index.md"),
+    mdocOut := file("README.md"),
     coverageEnabled := false,
   )
 

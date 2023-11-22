@@ -7,6 +7,7 @@
 [![codecov](https://codecov.io/gh/typelevel/grackle/branch/main/graph/badge.svg)](https://codecov.io/gh/typelevel/grackle)
 [![Discord](https://img.shields.io/discord/632277896739946517.svg?label=&logo=discord&logoColor=ffffff&color=404244&labelColor=6A7EC2)][grackle-dev]
 
+
 ## Overview
 
 Grackle is a [GraphQL](https://graphql.org) server written in functional [Scala](https://www.scala-lang.org), built on
@@ -41,19 +42,19 @@ To add Grackle to your project you should add the following to your `build.sbt`,
 
 ```scala
 // Required: Scala 2.13/3.3+
-libraryDependencies += "org.typelevel" %% "grackle-core" % "0.15.0"
+libraryDependencies += "org.typelevel" %% "grackle-core" % "0.16.1"
 
 // Optional: support for in-memory Json backend using circe
-libraryDependencies += "org.typelevel" %% "grackle-circe" % "0.15.0"
+libraryDependencies += "org.typelevel" %% "grackle-circe" % "0.16.1"
 
 // Optional: support for in-memory generic Scala backend using shapeless
-libraryDependencies += "org.typelevel" %% "grackle-generic" % "0.15.0"
+libraryDependencies += "org.typelevel" %% "grackle-generic" % "0.16.1"
 
 // Optional: support for Postgres backend via Doobie (JVM only)
-libraryDependencies += "org.typelevel" %% "grackle-doobie-pg" % "0.15.0"
+libraryDependencies += "org.typelevel" %% "grackle-doobie-pg" % "0.16.1"
 
 // Optional: support for Postgres backend via Skunk
-libraryDependencies += "org.typelevel" %% "grackle-skunk" % "0.15.0"
+libraryDependencies += "org.typelevel" %% "grackle-skunk" % "0.16.1"
 ```
 
 ## Community
@@ -66,7 +67,7 @@ Conversations around Grackle are currently happening on [GitHub issues][grackle-
 discussions][grackle-pulls], and [discord][grackle-dev].
 
 The Typelevel [discord][grackle-dev] has a **#grackle** channel, as well as channels for related
-projects channels such as **#cats**, **#cats-effect**, **#fs2**, **#doobie** and **#skunk**. If you're new to the Typelevel
+projects such as **#cats**, **#cats-effect**, **#fs2**, **#doobie** and **#skunk**. If you're new to the Typelevel
 ecosystem the **#beginners** channel might also be useful. Please join us!
 
 ## Contributing

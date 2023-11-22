@@ -36,4 +36,15 @@ object Output {
 
     prg.unsafeRunSync()
   }
+
+  def header(variant: String): String = {
+    variant match {
+      case "repo" =>
+        val prg = IO.blocking(Files.readString(Path.of("header.md"), StandardCharsets.UTF_8))
+        prg.unsafeRunSync()
+      case "tutorial" =>
+        "# Grackle"
+      case _ => ""
+    }
+  }
 }

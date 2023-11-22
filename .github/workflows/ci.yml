@@ -238,7 +238,7 @@ jobs:
       - name: Submit Dependencies
         uses: scalacenter/sbt-dependency-submission@v2
         with:
-          modules-ignore: grackle-demo_2.13 grackle-demo_3 benchmarks_2.13 benchmarks_3 rootjs_2.13 rootjs_3 docs_2.13 docs_3 buildinfo_native0.4_2.13 buildinfo_native0.4_3 buildinfo_sjs1_2.13 buildinfo_sjs1_3 profile_2.13 profile_3 rootjvm_2.13 rootjvm_3 rootnative_2.13 rootnative_3 buildinfo_2.13 buildinfo_3
+          modules-ignore: grackle-demo_2.13 grackle-demo_3 benchmarks_2.13 benchmarks_3 rootjs_2.13 rootjs_3 docs_2.13 docs_3 buildinfo_native0.4_2.13 buildinfo_native0.4_3 buildinfo_sjs1_2.13 buildinfo_sjs1_3 profile_2.13 profile_3 rootjvm_2.13 rootjvm_3 rootnative_2.13 rootnative_3 buildinfo_2.13 buildinfo_3 repodocs_2.13 repodocs_3
           configs-ignore: test scala-tool scala-doc-tool test-internal
 
   coverage:
