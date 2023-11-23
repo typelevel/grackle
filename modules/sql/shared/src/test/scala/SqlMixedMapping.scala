@@ -41,6 +41,7 @@ trait SqlMixedMapping[F[_]] extends SqlTestMapping[F] with ValueMappingLike[F] {
     schema"""
         type Query {
           movie(id: UUID!): Movie
+          movies: [Movie!]!
           foo: Foo!
           bar: Bar
         }
@@ -48,6 +49,8 @@ trait SqlMixedMapping[F[_]] extends SqlTestMapping[F] with ValueMappingLike[F] {
           id: UUID!
           title: String!
           nested: Bar
+          genre: String!
+          rating: Float!
         }
         type Foo {
           value: Int!
@@ -73,6 +76,7 @@ trait SqlMixedMapping[F[_]] extends SqlTestMapping[F] with ValueMappingLike[F] {
         fieldMappings =
           List(
             SqlObject("movie"),
+            SqlObject("movies"),
             ValueField[Unit]("foo", _ => Foo(23)),
             CirceField("bar", json"""{ "message": "Hello world" }""")
           )
@@ -83,7 +87,9 @@ trait SqlMixedMapping[F[_]] extends SqlTestMapping[F] with ValueMappingLike[F] {
           List(
             SqlField("id", movies.id, key = true),
             SqlField("title", movies.title),
-            CirceField("nested", json"""{ "message": "Hello world nested" }""")
+            CirceField("nested", json"""{ "message": "Hello world nested" }"""),
+            ValueField[Unit]("genre", _ => "comedy"),
+            CirceField("rating", json"""7.8""")
           )
       ),
       ValueObjectMapping[Foo](
