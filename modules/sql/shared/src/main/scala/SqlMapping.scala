@@ -889,8 +889,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         required.flatTraverse(r => columnsForLeaf(context, r))
       case None =>
         Result.internalError(s"No mapping for field '$fieldName' of type ${context.tpe}")
-      case other =>
-        Result.internalError(s"Non-leaf mapping for field '$fieldName' of type ${context.tpe}: $other")
+      case Some(_: SqlObject) =>
+        Result.internalError(s"Non-leaf mapping for field '$fieldName' of type ${context.tpe}")
+      case _ =>
+        Nil.success
     }
 
   /** Returns the aliased columns corresponding to `term` in `context` */
@@ -1171,7 +1173,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     def context: Context
 
     /** This query in the given context */
-    def withContext(context: Context, extraCols: List[SqlColumn], extraJoins: List[SqlJoin]): SqlQuery
+    def withContext(context: Context, extraCols: List[SqlColumn], extraJoins: List[SqlJoin]): Result[SqlQuery]
 
     /** The columns of this query */
     def cols: List[SqlColumn]
@@ -1201,16 +1203,14 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     ): Result[SqlQuery]
 
     /** Yields an equivalent query encapsulating this query as a subquery */
-    def toSubquery(name: String, lateral: Boolean): SqlSelect
-    /** Yields an equivalent query encapsulating this query as a common table expression */
-    def toWithQuery(name: String, refName: Option[String]): SqlSelect
+    def toSubquery(name: String, lateral: Boolean): Result[SqlSelect]
 
     /** Yields a collection of `SqlSelects` which when combined as a union are equivalent to this query */
     def asSelects: List[SqlSelect] =
       this match {
         case ss: SqlSelect => ss :: Nil
         case su: SqlUnion => su.elems
-        case EmptySqlQuery => Nil
+        case _: EmptySqlQuery => Nil
       }
 
     /** Is this query an SQL Union */
@@ -1232,7 +1232,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           queries.partitionMap {
             case s: SqlSelect => Left(s)
             case u: SqlUnion => Right(u.elems)
-            case EmptySqlQuery => Right(Nil)
+            case _: EmptySqlQuery => Right(Nil)
           }
 
         def combineSelects(sels: List[SqlSelect]): SqlSelect = {
@@ -1275,19 +1275,22 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     }
 
     // TODO: This should be handled in combineAll
-    def combineRootNodes(nodes: List[SqlQuery]): Result[SqlQuery] = {
+    def combineRootNodes(context: Context, nodes: List[SqlQuery]): Result[SqlQuery] = {
       val (selects, unions) =
         nodes.partitionMap {
           case s: SqlSelect => Left(s)
           case u: SqlUnion => Right(u.elems)
-          case EmptySqlQuery => Right(Nil)
+          case _: EmptySqlQuery => Right(Nil)
         }
 
       val unionSelects = unions.flatten
       val allSelects = (selects ++ unionSelects).distinct
 
-      if (allSelects.sizeCompare(1) <= 0) allSelects.headOption.getOrElse(EmptySqlQuery).success
-      else SqlUnion(allSelects).success
+      (allSelects match {
+        case Nil => EmptySqlQuery(context)
+        case List(sel) => sel
+        case sels => SqlUnion(sels)
+      }).success
     }
 
     /** Compute the set of paths traversed by the given prediate */
@@ -1730,9 +1733,11 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       }
     }
 
-    case object EmptySqlQuery extends SqlQuery {
-      def context: Context = ???
-      def withContext(context: Context, extraCols: List[SqlColumn], extraJoins: List[SqlJoin]): SqlQuery = this
+    case class EmptySqlQuery(context: Context) extends SqlQuery {
+      def withContext(context: Context, extraCols: List[SqlColumn], extraJoins: List[SqlJoin]): Result[SqlQuery] =
+        if (extraCols.isEmpty && extraJoins.isEmpty) EmptySqlQuery(context).success
+        else mkSelect.flatMap(_.withContext(context, extraCols, extraJoins))
+
       def contains(other: ColumnOwner): Boolean = false
       def directlyOwns(col: SqlColumn): Boolean = false
       def findNamedOwner(col: SqlColumn): Option[TableExpr] = None
@@ -1740,7 +1745,11 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       def cols: List[SqlColumn] = Nil
       def codecs: List[(Boolean, Codec)] = Nil
       def subst(from: TableExpr, to: TableExpr): SqlQuery = this
-      def nest(parentContext: Context, extraCols: List[SqlColumn], oneToOne: Boolean, lateral: Boolean): Result[SqlQuery] = this.success
+
+      def nest(parentContext: Context, extraCols: List[SqlColumn], oneToOne: Boolean, lateral: Boolean): Result[SqlQuery] =
+        if(extraCols.isEmpty) this.success
+        else mkSelect.flatMap(_.nest(parentContext, extraCols, oneToOne, lateral))
+
       def addFilterOrderByOffsetLimit(
         filter: Option[(Predicate, List[SqlJoin])],
         orderBy: Option[(List[OrderSelection[_]], List[SqlJoin])],
@@ -1748,13 +1757,20 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         limit: Option[Int],
         predIsOneToOne: Boolean,
         parentConstraints: List[List[(SqlColumn, SqlColumn)]]
-      ): Result[SqlQuery] = this.success
+      ): Result[SqlQuery] =
+        mkSelect.flatMap(_.addFilterOrderByOffsetLimit(filter, orderBy, offset, limit, predIsOneToOne, parentConstraints))
 
-      def toSubquery(name: String, lateral: Boolean): SqlSelect = ???
-      def toWithQuery(name: String, refName: Option[String]): SqlSelect = ???
+      def toSubquery(name: String, lateral: Boolean): Result[SqlSelect] =
+        mkSelect.flatMap(_.toSubquery(name, lateral))
+
       def isUnion: Boolean = false
       def oneToOne: Boolean = false
-      def toFragment: Aliased[Fragment] = Aliased.pure(Fragments.empty)
+      def toFragment: Aliased[Fragment] = Aliased.internalError("Attempt to render empty query as fragment")
+
+      def mkSelect: Result[SqlSelect] =
+        parentTableForType(context).map { parentTable =>
+          SqlSelect(context, Nil, parentTable, keyColumnsForType(context), Nil, Nil, Nil, None, None, Nil, false, false)
+        }
     }
 
     /** Representation of an SQL SELECT */
@@ -1783,8 +1799,8 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         isSameOwner(col.owner) || table.owns(col) || withs.exists(_.owns(col)) || joins.exists(_.owns(col))
 
       /** This query in the given context */
-      def withContext(context: Context, extraCols: List[SqlColumn], extraJoins: List[SqlJoin]): SqlSelect =
-        copy(context = context, cols = (cols ++ extraCols).distinct, joins = extraJoins ++ joins)
+      def withContext(context: Context, extraCols: List[SqlColumn], extraJoins: List[SqlJoin]): Result[SqlSelect] =
+        copy(context = context, cols = (cols ++ extraCols).distinct, joins = extraJoins ++ joins).success
 
       def isUnion: Boolean = table.isUnion
 
@@ -1854,65 +1870,67 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         parentTableForType(parentContext).flatMap { parentTable =>
           val inner = !context.tpe.isNullable && !context.tpe.isList
 
-          def mkSubquery(multiTable: Boolean, nested: SqlSelect, joinCols: List[SqlColumn], suffix: String): SqlSelect = {
+          def mkSubquery(multiTable: Boolean, nested: SqlSelect, joinCols: List[SqlColumn], suffix: String): Result[SqlSelect] = {
             def isMergeable: Boolean =
               !multiTable && !nested.joins.exists(_.isPredicate) && nested.wheres.isEmpty && nested.orders.isEmpty && nested.offset.isEmpty && nested.limit.isEmpty && !nested.isDistinct
 
-            if(isMergeable) nested
+            if(isMergeable) nested.success
             else {
               val exposeCols = nested.table match {
                 case _: TableRef => joinCols
                 case _ => Nil
               }
-              val base0 = nested.copy(cols = (exposeCols ++ nested.cols).distinct).toSubquery(syntheticName(suffix), lateral)
-              base0.copy(cols = nested.cols.map(_.derive(base0.table)))
+              nested.copy(cols = (exposeCols ++ nested.cols).distinct).toSubquery(syntheticName(suffix), lateral).map { base0 =>
+                base0.copy(cols = nested.cols.map(_.derive(base0.table)))
+              }
             }
           }
 
-          def mkJoins(joins0: List[Join], multiTable: Boolean): SqlSelect = {
+          def mkJoins(joins0: List[Join], multiTable: Boolean): Result[SqlSelect] = {
             val lastJoin = joins0.last
-            val base = mkSubquery(multiTable, this, lastJoin.childCols(table), "_nested")
+            mkSubquery(multiTable, this, lastJoin.childCols(table), "_nested").map { base =>
 
-            val initialJoins =
-              joins0.init.map(_.toSqlJoin(parentContext, parentContext, inner))
+              val initialJoins =
+                joins0.init.map(_.toSqlJoin(parentContext, parentContext, inner))
 
-            val finalJoins = {
-              val parentTable = lastJoin.parentTable(parentContext)
+              val finalJoins = {
+                val parentTable = lastJoin.parentTable(parentContext)
 
-              if(!isAssociative(context)) {
-                val finalJoin = lastJoin.toSqlJoin(parentTable, base.table, inner)
-                finalJoin :: Nil
-              } else {
-                val assocTable = TableExpr.DerivedTableRef(context, Some(base.table.name+"_assoc"), base.table, true)
-                val assocJoin = lastJoin.toSqlJoin(parentTable, assocTable, inner)
+                if(!isAssociative(context)) {
+                  val finalJoin = lastJoin.toSqlJoin(parentTable, base.table, inner)
+                  finalJoin :: Nil
+                } else {
+                  val assocTable = TableExpr.DerivedTableRef(context, Some(base.table.name+"_assoc"), base.table, true)
+                  val assocJoin = lastJoin.toSqlJoin(parentTable, assocTable, inner)
 
-                val finalJoin =
-                  SqlJoin(
-                    assocTable,
-                    base.table,
-                    keyColumnsForType(context).map { key => (key.in(assocTable), key) },
-                    false
-                  )
-                List(assocJoin, finalJoin)
+                  val finalJoin =
+                    SqlJoin(
+                      assocTable,
+                      base.table,
+                      keyColumnsForType(context).map { key => (key.in(assocTable), key) },
+                      false
+                    )
+                  List(assocJoin, finalJoin)
+                }
               }
+
+              val allJoins = initialJoins ++ finalJoins ++ base.joins
+
+              SqlSelect(
+                context = parentContext,
+                withs = base.withs,
+                table = allJoins.head.parent,
+                cols = base.cols,
+                joins = allJoins,
+                wheres = base.wheres,
+                orders = Nil,
+                offset = None,
+                limit = None,
+                distinct = Nil,
+                oneToOne = oneToOne,
+                predicate = false
+              )
             }
-
-            val allJoins = initialJoins ++ finalJoins ++ base.joins
-
-            SqlSelect(
-              context = parentContext,
-              withs = base.withs,
-              table = allJoins.head.parent,
-              cols = base.cols,
-              joins = allJoins,
-              wheres = base.wheres,
-              orders = Nil,
-              offset = None,
-              limit = None,
-              distinct = Nil,
-              oneToOne = oneToOne,
-              predicate = false
-            )
           }
 
           val fieldName = context.path.head
@@ -1947,28 +1965,30 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                   )
 
               case Some(SqlObject(_, single@(_ :: Nil))) =>
-                mkJoins(single, false).success
+                mkJoins(single, false)
 
               case Some(SqlObject(_, firstJoin :: tail)) =>
-                val nested = mkJoins(tail, true)
-                val base = mkSubquery(false, nested, firstJoin.childCols(nested.table), "_multi")
+                for {
+                  nested <- mkJoins(tail, true)
+                  base   <- mkSubquery(false, nested, firstJoin.childCols(nested.table), "_multi")
+                } yield {
+                  val initialJoin = firstJoin.toSqlJoin(parentTable, base.table, inner)
 
-                val initialJoin = firstJoin.toSqlJoin(parentTable, base.table, inner)
-
-                SqlSelect(
-                  context = parentContext,
-                  withs = base.withs,
-                  table = parentTable,
-                  cols = base.cols,
-                  joins = initialJoin :: base.joins,
-                  wheres = base.wheres,
-                  orders = Nil,
-                  offset = None,
-                  limit = None,
-                  distinct = Nil,
-                  oneToOne = oneToOne,
-                  predicate = false
-                ).success
+                  SqlSelect(
+                    context = parentContext,
+                    withs = base.withs,
+                    table = parentTable,
+                    cols = base.cols,
+                    joins = initialJoin :: base.joins,
+                    wheres = base.wheres,
+                    orders = Nil,
+                    offset = None,
+                    limit = None,
+                    distinct = Nil,
+                    oneToOne = oneToOne,
+                    predicate = false
+                  )
+                }
 
               case _ =>
                 Result.internalError(s"Non-subobject mapping for field '$fieldName' of type ${parentContext.tpe}")
@@ -2467,16 +2487,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       }
 
       /** Yields an equivalent query encapsulating this query as a subquery */
-      def toSubquery(name: String, lateral: Boolean): SqlSelect = {
+      def toSubquery(name: String, lateral: Boolean): Result[SqlSelect] = {
         val ref = SubqueryRef(context, name, this, lateral)
-        SqlSelect(context, Nil, ref, cols.map(_.derive(ref)), Nil, Nil, Nil, None, None, Nil, oneToOne, predicate)
-      }
-
-      /** Yields an equivalent query encapsulating this query as a common table expression */
-      def toWithQuery(name: String, refName: Option[String]): SqlSelect = {
-        val with0 = WithRef(context, name, this)
-        val ref = TableExpr.DerivedTableRef(context, refName, with0, true)
-        SqlSelect(context, with0 :: Nil, ref, cols.map(_.derive(ref)), Nil, Nil, Nil, None, None, Nil, oneToOne, predicate)
+        SqlSelect(context, Nil, ref, cols.map(_.derive(ref)), Nil, Nil, Nil, None, None, Nil, oneToOne, predicate).success
       }
 
       /** If the from clause of this query is a subquery, convert it to a
@@ -2565,9 +2578,8 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         assert(elems.tail.forall(elem => elem.context == context))
 
       /** This query in the given context */
-      def withContext(context: Context, extraCols: List[SqlColumn], extraJoins: List[SqlJoin]): SqlUnion = {
-        SqlUnion(elems = elems.map(_.withContext(context, extraCols, extraJoins)))
-      }
+      def withContext(context: Context, extraCols: List[SqlColumn], extraJoins: List[SqlJoin]): Result[SqlUnion] =
+        elems.traverse(_.withContext(context, extraCols, extraJoins)).map(SqlUnion(_))
 
       def owns(col: SqlColumn): Boolean = cols.exists(_ == col) || elems.exists(_.owns(col))
       def contains(other: ColumnOwner): Boolean = isSameOwner(other) || elems.exists(_.contains(other))
@@ -2587,15 +2599,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       def subst(from: TableExpr, to: TableExpr): SqlUnion =
         SqlUnion(elems.map(_.subst(from, to)))
 
-      def toSubquery(name: String, lateral: Boolean): SqlSelect = {
+      def toSubquery(name: String, lateral: Boolean): Result[SqlSelect] = {
         val sub = SubqueryRef(context, name, this, lateral)
-        SqlSelect(context, Nil, sub, cols.map(_.derive(sub)), Nil, Nil, Nil, None, None, Nil, false, false)
-      }
-
-      def toWithQuery(name: String, refName: Option[String]): SqlSelect = {
-        val with0 = WithRef(context, name, this)
-        val ref = TableExpr.DerivedTableRef(context, refName, with0, true)
-        SqlSelect(context, with0 :: Nil, ref, cols.map(_.derive(ref)), Nil, Nil, Nil, None, None, Nil, false, false)
+        SqlSelect(context, Nil, sub, cols.map(_.derive(sub)), Nil, Nil, Nil, None, None, Nil, false, false).success
       }
 
       /** Nest this query as a subobject in the enclosing `parentContext` */
@@ -2640,7 +2646,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             for {
               withFilter0 <- withFilter
               table       <- parentTableForType(context)
-              sel         =  withFilter0.toSubquery(table.name, parentConstraints.nonEmpty)
+              sel         <- withFilter0.toSubquery(table.name, parentConstraints.nonEmpty)
               res         <- sel.addFilterOrderByOffsetLimit(None, orderBy, offset, limit, predIsOneToOne, parentConstraints)
             } yield res
          }
@@ -2797,21 +2803,23 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           queries.foldLeft(List.empty[SqlQuery].success) {
             case (nodes, q) =>
               loop(q, context, parentConstraints, exposeJoins).flatMap {
-                case EmptySqlQuery =>
+                case _: EmptySqlQuery =>
                   nodes
                 case n =>
                   nodes.map(n :: _)
               }
-          }.flatMap { nodes =>
-            if(nodes.sizeCompare(1) <= 0) nodes.headOption.getOrElse(EmptySqlQuery).success
-            else if(schema.isRootType(context.tpe))
-              SqlQuery.combineRootNodes(nodes)
-            else {
-              parentTableForType(context).flatMap { parentTable =>
-                if(parentTable.isRoot) SqlQuery.combineRootNodes(nodes)
-                else SqlQuery.combineAll(nodes)
+          }.flatMap {
+            case Nil => EmptySqlQuery(context).success
+            case List(node) => node.success
+            case nodes =>
+              if(schema.isRootType(context.tpe))
+                SqlQuery.combineRootNodes(context, nodes)
+              else {
+                parentTableForType(context).flatMap { parentTable =>
+                  if(parentTable.isRoot) SqlQuery.combineRootNodes(context, nodes)
+                  else SqlQuery.combineAll(nodes)
+                }
               }
-            }
           }
         }
 
@@ -2873,21 +2881,19 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             }
           }
 
-        q match {
-          // Leaf or Json element: no subobjects
-          case Select(fieldName, _, child) if child == Empty || isJsonb(context, fieldName) =>
-            columnsForLeaf(context, fieldName).flatMap {
-              case Nil => EmptySqlQuery.success
-              case cols =>
-                val constraintCols = if(exposeJoins) parentConstraints.lastOption.getOrElse(Nil).map(_._2) else Nil
-                val extraCols = keyColumnsForType(context) ++ constraintCols
-                for {
-                  parentTable <- parentTableForType(context)
-                  extraJoins  <- parentConstraintsToSqlJoins(parentTable, parentConstraints)
-                } yield
-                  SqlSelect(context, Nil, parentTable, (cols ++ extraCols).distinct, extraJoins, Nil, Nil, None, None, Nil, true, false)
-              }
+        object NonSubobjectSelect {
+          def unapply(q: Query): Option[String] =
+            q match {
+              case Select(fieldName, _, child) if child == Empty || isJsonb(context, fieldName) || !isLocallyMapped(context, q) =>
+                Some(fieldName)
+              case Select(fieldName, _, Effect(_, _)) =>
+                Some(fieldName)
+              case _ =>
+                None
+            }
+        }
 
+        q match {
           case Select(fieldName, _, Count(child)) =>
             def childContext(q: Query): Result[Context] =
               q match {
@@ -2926,28 +2932,25 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 }
             } yield res
 
-          case _: Count => Result.internalError("Count node must be a child of a Select node")
-
-          case Select(fieldName, _, Effect(_, _)) =>
-            columnsForLeaf(context, fieldName).flatMap {
-              case Nil => EmptySqlQuery.success
-              case cols =>
-                val constraintCols = if(exposeJoins) parentConstraints.lastOption.getOrElse(Nil).map(_._2) else Nil
-                val extraCols = keyColumnsForType(context) ++ constraintCols
-                for {
-                  parentTable <- parentTableForType(context)
-                  extraJoins  <- parentConstraintsToSqlJoins(parentTable, parentConstraints)
-                } yield
-                  SqlSelect(context, Nil, parentTable, (cols ++ extraCols).distinct, extraJoins, Nil, Nil, None, None, Nil, true, false)
+          // Leaf, Json, Effect or mixed-in element: no SQL subobjects
+          case NonSubobjectSelect(fieldName) =>
+            columnsForLeaf(context, fieldName).flatMap { cols =>
+              val constraintCols = if(exposeJoins) parentConstraints.lastOption.getOrElse(Nil).map(_._2) else Nil
+              val extraCols = keyColumnsForType(context) ++ constraintCols
+              for {
+                parentTable <- parentTableForType(context)
+                extraJoins  <- parentConstraintsToSqlJoins(parentTable, parentConstraints)
+              } yield {
+                val allCols = (cols ++ extraCols).distinct
+                if (allCols.isEmpty) EmptySqlQuery(context)
+                else SqlSelect(context, Nil, parentTable, allCols, extraJoins, Nil, Nil, None, None, Nil, true, false)
               }
-
-          case Effect(_, _) => Result.internalError("Effect node must be a child of a Select node")
+            }
 
           // Non-leaf non-Json element: compile subobject queries
           case s@Select(fieldName, resultName, child) =>
             context.forField(fieldName, resultName).flatMap { fieldContext =>
               if(schema.isRootType(context.tpe)) loop(child, fieldContext, Nil, false)
-              else if(!isLocallyMapped(context, q)) EmptySqlQuery.success
               else {
                 val keyCols = keyColumnsForType(context)
                 val constraintCols = if(exposeJoins) parentConstraints.lastOption.getOrElse(Nil).map(_._2) else Nil
@@ -2960,9 +2963,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                     loop(child, fieldContext, parentConstraints0, false).flatMap { sq =>
                       if(parentTable.isRoot) {
                         assert(parentConstraints0.isEmpty && extraCols.isEmpty && extraJoins.isEmpty)
-                        sq.withContext(context, Nil, Nil).success
+                        sq.withContext(context, Nil, Nil)
                       } else
-                        sq.nest(context, extraCols, sq.oneToOne && isSingular(context, fieldName, child), parentConstraints0.nonEmpty).map { sq0 =>
+                        sq.nest(context, extraCols, sq.oneToOne && isSingular(context, fieldName, child), parentConstraints0.nonEmpty).flatMap { sq0 =>
                           sq0.withContext(sq0.context, Nil, extraJoins)
                         }
                     }
@@ -3000,11 +3003,11 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
             if (allSimple) {
               for {
-                dquery   <- loop(default, context, parentConstraints, exposeJoins).map(_.withContext(context, extraCols, Nil))
+                dquery   <- loop(default, context, parentConstraints, exposeJoins).flatMap(_.withContext(context, extraCols, Nil))
                 nqueries <-
                   narrows.traverse { narrow =>
                     val subtpe0 = narrow.subtpe.withModifiersOf(context.tpe)
-                    loop(narrow.child, context.asType(subtpe0), parentConstraints, exposeJoins).map(_.withContext(context, extraCols, Nil))
+                    loop(narrow.child, context.asType(subtpe0), parentConstraints, exposeJoins).flatMap(_.withContext(context, extraCols, Nil))
                   }
                 res <- SqlQuery.combineAll(dquery :: nqueries)
               } yield res
@@ -3013,11 +3016,11 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 narrows.traverse { narrow =>
                   val subtpe0 = narrow.subtpe.withModifiersOf(context.tpe)
                   val child = Group(List(default, narrow.child))
-                  loop(child, context.asType(subtpe0), parentConstraints, exposeJoins).map(_.withContext(context, extraCols, Nil))
+                  loop(child, context.asType(subtpe0), parentConstraints, exposeJoins).flatMap(_.withContext(context, extraCols, Nil))
                 }
 
               val dquery =
-                if(exhaustive) EmptySqlQuery.success
+                if(exhaustive) EmptySqlQuery(context).success
                 else {
                   val allPreds = narrowPredicates.collect {
                     case (_, Some(pred)) => pred
@@ -3033,7 +3036,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                   } else {
                     val allPreds0 = allPreds.map(Not(_))
                     val defaultPredicate = And.combineAll(allPreds0)
-                    loop(Filter(defaultPredicate, default), context, parentConstraints, exposeJoins).map(_.withContext(context, extraCols, Nil))
+                    loop(Filter(defaultPredicate, default), context, parentConstraints, exposeJoins).flatMap(_.withContext(context, extraCols, Nil))
                   }
                 }
 
@@ -3041,9 +3044,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 dquery0   <- dquery
                 nqueries0 <- nqueries
               } yield {
-                val allSels = (dquery0 :: nqueries0).filterNot(_ == EmptySqlQuery).flatMap(_.asSelects).distinct
+                val allSels = (dquery0 :: nqueries0).flatMap(_.asSelects).distinct
                 allSels match {
-                  case Nil => EmptySqlQuery
+                  case Nil => EmptySqlQuery(context)
                   case sel :: Nil => sel
                   case sels => SqlUnion(sels)
                 }
@@ -3056,12 +3059,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           case Group(queries) => group(queries)
 
           case Unique(child) =>
-            loop(child, context.asType(context.tpe.nonNull.list), parentConstraints, exposeJoins).map {
-              case node => node.withContext(context, Nil, Nil)
-            }
+            loop(child, context.asType(context.tpe.nonNull.list), parentConstraints, exposeJoins).flatMap(_.withContext(context, Nil, Nil))
 
-          case Filter(False, _) => EmptySqlQuery.success
-          case Filter(In(_, Nil), _) => EmptySqlQuery.success
+          case Filter(False, _) => EmptySqlQuery(context).success
+          case Filter(In(_, Nil), _) => EmptySqlQuery(context).success
           case Filter(True, child) => loop(child, context, parentConstraints, exposeJoins)
 
           case FilterOrderByOffsetLimit(pred, oss, offset, lim, child) =>
@@ -3083,7 +3084,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 sq match {
                   case sq: SqlSelect => sq.joins
                   case su: SqlUnion => su.elems.flatMap(_.joins)
-                  case EmptySqlQuery => Nil
+                  case _: EmptySqlQuery => Nil
                 }
 
               // Ordering will be repeated programmatically, so include the columns/
@@ -3118,7 +3119,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
           case _: Introspect =>
             val extraCols = (keyColumnsForType(context) ++ discriminatorColumnsForType(context)).distinct
-            if(extraCols.isEmpty) EmptySqlQuery.success
+            if(extraCols.isEmpty) EmptySqlQuery(context).success
             else
               parentTableForType(context).map { parentTable =>
                 SqlSelect(context, Nil, parentTable, extraCols.distinct, Nil, Nil, Nil, None, None, Nil, true, false)
@@ -3130,13 +3131,17 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           case TransformCursor(_, child) =>
             loop(child, context, parentConstraints, exposeJoins)
 
+          case _: Count => Result.internalError("Count node must be a child of a Select node")
+
+          case Effect(_, _) => Result.internalError("Effect node must be a child of a Select node")
+
           case Empty | Query.Component(_, _, _) | (_: UntypedSelect) | (_: UntypedFragmentSpread) | (_: UntypedInlineFragment) | (_: Select) =>
-            EmptySqlQuery.success
+            EmptySqlQuery(context).success
         }
       }
 
       loop(q, context, Nil, false).map {
-        case EmptySqlQuery => EmptyMappedQuery
+        case _: EmptySqlQuery => EmptyMappedQuery
         case query => new NonEmptyMappedQuery(query)
       }
     }

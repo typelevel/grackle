@@ -134,7 +134,7 @@ trait SqlMixedSuite extends CatsEffectSuite {
     assertWeaklyEqualIO(res, expected)
   }
 
-  test("mixed query nested") {
+  test("mixed query nested (1)") {
     val query = """
       query {
         movie(id: "6a7837fc-b463-4d32-b628-0f4b3065cb21") {
@@ -155,6 +155,226 @@ trait SqlMixedSuite extends CatsEffectSuite {
                "message": "Hello world nested"
             }
           }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("mixed query nested (2)") {
+    val query = """
+      query {
+        movie(id: "6a7837fc-b463-4d32-b628-0f4b3065cb21") {
+          nested {
+            message
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "movie" : {
+            "nested" : {
+               "message": "Hello world nested"
+            }
+          }
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("mixed query nested (3)") {
+    val query = """
+      query {
+        movies {
+          rating
+          nested {
+            message
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "movies" : [
+            {
+              "rating" : 7.8,
+              "nested" : {
+                "message" : "Hello world nested"
+              }
+            },
+            {
+              "rating" : 7.8,
+              "nested" : {
+                "message" : "Hello world nested"
+              }
+            },
+            {
+              "rating" : 7.8,
+              "nested" : {
+                "message" : "Hello world nested"
+              }
+            },
+            {
+              "rating" : 7.8,
+              "nested" : {
+                "message" : "Hello world nested"
+              }
+            },
+            {
+              "rating" : 7.8,
+              "nested" : {
+                "message" : "Hello world nested"
+              }
+            },
+            {
+              "rating" : 7.8,
+              "nested" : {
+                "message" : "Hello world nested"
+              }
+            },
+            {
+              "rating" : 7.8,
+              "nested" : {
+                "message" : "Hello world nested"
+              }
+            },
+            {
+              "rating" : 7.8,
+              "nested" : {
+                "message" : "Hello world nested"
+              }
+            },
+            {
+              "rating" : 7.8,
+              "nested" : {
+                "message" : "Hello world nested"
+              }
+            },
+            {
+              "rating" : 7.8,
+              "nested" : {
+                "message" : "Hello world nested"
+              }
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("mixed query only leaf (1)") {
+    val query = """
+      query {
+        movies {
+          genre
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "movies" : [
+            {
+              "genre" : "comedy"
+            },
+            {
+              "genre" : "comedy"
+            },
+            {
+              "genre" : "comedy"
+            },
+            {
+              "genre" : "comedy"
+            },
+            {
+              "genre" : "comedy"
+            },
+            {
+              "genre" : "comedy"
+            },
+            {
+              "genre" : "comedy"
+            },
+            {
+              "genre" : "comedy"
+            },
+            {
+              "genre" : "comedy"
+            },
+            {
+              "genre" : "comedy"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("mixed query only leaf (2)") {
+    val query = """
+      query {
+        movies {
+          rating
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "movies" : [
+            {
+              "rating" : 7.8
+            },
+            {
+              "rating" : 7.8
+            },
+            {
+              "rating" : 7.8
+            },
+            {
+              "rating" : 7.8
+            },
+            {
+              "rating" : 7.8
+            },
+            {
+              "rating" : 7.8
+            },
+            {
+              "rating" : 7.8
+            },
+            {
+              "rating" : 7.8
+            },
+            {
+              "rating" : 7.8
+            },
+            {
+              "rating" : 7.8
+            }
+          ]
         }
       }
     """
