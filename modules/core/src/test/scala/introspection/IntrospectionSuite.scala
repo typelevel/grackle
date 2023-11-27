@@ -105,6 +105,56 @@ final class IntrospectionSuite extends CatsEffectSuite {
     assertIO(res, expected)
   }
 
+  test("simple type query with variables") {
+    val query = """
+      query getType($name: String!) {
+        __type(name: $name) {
+          name
+          fields {
+            name
+            type {
+              name
+            }
+          }
+        }
+      }
+    """
+
+    val variables = json"""
+      {
+        "name": "User"
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "__type": {
+            "name": "User",
+            "fields": [
+              {
+                "name": "id",
+                "type": { "name": "String" }
+              },
+              {
+                "name": "name",
+                "type": { "name": "String" }
+              },
+              {
+                "name": "birthday",
+                "type": { "name": "Date" }
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = TestMapping.compileAndRun(query, untypedVars = Some(variables))
+
+    assertIO(res, expected)
+  }
+
   test("kind/name/description/ofType query") {
     val query = """
       {
@@ -879,6 +929,36 @@ final class IntrospectionSuite extends CatsEffectSuite {
     assertIO(res, Some(expected))
   }
 
+  test("simple schema query with fragment") {
+    val query = """
+      {
+        __schema {
+          ...SchemaFields
+        }
+      }
+
+      fragment SchemaFields on __Schema {
+        queryType { name }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "__schema" : {
+            "queryType" : {
+              "name" : "Query"
+            }
+          }
+        }
+      }
+    """
+
+    val res = TestMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
   test("standard introspection query") {
     val query = """
       |query IntrospectionQuery {
@@ -1255,6 +1335,39 @@ final class IntrospectionSuite extends CatsEffectSuite {
             {
               "__typename" : "User",
               "id" : "1000"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = SmallMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("typename in a fragment") {
+    val query = """
+      {
+        users {
+          ...UserFields
+        }
+      }
+      fragment UserFields on User {
+        __typename
+        renamed: __typename
+        name
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "users" : [
+            {
+              "__typename" : "User",
+              "renamed" : "User",
+              "name" : "Luke Skywalker"
             }
           ]
         }
