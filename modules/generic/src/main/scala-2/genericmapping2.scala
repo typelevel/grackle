@@ -87,13 +87,6 @@ trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: Ge
 
       override def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
         mkCursorForField(this, fieldName, resultName) orElse {
-          fieldMap.get(fieldName) match {
-            case None =>
-              println(s"No field '$fieldName' for type $tpe")
-              println(fieldMap)
-            case _ =>
-          }
-
           fieldMap.get(fieldName).toResult(s"No field '$fieldName' for type $tpe").flatMap { f =>
             f(context.forFieldOrAttribute(fieldName, resultName), focus, Some(this), Env.empty)
           }

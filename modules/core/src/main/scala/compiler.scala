@@ -234,7 +234,7 @@ class QueryCompiler(schema: Schema, phases: List[Phase]) {
       rootTpe <- op.rootTpe(schema)
       res     <- (
                    for {
-                     query <- allPhases.foldLeftM(op.query) { (acc, phase) => phase.transform(acc) }
+                     query <- allPhases.foldLeftM(op.query) { (acc, phase) => phase.transformFragments *> phase.transform(acc) }
                    } yield Operation(query, rootTpe, op.directives)
                  ).runA(
                    ElabState(
@@ -339,6 +339,12 @@ object QueryCompiler {
     /** The fragment with the supplied name, if defined, failing otherwise */
     def fragment(nme: String): Elab[UntypedFragment] =
       StateT.inspectF(_.fragments.get(nme).toResult(s"Fragment '$nme' is not defined"))
+    def transformFragments(f: Map[String, UntypedFragment] => Elab[Map[String, UntypedFragment]]): Elab[Unit] =
+      for {
+        fs  <- fragments
+        fs0 <- f(fs)
+        _   <- StateT.modify(_.copy(fragments = fs0)): Elab[Unit]
+      } yield ()
     /** `true` if the node currently being elaborated has a child with the supplied name */
     def hasField(name: String): Elab[Boolean] = StateT.inspect(_.hasField(name))
     /** The alias, if any, of the child with the supplied name */
@@ -432,6 +438,8 @@ object QueryCompiler {
 
   /** A QueryCompiler phase. */
   trait Phase {
+    def transformFragments: Elab[Unit] = Elab.unit
+
     /**
      * Transform the supplied query algebra term `query`.
      */
@@ -553,6 +561,21 @@ object QueryCompiler {
    * A phase which elaborates GraphQL introspection queries into the query algrebra.
    */
   class IntrospectionElaborator(level: IntrospectionLevel) extends Phase {
+    override def transformFragments: Elab[Unit] =
+      Elab.transformFragments { fs =>
+        fs.toList.traverse {
+          case (nme, f@UntypedFragment(_, tpnme, _, child)) =>
+            for {
+              s   <- Elab.schema
+              c   <- Elab.context
+              tpe <- Elab.liftR(Result.fromOption(s.definition(tpnme).orElse(Introspection.schema.definition(tpnme)), s"Unknown type '$tpnme' in fragment definition"))
+              _   <- Elab.push(c.asType(tpe), child)
+              ec  <- transform(child)
+              _   <- Elab.pop
+           } yield (nme, f.copy(child = ec))
+        }.map(_.toMap)
+      }
+
     override def transform(query: Query): Elab[Query] =
       query match {
         case s@UntypedSelect(fieldName @ ("__typename" | "__schema" | "__type"), _, _, _, _) =>
