@@ -144,11 +144,11 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
 
     def narrowsTo(subtpe: TypeRef): Boolean =
       subtpe <:< tpe &&
-        objectMapping(context.asType(subtpe)).map {
+        objectMapping(context.asType(subtpe)).exists {
           case ValueObjectMapping(_, _, classTag) =>
             classTag.runtimeClass.isInstance(focus)
           case _ => false
-        }.getOrElse(false)
+        }
 
 
     def narrow(subtpe: TypeRef): Result[Cursor] =

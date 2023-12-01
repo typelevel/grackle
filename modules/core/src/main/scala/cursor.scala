@@ -63,7 +63,7 @@ trait Cursor {
   def fullEnv: Env = parent.map(_.fullEnv).getOrElse(Env.empty).add(env)
 
   /** Does the environment at this `Cursor` contain a value for the supplied key? */
-  def envContains(nme: String): Boolean = env.contains(nme) || parent.map(_.envContains(nme)).getOrElse(false)
+  def envContains(nme: String): Boolean = env.contains(nme) || parent.exists(_.envContains(nme))
 
   /**
    * Yield the value at this `Cursor` as a value of type `T` if possible,

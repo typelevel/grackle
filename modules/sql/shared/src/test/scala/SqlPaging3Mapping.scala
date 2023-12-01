@@ -160,7 +160,7 @@ trait SqlPaging3Mapping[F[_]] extends SqlTestMapping[F] {
           size  <- c.listSize
           elems <- c.asList(Seq)
         } yield {
-          if(limit.map(size <= _).getOrElse(true)) c
+          if(limit.forall(size <= _)) c
           else ListTransformCursor(c, size-1, elems.init)
         }
       }
@@ -173,7 +173,7 @@ trait SqlPaging3Mapping[F[_]] extends SqlTestMapping[F] {
           for {
             items <- c.field("items", itemsAlias)
             size  <- items.listSize
-          } yield limit.map(size > _).getOrElse(false)
+          } yield limit.exists(size > _)
         } else {
           for {
             num <- c.fieldAs[Long](countField)

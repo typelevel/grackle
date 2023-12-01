@@ -715,13 +715,13 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       case Some(fm) if fm.isInstanceOf[SqlFieldMapping] => true
       case Some(re: EffectMapping) =>
         val fieldContext = context.forFieldOrAttribute(re.fieldName, None)
-        objectMapping(fieldContext).map { om =>
+        objectMapping(fieldContext).exists { om =>
           om.fieldMappings.exists {
             //case _: SqlFieldMapping => true // Scala 3 thinks this is unreachable
             case fm if fm.isInstanceOf[SqlFieldMapping] => true
             case _ => false
           }
-        }.getOrElse(false)
+        }
       case _ => false
     }
 
@@ -983,21 +983,21 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
   /** Is the context type mapped to an associative table? */
   def isAssociative(context: Context): Boolean =
-    objectMapping(context).map(_.fieldMappings.exists {
+    objectMapping(context).exists(_.fieldMappings.exists {
       case sf: SqlField => sf.associative
       case _ => false
-    }).getOrElse(false)
+    })
 
   /** Does the type of `fieldName` in `context` represent a list of subobjects? */
   def nonLeafList(context: Context, fieldName: String): Boolean =
-    context.tpe.underlyingField(fieldName).map { fieldTpe =>
+    context.tpe.underlyingField(fieldName).exists { fieldTpe =>
       fieldTpe.nonNull.isList && (
-        fieldMapping(context, fieldName).map {
+        fieldMapping(context, fieldName).exists {
           case SqlObject(_, joins) => joins.nonEmpty
           case _ => false
-        }.getOrElse(false)
+        }
       )
-    }.getOrElse(false)
+    }
 
   /** Does the supplied field correspond to a single, possibly structured, value? */
   def isSingular(context: Context, fieldName: String, query: Query): Boolean = {
@@ -2012,7 +2012,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       ): Result[SqlSelect] = {
         assert(orders.isEmpty && offset.isEmpty && limit.isEmpty && !isDistinct)
         assert(filter.isDefined || orderBy.isDefined || offset0.isDefined || limit0.isDefined)
-        assert(filter.map(f => isSqlTerm(context, f._1).getOrElse(false)).getOrElse(true))
+        assert(filter.forall(f => isSqlTerm(context, f._1).getOrElse(false)))
 
         val keyCols = keyColumnsForType(context)
 
@@ -2581,7 +2581,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       def withContext(context: Context, extraCols: List[SqlColumn], extraJoins: List[SqlJoin]): Result[SqlUnion] =
         elems.traverse(_.withContext(context, extraCols, extraJoins)).map(SqlUnion(_))
 
-      def owns(col: SqlColumn): Boolean = cols.exists(_ == col) || elems.exists(_.owns(col))
+      def owns(col: SqlColumn): Boolean = cols.contains(col) || elems.exists(_.owns(col))
       def contains(other: ColumnOwner): Boolean = isSameOwner(other) || elems.exists(_.contains(other))
       def directlyOwns(col: SqlColumn): Boolean = owns(col)
       def findNamedOwner(col: SqlColumn): Option[TableExpr] = None
@@ -3070,7 +3070,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             val orderPaths = oss.map(_.map(_.term).collect { case path: PathTerm => path.path }).getOrElse(Nil).distinct
             val filterOrderPaths = (filterPaths ++ orderPaths).distinct
 
-            if (pred.map(p => !isSqlTerm(context, p).getOrElse(false)).getOrElse(false)) {
+            if (pred.exists(p => !isSqlTerm(context, p).getOrElse(false))) {
               // If the predicate must be evaluated programatically then there's
               // nothing we can do here, so just collect up all the columns/joins
               // needed for the filter/order and loop
@@ -3108,7 +3108,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               for {
                 filter         <- filter0
                 orderBy        <- orderBy0
-                predIsOneToOne =  filter.map(_._2).getOrElse(true) && orderBy.map(_._2).getOrElse(true)
+                predIsOneToOne =  filter.forall(_._2) && orderBy.forall(_._2)
                 expandedChild  <- loop(expandedChildQuery, context, parentConstraints, true)
                 res            <- expandedChild.addFilterOrderByOffsetLimit(filter.map(_._1), orderBy.map(_._1), offset, lim, predIsOneToOne, parentConstraints)
               } yield res
@@ -3307,7 +3307,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     /** Specialized representation of a table with exactly one row */
     case class OneRowTable(row: Array[Any]) extends Table {
       def numRows: Int = 1
-      def numCols = row.size
+      def numCols = row.length
 
       def select(col: Int): Option[Any] =
         Some(row(col))
@@ -3341,7 +3341,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
     case class MultiRowTable(rows: Vector[Array[Any]]) extends Table {
       def numRows = rows.size
-      def numCols = rows.headOption.map(_.size).getOrElse(0)
+      def numCols = rows.headOption.map(_.length).getOrElse(0)
 
       def select(col: Int): Option[Any] = {
         val c = col
