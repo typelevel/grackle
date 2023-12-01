@@ -3307,7 +3307,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     /** Specialized representation of a table with exactly one row */
     case class OneRowTable(row: Array[Any]) extends Table {
       def numRows: Int = 1
-      def numCols = row.size
+      def numCols = row.length
 
       def select(col: Int): Option[Any] =
         Some(row(col))
@@ -3341,7 +3341,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
     case class MultiRowTable(rows: Vector[Array[Any]]) extends Table {
       def numRows = rows.size
-      def numCols = rows.headOption.map(_.size).getOrElse(0)
+      def numCols = rows.headOption.map(_.length).getOrElse(0)
 
       def select(col: Int): Option[Any] = {
         val c = col
