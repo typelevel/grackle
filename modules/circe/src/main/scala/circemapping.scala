@@ -116,7 +116,7 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
             .toResultOrError(s"Expected Int found ${focus.noSpaces}")
         case FloatType         if focus.isNumber  => focus.success
         case e: EnumType       if focus.isString  =>
-          if (focus.asString.map(e.hasValue).getOrElse(false)) focus.success
+          if (focus.asString.exists(e.hasValue)) focus.success
           else Result.internalError(s"Expected Enum ${e.name}, found ${focus.noSpaces}")
         case _: ScalarType     if !focus.isObject => focus.success // custom Scalar; any non-object type is fine
         case _ =>
@@ -182,7 +182,7 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
 
     def hasField(fieldName: String): Boolean =
       fieldMapping(context, fieldName).isDefined ||
-      tpe.hasField(fieldName) && focus.asObject.map(_.contains(fieldName)).getOrElse(false)
+      tpe.hasField(fieldName) && focus.asObject.exists(_.contains(fieldName))
 
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
       mkCursorForField(this, fieldName, resultName)

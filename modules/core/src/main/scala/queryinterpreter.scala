@@ -44,7 +44,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
   def run(query: Query, rootTpe: Type, env: Env): Stream[F, Result[Json]] = {
     val rootCursor = RootCursor(Context(rootTpe), None, env)
     val mergedResults =
-      if(mapping.schema.subscriptionType.map(_ =:= rootTpe).getOrElse(false))
+      if(mapping.schema.subscriptionType.exists(_ =:= rootTpe))
         runSubscription(query, rootTpe, rootCursor)
       else
         Stream.eval(runOneShot(query, rootTpe, rootCursor))

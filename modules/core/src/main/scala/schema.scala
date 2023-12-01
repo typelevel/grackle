@@ -137,7 +137,7 @@ trait Schema {
 
   /** True if the supplied type is one of the Query, Mutation or Subscription root types, false otherwise */
   def isRootType(tpe: Type): Boolean =
-    tpe =:= queryType || mutationType.map(_ =:= tpe).getOrElse(false) || subscriptionType.map(_ =:= tpe).getOrElse(false)
+    tpe =:= queryType || mutationType.exists(_ =:= tpe) || subscriptionType.exists(_ =:= tpe)
 
   /** Are the supplied alternatives exhaustive for `tp` */
   def exhaustive(tp: Type, branches: List[Type]): Boolean = {
@@ -333,9 +333,9 @@ sealed trait Type extends Product {
     case (_, NullableType(tpe)) => tpe.pathIsList(fns)
     case (_, TypeRef(_, _)) => dealias.pathIsList(fns)
     case (fieldName :: rest, ObjectType(_, _, fields, _, _)) =>
-      fields.find(_.name == fieldName).map(_.tpe.pathIsList(rest)).getOrElse(false)
+      fields.find(_.name == fieldName).exists(_.tpe.pathIsList(rest))
     case (fieldName :: rest, InterfaceType(_, _, fields, _, _)) =>
-      fields.find(_.name == fieldName).map(_.tpe.pathIsList(rest)).getOrElse(false)
+      fields.find(_.name == fieldName).exists(_.tpe.pathIsList(rest))
     case _ => false
   }
 
@@ -352,9 +352,9 @@ sealed trait Type extends Product {
     case (_, _: NullableType) => true
     case (_, TypeRef(_, _)) => dealias.pathIsNullable(fns)
     case (fieldName :: rest, ObjectType(_, _, fields, _, _)) =>
-      fields.find(_.name == fieldName).map(_.tpe.pathIsNullable(rest)).getOrElse(false)
+      fields.find(_.name == fieldName).exists(_.tpe.pathIsNullable(rest))
     case (fieldName :: rest, InterfaceType(_, _, fields, _, _)) =>
-      fields.find(_.name == fieldName).map(_.tpe.pathIsNullable(rest)).getOrElse(false)
+      fields.find(_.name == fieldName).exists(_.tpe.pathIsNullable(rest))
     case _ => false
   }
 
@@ -1800,8 +1800,8 @@ object SchemaRenderer {
       val dirs0 = schema.baseSchemaType.directives
       if (
         schema.queryType.name == "Query" &&
-        schema.mutationType.map(_.name == "Mutation").getOrElse(true) &&
-        schema.subscriptionType.map(_.name == "Subscription").getOrElse(true) &&
+        schema.mutationType.forall(_.name == "Mutation") &&
+        schema.subscriptionType.forall(_.name == "Subscription") &&
         dirs0.isEmpty
       ) ""
       else {
