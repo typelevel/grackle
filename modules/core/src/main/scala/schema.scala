@@ -1261,7 +1261,7 @@ object Directive {
           case None => (Problem(s"Undefined directive '$nme'") :: locs, reps)
           case Some(defn) =>
             val locs0 =
-              if (defn.locations.exists(_ == location)) locs
+              if (defn.locations.contains(location)) locs
               else Problem(s"Directive '$nme' is not allowed on $location") :: locs
 
             val reps0 =

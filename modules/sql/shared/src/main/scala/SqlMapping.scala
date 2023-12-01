@@ -2581,7 +2581,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       def withContext(context: Context, extraCols: List[SqlColumn], extraJoins: List[SqlJoin]): Result[SqlUnion] =
         elems.traverse(_.withContext(context, extraCols, extraJoins)).map(SqlUnion(_))
 
-      def owns(col: SqlColumn): Boolean = cols.exists(_ == col) || elems.exists(_.owns(col))
+      def owns(col: SqlColumn): Boolean = cols.contains(col) || elems.exists(_.owns(col))
       def contains(other: ColumnOwner): Boolean = isSameOwner(other) || elems.exists(_.contains(other))
       def directlyOwns(col: SqlColumn): Boolean = owns(col)
       def findNamedOwner(col: SqlColumn): Option[TableExpr] = None
