@@ -898,7 +898,7 @@ case class Field(
   def deprecationReason: Option[String] =
     for {
       dir    <- deprecatedDirective
-      reason <- dir.args.collect { case Binding("reason", StringValue(reason)) => reason }.headOption
+      reason <- dir.args.collectFirst { case Binding("reason", StringValue(reason)) => reason }
     } yield reason
 }
 
