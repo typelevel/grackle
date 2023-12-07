@@ -17,18 +17,22 @@ package minimizer
 
 import munit.CatsEffectSuite
 
-import grackle.{ GraphQLParser, QueryMinimizer }
+import grackle.{ GraphQLParser, QueryMinimizer, Result }
 
 final class MinimizerSuite extends CatsEffectSuite {
+  val parser = GraphQLParser(GraphQLParser.defaultConfig)
+  val minimizer = QueryMinimizer(parser)
+
   def run(query: String, expected: String, echo: Boolean = false): Unit = {
-    val Right(minimized) = QueryMinimizer.minimizeText(query) : @unchecked
+
+    val Result.Success(minimized) = minimizer.minimizeText(query) : @unchecked
     if (echo)
       println(minimized)
 
     assert(minimized == expected)
 
-    val Some(parsed0) = GraphQLParser.Document.parseAll(query).toOption : @unchecked
-    val Some(parsed1) = GraphQLParser.Document.parseAll(minimized).toOption : @unchecked
+    val Some(parsed0) = parser.parseText(query).toOption : @unchecked
+    val Some(parsed1) = parser.parseText(minimized).toOption : @unchecked
 
     assertEquals(parsed0, parsed1)
   }

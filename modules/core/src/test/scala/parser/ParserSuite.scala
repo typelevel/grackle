@@ -15,14 +15,15 @@
 
 package parser
 
-import cats.data.NonEmptyChain
 import munit.CatsEffectSuite
 
-import grackle.{Ast, GraphQLParser, Problem, Result}
+import grackle.{Ast, GraphQLParser, Result}
 import grackle.syntax._
 import Ast._, OperationType._, OperationDefinition._, Selection._, Value._, Type.Named
 
 final class ParserSuite extends CatsEffectSuite {
+  val parser = GraphQLParser(GraphQLParser.defaultConfig)
+
   test("simple query") {
     val query = doc"""
       query {
@@ -72,7 +73,7 @@ final class ParserSuite extends CatsEffectSuite {
         )
       )
 
-    GraphQLParser.Document.parseAll(query).toOption match {
+    parser.parseText(query).toOption match {
       case Some(List(q)) => assertEquals(q, expected)
       case _ => assert(false)
     }
@@ -104,7 +105,7 @@ final class ParserSuite extends CatsEffectSuite {
         )
       )
 
-    GraphQLParser.Document.parseAll(query).toOption match {
+    parser.parseText(query).toOption match {
       case Some(List(q)) => assertEquals(q, expected)
       case _ => assert(false)
     }
@@ -152,7 +153,7 @@ final class ParserSuite extends CatsEffectSuite {
         )
       )
 
-    GraphQLParser.Document.parseAll(query).toOption match {
+    parser.parseText(query).toOption match {
       case Some(List(q)) => assertEquals(q, expected)
       case _ => assert(false)
     }
@@ -194,7 +195,7 @@ final class ParserSuite extends CatsEffectSuite {
         )
       )
 
-    GraphQLParser.Document.parseAll(query).toOption match {
+    parser.parseText(query).toOption match {
       case Some(List(q)) => assertEquals(q, expected)
       case _ => assert(false)
     }
@@ -226,7 +227,7 @@ final class ParserSuite extends CatsEffectSuite {
         )
       )
 
-    GraphQLParser.Document.parseAll(query).toOption match {
+    parser.parseText(query).toOption match {
       case Some(List(q)) => assertEquals(q, expected)
       case _ => assert(false)
     }
@@ -258,7 +259,7 @@ final class ParserSuite extends CatsEffectSuite {
         )
       )
 
-    GraphQLParser.Document.parseAll(query).toOption match {
+    parser.parseText(query).toOption match {
       case Some(List(q)) => assertEquals(q, expected)
       case _ => assert(false)
     }
@@ -290,7 +291,7 @@ final class ParserSuite extends CatsEffectSuite {
         )
       )
 
-    GraphQLParser.Document.parseAll(query).toOption match {
+    parser.parseText(query).toOption match {
       case Some(List(q)) => assertEquals(q, expected)
       case _ => assert(false)
     }
@@ -322,7 +323,7 @@ final class ParserSuite extends CatsEffectSuite {
         )
       )
 
-    GraphQLParser.Document.parseAll(query).toOption match {
+    parser.parseText(query).toOption match {
       case Some(List(q)) => assertEquals(q, expected)
       case _ => assert(false)
     }
@@ -354,7 +355,7 @@ final class ParserSuite extends CatsEffectSuite {
         )
       )
 
-    GraphQLParser.Document.parseAll(query).toOption match {
+    parser.parseText(query).toOption match {
       case Some(List(q)) => assertEquals(q, expected)
       case _ => assert(false)
     }
@@ -406,14 +407,14 @@ final class ParserSuite extends CatsEffectSuite {
         )
       )
 
-    GraphQLParser.Document.parseAll(query).toOption match {
+    parser.parseText(query).toOption match {
       case Some(List(q)) => assertEquals(q, expected)
       case _ => assert(false)
     }
   }
 
   test("invalid document") {
-    GraphQLParser.Document.parseAll("scalar Foo woozle").toOption match {
+    parser.parseText("scalar Foo woozle").toOption match {
       case Some(_) => fail("should have failed")
       case None    => ()
     }
@@ -463,7 +464,7 @@ final class ParserSuite extends CatsEffectSuite {
         )
       )
 
-    GraphQLParser.Document.parseAll(query).toOption match {
+    parser.parseText(query).toOption match {
       case Some(xs) => assertEquals(xs, expected)
       case _ => assert(false)
     }
@@ -502,7 +503,7 @@ final class ParserSuite extends CatsEffectSuite {
         )
       )
 
-    GraphQLParser.Document.parseAll(query).toOption match {
+    parser.parseText(query).toOption match {
       case Some(List(q)) => assertEquals(q, expected)
       case _ => assert(false)
     }
@@ -540,7 +541,7 @@ final class ParserSuite extends CatsEffectSuite {
         )
       )
 
-    GraphQLParser.Document.parseAll(query).toOption match {
+    parser.parseText(query).toOption match {
       case Some(List(q)) => assertEquals(q, expected)
       case _ => assert(false)
     }
@@ -549,8 +550,9 @@ final class ParserSuite extends CatsEffectSuite {
   test("value literals") {
 
     def assertParse(input: String, expected: Value) =
-      GraphQLParser.Value.parseAll(input).toOption match {
-        case Some(v) => assertEquals(v, expected)
+      parser.parseText(s"query { foo(bar: $input) }").toOption match {
+        case Some(List(Operation(_, _, _, _,List(Field(_, _, List((_, v)), _, _))))) =>
+          assertEquals(v, expected)
         case _ => assert(false)
       }
 
@@ -580,6 +582,32 @@ final class ParserSuite extends CatsEffectSuite {
     assertParse("\"\"\"    \n\n   first\n   \tλ\n  123\n\n\n   \t\n\n\"\"\"", StringValue(" first\n \tλ\n123"))
   }
 
+  test("outsized int") {
+    val query =
+      """|query {
+         |  foo {
+         |    bar {
+         |      baz(id: 2147483648)
+         |    }
+         |  }
+         |}""".stripMargin
+
+    val expected =
+      """|...
+         |  foo {
+         |    bar {
+         |      baz(id: 2147483648)
+         |                        ^
+         |expectation:
+         |* must fail: 2147483648 is larger than max int
+         |    }
+         |  }""".stripMargin
+
+    val res = parser.parseText(query)
+
+    assertEquals(res, Result.failure(expected))
+  }
+
   test("parse object type extension") {
     val schema = """
       extend type Foo {
@@ -592,7 +620,7 @@ final class ParserSuite extends CatsEffectSuite {
         ObjectTypeExtension(Named(Name("Foo")), List(FieldDefinition(Name("bar"),None,Nil,Named(Name("Int")),Nil)), Nil, Nil)
       )
 
-    val res = GraphQLParser.Document.parseAll(schema).toOption
+    val res = parser.parseText(schema).toOption
     assert(res == Some(expected))
   }
 
@@ -608,7 +636,7 @@ final class ParserSuite extends CatsEffectSuite {
         SchemaExtension(List(RootOperationTypeDefinition(OperationType.Query, Named(Name("Query")), Nil)), Nil)
       )
 
-    val res = GraphQLParser.Document.parseAll(schema).toOption
+    val res = parser.parseText(schema).toOption
     assert(res == Some(expected))
   }
 
@@ -630,26 +658,155 @@ final class ParserSuite extends CatsEffectSuite {
         )
       )
 
-    val res = GraphQLParser.Document.parseAll(schema).toOption
+    val res = parser.parseText(schema).toOption
     assertEquals(res, Some(expected))
   }
 
   test("keywords parsed non-greedily (2)") {
     val schema =
       """|extendtypeName {
-         |  value:String
+         |  value: String
          |}""".stripMargin
 
     val expected =
-      NonEmptyChain(
-        Problem(
-          """|Parse error at line 0 column 6
-            |extendtypeName {
-            |      ^""".stripMargin
-        )
-      )
+      """|extendtypeName {
+         |      ^
+         |expectation:
+         |* must fail but matched with t
+         |  value: String
+         |}""".stripMargin
 
-    val res = GraphQLParser.toResult(schema, GraphQLParser.Document.parseAll(schema))
-    assertEquals(res, Result.Failure(expected))
+    val res = parser.parseText(schema)
+    assertEquals(res, Result.failure(expected))
   }
+
+  test("deep query") {
+    def mkQuery(depth: Int): String = {
+      val depth0 = depth - 1
+      "query{" + ("f{" *depth0) + "f" + ("}" * depth0) + "}"
+    }
+
+    val limit = 5
+    val limitedParser = mkParser(maxSelectionDepth = limit)
+
+    val queryOk = mkQuery(limit)
+    val queryFail = mkQuery(limit + 1)
+
+    val expectedFail =
+      """|query{f{f{f{f{f{f}}}}}}
+         |                ^
+         |expectation:
+         |* must fail: exceeded maximum selection depth""".stripMargin
+
+    val resOk = limitedParser.parseText(queryOk)
+    assert(resOk.hasValue)
+
+    val resFail = limitedParser.parseText(queryFail)
+    assertEquals(resFail, Result.failure(expectedFail))
+  }
+
+  test("wide query") {
+    def mkQuery(width: Int): String =
+      "query{r{" + ("f," * (width - 1) + "f") + "}}"
+
+    val limit = 5
+    val limitedParser = mkParser(maxSelectionWidth = limit)
+
+    val queryOk = mkQuery(limit)
+    val queryFail = mkQuery(limit + 1)
+
+    val expectedFail =
+      """|query{r{f,f,f,f,f,f}}
+         |                  ^
+         |expectation:
+         |* must be char: '}'""".stripMargin
+
+    val resOk = limitedParser.parseText(queryOk)
+    assert(resOk.hasValue)
+
+    val resFail = limitedParser.parseText(queryFail)
+    assertEquals(resFail, Result.failure(expectedFail))
+  }
+
+  test("deep list value") {
+    def mkQuery(depth: Int): String =
+      "query{f(l: " + ("[" *depth) + "0" + ("]" * depth) + "){f}}"
+
+    val limit = 5
+    val limitedParser = mkParser(maxInputValueDepth = limit)
+
+    val queryOk = mkQuery(limit)
+    val queryFail = mkQuery(limit + 1)
+
+    val expectedFail =
+      """|query{f(l: [[[[[[0]]]]]]){f}}
+         |                 ^
+         |expectation:
+         |* must fail: exceeded maximum input value depth""".stripMargin
+
+    val resOk = limitedParser.parseText(queryOk)
+    assert(resOk.hasValue)
+
+    val resFail = limitedParser.parseText(queryFail)
+    assertEquals(resFail, Result.failure(expectedFail))
+  }
+
+  test("deep input object value") {
+    def mkQuery(depth: Int): String =
+      "query{f(l: " + ("{m:" *depth) + "0" + ("}" * depth) + "){f}}"
+
+    val limit = 5
+    val limitedParser = mkParser(maxInputValueDepth = limit)
+
+    val queryOk = mkQuery(limit)
+    val queryFail = mkQuery(limit + 1)
+
+    val expectedFail =
+      """|query{f(l: {m:{m:{m:{m:{m:{m:0}}}}}}){f}}
+         |                           ^
+         |expectation:
+         |* must fail: exceeded maximum input value depth""".stripMargin
+
+    val resOk = limitedParser.parseText(queryOk)
+    assert(resOk.hasValue)
+
+    val resFail = limitedParser.parseText(queryFail)
+    assertEquals(resFail, Result.failure(expectedFail))
+  }
+
+  test("deep variable type") {
+    def mkQuery(depth: Int): String =
+      "query($l: " + ("[" *depth) + "Int" + ("]" * depth) + "){f(a:$l)}"
+
+    val limit = 5
+    val limitedParser = mkParser(maxListTypeDepth = limit)
+
+    val queryOk = mkQuery(limit)
+    val queryFail = mkQuery(limit + 1)
+
+    val expectedFail =
+      """|query($l: [[[[[[Int]]]]]]){f(a:$l)}
+         |                ^
+         |expectation:
+         |* must fail: exceeded maximum list type depth""".stripMargin
+
+    val resOk = limitedParser.parseText(queryOk)
+    assert(resOk.hasValue)
+
+    val resFail = limitedParser.parseText(queryFail)
+    assertEquals(resFail, Result.failure(expectedFail))
+  }
+
+  def mkParser(
+    maxSelectionDepth: Int = GraphQLParser.defaultConfig.maxSelectionDepth,
+    maxSelectionWidth: Int = GraphQLParser.defaultConfig.maxSelectionWidth,
+    maxInputValueDepth: Int = GraphQLParser.defaultConfig.maxInputValueDepth,
+    maxListTypeDepth: Int = GraphQLParser.defaultConfig.maxListTypeDepth): GraphQLParser =
+    GraphQLParser(
+      GraphQLParser.Config(
+        maxSelectionDepth = maxSelectionDepth,
+        maxSelectionWidth = maxSelectionWidth,
+        maxInputValueDepth = maxInputValueDepth,
+        maxListTypeDepth = maxListTypeDepth)
+      )
 }

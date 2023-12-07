@@ -31,151 +31,172 @@ import ScalarType._
 /**
  * GraphQL query parser
  */
-object QueryParser {
-  import Ast.{ Directive => _, Type => _, Value => _, _ }, OperationDefinition._, Selection._
-
+trait QueryParser {
   /**
    *  Parse a String to query algebra operations and fragments.
    *
    *  GraphQL errors and warnings are accumulated in the result.
    */
-  def parseText(text: String): Result[(List[UntypedOperation], List[UntypedFragment])] =
-    for {
-      doc <- GraphQLParser.toResult(text, GraphQLParser.Document.parseAll(text))
-      res <- parseDocument(doc)
-      _   <- Result.failure("At least one operation required").whenA(res._1.isEmpty)
-    } yield res
+  def parseText(text: String): Result[(List[UntypedOperation], List[UntypedFragment])]
 
   /**
    *  Parse a document AST to query algebra operations and fragments.
    *
    *  GraphQL errors and warnings are accumulated in the result.
    */
-  def parseDocument(doc: Document): Result[(List[UntypedOperation], List[UntypedFragment])] = {
-    val ops0 = doc.collect { case op: OperationDefinition => op }
-    val fragments0 = doc.collect { case frag: FragmentDefinition => frag }
+  def parseDocument(doc: Ast.Document): Result[(List[UntypedOperation], List[UntypedFragment])]
+}
 
-    for {
-      ops    <- ops0.traverse {
-                  case op: Operation => parseOperation(op)
-                  case qs: QueryShorthand => parseQueryShorthand(qs)
-                }
-      frags  <- fragments0.traverse { frag =>
-                  val tpnme = frag.typeCondition.name
-                  for {
-                    sels <- parseSelections(frag.selectionSet)
-                    dirs <- parseDirectives(frag.directives)
-                  } yield UntypedFragment(frag.name.value, tpnme, dirs, sels)
-                }
-    } yield (ops, frags)
-  }
+object QueryParser {
+  def apply(parser: GraphQLParser): QueryParser =
+    new Impl(parser)
 
-  /**
-   *  Parse an operation AST to a query algebra operation.
-   *
-   *  GraphQL errors and warnings are accumulated in the result.
-   */
-  def parseOperation(op: Operation): Result[UntypedOperation] = {
-    val Operation(opType, name, vds, dirs0, sels) = op
-    for {
-      vs   <- parseVariableDefinitions(vds)
-      q    <- parseSelections(sels)
-      dirs <- parseDirectives(dirs0)
-    } yield {
-      val name0 = name.map(_.value)
-      opType match {
-        case OperationType.Query => UntypedQuery(name0, q, vs, dirs)
-        case OperationType.Mutation => UntypedMutation(name0, q, vs, dirs)
-        case OperationType.Subscription => UntypedSubscription(name0, q, vs, dirs)
-      }
-    }
-  }
+  private final class Impl(parser: GraphQLParser) extends QueryParser {
+    import Ast.{ Directive => _, Type => _, Value => _, _ }, OperationDefinition._, Selection._
 
-  /**
-    * Parse variable definition ASTs to query algebra variable definitions.
+    /**
+    *  Parse a String to query algebra operations and fragments.
     *
-    * GraphQL errors and warnings are accumulated in the result.
+    *  GraphQL errors and warnings are accumulated in the result.
     */
-  def parseVariableDefinitions(vds: List[VariableDefinition]): Result[List[UntypedVarDef]] =
-    vds.traverse {
-      case VariableDefinition(Name(nme), tpe, dv0, dirs0) =>
-        for {
-          dv   <- dv0.traverse(SchemaParser.parseValue)
-          dirs <- parseDirectives(dirs0)
-        } yield UntypedVarDef(nme, tpe, dv, dirs)
-    }
-
-  /**
-    * Parse a query shorthand AST to query algebra operation.
-    *
-    * GraphQL errors and warnings are accumulated in the result.
-    */
-  def parseQueryShorthand(qs: QueryShorthand): Result[UntypedOperation] =
-    parseSelections(qs.selectionSet).map(q => UntypedQuery(None, q, Nil, Nil))
-
-  /**
-    * Parse selection ASTs to query algebra terms.
-    *
-    * GraphQL errors and warnings are accumulated in the result
-    */
-  def parseSelections(sels: List[Selection]): Result[Query] =
-    sels.traverse(parseSelection).map { sels0 =>
-      if (sels0.sizeCompare(1) == 0) sels0.head else Group(sels0)
-    }
-
-  /**
-    * Parse a selection AST to a query algebra term.
-    *
-    * GraphQL errors and warnings are accumulated in the result.
-    */
-  def parseSelection(sel: Selection): Result[Query] = sel match {
-    case Field(alias, name, args, directives, sels) =>
+    def parseText(text: String): Result[(List[UntypedOperation], List[UntypedFragment])] =
       for {
-        args0 <- parseArgs(args)
-        sels0 <- parseSelections(sels)
-        dirs  <- parseDirectives(directives)
+        doc <- parser.parseText(text)
+        res <- parseDocument(doc)
+        _   <- Result.failure("At least one operation required").whenA(res._1.isEmpty)
+      } yield res
+
+    /**
+    *  Parse a document AST to query algebra operations and fragments.
+    *
+    *  GraphQL errors and warnings are accumulated in the result.
+    */
+    def parseDocument(doc: Document): Result[(List[UntypedOperation], List[UntypedFragment])] = {
+      val ops0 = doc.collect { case op: OperationDefinition => op }
+      val fragments0 = doc.collect { case frag: FragmentDefinition => frag }
+
+      for {
+        ops    <- ops0.traverse {
+                    case op: Operation => parseOperation(op)
+                    case qs: QueryShorthand => parseQueryShorthand(qs)
+                  }
+        frags  <- fragments0.traverse { frag =>
+                    val tpnme = frag.typeCondition.name
+                    for {
+                      sels <- parseSelections(frag.selectionSet)
+                      dirs <- parseDirectives(frag.directives)
+                    } yield UntypedFragment(frag.name.value, tpnme, dirs, sels)
+                  }
+      } yield (ops, frags)
+    }
+
+    /**
+    *  Parse an operation AST to a query algebra operation.
+    *
+    *  GraphQL errors and warnings are accumulated in the result.
+    */
+    def parseOperation(op: Operation): Result[UntypedOperation] = {
+      val Operation(opType, name, vds, dirs0, sels) = op
+      for {
+        vs   <- parseVariableDefinitions(vds)
+        q    <- parseSelections(sels)
+        dirs <- parseDirectives(dirs0)
       } yield {
-        val nme = name.value
-        val alias0 = alias.map(_.value).flatMap(n => if (n == nme) None else Some(n))
-        if (sels.isEmpty) UntypedSelect(nme, alias0, args0, dirs, Empty)
-        else UntypedSelect(nme, alias0, args0, dirs, sels0)
+        val name0 = name.map(_.value)
+        opType match {
+          case OperationType.Query => UntypedQuery(name0, q, vs, dirs)
+          case OperationType.Mutation => UntypedMutation(name0, q, vs, dirs)
+          case OperationType.Subscription => UntypedSubscription(name0, q, vs, dirs)
+        }
+      }
+    }
+
+    /**
+      * Parse variable definition ASTs to query algebra variable definitions.
+      *
+      * GraphQL errors and warnings are accumulated in the result.
+      */
+    def parseVariableDefinitions(vds: List[VariableDefinition]): Result[List[UntypedVarDef]] =
+      vds.traverse {
+        case VariableDefinition(Name(nme), tpe, dv0, dirs0) =>
+          for {
+            dv   <- dv0.traverse(Value.fromAst)
+            dirs <- parseDirectives(dirs0)
+          } yield UntypedVarDef(nme, tpe, dv, dirs)
       }
 
-    case FragmentSpread(Name(name), directives) =>
-      for {
-        dirs <- parseDirectives(directives)
-      } yield UntypedFragmentSpread(name, dirs)
+    /**
+      * Parse a query shorthand AST to query algebra operation.
+      *
+      * GraphQL errors and warnings are accumulated in the result.
+      */
+    def parseQueryShorthand(qs: QueryShorthand): Result[UntypedOperation] =
+      parseSelections(qs.selectionSet).map(q => UntypedQuery(None, q, Nil, Nil))
 
-    case InlineFragment(typeCondition, directives, sels) =>
-      for {
-        dirs  <- parseDirectives(directives)
-        sels0 <- parseSelections(sels)
-      } yield UntypedInlineFragment(typeCondition.map(_.name), dirs, sels0)
+    /**
+      * Parse selection ASTs to query algebra terms.
+      *
+      * GraphQL errors and warnings are accumulated in the result
+      */
+    def parseSelections(sels: List[Selection]): Result[Query] =
+      sels.traverse(parseSelection).map { sels0 =>
+        if (sels0.sizeCompare(1) == 0) sels0.head else Group(sels0)
+      }
+
+    /**
+      * Parse a selection AST to a query algebra term.
+      *
+      * GraphQL errors and warnings are accumulated in the result.
+      */
+    def parseSelection(sel: Selection): Result[Query] = sel match {
+      case Field(alias, name, args, directives, sels) =>
+        for {
+          args0 <- parseArgs(args)
+          sels0 <- parseSelections(sels)
+          dirs  <- parseDirectives(directives)
+        } yield {
+          val nme = name.value
+          val alias0 = alias.map(_.value).flatMap(n => if (n == nme) None else Some(n))
+          if (sels.isEmpty) UntypedSelect(nme, alias0, args0, dirs, Empty)
+          else UntypedSelect(nme, alias0, args0, dirs, sels0)
+        }
+
+      case FragmentSpread(Name(name), directives) =>
+        for {
+          dirs <- parseDirectives(directives)
+        } yield UntypedFragmentSpread(name, dirs)
+
+      case InlineFragment(typeCondition, directives, sels) =>
+        for {
+          dirs  <- parseDirectives(directives)
+          sels0 <- parseSelections(sels)
+        } yield UntypedInlineFragment(typeCondition.map(_.name), dirs, sels0)
+    }
+
+    /**
+      * Parse directive ASTs to query algebra directives.
+      *
+      * GraphQL errors and warnings are accumulated in the result.
+      */
+    def parseDirectives(directives: List[Ast.Directive]): Result[List[Directive]] =
+      directives.traverse(Directive.fromAst)
+
+    /**
+      * Parse argument ASTs to query algebra bindings.
+      *
+      * GraphQL errors and warnings are accumulated in the result.
+      */
+    def parseArgs(args: List[(Name, Ast.Value)]): Result[List[Binding]] =
+      args.traverse((parseArg _).tupled)
+
+    /**
+      * Parse an argument AST to a query algebra binding.
+      *
+      * GraphQL errors and warnings are accumulated in the result.
+      */
+    def parseArg(name: Name, value: Ast.Value): Result[Binding] =
+      Value.fromAst(value).map(v => Binding(name.value, v))
   }
-
-  /**
-    * Parse directive ASTs to query algebra directives.
-    *
-    * GraphQL errors and warnings are accumulated in the result.
-    */
-  def parseDirectives(directives: List[Ast.Directive]): Result[List[Directive]] =
-    directives.traverse(SchemaParser.mkDirective)
-
-  /**
-    * Parse argument ASTs to query algebra bindings.
-    *
-    * GraphQL errors and warnings are accumulated in the result.
-    */
-  def parseArgs(args: List[(Name, Ast.Value)]): Result[List[Binding]] =
-    args.traverse((parseArg _).tupled)
-
-  /**
-    * Parse an argument AST to a query algebra binding.
-    *
-    * GraphQL errors and warnings are accumulated in the result.
-    */
-  def parseArg(name: Name, value: Ast.Value): Result[Binding] =
-    SchemaParser.parseValue(value).map(v => Binding(name.value, v))
 }
 
 /**
@@ -185,7 +206,7 @@ object QueryParser {
  * applies a collection of transformation phases in sequence, yielding a
  * query algebra term which can be directly interpreted.
  */
-class QueryCompiler(schema: Schema, phases: List[Phase]) {
+class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
   import IntrospectionLevel._
 
   /**
@@ -195,26 +216,30 @@ class QueryCompiler(schema: Schema, phases: List[Phase]) {
    * GraphQL errors and warnings are accumulated in the result.
    */
   def compile(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): Result[Operation] =
-    QueryParser.parseText(text).flatMap { case (ops, frags) =>
-      (ops, name) match {
-        case (Nil, _) =>
-          Result.failure("At least one operation required")
-        case (List(op), None) =>
-          compileOperation(op, untypedVars, frags, introspectionLevel, env)
-        case (_, None) =>
-          Result.failure("Operation name required to select unique operation")
-        case (ops, _) if ops.exists(_.name.isEmpty) =>
-          Result.failure("Query shorthand cannot be combined with multiple operations")
-        case (ops, name) =>
-          ops.filter(_.name == name) match {
-            case List(op) =>
-              compileOperation(op, untypedVars, frags, introspectionLevel, env)
-            case Nil =>
-              Result.failure(s"No operation named '$name'")
-            case _ =>
-              Result.failure(s"Multiple operations named '$name'")
-          }
-      }
+    parser.parseText(text).flatMap { case (ops, frags) =>
+      for {
+        _    <- Result.fromProblems(validateVariablesAndFragments(ops, frags))
+        ops0 <- ops.traverse(op => compileOperation(op, untypedVars, frags, introspectionLevel, env).map(op0 => (op.name, op0)))
+        res  <- (ops0, name) match {
+                  case (List((_, op)), None) =>
+                    op.success
+                  case (Nil, _) =>
+                    Result.failure("At least one operation required")
+                  case (_, None) =>
+                    Result.failure("Operation name required to select unique operation")
+                  case (ops, _) if ops.lengthCompare(1) > 0 && ops.exists(_._1.isEmpty) =>
+                    Result.failure("Query shorthand cannot be combined with multiple operations")
+                  case (ops, name) =>
+                    ops.filter(_._1 == name) match {
+                      case List((_, op)) =>
+                        op.success
+                      case Nil =>
+                        Result.failure(s"No operation named '$name'")
+                      case _ =>
+                        Result.failure(s"Multiple operations named '$name'")
+                    }
+                }
+      } yield res
     }
 
   /**
@@ -296,6 +321,154 @@ class QueryCompiler(schema: Schema, phases: List[Phase]) {
       }
     }
     loop(tpe, false)
+  }
+
+  def validateVariablesAndFragments(ops: List[UntypedOperation], frags: List[UntypedFragment]): List[Problem] = {
+    val (uniqueFrags, duplicateFrags) = frags.map(_.name).foldLeft((Set.empty[String], Set.empty[String])) {
+      case ((unique, duplicate), nme) =>
+        if (unique.contains(nme)) (unique, duplicate + nme)
+        else (unique + nme, duplicate)
+    }
+
+    if (duplicateFrags.nonEmpty)
+      duplicateFrags.toList.map(nme => Problem(s"Fragment '$nme' is defined more than once"))
+    else {
+      def collectQueryRefs(query: Query): (Set[String], Set[String]) = {
+        @tailrec
+        def loop(queries: Iterator[Query], vars: Set[String], frags: Set[String]): (Set[String], Set[String]) =
+          if (!queries.hasNext) (vars, frags)
+          else
+            queries.next() match {
+              case UntypedSelect(_, _, args, dirs, child) =>
+                val v0 = args.iterator.flatMap(arg => collectValueRefs(arg.value)).toSet
+                val v1 = dirs.iterator.flatMap(dir => dir.args.iterator.flatMap(arg => collectValueRefs(arg.value))).toSet
+                loop(Iterator.single(child) ++ queries, vars ++ v0 ++ v1, frags)
+              case UntypedFragmentSpread(nme, dirs) =>
+                val v0 = dirs.iterator.flatMap(dir => dir.args.iterator.flatMap(arg => collectValueRefs(arg.value))).toSet
+                loop(queries, vars ++ v0, frags + nme)
+              case UntypedInlineFragment(_, dirs, child) =>
+                val v0 = dirs.iterator.flatMap(dir => dir.args.iterator.flatMap(arg => collectValueRefs(arg.value))).toSet
+                loop(Iterator.single(child) ++ queries, vars ++ v0, frags)
+              case Group(children) =>
+                loop(children.iterator ++ queries, vars, frags)
+              case Select(_, _, child)       => loop(Iterator.single(child) ++ queries, vars, frags)
+              case Narrow(_, child)          => loop(Iterator.single(child) ++ queries, vars, frags)
+              case Unique(child)             => loop(Iterator.single(child) ++ queries, vars, frags)
+              case Filter(_, child)          => loop(Iterator.single(child) ++ queries, vars, frags)
+              case Limit(_, child)           => loop(Iterator.single(child) ++ queries, vars, frags)
+              case Offset(_, child)          => loop(Iterator.single(child) ++ queries, vars, frags)
+              case OrderBy(_, child)         => loop(Iterator.single(child) ++ queries, vars, frags)
+              case Introspect(_, child)      => loop(Iterator.single(child) ++ queries, vars, frags)
+              case Environment(_, child)     => loop(Iterator.single(child) ++ queries, vars, frags)
+              case Component(_, _, child)    => loop(Iterator.single(child) ++ queries, vars, frags)
+              case Effect(_, child)          => loop(Iterator.single(child) ++ queries, vars, frags)
+              case TransformCursor(_, child) => loop(Iterator.single(child) ++ queries, vars, frags)
+              case Count(_)                  => loop(queries, vars, frags)
+              case Empty                     => loop(queries, vars, frags)
+            }
+
+        loop(Iterator.single(query), Set.empty[String], Set.empty[String])
+      }
+
+      def collectValueRefs(value: Value): Set[String] = {
+        @tailrec
+        def loop(values: Iterator[Value], vars: Set[String]): Set[String] =
+          if (!values.hasNext) vars
+          else
+            values.next() match {
+              case VariableRef(nme) =>
+                loop(values, Set(nme))
+              case ObjectValue(fields) =>
+                loop(fields.iterator.map(_._2) ++ values, vars)
+              case ListValue(elems) =>
+                loop(elems.iterator ++ values, vars)
+              case _ => loop(values, vars)
+            }
+
+        loop(Iterator.single(value), Set.empty[String])
+      }
+
+      val fragRefs: Map[String, (Set[String], Set[String])] =
+        frags.map { frag =>
+          (frag.name, collectQueryRefs(frag.child))
+        }.toMap
+
+      @tailrec
+      def checkCycle(pendingFrags: Set[String], seen: Set[String]): Option[Set[String]] = {
+        if (pendingFrags.isEmpty) Some(seen)
+        else {
+          val hd = pendingFrags.head
+          if (seen.contains(hd)) None
+          else checkCycle(fragRefs(hd)._2 ++ pendingFrags.tail, seen + hd)
+        }
+      }
+
+      def findCycle: Option[String] = {
+        @tailrec
+        def loop(pendingFrags: Set[String]): Either[Set[String], String] = {
+          if(pendingFrags.isEmpty) Left(Set.empty[String])
+          else {
+            val hd = pendingFrags.head
+            checkCycle(Set(hd), Set.empty[String]) match {
+              case None => Right(hd)
+              case Some(seen) => loop(pendingFrags.tail.diff(seen))
+            }
+          }
+        }
+
+        if (uniqueFrags.isEmpty) None
+        else loop(uniqueFrags).toOption
+      }
+
+      findCycle match {
+        case Some(from) => List(Problem(s"Fragment cycle starting from '$from'"))
+        case _ =>
+          def validateOp(op: UntypedOperation, pendingFrags: Set[String]): (List[Problem], Set[String]) = {
+            val pendingVars = op.variables.map(_.name).toSet
+            val (dqv, dqf) = collectQueryRefs(op.query)
+
+            val (qv, qf) = {
+              dqf.foldLeft((dqv, dqf)) {
+                case ((v, f), nme) => fragRefs.get(nme) match {
+                  case None => (v, f)
+                  case Some((fv, ff)) => (v ++ fv, f ++ ff)
+                }
+              }
+            }
+
+            val varProblems =
+              if (qv == pendingVars) Nil
+              else {
+                val undefined = qv.diff(pendingVars)
+                val unused = pendingVars.diff(qv)
+                val undefinedProblems = undefined.toList.map(nme => Problem(s"Variable '$nme' is undefined"))
+                val unusedProblems = unused.toList.map(nme => Problem(s"Variable '$nme' is unused"))
+                undefinedProblems ++ unusedProblems
+              }
+
+            val fragProblems =
+              if (qf.subsetOf(uniqueFrags)) Nil
+              else {
+                val undefined = qf.diff(uniqueFrags)
+                val undefinedProblems = undefined.toList.map(nme => Problem(s"Fragment '$nme' is undefined"))
+                undefinedProblems
+              }
+
+            (varProblems ++ fragProblems, pendingFrags.diff(qf))
+          }
+
+          val (opProblems, unreferencedFrags) =
+            ops.foldLeft((List.empty[Problem], uniqueFrags)) {
+              case ((acc, pendingFrags), op) =>
+                val (problems, pendingFrags0) = validateOp(op, pendingFrags)
+                (acc ++ problems, pendingFrags0)
+              }
+
+          val unreferencedFragProblems = unreferencedFrags.toList.map(nme => Problem(s"Fragment '$nme' is unused"))
+
+          opProblems ++ unreferencedFragProblems
+      }
+    }
   }
 }
 
@@ -710,7 +883,7 @@ object QueryCompiler {
         case VariableRef(varName) =>
           for {
             v  <- Elab.vars
-            tv <- Elab.liftR(Result.fromOption(v.get(varName), s"Undefined variable '$varName'"))
+            tv <- Elab.liftR(Result.fromOption(v.get(varName), s"Variable '$varName' is undefined"))
             b  <- tv match {
                     case (tpe, BooleanValue(value)) if tpe.nonNull =:= BooleanType => Elab.pure(value)
                     case _ => Elab.failure(s"Argument of skip/include must be boolean")

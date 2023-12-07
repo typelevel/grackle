@@ -373,6 +373,38 @@ final class ScalarsSuite extends CatsEffectSuite {
     assertIO(res, expected)
   }
 
+  test("query with scalar argument without apostrophes") {
+    val query = """
+      query {
+        moviesLongerThan(duration: PT3H) {
+          title
+          duration
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "moviesLongerThan" : [
+            {
+              "title" : "Celine et Julie Vont en Bateau",
+              "duration" : "PT3H25M"
+            },
+            {
+              "title" : "L'Amour fou",
+              "duration" : "PT4H12M"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = MovieMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
   test("query with LocalTime argument") {
     val query = """
       query {

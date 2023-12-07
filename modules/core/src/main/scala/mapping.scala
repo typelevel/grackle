@@ -480,7 +480,11 @@ abstract class Mapping[F[_]] {
 
   def compilerPhases: List[QueryCompiler.Phase] = List(selectElaborator, componentElaborator, effectElaborator)
 
-  lazy val compiler = new QueryCompiler(schema, compilerPhases)
+  def parserConfig: GraphQLParser.Config = GraphQLParser.defaultConfig
+  lazy val graphQLParser: GraphQLParser = GraphQLParser(parserConfig)
+  lazy val queryParser: QueryParser = QueryParser(graphQLParser)
+
+  lazy val compiler: QueryCompiler = new QueryCompiler(queryParser, schema, compilerPhases)
 
   val interpreter: QueryInterpreter[F] = new QueryInterpreter(this)
 

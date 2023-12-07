@@ -790,6 +790,258 @@ final class FragmentSuite extends CatsEffectSuite {
 
     assertIO(res, expected)
   }
+
+  test("fragment defined") {
+    val query = """
+      query withFragments {
+        user(id: 1) {
+          friends {
+            ...friendFields
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Fragment 'friendFields' is undefined"
+          }
+        ]
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("fragment used") {
+    val query = """
+      query withFragments {
+        user(id: 1) {
+          friends {
+            id
+            name
+            profilePic
+          }
+        }
+      }
+
+      fragment friendFields on User {
+        id
+        name
+        profilePic
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Fragment 'friendFields' is unused"
+          }
+        ]
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("fragment duplication") {
+    val query = """
+      query withFragments {
+        user(id: 1) {
+          ...userFields
+        }
+      }
+
+      fragment userFields on User {
+        name
+      }
+
+      fragment userFields on User {
+        name
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Fragment 'userFields' is defined more than once"
+          }
+        ]
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+
+  test("fragment recursion (1)") {
+    val query = """
+      query withFragments {
+        user(id: 1) {
+          ...userFields
+        }
+      }
+
+      fragment userFields on User {
+        name
+        friends {
+          ...userFields
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Fragment cycle starting from 'userFields'"
+          }
+        ]
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("fragment recursion (2)") {
+    val query = """
+      query withFragments {
+        user(id: 1) {
+          ...userFields
+        }
+      }
+
+      fragment userFields on User {
+        name
+        favourite {
+          ...pageFields
+        }
+      }
+
+      fragment pageFields on Page {
+        title
+        likers {
+          ...userFields
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Fragment cycle starting from 'userFields'"
+          }
+        ]
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("fragment recursion (3)") {
+    val query = """
+      query withFragments {
+        user(id: 1) {
+          ...userFields
+        }
+      }
+
+      fragment userFields on User {
+        name
+        favourite {
+          ...pageFields
+        }
+      }
+
+      fragment pageFields on Page {
+        title
+        likers {
+          ...userFields2
+        }
+      }
+
+      fragment userFields2 on User {
+        profilePic
+        favourite {
+          ...userFields
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Fragment cycle starting from 'userFields'"
+          }
+        ]
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("fragment recursion (4)") {
+    val query = """
+      query withFragments {
+        user(id: 1) {
+          ...userFields
+        }
+      }
+
+      fragment pageFields on Page {
+        title
+        likers {
+          ...userFields2
+        }
+      }
+
+      fragment userFields2 on User {
+        profilePic
+        favourite {
+          ...pageFields
+        }
+      }
+
+      fragment userFields on User {
+        name
+        favourite {
+          ...pageFields
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Fragment cycle starting from 'pageFields'"
+          }
+        ]
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
 }
 
 object FragmentData {

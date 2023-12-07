@@ -228,7 +228,10 @@ trait Schema {
 
 object Schema {
   def apply(schemaText: String)(implicit pos: SourcePos): Result[Schema] =
-    SchemaParser.parseText(schemaText)
+    apply(schemaText, SchemaParser(GraphQLParser(GraphQLParser.defaultConfig)))
+
+  def apply(schemaText: String, parser: SchemaParser)(implicit pos: SourcePos): Result[Schema] =
+    parser.parseText(schemaText)
 }
 
 case class SchemaExtension(
@@ -940,6 +943,23 @@ object Value {
 
   case object AbsentValue extends Value
 
+  def fromAst(value: Ast.Value): Result[Value] = {
+    value match {
+      case Ast.Value.IntValue(i) => IntValue(i).success
+      case Ast.Value.FloatValue(d) => FloatValue(d).success
+      case Ast.Value.StringValue(s) => StringValue(s).success
+      case Ast.Value.BooleanValue(b) => BooleanValue(b).success
+      case Ast.Value.EnumValue(e) => EnumValue(e.value).success
+      case Ast.Value.Variable(v) => VariableRef(v.value).success
+      case Ast.Value.NullValue => NullValue.success
+      case Ast.Value.ListValue(vs) => vs.traverse(fromAst).map(ListValue(_))
+      case Ast.Value.ObjectValue(fs) =>
+        fs.traverse { case (name, value) =>
+          fromAst(value).map(v => (name.value, v))
+        }.map(ObjectValue(_))
+    }
+  }
+
   object StringListValue {
     def apply(ss: List[String]): Value =
       ListValue(ss.map(StringValue(_)))
@@ -961,7 +981,7 @@ object Value {
     def loop(value: Value): Result[Value] =
       value match {
         case VariableRef(varName) =>
-          Result.fromOption(vars.get(varName).map(_._2), s"Undefined variable '$varName'")
+          Result.fromOption(vars.get(varName).map(_._2), s"Variable '$varName' is undefined")
         case ObjectValue(fields) =>
           val (keys, values) = fields.unzip
           values.traverse(loop).map(evs => ObjectValue(keys.zip(evs)))
@@ -1166,6 +1186,13 @@ case class Directive(
 )
 
 object Directive {
+  def fromAst(d: Ast.Directive): Result[Directive] = {
+    val Ast.Directive(Ast.Name(nme), args) = d
+    args.traverse {
+      case (Ast.Name(nme), value) => Value.fromAst(value).map(Binding(nme, _))
+    }.map(Directive(nme, _))
+  }
+
   def validateDirectivesForSchema(schema: Schema): List[Problem] = {
     def validateTypeDirectives(tpe: NamedType): List[Problem] =
       tpe match {
@@ -1325,268 +1352,254 @@ object Directive {
 /**
  * GraphQL schema parser
  */
+trait SchemaParser {
+    def parseText(text: String)(implicit pos: SourcePos): Result[Schema]
+    def parseDocument(doc: Ast.Document)(implicit sourcePos: SourcePos): Result[Schema]
+}
+
 object SchemaParser {
+  def apply(parser: GraphQLParser): SchemaParser =
+    new Impl(parser)
 
-  import Ast.{Directive => _, EnumValueDefinition => _, SchemaExtension => _, Type => _, TypeExtension => _, Value => _, _}
+  private final class Impl(parser: GraphQLParser) extends SchemaParser {
 
-  /**
-   * Parse a query String to a query algebra term.
-   *
-   * Yields a Query value on the right and accumulates errors on the left.
-   */
-  def parseText(text: String)(implicit pos: SourcePos): Result[Schema] =
-    for {
-      doc <- GraphQLParser.toResult(text, GraphQLParser.Document.parseAll(text))
-      query <- parseDocument(doc)
-    } yield query
+    import Ast.{Directive => _, EnumValueDefinition => _, SchemaExtension => _, Type => _, TypeExtension => _, Value => _, _}
 
-  def parseDocument(doc: Document)(implicit sourcePos: SourcePos): Result[Schema] = {
-    object schema extends Schema {
-      var baseTypes: List[NamedType] = Nil
-      var baseSchemaType1: Option[NamedType] = null
-      var pos: SourcePos = sourcePos
-
-      override def baseSchemaType: NamedType = baseSchemaType1.getOrElse(super.baseSchemaType)
-
-      var directives: List[DirectiveDef] = Nil
-      var schemaExtensions: List[SchemaExtension] = Nil
-      var typeExtensions: List[TypeExtension] = Nil
-
-      def complete(types0: List[NamedType], baseSchemaType0: Option[NamedType], directives0: List[DirectiveDef], schemaExtensions0: List[SchemaExtension], typeExtensions0: List[TypeExtension]): Unit = {
-        baseTypes = types0
-        baseSchemaType1 = baseSchemaType0
-        directives = directives0 ++ DirectiveDef.builtIns
-        schemaExtensions = schemaExtensions0
-        typeExtensions = typeExtensions0
-      }
-    }
-
-    val schemaExtnDefns: List[Ast.SchemaExtension] = doc.collect { case tpe: Ast.SchemaExtension => tpe }
-    val typeDefns: List[TypeDefinition] = doc.collect { case tpe: TypeDefinition => tpe }
-    val dirDefns: List[DirectiveDefinition] = doc.collect { case dir: DirectiveDefinition => dir }
-    val extnDefns: List[Ast.TypeExtension] = doc.collect { case tpe: Ast.TypeExtension => tpe }
-
-    for {
-      baseTypes   <- mkTypeDefs(schema, typeDefns)
-      schemaExtns <- mkSchemaExtensions(schema, schemaExtnDefns)
-      typeExtns   <- mkExtensions(schema, extnDefns)
-      directives  <- mkDirectiveDefs(schema, dirDefns)
-      schemaType  <- mkSchemaType(schema, doc)
-      _           =  schema.complete(baseTypes, schemaType, directives, schemaExtns, typeExtns)
-      _           <- Result.fromProblems(SchemaValidator.validateSchema(schema, typeDefns, extnDefns))
-    } yield schema
-  }
-
-  // explicit Schema type, if any
-  def mkSchemaType(schema: Schema, doc: Document): Result[Option[NamedType]] = {
-    def build(dirs: List[Directive], ops: List[Field]): NamedType = {
-      val query = ops.find(_.name == "query").getOrElse(Field("query", None, Nil, defaultQueryType, Nil))
-      ObjectType(
-        name = "Schema",
-        description = None,
-        fields = query :: List(ops.find(_.name == "mutation"), ops.find(_.name == "subscription")).flatten,
-        interfaces = Nil,
-        directives = dirs
-      )
-    }
-
-    def defaultQueryType = schema.ref("Query")
-
-    val defns = doc.collect { case schema: SchemaDefinition => schema }
-    defns match {
-      case Nil => None.success
-      case SchemaDefinition(rootOpTpes, dirs0) :: Nil =>
-        for {
-          ops  <- rootOpTpes.traverse(mkRootOperation(schema))
-          dirs <- dirs0.traverse(mkDirective)
-        } yield Some(build(dirs, ops))
-
-      case _ => Result.failure("At most one schema definition permitted")
-    }
-  }
-
-  def mkSchemaExtensions(schema: Schema, extnDefns: List[Ast.SchemaExtension]): Result[List[SchemaExtension]] =
-    extnDefns.traverse(mkSchemaExtension(schema))
-
-  def mkSchemaExtension(schema: Schema)(se: Ast.SchemaExtension): Result[SchemaExtension] = {
-    val Ast.SchemaExtension(rootOpTpes, dirs0) = se
-    for {
-      ops  <- rootOpTpes.traverse(mkRootOperation(schema))
-      dirs <- dirs0.traverse(mkDirective)
-    } yield SchemaExtension(ops, dirs)
-  }
-
-  def mkRootOperation(schema: Schema)(rootTpe: RootOperationTypeDefinition): Result[Field] = {
-    val RootOperationTypeDefinition(optype, tpe, dirs0) = rootTpe
-    for {
-      dirs <- dirs0.traverse(mkDirective)
-      tpe  <- mkType(schema)(tpe)
-      _    <- Result.failure(s"Root operation types must be named types, found '$tpe'").whenA(!tpe.nonNull.isNamed)
-    } yield Field(optype.name, None, Nil, tpe, dirs)
-  }
-
-  def mkExtensions(schema: Schema, extnDefns: List[Ast.TypeExtension]): Result[List[TypeExtension]] =
-    extnDefns.traverse(mkExtension(schema))
-
-  def mkExtension(schema: Schema)(ed: Ast.TypeExtension): Result[TypeExtension] =
-    ed match {
-      case ScalarTypeExtension(Ast.Type.Named(Name(name)), dirs0) =>
-        for {
-          dirs   <- dirs0.traverse(mkDirective)
-        } yield ScalarExtension(name, dirs)
-      case InterfaceTypeExtension(Ast.Type.Named(Name(name)), fields0, ifs0, dirs0) =>
-        for {
-          fields <- fields0.traverse(mkField(schema))
-          ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
-          dirs   <- dirs0.traverse(mkDirective)
-        } yield InterfaceExtension(name, fields, ifs, dirs)
-      case ObjectTypeExtension(Ast.Type.Named(Name(name)), fields0, ifs0, dirs0) =>
-        for {
-          fields <- fields0.traverse(mkField(schema))
-          ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
-          dirs   <- dirs0.traverse(mkDirective)
-        } yield ObjectExtension(name, fields, ifs, dirs)
-      case UnionTypeExtension(Ast.Type.Named(Name(name)), dirs0, members0) =>
-        for {
-          dirs    <- dirs0.traverse(mkDirective)
-          members =  members0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
-        } yield UnionExtension(name, members, dirs)
-      case EnumTypeExtension(Ast.Type.Named(Name(name)), dirs0, values0) =>
-        for {
-          values  <- values0.traverse(mkEnumValue)
-          dirs    <- dirs0.traverse(mkDirective)
-        } yield EnumExtension(name, values, dirs)
-      case InputObjectTypeExtension(Ast.Type.Named(Name(name)), dirs0, fields0) =>
-        for {
-          fields <- fields0.traverse(mkInputValue(schema))
-          dirs   <- dirs0.traverse(mkDirective)
-        } yield InputObjectExtension(name, fields, dirs)
-    }
-
-  def mkTypeDefs(schema: Schema, defns: List[TypeDefinition]): Result[List[NamedType]] =
-    defns.traverse(mkTypeDef(schema))
-
-  def mkTypeDef(schema: Schema)(td: TypeDefinition): Result[NamedType] = td match {
-    case ScalarTypeDefinition(Name("Int"), _, _) => IntType.success
-    case ScalarTypeDefinition(Name("Float"), _, _) => FloatType.success
-    case ScalarTypeDefinition(Name("String"), _, _) => StringType.success
-    case ScalarTypeDefinition(Name("Boolean"), _, _) => BooleanType.success
-    case ScalarTypeDefinition(Name("ID"), _, _) => IDType.success
-    case ScalarTypeDefinition(Name(nme), desc, dirs0) =>
+    /**
+    * Parse a query String to a query algebra term.
+    *
+    * Yields a Query value on the right and accumulates errors on the left.
+    */
+    def parseText(text: String)(implicit pos: SourcePos): Result[Schema] =
       for {
-        dirs <- dirs0.traverse(mkDirective)
-      } yield ScalarType(nme, desc, dirs)
-    case ObjectTypeDefinition(Name(nme), desc, fields0, ifs0, dirs0) =>
-      if (fields0.isEmpty) Result.failure(s"object type $nme must define at least one field")
-      else
-        for {
-          fields <- fields0.traverse(mkField(schema))
-          ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
-          dirs   <- dirs0.traverse(mkDirective)
-        } yield ObjectType(nme, desc, fields, ifs, dirs)
-    case InterfaceTypeDefinition(Name(nme), desc, fields0, ifs0, dirs0) =>
-      if (fields0.isEmpty) Result.failure(s"interface type $nme must define at least one field")
-      else
-        for {
-          fields <- fields0.traverse(mkField(schema))
-          ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
-          dirs   <- dirs0.traverse(mkDirective)
-        } yield InterfaceType(nme, desc, fields, ifs, dirs)
-    case UnionTypeDefinition(Name(nme), desc, dirs0, members0) =>
-      if (members0.isEmpty) Result.failure(s"union type $nme must define at least one member")
-      else {
-        for {
-          dirs    <- dirs0.traverse(mkDirective)
-          members =  members0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
-        } yield UnionType(nme, desc, members, dirs)
+        doc <- parser.parseText(text)
+        query <- parseDocument(doc)
+      } yield query
+
+    def parseDocument(doc: Document)(implicit sourcePos: SourcePos): Result[Schema] = {
+      object schema extends Schema {
+        var baseTypes: List[NamedType] = Nil
+        var baseSchemaType1: Option[NamedType] = null
+        var pos: SourcePos = sourcePos
+
+        override def baseSchemaType: NamedType = baseSchemaType1.getOrElse(super.baseSchemaType)
+
+        var directives: List[DirectiveDef] = Nil
+        var schemaExtensions: List[SchemaExtension] = Nil
+        var typeExtensions: List[TypeExtension] = Nil
+
+        def complete(types0: List[NamedType], baseSchemaType0: Option[NamedType], directives0: List[DirectiveDef], schemaExtensions0: List[SchemaExtension], typeExtensions0: List[TypeExtension]): Unit = {
+          baseTypes = types0
+          baseSchemaType1 = baseSchemaType0
+          directives = directives0 ++ DirectiveDef.builtIns
+          schemaExtensions = schemaExtensions0
+          typeExtensions = typeExtensions0
+        }
       }
-    case EnumTypeDefinition(Name(nme), desc, dirs0, values0) =>
-      if (values0.isEmpty) Result.failure(s"enum type $nme must define at least one enum value")
-      else
-        for {
-          values <- values0.traverse(mkEnumValue)
-          dirs   <- dirs0.traverse(mkDirective)
-        } yield EnumType(nme, desc, values, dirs)
-    case InputObjectTypeDefinition(Name(nme), desc, fields0, dirs0) =>
-      if (fields0.isEmpty) Result.failure(s"input object type $nme must define at least one input field")
-      else
-        for {
-          fields <- fields0.traverse(mkInputValue(schema))
-          dirs   <- dirs0.traverse(mkDirective)
-        } yield InputObjectType(nme, desc, fields, dirs)
-  }
 
-  def mkDirective(d: Ast.Directive): Result[Directive] = {
-    val Ast.Directive(Name(nme), args) = d
-    args.traverse {
-      case (Name(nme), value) => parseValue(value).map(Binding(nme, _))
-    }.map(Directive(nme, _))
-  }
+      val schemaExtnDefns: List[Ast.SchemaExtension] = doc.collect { case tpe: Ast.SchemaExtension => tpe }
+      val typeDefns: List[TypeDefinition] = doc.collect { case tpe: TypeDefinition => tpe }
+      val dirDefns: List[DirectiveDefinition] = doc.collect { case dir: DirectiveDefinition => dir }
+      val extnDefns: List[Ast.TypeExtension] = doc.collect { case tpe: Ast.TypeExtension => tpe }
 
-  def mkField(schema: Schema)(f: FieldDefinition): Result[Field] = {
-    val FieldDefinition(Name(nme), desc, args0, tpe0, dirs0) = f
-    for {
-      args <- args0.traverse(mkInputValue(schema))
-      tpe  <- mkType(schema)(tpe0)
-      dirs <- dirs0.traverse(mkDirective)
-    } yield Field(nme, desc, args, tpe, dirs)
-  }
+      for {
+        baseTypes   <- mkTypeDefs(schema, typeDefns)
+        schemaExtns <- mkSchemaExtensions(schema, schemaExtnDefns)
+        typeExtns   <- mkExtensions(schema, extnDefns)
+        directives  <- mkDirectiveDefs(schema, dirDefns)
+        schemaType  <- mkSchemaType(schema, doc)
+        _           =  schema.complete(baseTypes, schemaType, directives, schemaExtns, typeExtns)
+        _           <- Result.fromProblems(SchemaValidator.validateSchema(schema, typeDefns, extnDefns))
+      } yield schema
+    }
 
-  def mkType(schema: Schema)(tpe: Ast.Type): Result[Type] = {
-    def loop(tpe: Ast.Type, nullable: Boolean): Result[Type] = {
-      def wrap(tpe: Type): Type = if (nullable) NullableType(tpe) else tpe
+    // explicit Schema type, if any
+    def mkSchemaType(schema: Schema, doc: Document): Result[Option[NamedType]] = {
+      def build(dirs: List[Directive], ops: List[Field]): NamedType = {
+        val query = ops.find(_.name == "query").getOrElse(Field("query", None, Nil, defaultQueryType, Nil))
+        ObjectType(
+          name = "Schema",
+          description = None,
+          fields = query :: List(ops.find(_.name == "mutation"), ops.find(_.name == "subscription")).flatten,
+          interfaces = Nil,
+          directives = dirs
+        )
+      }
 
-      tpe match {
-        case Ast.Type.List(tpe) => loop(tpe, true).map(tpe => wrap(ListType(tpe)))
-        case Ast.Type.NonNull(Left(tpe)) => loop(tpe, false)
-        case Ast.Type.NonNull(Right(tpe)) => loop(tpe, false)
-        case Ast.Type.Named(Name(nme)) => wrap(ScalarType.builtIn(nme).getOrElse(schema.ref(nme))).success
+      def defaultQueryType = schema.ref("Query")
+
+      val defns = doc.collect { case schema: SchemaDefinition => schema }
+      defns match {
+        case Nil => None.success
+        case SchemaDefinition(rootOpTpes, dirs0) :: Nil =>
+          for {
+            ops  <- rootOpTpes.traverse(mkRootOperation(schema))
+            dirs <- dirs0.traverse(Directive.fromAst)
+          } yield Some(build(dirs, ops))
+
+        case _ => Result.failure("At most one schema definition permitted")
       }
     }
 
-    loop(tpe, true)
-  }
+    def mkSchemaExtensions(schema: Schema, extnDefns: List[Ast.SchemaExtension]): Result[List[SchemaExtension]] =
+      extnDefns.traverse(mkSchemaExtension(schema))
 
-  def mkDirectiveDefs(schema: Schema, defns: List[DirectiveDefinition]): Result[List[DirectiveDef]] =
-    defns.traverse(mkDirectiveDef(schema))
+    def mkSchemaExtension(schema: Schema)(se: Ast.SchemaExtension): Result[SchemaExtension] = {
+      val Ast.SchemaExtension(rootOpTpes, dirs0) = se
+      for {
+        ops  <- rootOpTpes.traverse(mkRootOperation(schema))
+        dirs <- dirs0.traverse(Directive.fromAst)
+      } yield SchemaExtension(ops, dirs)
+    }
 
-  def mkDirectiveDef(schema: Schema)(dd: DirectiveDefinition): Result[DirectiveDef] = {
-    val DirectiveDefinition(Name(nme), desc, args0, repeatable, locations) = dd
-    for {
-      args <- args0.traverse(mkInputValue(schema))
-    } yield DirectiveDef(nme, desc, args, repeatable, locations)
-  }
+    def mkRootOperation(schema: Schema)(rootTpe: RootOperationTypeDefinition): Result[Field] = {
+      val RootOperationTypeDefinition(optype, tpe, dirs0) = rootTpe
+      for {
+        dirs <- dirs0.traverse(Directive.fromAst)
+        tpe  <- mkType(schema)(tpe)
+        _    <- Result.failure(s"Root operation types must be named types, found '$tpe'").whenA(!tpe.nonNull.isNamed)
+      } yield Field(optype.name, None, Nil, tpe, dirs)
+    }
 
-  def mkInputValue(schema: Schema)(f: InputValueDefinition): Result[InputValue] = {
-    val InputValueDefinition(Name(nme), desc, tpe0, default0, dirs0) = f
-    for {
-      tpe <- mkType(schema)(tpe0)
-      dflt <- default0.traverse(parseValue)
-      dirs <- dirs0.traverse(mkDirective)
-    } yield InputValue(nme, desc, tpe, dflt, dirs)
-  }
+    def mkExtensions(schema: Schema, extnDefns: List[Ast.TypeExtension]): Result[List[TypeExtension]] =
+      extnDefns.traverse(mkExtension(schema))
 
-  def mkEnumValue(e: Ast.EnumValueDefinition): Result[EnumValueDefinition] = {
-    val Ast.EnumValueDefinition(Name(nme), desc, dirs0) = e
-    for {
-      dirs <- dirs0.traverse(mkDirective)
-    } yield EnumValueDefinition(nme, desc, dirs)
-  }
+    def mkExtension(schema: Schema)(ed: Ast.TypeExtension): Result[TypeExtension] =
+      ed match {
+        case ScalarTypeExtension(Ast.Type.Named(Name(name)), dirs0) =>
+          for {
+            dirs   <- dirs0.traverse(Directive.fromAst)
+          } yield ScalarExtension(name, dirs)
+        case InterfaceTypeExtension(Ast.Type.Named(Name(name)), fields0, ifs0, dirs0) =>
+          for {
+            fields <- fields0.traverse(mkField(schema))
+            ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+            dirs   <- dirs0.traverse(Directive.fromAst)
+          } yield InterfaceExtension(name, fields, ifs, dirs)
+        case ObjectTypeExtension(Ast.Type.Named(Name(name)), fields0, ifs0, dirs0) =>
+          for {
+            fields <- fields0.traverse(mkField(schema))
+            ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+            dirs   <- dirs0.traverse(Directive.fromAst)
+          } yield ObjectExtension(name, fields, ifs, dirs)
+        case UnionTypeExtension(Ast.Type.Named(Name(name)), dirs0, members0) =>
+          for {
+            dirs    <- dirs0.traverse(Directive.fromAst)
+            members =  members0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+          } yield UnionExtension(name, members, dirs)
+        case EnumTypeExtension(Ast.Type.Named(Name(name)), dirs0, values0) =>
+          for {
+            values  <- values0.traverse(mkEnumValue)
+            dirs    <- dirs0.traverse(Directive.fromAst)
+          } yield EnumExtension(name, values, dirs)
+        case InputObjectTypeExtension(Ast.Type.Named(Name(name)), dirs0, fields0) =>
+          for {
+            fields <- fields0.traverse(mkInputValue(schema))
+            dirs   <- dirs0.traverse(Directive.fromAst)
+          } yield InputObjectExtension(name, fields, dirs)
+      }
 
-  def parseValue(value: Ast.Value): Result[Value] = {
-    value match {
-      case Ast.Value.IntValue(i) => IntValue(i).success
-      case Ast.Value.FloatValue(d) => FloatValue(d).success
-      case Ast.Value.StringValue(s) => StringValue(s).success
-      case Ast.Value.BooleanValue(b) => BooleanValue(b).success
-      case Ast.Value.EnumValue(e) => EnumValue(e.value).success
-      case Ast.Value.Variable(v) => VariableRef(v.value).success
-      case Ast.Value.NullValue => NullValue.success
-      case Ast.Value.ListValue(vs) => vs.traverse(parseValue).map(ListValue(_))
-      case Ast.Value.ObjectValue(fs) =>
-        fs.traverse { case (name, value) =>
-          parseValue(value).map(v => (name.value, v))
-        }.map(ObjectValue(_))
+    def mkTypeDefs(schema: Schema, defns: List[TypeDefinition]): Result[List[NamedType]] =
+      defns.traverse(mkTypeDef(schema))
+
+    def mkTypeDef(schema: Schema)(td: TypeDefinition): Result[NamedType] = td match {
+      case ScalarTypeDefinition(Name("Int"), _, _) => IntType.success
+      case ScalarTypeDefinition(Name("Float"), _, _) => FloatType.success
+      case ScalarTypeDefinition(Name("String"), _, _) => StringType.success
+      case ScalarTypeDefinition(Name("Boolean"), _, _) => BooleanType.success
+      case ScalarTypeDefinition(Name("ID"), _, _) => IDType.success
+      case ScalarTypeDefinition(Name(nme), desc, dirs0) =>
+        for {
+          dirs <- dirs0.traverse(Directive.fromAst)
+        } yield ScalarType(nme, desc, dirs)
+      case ObjectTypeDefinition(Name(nme), desc, fields0, ifs0, dirs0) =>
+        if (fields0.isEmpty) Result.failure(s"object type $nme must define at least one field")
+        else
+          for {
+            fields <- fields0.traverse(mkField(schema))
+            ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+            dirs   <- dirs0.traverse(Directive.fromAst)
+          } yield ObjectType(nme, desc, fields, ifs, dirs)
+      case InterfaceTypeDefinition(Name(nme), desc, fields0, ifs0, dirs0) =>
+        if (fields0.isEmpty) Result.failure(s"interface type $nme must define at least one field")
+        else
+          for {
+            fields <- fields0.traverse(mkField(schema))
+            ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+            dirs   <- dirs0.traverse(Directive.fromAst)
+          } yield InterfaceType(nme, desc, fields, ifs, dirs)
+      case UnionTypeDefinition(Name(nme), desc, dirs0, members0) =>
+        if (members0.isEmpty) Result.failure(s"union type $nme must define at least one member")
+        else {
+          for {
+            dirs    <- dirs0.traverse(Directive.fromAst)
+            members =  members0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+          } yield UnionType(nme, desc, members, dirs)
+        }
+      case EnumTypeDefinition(Name(nme), desc, dirs0, values0) =>
+        if (values0.isEmpty) Result.failure(s"enum type $nme must define at least one enum value")
+        else
+          for {
+            values <- values0.traverse(mkEnumValue)
+            dirs   <- dirs0.traverse(Directive.fromAst)
+          } yield EnumType(nme, desc, values, dirs)
+      case InputObjectTypeDefinition(Name(nme), desc, fields0, dirs0) =>
+        if (fields0.isEmpty) Result.failure(s"input object type $nme must define at least one input field")
+        else
+          for {
+            fields <- fields0.traverse(mkInputValue(schema))
+            dirs   <- dirs0.traverse(Directive.fromAst)
+          } yield InputObjectType(nme, desc, fields, dirs)
+    }
+
+    def mkField(schema: Schema)(f: FieldDefinition): Result[Field] = {
+      val FieldDefinition(Name(nme), desc, args0, tpe0, dirs0) = f
+      for {
+        args <- args0.traverse(mkInputValue(schema))
+        tpe  <- mkType(schema)(tpe0)
+        dirs <- dirs0.traverse(Directive.fromAst)
+      } yield Field(nme, desc, args, tpe, dirs)
+    }
+
+    def mkType(schema: Schema)(tpe: Ast.Type): Result[Type] = {
+      def loop(tpe: Ast.Type, nullable: Boolean): Result[Type] = {
+        def wrap(tpe: Type): Type = if (nullable) NullableType(tpe) else tpe
+
+        tpe match {
+          case Ast.Type.List(tpe) => loop(tpe, true).map(tpe => wrap(ListType(tpe)))
+          case Ast.Type.NonNull(Left(tpe)) => loop(tpe, false)
+          case Ast.Type.NonNull(Right(tpe)) => loop(tpe, false)
+          case Ast.Type.Named(Name(nme)) => wrap(ScalarType.builtIn(nme).getOrElse(schema.ref(nme))).success
+        }
+      }
+
+      loop(tpe, true)
+    }
+
+    def mkDirectiveDefs(schema: Schema, defns: List[DirectiveDefinition]): Result[List[DirectiveDef]] =
+      defns.traverse(mkDirectiveDef(schema))
+
+    def mkDirectiveDef(schema: Schema)(dd: DirectiveDefinition): Result[DirectiveDef] = {
+      val DirectiveDefinition(Name(nme), desc, args0, repeatable, locations) = dd
+      for {
+        args <- args0.traverse(mkInputValue(schema))
+      } yield DirectiveDef(nme, desc, args, repeatable, locations)
+    }
+
+    def mkInputValue(schema: Schema)(f: InputValueDefinition): Result[InputValue] = {
+      val InputValueDefinition(Name(nme), desc, tpe0, default0, dirs0) = f
+      for {
+        tpe <- mkType(schema)(tpe0)
+        dflt <- default0.traverse(Value.fromAst)
+        dirs <- dirs0.traverse(Directive.fromAst)
+      } yield InputValue(nme, desc, tpe, dflt, dirs)
+    }
+
+    def mkEnumValue(e: Ast.EnumValueDefinition): Result[EnumValueDefinition] = {
+      val Ast.EnumValueDefinition(Name(nme), desc, dirs0) = e
+      for {
+        dirs <- dirs0.traverse(Directive.fromAst)
+      } yield EnumValueDefinition(nme, desc, dirs)
     }
   }
 }

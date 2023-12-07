@@ -19,7 +19,6 @@ import cats.data.NonEmptyChain
 import cats.syntax.all._
 import org.typelevel.literally.Literally
 import grackle.Ast.Document
-import grackle.GraphQLParser.Document.parseAll
 import grackle.Schema
 
 trait VersionSpecificSyntax {
@@ -32,7 +31,7 @@ class StringContextOps(val sc: StringContext) extends AnyVal {
   def doc(args: Any*): Document = macro DocumentLiteral.make
 }
 
-object SchemaLiteral extends Literally[Schema] {
+private object SchemaLiteral extends Literally[Schema] {
   def validate(c: Context)(s: String): Either[String,c.Expr[Schema]] = {
     import c.universe._
     def mkError(err: Either[Throwable, NonEmptyChain[Problem]]) =
@@ -40,18 +39,23 @@ object SchemaLiteral extends Literally[Schema] {
         t  => s"Internal error: ${t.getMessage}",
         ps => s"Invalid schema: ${ps.toList.distinct.mkString("\n  🐞 ", "\n  🐞 ", "\n")}",
       )
-    Schema(s).toEither.bimap(mkError, _ => c.Expr(q"_root_.grackle.Schema($s).toOption.get"))
+    Schema(s, CompiletimeParsers.schemaParser).toEither.bimap(mkError, _ => c.Expr(q"_root_.grackle.Schema($s, _root_.grackle.CompiletimeParsers.schemaParser).toOption.get"))
   }
   def make(c: Context)(args: c.Expr[Any]*): c.Expr[Schema] = apply(c)(args: _*)
 }
 
-object DocumentLiteral extends Literally[Document] {
+private object DocumentLiteral extends Literally[Document] {
   def validate(c: Context)(s: String): Either[String,c.Expr[Document]] = {
     import c.universe._
-    parseAll(s).bimap(
-      pf => show"Invalid document: $pf",
-      _  => c.Expr(q"_root_.grackle.GraphQLParser.Document.parseAll($s).toOption.get"),
+    CompiletimeParsers.parser.parseText(s).toEither.bimap(
+      _.fold(thr => show"Invalid document: ${thr.getMessage}", _.toList.mkString("\n  🐞 ", "\n  🐞 ", "\n")),
+      _  => c.Expr(q"_root_.grackle.CompiletimeParsers.parser.parseText($s).toOption.get"),
     )
   }
   def make(c: Context)(args: c.Expr[Any]*): c.Expr[Document] = apply(c)(args: _*)
+}
+
+object CompiletimeParsers {
+  val parser: GraphQLParser = GraphQLParser(GraphQLParser.defaultConfig)
+  val schemaParser: SchemaParser = SchemaParser(parser)
 }

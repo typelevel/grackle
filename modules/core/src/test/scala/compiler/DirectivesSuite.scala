@@ -23,6 +23,8 @@ import Ast.DirectiveLocation._
 import Query._
 
 final class DirectivesSuite extends CatsEffectSuite {
+  val schemaParser = SchemaParser(GraphQLParser(GraphQLParser.defaultConfig))
+
   def testDirectiveDefs(s: Schema): List[DirectiveDef] =
     s.directives.filter {
       case DirectiveDef("skip"|"include"|"deprecated", _, _, _, _) => false
@@ -169,7 +171,7 @@ final class DirectivesSuite extends CatsEffectSuite {
        |directive @foo on SCHEMA|SCALAR|OBJECT|FIELD_DEFINITION|ARGUMENT_DEFINITION|INTERFACE|UNION|ENUM|ENUM_VALUE|INPUT_OBJECT|INPUT_FIELD_DEFINITION
        |""".stripMargin
 
-    val res = SchemaParser.parseText(schema)
+    val res = schemaParser.parseText(schema)
     val ser = res.map(_.toString)
 
     assertEquals(ser, schema.success)
