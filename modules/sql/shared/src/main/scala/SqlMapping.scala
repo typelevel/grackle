@@ -2973,7 +2973,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               }
             }
 
-          case TypeCase(default, narrows) =>
+          case TypeCase(default, narrows0) =>
             def isSimple(query: Query): Boolean = {
               def loop(query: Query): Boolean =
                 query match {
@@ -2985,9 +2985,11 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               loop(query)
             }
 
-            val subtpes = narrows.map(_.subtpe)
             val supertpe = context.tpe.underlying
-            assert(supertpe.underlying.isInterface || supertpe.underlying.isUnion)
+            val narrows = narrows0.filter(_.subtpe <:< supertpe)
+            val subtpes = narrows.map(_.subtpe)
+
+            assert(supertpe.underlying.isInterface || supertpe.underlying.isUnion || (subtpes.sizeCompare(1) == 0 && subtpes.head =:= supertpe))
             subtpes.foreach(subtpe => assert(subtpe <:< supertpe))
 
             val discriminator = discriminatorForType(context)
@@ -3472,10 +3474,11 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         if (ctpe =:= tpe) asTable.map(table => mapped.narrowsTo(context.asType(subtpe), table)).toOption.getOrElse(false)
         else ctpe <:< subtpe
 
-      discriminatorForType(context) match {
-        case Some(disc) => disc.discriminator.discriminate(this).map(check).getOrElse(false)
-        case _ => check(tpe)
-      }
+      (subtpe <:< tpe) &&
+        (discriminatorForType(context) match {
+          case Some(disc) => disc.discriminator.discriminate(this).map(check).getOrElse(false)
+          case _ => check(tpe)
+        })
     }
 
     def narrow(subtpe: TypeRef): Result[Cursor] = {

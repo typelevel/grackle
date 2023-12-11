@@ -634,4 +634,141 @@ trait SqlInterfacesSuite extends CatsEffectSuite {
 
     assertWeaklyEqualIO(res, expected)
   }
+
+  test("interface query with supertype fragment containing subtype refinement") {
+    val query = """
+      query {
+        films {
+          ... EntityFields
+        }
+      }
+
+      fragment EntityFields on Entity {
+        id
+        ... on Film {
+          rating
+        }
+        ... on Series {
+          numberOfEpisodes
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "films" : [
+            {
+              "id" : "1",
+              "rating" : "PG"
+            },
+            {
+              "id" : "2",
+              "rating" : "U"
+            },
+            {
+              "id" : "3",
+              "rating" : "15"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("interface query with supertype fragment containing nested fragment spreads") {
+    val query = """
+      query {
+        films {
+          ... EntityFields
+        }
+      }
+
+      fragment EntityFields on Entity {
+        id
+        ... FilmFields
+        ... SeriesFields
+      }
+
+      fragment FilmFields on Film {
+        rating
+      }
+
+      fragment SeriesFields on Series {
+        numberOfEpisodes
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "films" : [
+            {
+              "id" : "1",
+              "rating" : "PG"
+            },
+            {
+              "id" : "2",
+              "rating" : "U"
+            },
+            {
+              "id" : "3",
+              "rating" : "15"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("interface query with nested inline fragments") {
+    val query = """
+      query {
+        films {
+          ... on Entity {
+            id
+            ... on Film {
+              rating
+            }
+            ... on Series {
+              numberOfEpisodes
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "films" : [
+            {
+              "id" : "1",
+              "rating" : "PG"
+            },
+            {
+              "id" : "2",
+              "rating" : "U"
+            },
+            {
+              "id" : "3",
+              "rating" : "15"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
 }
