@@ -1011,6 +1011,8 @@ object Value {
         value.success
       case (s: ScalarType, Some(value: BooleanValue)) if !s.isBuiltIn =>
         value.success
+      case (s: ScalarType, Some(enumValue: EnumValue)) if !s.isBuiltIn =>
+        StringValue(enumValue.name).success
 
       case (IDType, Some(value: IDValue)) =>
         value.success
