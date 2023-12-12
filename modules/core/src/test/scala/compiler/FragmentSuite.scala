@@ -620,6 +620,173 @@ final class FragmentSuite extends CatsEffectSuite {
 
     val res = FragmentMapping.compileAndRun(query)
 
+    assertIO(res, expected)
+  }
+
+  test("supertype fragment query (5)") {
+    val query = """
+      query withFragments {
+        user(id: 1) {
+          friends {
+            ...profileFields
+          }
+        }
+      }
+
+      fragment profileFields on Profile {
+        id
+        name
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "No field 'name' for type Profile"
+          }
+        ]
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("interface query with supertype fragment containing subtype refinement") {
+    val query = """
+      query withFragments {
+        user(id: 1) {
+          friends {
+            ... ProfileFields
+          }
+        }
+      }
+
+      fragment ProfileFields on Profile {
+        id
+        ... on User {
+          name
+        }
+        ... on Page {
+          title
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "user" : {
+            "friends" : [
+              {
+                "id" : "2",
+                "name" : "Bob"
+              },
+              {
+                "id" : "3",
+                "name" : "Carol"
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("interface query with supertype fragment containing nested fragment spreads") {
+    val query = """
+      query withFragments {
+        user(id: 1) {
+          friends {
+            ... ProfileFields
+          }
+        }
+      }
+
+      fragment ProfileFields on Profile {
+        id
+        ... UserFields
+        ... PageFields
+      }
+
+      fragment UserFields on User {
+        name
+      }
+
+      fragment PageFields on Page {
+        title
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "user" : {
+            "friends" : [
+              {
+                "id" : "2",
+                "name" : "Bob"
+              },
+              {
+                "id" : "3",
+                "name" : "Carol"
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("interface query with nested inline fragments") {
+    val query = """
+      query withFragments {
+        user(id: 1) {
+          friends {
+            ... on Profile {
+              id
+              ... on User {
+                name
+              }
+              ... on Page {
+                title
+              }
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "user" : {
+            "friends" : [
+              {
+                "id" : "2",
+                "name" : "Bob"
+              },
+              {
+                "id" : "3",
+                "name" : "Carol"
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
 
     assertIO(res, expected)
   }
