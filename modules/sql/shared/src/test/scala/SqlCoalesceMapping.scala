@@ -16,6 +16,7 @@
 package grackle.sql.test
 
 import grackle.syntax._
+import java.time.ZonedDateTime
 
 trait SqlCoalesceMapping[F[_]] extends SqlTestMapping[F] {
 
@@ -35,15 +36,23 @@ trait SqlCoalesceMapping[F[_]] extends SqlTestMapping[F] {
     val b = col("b", bool)
   }
 
+  object cc extends TableDef("cc") {
+    val id = col("id", text)
+    val rid = col("rid", text)
+    val c = col("c", offsetDateTime)
+  }
+
   val schema =
     schema"""
       type Query {
         r: [R!]!
       }
+      scalar DateTime
       type R {
         id: String!
         ca: [CA!]!
         cb: [CB!]!
+        cc: [CC!]!
       }
       type CA {
         id: String!
@@ -53,12 +62,18 @@ trait SqlCoalesceMapping[F[_]] extends SqlTestMapping[F] {
         id: String!
         b: Boolean!
       }
+      type CC {
+        id: String!
+        c: DateTime!
+      }
     """
 
   val QueryType = schema.ref("Query")
   val RType = schema.ref("R")
   val CAType = schema.ref("CA")
   val CBType = schema.ref("CB")
+  val CCType = schema.ref("CC")
+  val DateTimeType = schema.ref("DateTime")
 
   val typeMappings =
     List(
@@ -76,6 +91,7 @@ trait SqlCoalesceMapping[F[_]] extends SqlTestMapping[F] {
             SqlField("id", r.id, key = true),
             SqlObject("ca", Join(r.id, ca.rid)),
             SqlObject("cb", Join(r.id, cb.rid)),
+            SqlObject("cc", Join(r.id, cc.rid)),
           )
       ),
       ObjectMapping(
@@ -95,6 +111,16 @@ trait SqlCoalesceMapping[F[_]] extends SqlTestMapping[F] {
             SqlField("rid", cb.rid, hidden = true),
             SqlField("b", cb.b)
           )
-      )
+      ),
+      ObjectMapping(
+        tpe = CCType,
+        fieldMappings =
+          List(
+            SqlField("id", cc.id, key = true),
+            SqlField("rid", cc.rid, hidden = true),
+            SqlField("c", cc.c)
+          )
+      ),
+      LeafMapping[ZonedDateTime](DateTimeType)
     )
 }

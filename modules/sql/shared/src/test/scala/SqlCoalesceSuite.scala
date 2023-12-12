@@ -124,4 +124,85 @@ trait SqlCoalesceSuite extends CatsEffectSuite {
       assert(numCells   == 40)
     }
   }
+
+  test("zoned-date-time coalesced query") {
+    val query = """
+      query {
+        r {
+          id
+          ca {
+            id
+            a
+          }
+          cc {
+            id
+            c
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "r" : [
+            {
+              "id" : "R1",
+              "ca" : [
+                {
+                  "id" : "CA1a",
+                  "a" : 10
+                },
+                {
+                  "id" : "CA1b",
+                  "a" : 11
+                }
+              ],
+              "cc" : [
+                {
+                  "id" : "CC1",
+                  "c" : "2020-05-27T19:00:00Z"
+                }
+              ]
+            },
+            {
+              "id" : "R2",
+              "ca" : [
+                {
+                  "id" : "CA2",
+                  "a" : 20
+                }
+              ],
+              "cc" : [
+                {
+                  "id" : "CC2",
+                  "c" : "2004-10-19T08:23:54Z"
+                }
+              ]
+            },
+            {
+              "id" : "R3",
+              "ca" : [
+                {
+                  "id" : "CA3",
+                  "a" : 30
+                }
+              ],
+              "cc" : [
+                {
+                  "id" : "CC3",
+                  "c" : "2014-10-19T08:23:54Z"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    for {
+      map  <- mapping.map(_._1)
+      res <- map.compileAndRun(query)
+    } yield assertWeaklyEqual(res, expected)
+  }
 }
