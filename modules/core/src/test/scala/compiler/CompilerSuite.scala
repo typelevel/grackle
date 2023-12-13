@@ -26,7 +26,7 @@ import Predicate._, Value._, UntypedOperation._
 import QueryCompiler._, ComponentElaborator.TrivialJoin
 
 final class CompilerSuite extends CatsEffectSuite {
-  val queryParser = QueryParser(GraphQLParser(GraphQLParser.defaultConfig))
+  val queryParser = QueryParser(GraphQLParser(GraphQLParser.defaultConfig.copy(terseError = false)))
 
   test("simple query") {
     val query = """

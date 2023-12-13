@@ -32,7 +32,8 @@ object GraphQLParser {
     maxSelectionDepth: Int,
     maxSelectionWidth: Int,
     maxInputValueDepth: Int,
-    maxListTypeDepth: Int
+    maxListTypeDepth: Int,
+    terseError: Boolean
   )
 
   val defaultConfig: Config =
@@ -40,7 +41,8 @@ object GraphQLParser {
       maxSelectionDepth = 100,
       maxSelectionWidth = 1000,
       maxInputValueDepth = 5,
-      maxListTypeDepth = 5
+      maxListTypeDepth = 5,
+      terseError = true
     )
 
   def apply(config: Config): GraphQLParser =
@@ -49,14 +51,19 @@ object GraphQLParser {
   def toResult[T](pr: Either[Parser.Error, T]): Result[T] =
     Result.fromEither(pr.leftMap(_.show))
 
+  def toResultTerseError[T](pr: Either[Parser.Error, T]): Result[T] =
+    Result.fromEither(pr.leftMap(_.copy().show))
+
   import CommentedText._
   import Literals._
 
   private final class Impl(config: Config) extends GraphQLParser {
     import config._
 
-    def parseText(text: String): Result[Ast.Document] =
-      toResult(Document.parseAll(text))
+    def parseText(text: String): Result[Ast.Document] = {
+      val res = Document.parseAll(text)
+      if (config.terseError) toResultTerseError(res) else toResult(res)
+    }
 
     val nameInitial    = ('A' to 'Z') ++ ('a' to 'z') ++ Seq('_')
     val nameSubsequent = nameInitial ++ ('0' to '9')

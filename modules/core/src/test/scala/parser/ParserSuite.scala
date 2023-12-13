@@ -22,7 +22,7 @@ import grackle.syntax._
 import Ast._, OperationType._, OperationDefinition._, Selection._, Value._, Type.Named
 
 final class ParserSuite extends CatsEffectSuite {
-  val parser = GraphQLParser(GraphQLParser.defaultConfig)
+  val parser = mkParser()
 
   test("simple query") {
     val query = doc"""
@@ -801,12 +801,15 @@ final class ParserSuite extends CatsEffectSuite {
     maxSelectionDepth: Int = GraphQLParser.defaultConfig.maxSelectionDepth,
     maxSelectionWidth: Int = GraphQLParser.defaultConfig.maxSelectionWidth,
     maxInputValueDepth: Int = GraphQLParser.defaultConfig.maxInputValueDepth,
-    maxListTypeDepth: Int = GraphQLParser.defaultConfig.maxListTypeDepth): GraphQLParser =
+    maxListTypeDepth: Int = GraphQLParser.defaultConfig.maxListTypeDepth,
+  ): GraphQLParser =
     GraphQLParser(
       GraphQLParser.Config(
         maxSelectionDepth = maxSelectionDepth,
         maxSelectionWidth = maxSelectionWidth,
         maxInputValueDepth = maxInputValueDepth,
-        maxListTypeDepth = maxListTypeDepth)
+        maxListTypeDepth = maxListTypeDepth,
+        terseError = false
       )
+    )
 }
