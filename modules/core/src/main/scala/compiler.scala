@@ -215,10 +215,10 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
    *
    * GraphQL errors and warnings are accumulated in the result.
    */
-  def compile(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): Result[Operation] =
+  def compile(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, reportUnused: Boolean = true, env: Env = Env.empty): Result[Operation] =
     parser.parseText(text).flatMap { case (ops, frags) =>
       for {
-        _    <- Result.fromProblems(validateVariablesAndFragments(ops, frags))
+        _    <- Result.fromProblems(validateVariablesAndFragments(ops, frags, reportUnused))
         ops0 <- ops.traverse(op => compileOperation(op, untypedVars, frags, introspectionLevel, env).map(op0 => (op.name, op0)))
         res  <- (ops0, name) match {
                   case (List((_, op)), None) =>
@@ -323,7 +323,7 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
     loop(tpe, false)
   }
 
-  def validateVariablesAndFragments(ops: List[UntypedOperation], frags: List[UntypedFragment]): List[Problem] = {
+  def validateVariablesAndFragments(ops: List[UntypedOperation], frags: List[UntypedFragment], reportUnused: Boolean): List[Problem] = {
     val (uniqueFrags, duplicateFrags) = frags.map(_.name).foldLeft((Set.empty[String], Set.empty[String])) {
       case ((unique, duplicate), nme) =>
         if (unique.contains(nme)) (unique, duplicate + nme)
@@ -439,10 +439,13 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
             val varProblems =
               if (qv == pendingVars) Nil
               else {
-                val undefined = qv.diff(pendingVars)
-                val unused = pendingVars.diff(qv)
-                val undefinedProblems = undefined.toList.map(nme => Problem(s"Variable '$nme' is undefined"))
-                val unusedProblems = unused.toList.map(nme => Problem(s"Variable '$nme' is unused"))
+                val undefinedProblems =
+                  qv.diff(pendingVars).toList.map(nme => Problem(s"Variable '$nme' is undefined"))
+
+                val unusedProblems =
+                  if (!reportUnused) Nil
+                  else pendingVars.diff(qv).toList.map(nme => Problem(s"Variable '$nme' is unused"))
+
                 undefinedProblems ++ unusedProblems
               }
 
@@ -464,7 +467,9 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
                 (acc ++ problems, pendingFrags0)
               }
 
-          val unreferencedFragProblems = unreferencedFrags.toList.map(nme => Problem(s"Fragment '$nme' is unused"))
+          val unreferencedFragProblems =
+            if (!reportUnused) Nil
+            else unreferencedFrags.toList.map(nme => Problem(s"Fragment '$nme' is unused"))
 
           opProblems ++ unreferencedFragProblems
       }

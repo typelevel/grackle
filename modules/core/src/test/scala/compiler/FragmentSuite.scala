@@ -817,7 +817,7 @@ final class FragmentSuite extends CatsEffectSuite {
     assertIO(res, expected)
   }
 
-  test("fragment used") {
+  test("fragment unused (1)") {
     val query = """
       query withFragments {
         user(id: 1) {
@@ -847,6 +847,51 @@ final class FragmentSuite extends CatsEffectSuite {
     """
 
     val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("fragment unused (2)") {
+    val query = """
+      query withFragments {
+        user(id: 1) {
+          friends {
+            id
+            name
+            profilePic
+          }
+        }
+      }
+
+      fragment friendFields on User {
+        id
+        name
+        profilePic
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "user" : {
+            "friends" : [
+              {
+                "id" : "2",
+                "name" : "Bob",
+                "profilePic" : "B"
+              },
+              {
+                "id" : "3",
+                "name" : "Carol",
+                "profilePic" : "C"
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query, reportUnused = false)
 
     assertIO(res, expected)
   }

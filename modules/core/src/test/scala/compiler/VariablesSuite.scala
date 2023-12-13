@@ -511,6 +511,36 @@ final class VariablesSuite extends CatsEffectSuite {
 
     assertEquals(compiled, expected)
   }
+
+  test("variable unused (2)") {
+    val query = """
+      query getZuckProfile($devicePicSize: Int) {
+        user(id: 4) {
+          id
+          name
+        }
+      }
+    """
+
+    val compiled = VariablesMapping.compiler.compile(query, reportUnused = false)
+    println(compiled)
+
+    val expected =
+      Operation(
+        UntypedSelect("user", None, List(Binding("id", IDValue("4"))), Nil,
+          Group(
+            List(
+              UntypedSelect("id", None, Nil, Nil, Empty),
+              UntypedSelect("name", None, Nil, Nil, Empty)
+            )
+          )
+        ),
+        VariablesMapping.QueryType,
+        Nil
+      )
+
+    assertEquals(compiled, Result.success(expected))
+  }
 }
 
 object VariablesMapping extends TestMapping {
@@ -543,6 +573,8 @@ object VariablesMapping extends TestMapping {
       scalar Date
       scalar BigDecimal
     """
+
+  val QueryType = schema.ref("Query").dealias
 
   override val selectElaborator = PreserveArgsElaborator
 }
