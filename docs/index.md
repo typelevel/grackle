@@ -81,7 +81,8 @@ incorrect, it's a perfect opportunity to make a change to it!
 If at any point you run into problems, you can always ask a question on the **#grackle** channel on the Typelevel
 [discord server][grackle-dev].
 
-More information, including on how to build locally and submit pull requests, can be found [here](CONTRIBUTING.md).
+More information, including on how to build locally and submit pull requests, can be found
+[here](https://typelevel.org/grackle/CONTRIBUTING.html).
 
 [grackle-issues]: https://github.com/typelevel/grackle/issues
 [grackle-pulls]: https://github.com/typelevel/grackle/pulls
