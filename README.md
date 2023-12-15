@@ -42,19 +42,19 @@ To add Grackle to your project you should add the following to your `build.sbt`,
 
 ```scala
 // Required: Scala 2.13/3.3+
-libraryDependencies += "org.typelevel" %% "grackle-core" % "0.17.1"
+libraryDependencies += "org.typelevel" %% "grackle-core" % "0.17.2"
 
 // Optional: support for in-memory Json backend using circe
-libraryDependencies += "org.typelevel" %% "grackle-circe" % "0.17.1"
+libraryDependencies += "org.typelevel" %% "grackle-circe" % "0.17.2"
 
 // Optional: support for in-memory generic Scala backend using shapeless
-libraryDependencies += "org.typelevel" %% "grackle-generic" % "0.17.1"
+libraryDependencies += "org.typelevel" %% "grackle-generic" % "0.17.2"
 
 // Optional: support for Postgres backend via Doobie (JVM only)
-libraryDependencies += "org.typelevel" %% "grackle-doobie-pg" % "0.17.1"
+libraryDependencies += "org.typelevel" %% "grackle-doobie-pg" % "0.17.2"
 
 // Optional: support for Postgres backend via Skunk
-libraryDependencies += "org.typelevel" %% "grackle-skunk" % "0.17.1"
+libraryDependencies += "org.typelevel" %% "grackle-skunk" % "0.17.2"
 ```
 
 ## Community
