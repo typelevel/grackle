@@ -375,7 +375,7 @@ object ExecutableDirectiveMapping extends Mapping[IO] {
   override val selectElaborator = PreserveArgsElaborator
 
   def compileAllOperations(text: String): Result[List[Operation]] =
-    QueryParser.parseText(text).flatMap {
+    queryParser.parseText(text).flatMap {
       case (ops, frags) => ops.parTraverse(compiler.compileOperation(_, None, frags))
     }
 }

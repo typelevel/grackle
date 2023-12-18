@@ -26,6 +26,8 @@ import Predicate._, Value._, UntypedOperation._
 import QueryCompiler._, ComponentElaborator.TrivialJoin
 
 final class CompilerSuite extends CatsEffectSuite {
+  val queryParser = QueryParser(GraphQLParser(GraphQLParser.defaultConfig.copy(terseError = false)))
+
   test("simple query") {
     val query = """
       query {
@@ -40,7 +42,7 @@ final class CompilerSuite extends CatsEffectSuite {
         UntypedSelect("name", None, Nil, Nil, Empty)
       )
 
-    val res = QueryParser.parseText(query).map(_._1)
+    val res = queryParser.parseText(query).map(_._1)
     assertEquals(res, Result.Success(List(UntypedQuery(None, expected, Nil, Nil))))
   }
 
@@ -62,7 +64,7 @@ final class CompilerSuite extends CatsEffectSuite {
         )
       )
 
-    val res = QueryParser.parseText(query).map(_._1)
+    val res = queryParser.parseText(query).map(_._1)
     assertEquals(res, Result.Success(List(UntypedMutation(None, expected, Nil, Nil))))
   }
 
@@ -80,7 +82,7 @@ final class CompilerSuite extends CatsEffectSuite {
         UntypedSelect("name", None, Nil, Nil, Empty)
       )
 
-    val res = QueryParser.parseText(query).map(_._1)
+    val res = queryParser.parseText(query).map(_._1)
     assertEquals(res, Result.Success(List(UntypedSubscription(None, expected, Nil, Nil))))
   }
 
@@ -106,7 +108,7 @@ final class CompilerSuite extends CatsEffectSuite {
           )
       )
 
-    val res = QueryParser.parseText(query).map(_._1)
+    val res = queryParser.parseText(query).map(_._1)
     assertEquals(res, Result.Success(List(UntypedQuery(None, expected, Nil, Nil))))
   }
 
@@ -137,7 +139,7 @@ final class CompilerSuite extends CatsEffectSuite {
         )
       )
 
-    val res = QueryParser.parseText(query).map(_._1)
+    val res = queryParser.parseText(query).map(_._1)
     assertEquals(res, Result.Success(List(UntypedQuery(None, expected, Nil, Nil))))
   }
 
@@ -163,7 +165,7 @@ final class CompilerSuite extends CatsEffectSuite {
         ))
       )
 
-    val res = QueryParser.parseText(query).map(_._1)
+    val res = queryParser.parseText(query).map(_._1)
     assertEquals(res, Result.Success(List(UntypedQuery(None, expected, Nil, Nil))))
   }
 
@@ -192,7 +194,7 @@ final class CompilerSuite extends CatsEffectSuite {
         UntypedSelect("subscriptionType", None, Nil, Nil, UntypedSelect("name", None, Nil, Nil, Empty))
       )
 
-    val res = QueryParser.parseText(query).map(_._1)
+    val res = queryParser.parseText(query).map(_._1)
     assertEquals(res, Result.Success(List(UntypedQuery(Some("IntrospectionQuery"), expected, Nil, Nil))))
   }
 
@@ -355,46 +357,55 @@ final class CompilerSuite extends CatsEffectSuite {
   }
 
   test("malformed query (1)") {
-    val query = """
-      query {
-        character(id: "1000" {
-          name
-        }
-      }
-    """
+    val query =
+      """|query {
+         |  character(id: "1000" {
+         |    name
+         |  }
+         |}""".stripMargin
 
-    val res = QueryParser.parseText(query)
+    val expected =
+      """|query {
+         |  character(id: "1000" {
+         |                       ^
+         |expectation:
+         |* must be char: ')'
+         |    name
+         |  }""".stripMargin
 
-    val error =
-      """Parse error at line 2 column 29
-        |        character(id: "1000" {
-        |                             ^""".stripMargin
+    val res = queryParser.parseText(query)
 
-    assertEquals(res, Result.failure(error))
+    assertEquals(res, Result.failure(expected))
   }
 
   test("malformed query (2)") {
     val query = ""
 
-    val res = QueryParser.parseText(query)
+    val res = queryParser.parseText(query)
 
     assertEquals(res, Result.failure("At least one operation required"))
   }
 
   test("malformed query (3)") {
-    val query = """
-      query {
-        character(id: "1000") {
-          name
-        }
-    """
+    val query =
+      """|query {
+         |  character(id: "1000") {
+         |    name
+         |  }""".stripMargin
 
-    val res = QueryParser.parseText(query)
+    val expected =
+      """|...
+         |  character(id: "1000") {
+         |    name
+         |  }
+         |   ^
+         |expectation:
+         |* must be char: '}'""".stripMargin
 
-    val error =
-      "Parse error at line 5 column 4\n    \n    ^"
+    val res = queryParser.parseText(query)
+    //println(res.toProblems.toList.head.message)
 
-    assertEquals(res, Result.failure(error))
+    assertEquals(res, Result.failure(expected))
   }
 }
 

@@ -47,10 +47,10 @@ abstract class Mapping[F[_]] {
     *
     * Yields a JSON response containing the result of the query or mutation.
     */
-  def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty)(
+  def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, reportUnused: Boolean = true, env: Env = Env.empty)(
     implicit sc: Compiler[F,F]
   ): F[Json] =
-    compileAndRunSubscription(text, name, untypedVars, introspectionLevel, env).compile.toList.flatMap {
+    compileAndRunSubscription(text, name, untypedVars, introspectionLevel, reportUnused, env).compile.toList.flatMap {
       case List(j) => j.pure[F]
       case Nil     => M.raiseError(new IllegalStateException("Result stream was empty."))
       case js      => M.raiseError(new IllegalStateException(s"Result stream contained ${js.length} results; expected exactly one."))
@@ -61,8 +61,8 @@ abstract class Mapping[F[_]] {
    *
    * Yields a stream of JSON responses containing the results of the subscription.
    */
-  def compileAndRunSubscription(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, env: Env = Env.empty): Stream[F,Json] = {
-    val compiled = compiler.compile(text, name, untypedVars, introspectionLevel, env)
+  def compileAndRunSubscription(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, reportUnused: Boolean = true, env: Env = Env.empty): Stream[F,Json] = {
+    val compiled = compiler.compile(text, name, untypedVars, introspectionLevel, reportUnused, env)
     Stream.eval(compiled.pure[F]).flatMap(_.flatTraverse(op => interpreter.run(op.query, op.rootTpe, env))).evalMap(mkResponse)
   }
 
@@ -480,7 +480,11 @@ abstract class Mapping[F[_]] {
 
   def compilerPhases: List[QueryCompiler.Phase] = List(selectElaborator, componentElaborator, effectElaborator)
 
-  lazy val compiler = new QueryCompiler(schema, compilerPhases)
+  def parserConfig: GraphQLParser.Config = GraphQLParser.defaultConfig
+  lazy val graphQLParser: GraphQLParser = GraphQLParser(parserConfig)
+  lazy val queryParser: QueryParser = QueryParser(graphQLParser)
+
+  lazy val compiler: QueryCompiler = new QueryCompiler(queryParser, schema, compilerPhases)
 
   val interpreter: QueryInterpreter[F] = new QueryInterpreter(this)
 

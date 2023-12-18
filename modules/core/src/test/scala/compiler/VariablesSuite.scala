@@ -378,6 +378,169 @@ final class VariablesSuite extends CatsEffectSuite {
 
     assertEquals(compiled.map(_.query), Result.Success(expected))
   }
+
+  test("variables in directive argument") {
+    val query = """
+      query getZuckProfile($skipName: Boolean) {
+        user(id: 4) {
+          id
+          name @skip(if: $skipName)
+        }
+      }
+    """
+
+    val variables = json"""
+      {
+        "skipName": true
+      }
+    """
+
+    val expected =
+      UntypedSelect("user", None, List(Binding("id", IDValue("4"))), Nil,
+        UntypedSelect("id", None, Nil, Nil, Empty)
+      )
+
+    val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
+
+    assertEquals(compiled.map(_.query), Result.Success(expected))
+  }
+
+  test("variable not defined (1)") {
+    val query = """
+      query getZuckProfile {
+        user(id: 4) {
+          id
+          name
+          profilePic(size: $devicePicSize)
+        }
+      }
+    """
+
+    val compiled = VariablesMapping.compiler.compile(query)
+
+    val expected = Result.failure("Variable 'devicePicSize' is undefined")
+
+    assertEquals(compiled, expected)
+  }
+
+
+  test("variable not defined (2)") {
+    val query = """
+      query getZuckProfile($devicePicSize: Int) {
+        user(id: 4) {
+          id
+          name
+          profilePic(size: $devicePicSize)
+        }
+      }
+    """
+
+    val compiled = VariablesMapping.compiler.compile(query)
+
+    val expected = Result.failure("Variable 'devicePicSize' is undefined")
+
+    assertEquals(compiled, expected)
+  }
+
+  test("variable not defined (3)") {
+    val query = """
+      query getZuckProfile($skipPic: Boolean) {
+        user(id: 4) {
+          id
+          name
+          profilePic(size: $devicePicSize) @skip(if: $skipPic)
+        }
+      }
+    """
+
+    val expected = Result.failure("Variable 'devicePicSize' is undefined")
+
+    val compiled = VariablesMapping.compiler.compile(query)
+
+    assertEquals(compiled.map(_.query), expected)
+  }
+
+  test("variable not defined (4)") {
+    val query = """
+      query getZuckProfile {
+        user(id: 4) {
+          id
+          name @skip(if: $skipName)
+        }
+      }
+    """
+
+    val expected = Result.failure("Variable 'skipName' is undefined")
+
+    val compiled = VariablesMapping.compiler.compile(query)
+
+    assertEquals(compiled.map(_.query), expected)
+  }
+
+
+  test("variable not defined (5)") {
+    val query = """
+      query getZuckProfile($skipName: Boolean) {
+        user(id: 4) {
+          id
+          name @skip(if: $skipName)
+        }
+      }
+    """
+
+    val expected = Result.failure("Variable 'skipName' is undefined")
+
+    val compiled = VariablesMapping.compiler.compile(query)
+
+    assertEquals(compiled.map(_.query), expected)
+  }
+
+  test("variable unused (1)") {
+    val query = """
+      query getZuckProfile($devicePicSize: Int) {
+        user(id: 4) {
+          id
+          name
+        }
+      }
+    """
+
+    val compiled = VariablesMapping.compiler.compile(query)
+
+    val expected = Result.failure("Variable 'devicePicSize' is unused")
+
+    assertEquals(compiled, expected)
+  }
+
+  test("variable unused (2)") {
+    val query = """
+      query getZuckProfile($devicePicSize: Int) {
+        user(id: 4) {
+          id
+          name
+        }
+      }
+    """
+
+    val compiled = VariablesMapping.compiler.compile(query, reportUnused = false)
+    println(compiled)
+
+    val expected =
+      Operation(
+        UntypedSelect("user", None, List(Binding("id", IDValue("4"))), Nil,
+          Group(
+            List(
+              UntypedSelect("id", None, Nil, Nil, Empty),
+              UntypedSelect("name", None, Nil, Nil, Empty)
+            )
+          )
+        ),
+        VariablesMapping.QueryType,
+        Nil
+      )
+
+    assertEquals(compiled, Result.success(expected))
+  }
 }
 
 object VariablesMapping extends TestMapping {
@@ -410,6 +573,8 @@ object VariablesMapping extends TestMapping {
       scalar Date
       scalar BigDecimal
     """
+
+  val QueryType = schema.ref("Query").dealias
 
   override val selectElaborator = PreserveArgsElaborator
 }
