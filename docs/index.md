@@ -64,6 +64,11 @@ The Typelevel [discord][grackle-dev] has a **#grackle** channel, as well as chan
 projects such as **#cats**, **#cats-effect**, **#fs2**, **#doobie** and **#skunk**. If you're new to the Typelevel
 ecosystem the **#beginners** channel might also be useful. Please join us!
 
+## Talks
+
+- [Grackle GraphQL server - Rafał Piotrowski & Miles Sabin (ScalaCon 2022)](https://www.youtube.com/watch?v=BXTkvwZ-7Xg)
+- [Functional GraphQL for the Typelevel Stack (NEScala 2023)](https://www.youtube.com/watch?v=c1_WHBs9M5U)
+
 ## Contributing
 
 This project exists thanks to [all the people who
