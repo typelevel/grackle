@@ -205,8 +205,8 @@ final class DirectiveValidationSuite extends CatsEffectSuite {
           UntypedSelect("foo", None, Nil, List(Directive("onField", Nil)),
             Group(
               List(
-                UntypedSelect("bar",None, Nil, List(Directive("onField", Nil)), Empty),
-                UntypedSelect("bar",None, Nil, List(Directive("onField", Nil)), Empty)
+                UntypedSelect("bar", Some("baz"), Nil, List(Directive("onField", Nil)), Empty),
+                UntypedSelect("bar", None, Nil, List(Directive("onField", Nil)), Empty)
               )
             )
           ),
@@ -244,7 +244,7 @@ final class DirectiveValidationSuite extends CatsEffectSuite {
          |}
          |
          |fragment Frag on Foo @onFragmentDefinition {
-         |  bar @onField
+         |  baz:bar @onField
          |}
          |""".stripMargin
 

@@ -193,17 +193,32 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
     if (!cursorCompatible(tpe, cursor.tpe))
       Result.internalError(s"Mismatched query and cursor type in runFields: $tpe ${cursor.tpe}")
     else {
-      (query, tpe.dealias) match {
-        case (Narrow(tp1, child), _) =>
-          if (!cursor.narrowsTo(tp1)) Nil.success
-          else
-            for {
-              c      <- cursor.narrow(tp1)
-              fields <- runFields(child, tp1, c)
-            } yield fields
+      query match {
+        case TypeCase(default, narrows) =>
+          val runDefault =
+            default match {
+              case Empty => Nil.success
+              case _ => runFields(default, tpe, cursor)
+            }
+          val applicableNarrows = narrows.filter(n => cursor.narrowsTo(n.subtpe))
+          val runApplicableNarrows = applicableNarrows.flatTraverse {
+            case Narrow(tp1, child) =>
+              for {
+                c      <- cursor.narrow(tp1)
+                fields <- runFields(child, tp1, c)
+              } yield fields
+          }
 
-        case (Introspect(schema, s@Select("__typename", _, Empty)), tpe: NamedType) =>
-          (tpe match {
+          for {
+            default <- runDefault
+            applicableNarrows <- runApplicableNarrows
+          } yield mergeFields(default ::: applicableNarrows).toList
+
+        case Group(siblings) =>
+          siblings.flatTraverse(query => runFields(query, tpe, cursor))
+
+        case Introspect(schema, s@Select("__typename", _, Empty)) if tpe.isNamed =>
+          (tpe.dealias match {
             case o: ObjectType => Some(o.name)
             case i: InterfaceType =>
               (schema.types.collectFirst {
@@ -221,7 +236,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
               Result.failure(s"'__typename' cannot be applied to non-selectable type '$tpe'")
           }
 
-        case (sel: Select, NullableType(tpe)) =>
+        case sel: Select if tpe.isNullable =>
           cursor.asNullable.sequence.map { rc =>
             for {
               c      <- rc
@@ -229,7 +244,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             } yield fields
           }.getOrElse(List((sel.resultName, ProtoJson.fromJson(Json.Null))).success)
 
-        case (sel@Select(_, _, Count(Select(countName, _, _))), _) =>
+        case sel@Select(_, _, Count(Select(countName, _, _))) =>
           def size(c: Cursor): Result[Int] =
             if (c.isList) c.asList(Iterator).map(_.size)
             else 1.success
@@ -240,31 +255,28 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
                       else size(c0)
           } yield List((sel.resultName, ProtoJson.fromJson(Json.fromInt(count))))
 
-        case (sel@Select(_, _, Effect(handler, cont)), _) =>
+        case sel@Select(_, _, Effect(handler, cont)) =>
           for {
             value <- ProtoJson.effect(mapping, handler.asInstanceOf[EffectHandler[F]], cont, cursor).success
           } yield List((sel.resultName, value))
 
-        case (sel@Select(fieldName, resultName, child), _) =>
+        case sel@Select(fieldName, resultName, child) =>
           val fieldTpe = tpe.field(fieldName).getOrElse(ScalarType.AttributeType)
           for {
             c        <- cursor.field(fieldName, resultName)
             value    <- runValue(child, fieldTpe, c)
           } yield List((sel.resultName, value))
 
-        case (c@Component(_, _, cont), _) =>
+        case c@Component(_, _, cont) =>
           for {
             componentName <- resultName(cont).toResultOrError("Join continuation has unexpected shape")
             value <- runValue(c, tpe, cursor)
           } yield List((componentName, ProtoJson.select(value, componentName)))
 
-        case (Group(siblings), _) =>
-          siblings.flatTraverse(query => runFields(query, tpe, cursor))
-
-        case (Environment(childEnv: Env, child: Query), tpe) =>
+        case Environment(childEnv: Env, child: Query) =>
           runFields(child, tpe, cursor.withEnv(childEnv))
 
-        case (TransformCursor(f, child), _) =>
+        case TransformCursor(f, child) =>
           for {
             ct     <- f(cursor)
             fields <- runFields(child, tpe, ct)
@@ -411,7 +423,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
                                 )
                               }
               } yield
-                ProtoJson.fromFields(
+                ProtoJson.fromDisjointFields(
                   List(childName -> ProtoJson.fromValues(elems))
                 )
 
@@ -447,7 +459,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
           cursor.asLeaf.map(ProtoJson.fromJson)
 
         case (_, (_: ObjectType) | (_: InterfaceType) | (_: UnionType)) =>
-          runFields(query, tpe, cursor).map(ProtoJson.fromFields)
+          runFields(query, tpe, cursor).map(ProtoJson.fromDisjointFields)
 
         case _ =>
           Result.internalError(s"Stuck at type $tpe for ${query.render}")
@@ -480,7 +492,7 @@ object QueryInterpreter {
     implicit val monoidInstance: Monoid[ProtoJson] =
       new Monoid[ProtoJson] {
         val empty: ProtoJson = fromJson(Json.Null)
-        def combine(x: ProtoJson, y: ProtoJson): ProtoJson = ProtoJson.mergeObjects(List(x, y))
+        def combine(x: ProtoJson, y: ProtoJson): ProtoJson = ProtoJson.mergeProtoJson(List(x, y))
       }
 
     /**
@@ -500,12 +512,23 @@ object QueryInterpreter {
      *
      * If all fields are complete then they will be combined as a complete
      * Json object.
+     *
+     * Assumes that all fields are disjoint.
      */
-    def fromFields(fields: Seq[(String, ProtoJson)]): ProtoJson =
+    def fromDisjointFields(fields: Seq[(String, ProtoJson)]): ProtoJson =
       if(fields.forall(_._2.isInstanceOf[Json]))
         wrap(Json.fromFields(fields.asInstanceOf[Seq[(String, Json)]]))
       else
         wrap(ProtoObject(fields))
+
+    /**
+     * Combine possibly partial fields to create a possibly partial object.
+     *
+     * If all fields are complete then they will be combined as a complete
+     * Json object.
+     */
+    def fromFields(fields: Seq[(String, ProtoJson)]): ProtoJson =
+      fromDisjointFields(mergeFields(fields))
 
     /**
      * Combine possibly partial values to create a possibly partial array.
@@ -542,35 +565,78 @@ object QueryInterpreter {
     def isDeferred(p: ProtoJson): Boolean =
       p.isInstanceOf[DeferredJson]
 
-    def mergeObjects(elems: List[ProtoJson]): ProtoJson = {
-      def loop(elems: List[ProtoJson], acc: List[(String, ProtoJson)]): List[(String, ProtoJson)] = elems match {
-        case Nil                       => acc
-        case (j: Json) :: tl =>
-          j.asObject match {
-            case Some(obj)             => loop(tl, acc ++ obj.keys.zip(obj.values.map(fromJson)))
-            case None                  => loop(tl, acc)
-          }
-        case ProtoObject(fields) :: tl => loop(tl, acc ++ fields)
-        case _ :: tl                   => loop(tl, acc)
-      }
-
+    /** Recursively merge a list of ProtoJson values. */
+    def mergeProtoJson(elems: Seq[ProtoJson]): ProtoJson = {
       elems match {
-        case Nil        => wrap(Json.Null)
-        case hd :: Nil  => hd
-        case _          =>
-          loop(elems, Nil) match {
-            case Nil    => wrap(Json.Null)
-            case fields => fromFields(fields)
-          }
+        case Seq(elem) => elem
+        case Seq(_: ProtoObject, _*) => mergeProtoObjects(elems)
+        case Seq(j: Json, _*) if j.isObject => mergeProtoObjects(elems)
+        case Seq(_: ProtoArray, _*) => mergeProtoArrays(elems)
+        case Seq(j: Json, _*) if j.isArray => mergeProtoArrays(elems)
+        case Seq(hd, _*) => hd
+        case _ => wrap(Json.Null)
       }
     }
 
-    def mergeJson(elems: List[Json]): Json =
-      elems match {
-        case Nil => Json.Null
-        case List(elem) => elem
-        case elems => elems.reduce(_.deepMerge(_))
+    /** Recursively merge a list of ProtoJson objects. */
+    def mergeProtoObjects(objs: Seq[ProtoJson]): ProtoJson =
+      objs match {
+        case Seq(obj) => obj
+        case Seq(_, _, _*) =>
+          val fieldss = objs flatMap {
+            case ProtoObject(fields) => fields
+            case j: Json if j.isObject => j.asObject.get.toIterable.map { case (k, v) => (k, wrap(v)) }
+            case _ => Nil
+          }
+          fromFields(fieldss)
+        case _ => wrap(Json.Null)
       }
+
+    /** Recursively merge a list of ProtoJson arrays. */
+    def mergeProtoArrays(arrs: Seq[ProtoJson]): ProtoJson =
+      arrs match {
+        case Seq(arr) => arr
+        case Seq(_, _, _*) =>
+          val elemss = arrs map {
+            case ProtoArray(elems) => elems
+            case j: Json if j.isArray => j.asArray.get.map(wrap)
+            case _ => Nil
+          }
+          elemss.transpose.map(mergeProtoJson) match {
+            case Nil => wrap(Json.Null)
+            case elems => fromValues(elems)
+          }
+        case _ => wrap(Json.Null)
+      }
+
+    /** Recursively merge a list of ProtoJson fields. */
+    def mergeFields(fields: Seq[(String, ProtoJson)]): Seq[(String, ProtoJson)] = {
+      def hasDuplicates[T](xs: Seq[(String, T)]): Boolean =
+        xs match {
+          case Seq(_, _, _*) =>
+            val seen = mutable.HashSet.empty[String]
+            xs.exists { case (k, _) => !seen.add(k) }
+          case _ => false
+        }
+
+      if (!hasDuplicates(fields)) fields
+      else {
+        val groupedFields = fields.groupMap(_._1)(_._2).view.mapValues(mergeProtoJson).toMap
+        fields.foldLeft((Set.empty[String], List.empty[(String, ProtoJson)])) {
+          case ((seen, acc), (fieldName, _)) =>
+            if (seen.contains(fieldName)) (seen, acc)
+            else (seen + fieldName, (fieldName, groupedFields(fieldName)) :: acc)
+        }._2.reverse
+      }
+    }
+
+    @deprecated("Use mergeProtoObjects or mergeProtoJson instead", "0.18.1")
+    def mergeObjects(objs: List[ProtoJson]): ProtoJson =
+      mergeProtoObjects(objs)
+
+    @deprecated("Use mergeProtoJson instead", "0.18.1")
+    def mergeJson(objs: List[Json]): Json =
+      mergeProtoJson(objs.asInstanceOf[List[ProtoJson]]).asInstanceOf[Json]
 
     // Combine a list of ProtoJson results, collecting all errors on the left and preserving
     // the order and number of elements by inserting Json Nulls for Lefts.
@@ -591,7 +657,7 @@ object QueryInterpreter {
   def complete[F[_]: Monad](pj: ProtoJson): F[Result[Json]] =
     pj match {
       case j: Json => Result(j).pure[F]
-      case _ => completeAll[F](List(pj)).map(_.map(ProtoJson.mergeJson))
+      case _ => completeAll[F](List(pj)).map(_.map(_.head)) // result is 1:1 with the argument, so head is safe
     }
 
   /** Complete a collection of possibly deferred results.

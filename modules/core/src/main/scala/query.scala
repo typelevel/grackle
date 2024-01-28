@@ -445,19 +445,13 @@ object Query {
   /** Extractor for grouped Narrow patterns in the query algebra */
   object TypeCase {
     def unapply(q: Query): Option[(Query, List[Narrow])] = {
-      def loop(q: Query): List[Query] =
-        q match {
-          case Group(children) => children.flatMap(loop)
-          case other => List(other)
-        }
-
       def branch(q: Query): Option[TypeRef] =
         q match {
           case Narrow(subtpe, _) => Some(subtpe)
           case _ => None
         }
 
-      val grouped = loop(q).groupBy(branch).toList
+      val grouped = ungroup(q).groupBy(branch).toList
       val (default0, narrows0) = grouped.partition(_._1.isEmpty)
       if (narrows0.isEmpty) None
       else {
@@ -493,34 +487,112 @@ object Query {
     }
 
   /** Merge the given queries as a single query */
-  def mergeQueries(qs: List[Query]): Query = {
-    qs.filterNot(_ == Empty) match {
-      case Nil => Empty
-      case List(one) => one
-      case qs =>
-        def flattenLevel(qs: List[Query]): List[Query] = {
-          def loop(qs: List[Query], acc: List[Query]): List[Query] =
-            qs match {
-              case Nil => acc.reverse
-              case Group(gs) :: tl => loop(gs ++ tl, acc)
-              case Empty :: tl => loop(tl, acc)
-              case hd :: tl => loop(tl, hd :: acc)
+  def mergeQueries(qs: List[Query]): Query =
+    TypedQueryMerger.merge(qs)
+
+  /** Merge the given untyped queries as a single untyped query */
+  def mergeUntypedQueries(qs: List[Query]): Query =
+    UntypedQueryMerger.merge(qs)
+
+  private abstract class QueryMerger[T <: Query] {
+    def merge(qs: List[Query]): Query = {
+      qs match {
+        case Nil | List(Empty) => Empty
+        case qs =>
+          val flattened = flattenLevel(qs)
+
+          val groupedSelects = groupSelects(flattened)
+
+          def mergeInOrder(qs: List[Query]): List[Query] =
+            qs.foldLeft((Set.empty[(String, Option[String])], List.empty[Query])) {
+              case ((seen, acc), q) =>
+                q match {
+                  case Key(key@(_, _)) =>
+                    if (seen.contains(key)) (seen, acc)
+                    else (seen + key, groupedSelects(key) :: acc)
+                  case _: Narrow => (seen, acc)
+                  case elem => (seen, elem :: acc)
+                }
+            }._2.reverse
+
+          val mergedSelects = mergeInOrder(flattened)
+
+          val narrows = flattened.filter { case _: Narrow => true case _ => false }.asInstanceOf[List[Narrow]]
+          val mergedNarrows =
+            if(narrows.isEmpty) Nil
+            else {
+              val allTypes = narrows.map(_.subtpe.name).distinct
+              val groupedNarrows = narrows.groupBy(_.subtpe)
+              val merged =
+                groupedNarrows.map {
+                  case (subtpe, narrows) =>
+                    val children = narrows.map(_.child)
+                    val merged = merge(children)
+                    Narrow(subtpe, merged)
+                }.toList
+
+              allTypes.flatMap { subtpe => merged.filter(_.subtpe.name == subtpe) }
             }
-          loop(qs, Nil)
-        }
 
-        val flattened = flattenLevel(qs)
-        val (selects, rest) = flattened.partitionMap { case sel: Select => Left(sel) ; case other => Right(other) }
-
-        val mergedSelects =
-          selects.groupBy { case Select(fieldName, resultName, _) => (fieldName, resultName) }.values.map { sels =>
-            val Select(fieldName, resultName, _) = sels.head : @unchecked
-            val children = sels.map(_.child)
-            val merged = mergeQueries(children)
-            Select(fieldName, resultName, merged)
+          (mergedSelects ::: mergedNarrows) match {
+            case Nil => Empty
+            case List(one) => one
+            case qs => Group(qs)
           }
+        }
+    }
 
-        Group(rest ++ mergedSelects)
-      }
+    def flattenLevel(qs: List[Query]): List[Query] = {
+      @tailrec
+      def loop(qs: List[Query], acc: List[Query]): List[Query] =
+        qs match {
+          case Nil => acc.reverse
+          case Group(gs) :: tl => loop(gs ++ tl, acc)
+          case Empty :: tl => loop(tl, acc)
+          case hd :: tl => loop(tl, hd :: acc)
+        }
+      loop(qs, Nil)
+    }
+
+    val Key: PartialFunction[Query, (String, Option[String])]
+
+    def groupSelects(qs: List[Query]): Map[(String, Option[String]), Query]
+  }
+
+  private object TypedQueryMerger extends QueryMerger[Select] {
+    val Key: PartialFunction[Query, (String, Option[String])] = {
+      case sel: Select => (sel.name, sel.alias)
+    }
+
+    def groupSelects(qs: List[Query]): Map[(String, Option[String]), Query] = {
+      val selects = qs.filter { case _: Select => true case _ => false }.asInstanceOf[List[Select]]
+      selects.groupBy(sel => (sel.name, sel.alias)).view.mapValues(mergeSelects).toMap
+    }
+
+    def mergeSelects(sels: List[Select]): Query = {
+      val sel = sels.head
+      val children = sels.map(_.child)
+      val merged = merge(children)
+      sel.copy(child = merged)
+    }
+  }
+
+  private object UntypedQueryMerger extends QueryMerger[UntypedSelect] {
+    val Key: PartialFunction[Query, (String, Option[String])] = {
+      case sel: UntypedSelect => (sel.name, sel.alias)
+    }
+
+    def groupSelects(qs: List[Query]): Map[(String, Option[String]), Query] = {
+      val selects = qs.filter { case _: UntypedSelect => true case _ => false }.asInstanceOf[List[UntypedSelect]]
+      selects.groupBy(sel => (sel.name, sel.alias)).view.mapValues(mergeSelects).toMap
+    }
+
+    def mergeSelects(sels: List[UntypedSelect]): Query = {
+      val sel = sels.head
+      val dirs = sels.flatMap(_.directives)
+      val children = sels.map(_.child)
+      val merged = merge(children)
+      sel.copy(directives = dirs, child = merged)
+    }
   }
 }

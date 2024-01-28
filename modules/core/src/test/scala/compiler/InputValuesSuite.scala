@@ -27,13 +27,13 @@ final class InputValuesSuite extends CatsEffectSuite {
   test("null value") {
     val query = """
       query {
-        field {
+        one:field {
           subfield
         }
-        field(arg: null) {
+        two:field(arg: null) {
           subfield
         }
-        field(arg: 23) {
+        three:field(arg: 23) {
           subfield
         }
       }
@@ -41,9 +41,9 @@ final class InputValuesSuite extends CatsEffectSuite {
 
     val expected =
       Group(List(
-        UntypedSelect("field", None, List(Binding("arg", AbsentValue)), Nil, UntypedSelect("subfield", None, Nil, Nil, Empty)),
-        UntypedSelect("field", None, List(Binding("arg", NullValue)), Nil, UntypedSelect("subfield", None, Nil, Nil, Empty)),
-        UntypedSelect("field", None, List(Binding("arg", IntValue(23))), Nil, UntypedSelect("subfield", None, Nil, Nil, Empty))
+        UntypedSelect("field", Some("one"), List(Binding("arg", AbsentValue)), Nil, UntypedSelect("subfield", None, Nil, Nil, Empty)),
+        UntypedSelect("field", Some("two"), List(Binding("arg", NullValue)), Nil, UntypedSelect("subfield", None, Nil, Nil, Empty)),
+        UntypedSelect("field", Some("three"), List(Binding("arg", IntValue(23))), Nil, UntypedSelect("subfield", None, Nil, Nil, Empty))
       ))
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
@@ -54,10 +54,10 @@ final class InputValuesSuite extends CatsEffectSuite {
   test("list value") {
     val query = """
       query {
-        listField(arg: []) {
+        one:listField(arg: []) {
           subfield
         }
-        listField(arg: ["foo", "bar"]) {
+        two:listField(arg: ["foo", "bar"]) {
           subfield
         }
       }
@@ -65,10 +65,10 @@ final class InputValuesSuite extends CatsEffectSuite {
 
     val expected =
       Group(List(
-        UntypedSelect("listField", None, List(Binding("arg", ListValue(Nil))), Nil,
+        UntypedSelect("listField", Some("one"), List(Binding("arg", ListValue(Nil))), Nil,
           UntypedSelect("subfield", None, Nil, Nil, Empty)
         ),
-        UntypedSelect("listField", None, List(Binding("arg", ListValue(List(StringValue("foo"),  StringValue("bar"))))), Nil,
+        UntypedSelect("listField", Some("two"), List(Binding("arg", ListValue(List(StringValue("foo"),  StringValue("bar"))))), Nil,
           UntypedSelect("subfield", None, Nil, Nil, Empty)
         )
       ))

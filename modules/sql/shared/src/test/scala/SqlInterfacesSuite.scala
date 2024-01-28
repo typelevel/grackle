@@ -522,7 +522,7 @@ trait SqlInterfacesSuite extends CatsEffectSuite {
     assertWeaklyEqualIO(res, expected)
   }
 
-  test("interface query with type variant fields in type conditions") {
+  test("interface query with type variant fields in type conditions (1)") {
     val query = """
       query {
         entities {
@@ -535,7 +535,7 @@ trait SqlInterfacesSuite extends CatsEffectSuite {
           }
           ... on Series {
             numberOfEpisodes
-            label
+            alphaLabel:label
           }
         }
       }
@@ -571,24 +571,58 @@ trait SqlInterfacesSuite extends CatsEffectSuite {
               "entityType" : "SERIES",
               "title" : "Series 1",
               "numberOfEpisodes" : 5,
-              "label" : "One"
+              "alphaLabel" : "One"
             },
             {
               "id" : "5",
               "entityType" : "SERIES",
               "title" : "Series 2",
               "numberOfEpisodes" : 6,
-              "label" : "Two"
+              "alphaLabel" : "Two"
             },
             {
               "id" : "6",
               "entityType" : "SERIES",
               "title" : "Series 3",
               "numberOfEpisodes" : 7,
-              "label" : "Three"
+              "alphaLabel" : "Three"
             }
           ]
         }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("interface query with type variant fields in type conditions (2)") {
+    val query = """
+      query {
+        entities {
+          id
+          entityType
+          title
+          ... on Film {
+            rating
+            label
+          }
+          ... on Series {
+            numberOfEpisodes
+            label
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Cannot merge fields named 'label' of distinct leaf types Int, String"
+          }
+        ]
       }
     """
 
