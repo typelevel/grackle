@@ -151,6 +151,36 @@ final class SubscriptionSuite extends CatsEffectSuite {
 
   }
 
+  test("serial execution") {
+    val mutation =
+      """
+        mutation {
+          one:put(n: 1)
+          two:put(n: 2)
+          three:put(n: 3)
+        }
+      """
+
+    val prog: IO[Json] =
+      for {
+        ref <- SignallingRef[IO, Int](0)
+        map  = mapping(ref)
+        r  <- map.compileAndRun(mutation)
+      } yield r
+
+    assertIO(prog,
+      json"""
+        {
+          "data" : {
+            "one" : 1,
+            "two" : 2,
+            "three" : 3
+          }
+        }
+      """
+    )
+  }
+
   test("subscription") {
 
     val prog: IO[List[Json]] =
