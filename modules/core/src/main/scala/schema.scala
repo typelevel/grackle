@@ -256,7 +256,7 @@ sealed trait Type extends Product {
   def <:<(other: Type): Boolean =
     (this.dealias, other.dealias) match {
       case (tp1, tp2) if tp1 == tp2 => true
-      case (tp1, UnionType(_, _, members, _)) => members.exists(tp1 <:< _.dealias)
+      case (tp1, UnionType(_, _, members, _)) => members.exists(tp1 <:< _)
       case (ObjectType(_, _, _, interfaces, _), tp2) => interfaces.exists(_ <:< tp2)
       case (InterfaceType(_, _, _, interfaces, _), tp2) => interfaces.exists(_ <:< tp2)
       case (NullableType(tp1), NullableType(tp2)) => tp1 <:< tp2
@@ -456,6 +456,19 @@ sealed trait Type extends Product {
     case ObjectType(_, _, fields, _, _) => fields.find(_.name == fieldName).map(_.tpe)
     case InterfaceType(_, _, fields, _, _) => fields.find(_.name == fieldName).map(_.tpe)
     case _ => None
+  }
+
+  /**
+    * Yield the named type underlying this type.
+    *
+    * Strips of nullability and enclosing list types until an
+    * underlying named type is reached. This method will always
+    * yield a named type.
+    */
+  def underlyingNamed: NamedType = this match {
+    case NullableType(tpe) => tpe.underlyingNamed
+    case ListType(tpe)     => tpe.underlyingNamed
+    case tpe: NamedType => tpe
   }
 
   /** Is this type a leaf type?

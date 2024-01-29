@@ -523,7 +523,6 @@ final class VariablesSuite extends CatsEffectSuite {
     """
 
     val compiled = VariablesMapping.compiler.compile(query, reportUnused = false)
-    println(compiled)
 
     val expected =
       Operation(
