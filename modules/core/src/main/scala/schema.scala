@@ -52,18 +52,31 @@ trait Schema {
   /** The type extensions defined by this `Schema` */
   def typeExtensions: List[TypeExtension]
 
-  /** A reference by name to a type defined by this `Schema`.
+  /**
+   * A reference by name to a type defined by this `Schema`.
+   *
+   * This method should be used to obtain the references to types
+   * required for the definitions of mappings and the bodies of select
+   * elaborators because TypeRefs can be meaningfully compared for
+   * equality using `==`.
+   *
+   * @throws java.lang.IllegalArgumentException if the type is not defined in this schema
+   */
+  def ref(tpnme: String): TypeRef = {
+    if (!types.exists(_.name == tpnme))
+      throw new IllegalArgumentException(s"Type $tpnme not defined in schema")
+    else
+      new TypeRef(this, tpnme)
+  }
+
+  /**
+   * Alias for `uncheckedRef` for use within constructors of concrete
+   * `Schema` values.
    *
    * `TypeRef`s refer to types defined in this schema by name and hence
    * can be used as part of mutually recursive type definitions.
    */
-  def ref(tpnme: String): TypeRef = new TypeRef(this, tpnme)
-
-  /**
-   * Alias for `ref` for use within constructors of concrete
-   * `Schema` values.
-   */
-  protected def TypeRef(tpnme: String): TypeRef = ref(tpnme)
+  protected def TypeRef(tpnme: String): TypeRef = uncheckedRef(tpnme)
 
   /**
    * The default type of a GraphQL schema
@@ -109,10 +122,30 @@ trait Schema {
 
   private lazy val typeIndex = types.map(tpe => (tpe.name, tpe)).toMap
 
-  def ref(tp: Type): Option[TypeRef] = tp match {
-    case nt: NamedType if types.exists(_.name == nt.name) => Some(ref(nt.name))
-    case _ => None
-  }
+  /**
+   * A reference by name to a type defined by this `Schema`.
+   *
+   * `TypeRef`s refer to types defined in this schema by name and hence
+   * can be used as part of mutually recursive type definitions.
+   *
+   * Note that this method should be used with caution as it does not
+   * check that the type is defined in this schema.
+   */
+  def uncheckedRef(tpnme: String): TypeRef =
+    new TypeRef(this, tpnme)
+
+  /**
+   * A reference to a type defined by this `Schema`.
+   *
+   * The primary use of this method is to obtain a TypeRef
+   * corresponding to a type defined in this schema for use in
+   * builtin equality comparisons with other TypeRefs.
+   *
+   * Note that this method should be used with caution as it does not
+   * check that the type is defined in this schema.
+   */
+  def uncheckedRef(tpe: NamedType): TypeRef =
+    uncheckedRef(tpe.name)
 
   def baseSchemaType: NamedType = definition("Schema").getOrElse(defaultSchemaType)
 
@@ -292,7 +325,7 @@ sealed trait Type extends Product {
   def fieldInfo(fieldName: String): Option[Field] = this match {
     case NullableType(tpe) => tpe.fieldInfo(fieldName)
     case ListType(tpe) => tpe.fieldInfo(fieldName)
-    case _: TypeRef => dealias.fieldInfo(fieldName)
+    case _: TypeRef if exists => dealias.fieldInfo(fieldName)
     case _ => None
   }
 
@@ -315,7 +348,7 @@ sealed trait Type extends Product {
     case (Nil, _) => Some(this)
     case (_, ListType(tpe)) => tpe.path(fns)
     case (_, NullableType(tpe)) => tpe.path(fns)
-    case (_, TypeRef(_, _)) => dealias.path(fns)
+    case (_, TypeRef(_, _)) if exists => dealias.path(fns)
     case (fieldName :: rest, ObjectType(_, _, fields, _, _)) =>
       fields.find(_.name == fieldName).flatMap(_.tpe.path(rest))
     case (fieldName :: rest, InterfaceType(_, _, fields, _, _)) =>
@@ -334,7 +367,7 @@ sealed trait Type extends Product {
     case (Nil, _) => this.isList
     case (_, _: ListType) => true
     case (_, NullableType(tpe)) => tpe.pathIsList(fns)
-    case (_, TypeRef(_, _)) => dealias.pathIsList(fns)
+    case (_, TypeRef(_, _)) if exists => dealias.pathIsList(fns)
     case (fieldName :: rest, ObjectType(_, _, fields, _, _)) =>
       fields.find(_.name == fieldName).exists(_.tpe.pathIsList(rest))
     case (fieldName :: rest, InterfaceType(_, _, fields, _, _)) =>
@@ -353,7 +386,7 @@ sealed trait Type extends Product {
     case (Nil, _) => false
     case (_, ListType(tpe)) => tpe.pathIsNullable(fns)
     case (_, _: NullableType) => true
-    case (_, TypeRef(_, _)) => dealias.pathIsNullable(fns)
+    case (_, TypeRef(_, _)) if exists => dealias.pathIsNullable(fns)
     case (fieldName :: rest, ObjectType(_, _, fields, _, _)) =>
       fields.find(_.name == fieldName).exists(_.tpe.pathIsNullable(rest))
     case (fieldName :: rest, InterfaceType(_, _, fields, _, _)) =>
@@ -418,7 +451,7 @@ sealed trait Type extends Product {
   def underlying: Type = this match {
     case NullableType(tpe) => tpe.underlying
     case ListType(tpe) => tpe.underlying
-    case _: TypeRef => dealias.underlying
+    case _: TypeRef if exists => dealias.underlying
     case _ => this
   }
 
@@ -433,7 +466,7 @@ sealed trait Type extends Product {
   def underlyingObject: Option[NamedType] = this match {
     case NullableType(tpe) => tpe.underlyingObject
     case ListType(tpe) => tpe.underlyingObject
-    case _: TypeRef => dealias.underlyingObject
+    case _: TypeRef if exists => dealias.underlyingObject
     case o: ObjectType => Some(o)
     case i: InterfaceType => Some(i)
     case u: UnionType => Some(u)
@@ -452,7 +485,7 @@ sealed trait Type extends Product {
   def underlyingField(fieldName: String): Option[Type] = this match {
     case NullableType(tpe) => tpe.underlyingField(fieldName)
     case ListType(tpe) => tpe.underlyingField(fieldName)
-    case TypeRef(_, _) => dealias.underlyingField(fieldName)
+    case TypeRef(_, _) if exists => dealias.underlyingField(fieldName)
     case ObjectType(_, _, fields, _, _) => fields.find(_.name == fieldName).map(_.tpe)
     case InterfaceType(_, _, fields, _, _) => fields.find(_.name == fieldName).map(_.tpe)
     case _ => None
@@ -477,9 +510,8 @@ sealed trait Type extends Product {
    * enum, `false` otherwise.
    */
   def isLeaf: Boolean = this match {
-    case TypeRef(_, _) => dealias.isLeaf
-    case _: ScalarType => true
-    case _: EnumType => true
+    case TypeRef(_, _) if exists => dealias.isLeaf
+    case _: ScalarType | _: EnumType => true
     case _ => false
   }
 
@@ -488,9 +520,8 @@ sealed trait Type extends Product {
    * otherwise yield `None`.
    */
   def asLeaf: Option[Type] = this match {
-    case TypeRef(_, _) => dealias.asLeaf
-    case _: ScalarType => Some(this)
-    case _: EnumType => Some(this)
+    case TypeRef(_, _) if exists => dealias.asLeaf
+    case _: ScalarType | _: EnumType => Some(this)
     case _ => None
   }
 
@@ -506,9 +537,9 @@ sealed trait Type extends Product {
   def isUnderlyingLeaf: Boolean = this match {
     case NullableType(tpe) => tpe.isUnderlyingLeaf
     case ListType(tpe) => tpe.isUnderlyingLeaf
-    case _: TypeRef => dealias.isUnderlyingLeaf
-    case (_: ObjectType)|(_: InterfaceType)|(_: UnionType) => false
-    case _ => true
+    case _: TypeRef if exists => dealias.isUnderlyingLeaf
+    case _: ScalarType | _: EnumType => true
+    case _ => false
   }
 
   /**
@@ -522,9 +553,9 @@ sealed trait Type extends Product {
   def underlyingLeaf: Option[Type] = this match {
     case NullableType(tpe) => tpe.underlyingLeaf
     case ListType(tpe) => tpe.underlyingLeaf
-    case _: TypeRef => dealias.underlyingLeaf
-    case (_: ObjectType)|(_: InterfaceType)|(_: UnionType) => None
-    case tpe => Some(tpe)
+    case _: TypeRef if exists => dealias.underlyingLeaf
+    case _: ScalarType | _: EnumType => Some(this)
+    case _ => None
   }
 
   def withModifiersOf(tpe: Type): Type = {
@@ -583,7 +614,7 @@ sealed trait TypeExtension {
 /**
  * A by name reference to a type defined in `schema`.
  */
-case class TypeRef(schema: Schema, name: String) extends NamedType {
+case class TypeRef private[grackle] (schema: Schema, name: String) extends NamedType {
   override lazy val dealias: NamedType = schema.definition(name).getOrElse(this)
 
   override lazy val exists: Boolean = schema.definition(name).isDefined
@@ -1379,15 +1410,15 @@ object SchemaParser {
     import Ast.{Directive => _, EnumValueDefinition => _, SchemaExtension => _, Type => _, TypeExtension => _, Value => _, _}
 
     /**
-    * Parse a query String to a query algebra term.
+    * Parse a GraphQL schema String to a Schema value
     *
-    * Yields a Query value on the right and accumulates errors on the left.
+    * Yields a Schema value on the right and accumulates errors on the left.
     */
     def parseText(text: String)(implicit pos: SourcePos): Result[Schema] =
       for {
         doc <- parser.parseText(text)
-        query <- parseDocument(doc)
-      } yield query
+        schema <- parseDocument(doc)
+      } yield schema
 
     def parseDocument(doc: Document)(implicit sourcePos: SourcePos): Result[Schema] = {
       object schema extends Schema {
@@ -1426,6 +1457,8 @@ object SchemaParser {
       } yield schema
     }
 
+    def lazyRef(schema: Schema, tpnme: String): TypeRef = schema.uncheckedRef(tpnme)
+
     // explicit Schema type, if any
     def mkSchemaType(schema: Schema, doc: Document): Result[Option[NamedType]] = {
       def build(dirs: List[Directive], ops: List[Field]): NamedType = {
@@ -1439,7 +1472,7 @@ object SchemaParser {
         )
       }
 
-      def defaultQueryType = schema.ref("Query")
+      def defaultQueryType = lazyRef(schema, "Query")
 
       val defns = doc.collect { case schema: SchemaDefinition => schema }
       defns match {
@@ -1486,19 +1519,19 @@ object SchemaParser {
         case InterfaceTypeExtension(Ast.Type.Named(Name(name)), fields0, ifs0, dirs0) =>
           for {
             fields <- fields0.traverse(mkField(schema))
-            ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+            ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => lazyRef(schema, nme) }
             dirs   <- dirs0.traverse(Directive.fromAst)
           } yield InterfaceExtension(name, fields, ifs, dirs)
         case ObjectTypeExtension(Ast.Type.Named(Name(name)), fields0, ifs0, dirs0) =>
           for {
             fields <- fields0.traverse(mkField(schema))
-            ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+            ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => lazyRef(schema, nme) }
             dirs   <- dirs0.traverse(Directive.fromAst)
           } yield ObjectExtension(name, fields, ifs, dirs)
         case UnionTypeExtension(Ast.Type.Named(Name(name)), dirs0, members0) =>
           for {
             dirs    <- dirs0.traverse(Directive.fromAst)
-            members =  members0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+            members =  members0.map { case Ast.Type.Named(Name(nme)) => lazyRef(schema, nme) }
           } yield UnionExtension(name, members, dirs)
         case EnumTypeExtension(Ast.Type.Named(Name(name)), dirs0, values0) =>
           for {
@@ -1530,7 +1563,7 @@ object SchemaParser {
         else
           for {
             fields <- fields0.traverse(mkField(schema))
-            ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+            ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => lazyRef(schema, nme) }
             dirs   <- dirs0.traverse(Directive.fromAst)
           } yield ObjectType(nme, desc, fields, ifs, dirs)
       case InterfaceTypeDefinition(Name(nme), desc, fields0, ifs0, dirs0) =>
@@ -1538,7 +1571,7 @@ object SchemaParser {
         else
           for {
             fields <- fields0.traverse(mkField(schema))
-            ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+            ifs    =  ifs0.map { case Ast.Type.Named(Name(nme)) => lazyRef(schema, nme) }
             dirs   <- dirs0.traverse(Directive.fromAst)
           } yield InterfaceType(nme, desc, fields, ifs, dirs)
       case UnionTypeDefinition(Name(nme), desc, dirs0, members0) =>
@@ -1546,7 +1579,7 @@ object SchemaParser {
         else {
           for {
             dirs    <- dirs0.traverse(Directive.fromAst)
-            members =  members0.map { case Ast.Type.Named(Name(nme)) => schema.ref(nme) }
+            members =  members0.map { case Ast.Type.Named(Name(nme)) => lazyRef(schema, nme) }
           } yield UnionType(nme, desc, members, dirs)
         }
       case EnumTypeDefinition(Name(nme), desc, dirs0, values0) =>
@@ -1582,7 +1615,7 @@ object SchemaParser {
           case Ast.Type.List(tpe) => loop(tpe, true).map(tpe => wrap(ListType(tpe)))
           case Ast.Type.NonNull(Left(tpe)) => loop(tpe, false)
           case Ast.Type.NonNull(Right(tpe)) => loop(tpe, false)
-          case Ast.Type.Named(Name(nme)) => wrap(ScalarType.builtIn(nme).getOrElse(schema.ref(nme))).success
+          case Ast.Type.Named(Name(nme)) => wrap(ScalarType.builtIn(nme).getOrElse(lazyRef(schema, nme))).success
         }
       }
 
@@ -1918,7 +1951,7 @@ object SchemaRenderer {
         val dirs = renderDirectives(dirs0)
         val fields =
           if(fields0.isEmpty) ""
-          else 
+          else
             s"""| {
                 |  ${fields0.map(renderField).mkString("\n  ")}
                 |}""".stripMargin
@@ -1930,7 +1963,7 @@ object SchemaRenderer {
         val dirs = renderDirectives(dirs0)
         val fields =
           if(fields0.isEmpty) ""
-          else 
+          else
             s"""| {
                 |  ${fields0.map(renderField).mkString("\n  ")}
                 |}""".stripMargin
@@ -1949,7 +1982,7 @@ object SchemaRenderer {
         val dirs = renderDirectives(dirs0)
         val values =
           if(values0.isEmpty) ""
-          else 
+          else
             s"""| {
                 |  ${values0.map(renderEnumValueDefinition).mkString("\n  ")}
                 |}""".stripMargin
@@ -1960,7 +1993,7 @@ object SchemaRenderer {
         val dirs = renderDirectives(dirs0)
         val fields =
           if(fields0.isEmpty) ""
-          else 
+          else
             s"""| {
                 |  ${fields0.map(renderInputValue).mkString("\n  ")}
                 |}""".stripMargin

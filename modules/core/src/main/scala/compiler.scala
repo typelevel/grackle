@@ -974,7 +974,7 @@ object QueryCompiler {
               _      <- Elab.pop
             } yield
               if (ctpe <:< subtpe) ec
-              else Narrow(s.ref(subtpe.name), ec)
+              else Narrow(s.uncheckedRef(subtpe), ec)
           )
 
         case UntypedInlineFragment(tpnme0, dirs, child) =>
@@ -996,7 +996,7 @@ object QueryCompiler {
               _      <- Elab.pop
             } yield
               if (ctpe <:< subtpe) ec
-              else Narrow(s.ref(subtpe.name), ec)
+              else Narrow(s.uncheckedRef(subtpe), ec)
           )
 
         case _ => super.transform(query)
@@ -1096,9 +1096,8 @@ object QueryCompiler {
                           case _ => Elab.failure(s"Type $obj is not an object or interface type")
                         }
             eArgs    <- Elab.liftR(elaborateFieldArgs(obj, field, args))
-            ref      <- Elab.liftR(s.ref(obj).orElse(introspectionRef(obj)).toResultOrError(s"Type $obj not found in schema"))
-            _        <- if (s eq Introspection.schema) elaborateIntrospection(ref, fieldName, eArgs)
-                        else select(ref, fieldName, eArgs, dirs)
+            _        <- if (s eq Introspection.schema) elaborateIntrospection(Introspection.schema.uncheckedRef(obj), fieldName, eArgs)
+                        else select(s.uncheckedRef(obj), fieldName, eArgs, dirs)
             elab     <- Elab.transform
             env      <- Elab.localEnv
             attrs    <- Elab.attributes
@@ -1121,18 +1120,10 @@ object QueryCompiler {
 
     def select(ref: TypeRef, name: String, args: List[Binding], directives: List[Directive]): Elab[Unit]
 
-    val QueryTypeRef = Introspection.schema.ref("Query")
-    val TypeTypeRef = Introspection.schema.ref("__Type")
-    val FieldTypeRef = Introspection.schema.ref("__Field")
-    val EnumValueTypeRef = Introspection.schema.ref("__EnumValue")
-
-    def introspectionRef(tpe: Type): Option[TypeRef] =
-      Introspection.schema.ref(tpe).orElse(tpe.asNamed.flatMap(
-        _.name match {
-          case "__Typename" => Some(Introspection.schema.ref("__Typename"))
-          case _ => None
-        }
-      ))
+    val QueryTypeRef = Introspection.QueryType
+    val TypeTypeRef = Introspection.__TypeType
+    val FieldTypeRef = Introspection.__FieldType
+    val EnumValueTypeRef = Introspection.__EnumValueType
 
     def elaborateIntrospection(ref: TypeRef, name: String, args: List[Binding]): Elab[Unit] =
       (ref, name, args) match {
@@ -1213,7 +1204,7 @@ object QueryCompiler {
             ec       <- transform(child)
             _        <- Elab.pop
             schema   <- Elab.schema
-            ref      =  schema.ref(obj.name)
+            ref      =  schema.uncheckedRef(obj)
           } yield
             cmapping.get((ref, fieldName)) match {
               case Some((component, join)) =>
@@ -1263,7 +1254,7 @@ object QueryCompiler {
             ec       <- transform(child)
             _        <- Elab.pop
             schema   <- Elab.schema
-            ref      =  schema.ref(obj.name)
+            ref      =  schema.uncheckedRef(obj)
           } yield
             emapping.get((ref, fieldName)) match {
               case Some(handler) =>

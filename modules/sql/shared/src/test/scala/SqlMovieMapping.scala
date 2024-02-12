@@ -98,7 +98,6 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
   val IntervalType = schema.ref("Interval")
   val GenreType = schema.ref("Genre")
   val FeatureType = schema.ref("Feature")
-  val RatingType = schema.ref("Rating")
 
   val typeMappings =
     List(

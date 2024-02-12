@@ -126,7 +126,7 @@ object Introspection {
       """
     ).toOption.get
 
-  val QueryType = schema.queryType
+  val QueryType = schema.uncheckedRef(schema.queryType)
   val __SchemaType = schema.ref("__Schema")
   val __TypeType =  schema.ref("__Type")
   val __FieldType =  schema.ref("__Field")
