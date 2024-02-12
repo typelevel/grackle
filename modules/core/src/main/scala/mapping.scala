@@ -235,6 +235,8 @@ abstract class Mapping[F[_]] {
   case class PrimitiveMapping(tpe: Type)(implicit val pos: SourcePos) extends TypeMapping
 
   abstract class ObjectMapping extends TypeMapping {
+    def tpe: NamedType
+
     private lazy val fieldMappingIndex = fieldMappings.map(fm => (fm.fieldName, fm)).toMap
 
     def fieldMappings: List[FieldMapping]
@@ -243,11 +245,11 @@ abstract class Mapping[F[_]] {
 
   object ObjectMapping {
 
-    case class DefaultObjectMapping(tpe: Type, fieldMappings: List[FieldMapping])(
+    case class DefaultObjectMapping(tpe: NamedType, fieldMappings: List[FieldMapping])(
       implicit val pos: SourcePos
     ) extends ObjectMapping
 
-    def apply(tpe: Type, fieldMappings: List[FieldMapping])(
+    def apply(tpe: NamedType, fieldMappings: List[FieldMapping])(
       implicit pos: SourcePos
     ): ObjectMapping =
       DefaultObjectMapping(tpe, fieldMappings.map(_.withParent(tpe)))
@@ -456,7 +458,7 @@ abstract class Mapping[F[_]] {
         case om: ObjectMapping =>
           om.fieldMappings.collect {
             case Delegate(fieldName, mapping, join) =>
-              ComponentElaborator.ComponentMapping(schema.ref(om.tpe.toString), fieldName, mapping, join)
+              ComponentElaborator.ComponentMapping(schema.uncheckedRef(om.tpe), fieldName, mapping, join)
           }
         case _ => Nil
       }
@@ -470,7 +472,7 @@ abstract class Mapping[F[_]] {
         case om: ObjectMapping =>
           om.fieldMappings.collect {
             case EffectField(fieldName, handler, _, _) =>
-              EffectElaborator.EffectMapping(schema.ref(om.tpe.toString), fieldName, handler)
+              EffectElaborator.EffectMapping(schema.uncheckedRef(om.tpe), fieldName, handler)
           }
         case _ => Nil
       }

@@ -160,7 +160,7 @@ final class ValidatorSuite extends CatsEffectSuite {
 
     object M extends TestMapping {
       val schema = schema""
-      override val typeMappings  = List(ObjectMapping(schema.ref("Foo"), Nil))
+      override val typeMappings  = List(ObjectMapping(schema.uncheckedRef("Foo"), Nil))
     }
 
     val es = M.validator.validateMapping()
@@ -220,7 +220,7 @@ final class ValidatorSuite extends CatsEffectSuite {
   test("unsafeValidate") {
     object M extends TestMapping {
       val schema = schema"scalar Bar"
-      override val typeMappings = List(ObjectMapping(schema.ref("Foo"), Nil))
+      override val typeMappings = List(ObjectMapping(schema.uncheckedRef("Foo"), Nil))
     }
     intercept[ValidationException] {
       MappingValidator(M).unsafeValidate()

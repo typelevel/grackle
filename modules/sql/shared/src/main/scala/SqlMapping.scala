@@ -814,12 +814,12 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
   object SqlInterfaceMapping {
 
-    case class DefaultInterfaceMapping(tpe: Type, fieldMappings: List[FieldMapping], path: List[String], discriminator: SqlDiscriminator)(
+    case class DefaultInterfaceMapping(tpe: NamedType, fieldMappings: List[FieldMapping], path: List[String], discriminator: SqlDiscriminator)(
       implicit val pos: SourcePos
     ) extends SqlInterfaceMapping
 
     def apply(
-      tpe: Type,
+      tpe: NamedType,
       fieldMappings: List[FieldMapping],
       path: List[String] = Nil,
       discriminator: SqlDiscriminator
@@ -833,12 +833,12 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
   object SqlUnionMapping {
 
-    case class DefaultUnionMapping(tpe: Type, fieldMappings: List[FieldMapping], path: List[String], discriminator: SqlDiscriminator)(
+    case class DefaultUnionMapping(tpe: NamedType, fieldMappings: List[FieldMapping], path: List[String], discriminator: SqlDiscriminator)(
       implicit val pos: SourcePos
     ) extends SqlUnionMapping
 
     def apply(
-      tpe: Type,
+      tpe: NamedType,
       fieldMappings: List[FieldMapping],
       path: List[String] = Nil,
       discriminator: SqlDiscriminator,

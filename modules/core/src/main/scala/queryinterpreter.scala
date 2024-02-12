@@ -222,11 +222,11 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             case o: ObjectType => Some(o.name)
             case i: InterfaceType =>
               (schema.types.collectFirst {
-                case o: ObjectType if o <:< i && cursor.narrowsTo(schema.ref(o.name)) => o.name
+                case o: ObjectType if o <:< i && cursor.narrowsTo(schema.uncheckedRef(o)) => o.name
               })
             case u: UnionType =>
               (u.members.map(_.dealias).collectFirst {
-                case nt: NamedType if cursor.narrowsTo(schema.ref(nt.name)) => nt.name
+                case nt: NamedType if cursor.narrowsTo(schema.uncheckedRef(nt)) => nt.name
               })
             case _ => None
           }) match {

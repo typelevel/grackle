@@ -470,4 +470,21 @@ final class SchemaSuite extends CatsEffectSuite {
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
+
+  test("operations on undefined types") {
+    val schema = schema""
+
+    val QuuxType = schema.uncheckedRef("Quux")
+    assertEquals(QuuxType.fieldInfo("quux"), None)
+    assertEquals(QuuxType.path(List("foo")), None)
+    assertEquals(QuuxType.pathIsList(List("foo")), false)
+    assertEquals(QuuxType.pathIsNullable(List("foo")), false)
+    assertEquals(QuuxType.underlying, QuuxType)
+    assertEquals(QuuxType.underlyingObject, None)
+    assertEquals(QuuxType.underlyingField("foo"), None)
+    assertEquals(QuuxType.isLeaf, false)
+    assertEquals(QuuxType.asLeaf, None)
+    assertEquals(QuuxType.isUnderlyingLeaf, false)
+    assertEquals(QuuxType.underlyingLeaf, None)
+  }
 }

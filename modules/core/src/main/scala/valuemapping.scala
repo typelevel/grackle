@@ -76,13 +76,13 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
   }
 
   case class ValueObjectMapping[T](
-    tpe: Type,
+    tpe: NamedType,
     fieldMappings: List[FieldMapping],
     classTag: ClassTag[T]
   )(implicit val pos: SourcePos) extends ObjectMapping
 
   def ValueObjectMapping[T](
-    tpe: Type,
+    tpe: NamedType,
     fieldMappings: List[ValueFieldMapping[T]]
   )(implicit classTag: ClassTag[T], pos: SourcePos): ValueObjectMapping[T] =
     new ValueObjectMapping(tpe, fieldMappings.map(_.withParent(tpe)), classTag)
