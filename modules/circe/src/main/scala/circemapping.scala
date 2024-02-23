@@ -64,14 +64,6 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
         CirceCursor(fieldContext, json, Some(parent), parent.env).success
       case (Some(CursorFieldJson(_, f, _, _)), _) =>
         f(parent).map(res => CirceCursor(fieldContext, focus = res, parent = Some(parent), env = parent.env))
-      case (None|Some(_: EffectMapping), json: Json) =>
-        val f = json.asObject.flatMap(_(fieldName))
-        f match {
-          case None if fieldContext.tpe.isNullable => CirceCursor(fieldContext, Json.Null, Some(parent), parent.env).success
-          case Some(json) => CirceCursor(fieldContext, json, Some(parent), parent.env).success
-          case _ =>
-            Result.failure(s"No field '$fieldName' for type ${context.tpe}")
-        }
       case _ =>
         super.mkCursorForField(parent, fieldName, resultName)
     }
@@ -181,11 +173,17 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
         Result.internalError(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
 
     def hasField(fieldName: String): Boolean =
-      fieldMapping(context, fieldName).isDefined ||
-      tpe.hasField(fieldName) && focus.asObject.exists(_.contains(fieldName))
+      tpe.hasField(fieldName) && focus.asObject.exists(_.contains(fieldName)) ||
+      fieldMapping(context, fieldName).isDefined
 
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
-      mkCursorForField(this, fieldName, resultName)
+      val localField =
+        for {
+          obj <- focus.asObject
+          f   <- obj(fieldName)
+        } yield mkChild(context.forFieldOrAttribute(fieldName, resultName), f)
+
+      localField.map(_.success).getOrElse(mkCursorForField(this, fieldName, resultName))
     }
   }
 }

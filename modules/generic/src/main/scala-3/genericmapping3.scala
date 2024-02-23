@@ -73,14 +73,17 @@ trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: Ge
       extends AbstractCursor {
       def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
-      override def hasField(fieldName: String): Boolean = fieldMap.contains(fieldName)
+      override def hasField(fieldName: String): Boolean =
+        fieldMap.contains(fieldName) || fieldMapping(context, fieldName).isDefined
 
-      override def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
-        mkCursorForField(this, fieldName, resultName) orElse {
+      override def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
+        val localField =
           fieldMap.get(fieldName).toResult(s"No field '$fieldName' for type $tpe").flatMap { f =>
             f(context.forFieldOrAttribute(fieldName, resultName), focus, Some(this), Env.empty)
           }
-        }
+
+        localField orElse mkCursorForField(this, fieldName, resultName)
+      }
     }
   }
 
@@ -116,7 +119,7 @@ trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: Ge
       override def hasField(fieldName: String): Boolean = cursor.hasField(fieldName)
 
       override def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
-        mkCursorForField(this, fieldName, resultName) orElse cursor.field(fieldName, resultName)
+        cursor.field(fieldName, resultName) orElse mkCursorForField(this, fieldName, resultName)
 
       override def narrowsTo(subtpe: TypeRef): Boolean =
         subtpe <:< tpe && rtpe <:< subtpe
