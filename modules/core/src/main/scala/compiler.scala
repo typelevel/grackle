@@ -428,14 +428,23 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
             val pendingVars = op.variables.map(_.name).toSet
             val (dqv, dqf) = collectQueryRefs(op.query)
 
-            val (qv, qf) = {
-              dqf.foldLeft((dqv, dqf)) {
-                case ((v, f), nme) => fragRefs.get(nme) match {
-                  case None => (v, f)
-                  case Some((fv, ff)) => (v ++ fv, f ++ ff)
-                }
+            @tailrec
+            def closeRefs(pendingFrags: List[String], seenVars: Set[String], seenFrags: Set[String]): (Set[String], Set[String]) =
+              pendingFrags match {
+                case Nil => (seenVars, seenFrags)
+                case hd :: tl =>
+                  if (seenFrags.contains(hd)) closeRefs(tl, seenVars, seenFrags)
+                  else {
+                    fragRefs.get(hd) match {
+                      case None =>
+                        closeRefs(tl, seenVars, seenFrags + hd)
+                      case Some((v, f)) =>
+                        closeRefs(f.toList ::: tl, seenVars ++ v, seenFrags + hd)
+                    }
+                  }
               }
-            }
+
+            val (qv, qf) = closeRefs(dqf.toList, dqv, Set.empty)
 
             val varProblems =
               if (qv == pendingVars) Nil
