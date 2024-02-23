@@ -119,7 +119,7 @@ final class FragmentSuite extends CatsEffectSuite {
     assertIO(res, List(expectedResult))
   }
 
-  test("nested fragment query") {
+  test("nested fragment query (1)") {
     val query = """
       query withNestedFragments {
         user(id: 1) {
@@ -134,6 +134,100 @@ final class FragmentSuite extends CatsEffectSuite {
 
       fragment friendFields on User {
         id
+        name
+        ...standardProfilePic
+      }
+
+      fragment standardProfilePic on User {
+        profilePic
+      }
+    """
+
+    val expected =
+      Select("user",
+        Unique(
+          Filter(Eql(FragmentMapping.UserType / "id", Const("1")),
+            Group(List(
+              Select("friends",
+                Group(List(
+                  Select("id"),
+                  Select("name"),
+                  Select("profilePic")
+                ))
+              ),
+              Select("mutualFriends",
+                Group(List(
+                  Select("id"),
+                  Select("name"),
+                  Select("profilePic")
+                ))
+              )
+            ))
+          )
+        )
+      )
+
+    val expectedResult = json"""
+      {
+        "data" : {
+          "user" : {
+            "friends" : [
+              {
+                "id" : "2",
+                "name" : "Bob",
+                "profilePic" : "B"
+              },
+              {
+                "id" : "3",
+                "name" : "Carol",
+                "profilePic" : "C"
+              }
+            ],
+            "mutualFriends" : [
+              {
+                "id" : "2",
+                "name" : "Bob",
+                "profilePic" : "B"
+              },
+              {
+                "id" : "3",
+                "name" : "Carol",
+                "profilePic" : "C"
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val compiled = FragmentMapping.compiler.compile(query)
+
+    assertEquals(compiled.map(_.query), Result.Success(expected))
+
+    val res = runOperation(compiled)
+
+    assertIO(res, List(expectedResult))
+  }
+
+  test("nested fragment query (2)") {
+    val query = """
+      query withNestedFragments {
+        user(id: 1) {
+          friends {
+            ...friendFields
+          }
+          mutualFriends {
+            ...friendFields
+          }
+        }
+      }
+
+      fragment friendFields on User {
+        id
+        ...nameAndStandardProfilePic
+      }
+
+      fragment nameAndStandardProfilePic on User {
         name
         ...standardProfilePic
       }
