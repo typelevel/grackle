@@ -725,47 +725,6 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       case _ => false
     }
 
-  override def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
-    val context = parent.context
-    val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
-    val fieldTpe = fieldContext.tpe
-    (fieldMapping(context, fieldName), parent) match {
-      case (Some(_: SqlJson), sc: SqlCursor) =>
-        sc.asTable.flatMap { table =>
-          def mkCirceCursor(f: Json): Result[Cursor] =
-            CirceCursor(fieldContext, focus = f, parent = Some(parent), env = parent.env).success
-          sc.mapped.selectAtomicField(context, fieldName, table).flatMap(_ match {
-            case Some(j: Json) if fieldTpe.isNullable => mkCirceCursor(j)
-            case None => mkCirceCursor(Json.Null)
-            case j: Json if !fieldTpe.isNullable => mkCirceCursor(j)
-            case other =>
-              Result.internalError(s"$fieldTpe: expected jsonb value found ${other.getClass}: $other")
-          })
-        }
-
-      case (Some(_: SqlField), sc: SqlCursor) =>
-        sc.asTable.flatMap(table =>
-          sc.mapped.selectAtomicField(context, fieldName, table).map { leaf =>
-            val leafFocus = leaf match {
-              case Some(f) if sc.tpe.variantField(fieldName) && !fieldTpe.isNullable => f
-              case other => other
-            }
-            assert(leafFocus != FailedJoin)
-            LeafCursor(fieldContext, leafFocus, Some(parent), Env.empty)
-          }
-        )
-
-      case (Some(_: SqlObject)|Some(_: EffectMapping), sc: SqlCursor) =>
-        sc.asTable.map { table =>
-          val focussed = sc.mapped.narrow(fieldContext, table)
-          sc.mkChild(context = fieldContext, focus = focussed)
-        }
-
-      case _ =>
-        super.mkCursorForField(parent, fieldName, resultName)
-    }
-  }
-
   sealed trait SqlFieldMapping extends FieldMapping {
     final def withParent(tpe: Type): FieldMapping = this
   }
@@ -3493,8 +3452,48 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     def hasField(fieldName: String): Boolean =
       fieldMapping(context, fieldName).isDefined
 
-    def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
-      mkCursorForField(this, fieldName, resultName)
+    def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
+      val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
+      val fieldTpe = fieldContext.tpe
+      val localField =
+        fieldMapping(context, fieldName) match {
+          case Some(_: SqlJson) =>
+            asTable.flatMap { table =>
+              def mkCirceCursor(f: Json): Result[Cursor] =
+                CirceCursor(fieldContext, focus = f, parent = Some(this), Env.empty).success
+              mapped.selectAtomicField(context, fieldName, table).flatMap(_ match {
+                case Some(j: Json) if fieldTpe.isNullable => mkCirceCursor(j)
+                case None => mkCirceCursor(Json.Null)
+                case j: Json if !fieldTpe.isNullable => mkCirceCursor(j)
+                case other =>
+                  Result.internalError(s"$fieldTpe: expected jsonb value found ${other.getClass}: $other")
+              })
+            }
+
+          case Some(_: SqlField) =>
+            asTable.flatMap(table =>
+              mapped.selectAtomicField(context, fieldName, table).map { leaf =>
+                val leafFocus = leaf match {
+                  case Some(f) if tpe.variantField(fieldName) && !fieldTpe.isNullable => f
+                  case other => other
+                }
+                assert(leafFocus != FailedJoin)
+                LeafCursor(fieldContext, leafFocus, Some(this), Env.empty)
+              }
+            )
+
+          case Some(_: SqlObject) | Some(_: EffectMapping) =>
+            asTable.map { table =>
+              val focussed = mapped.narrow(fieldContext, table)
+              mkChild(context = fieldContext, focus = focussed)
+            }
+
+          case _ =>
+            Result.failure(s"No field '$fieldName' for type ${context.tpe}")
+        }
+
+      localField orElse mkCursorForField(this, fieldName, resultName)
+    }
   }
 
   case class MultiRootCursor(roots: List[SqlCursor]) extends Cursor.AbstractCursor {
