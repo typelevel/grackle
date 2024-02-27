@@ -194,25 +194,8 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
       Result.internalError(s"Mismatched query and cursor type in runFields: $tpe ${cursor.tpe}")
     else {
       query match {
-        case TypeCase(default, narrows) =>
-          val runDefault =
-            default match {
-              case Empty => Nil.success
-              case _ => runFields(default, tpe, cursor)
-            }
-          val applicableNarrows = narrows.filter(n => cursor.narrowsTo(n.subtpe))
-          val runApplicableNarrows = applicableNarrows.flatTraverse {
-            case Narrow(tp1, child) =>
-              for {
-                c      <- cursor.narrow(tp1)
-                fields <- runFields(child, tp1, c)
-              } yield fields
-          }
-
-          for {
-            default <- runDefault
-            applicableNarrows <- runApplicableNarrows
-          } yield mergeFields(default ::: applicableNarrows).toList
+        case g: Group if groupWithTypeCase(g) =>
+          ungroup(g).flatTraverse(query => runFields(query, tpe, cursor)).map(fs => mergeFields(fs).toList)
 
         case Group(siblings) =>
           siblings.flatTraverse(query => runFields(query, tpe, cursor))
@@ -266,6 +249,14 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             c        <- cursor.field(fieldName, resultName)
             value    <- runValue(child, fieldTpe, c)
           } yield List((sel.resultName, value))
+
+        case Narrow(tp1, child) if cursor.narrowsTo(tp1) =>
+          for {
+            c      <- cursor.narrow(tp1)
+            fields <- runFields(child, tp1, c)
+          } yield fields
+
+        case _: Narrow => Nil.success
 
         case c@Component(_, _, cont) =>
           for {

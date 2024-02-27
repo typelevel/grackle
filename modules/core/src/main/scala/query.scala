@@ -297,6 +297,20 @@ object Query {
       case query => List(query)
     }
 
+  def groupWithTypeCase(query: Query): Boolean = {
+    @tailrec
+    def loop(qs: Iterator[Query]): Boolean =
+      if(!qs.hasNext) false
+      else
+        qs.next() match {
+          case _: Narrow => true
+          case Group(children) => loop(qs ++ children.iterator)
+          case _ => loop(qs)
+        }
+
+    loop(Iterator.single(query))
+  }
+
   /**
    * Yields the top-level field selections of the supplied query.
    */
@@ -510,31 +524,15 @@ object Query {
                   case Key(key@(_, _)) =>
                     if (seen.contains(key)) (seen, acc)
                     else (seen + key, groupedSelects(key) :: acc)
-                  case _: Narrow => (seen, acc)
+                  case Narrow(tpe, child) =>
+                    (seen, Narrow(tpe, merge(List(child))) :: acc)
                   case elem => (seen, elem :: acc)
                 }
             }._2.reverse
 
           val mergedSelects = mergeInOrder(flattened)
 
-          val narrows = flattened.filter { case _: Narrow => true case _ => false }.asInstanceOf[List[Narrow]]
-          val mergedNarrows =
-            if(narrows.isEmpty) Nil
-            else {
-              val allTypes = narrows.map(_.subtpe.name).distinct
-              val groupedNarrows = narrows.groupBy(_.subtpe)
-              val merged =
-                groupedNarrows.map {
-                  case (subtpe, narrows) =>
-                    val children = narrows.map(_.child)
-                    val merged = merge(children)
-                    Narrow(subtpe, merged)
-                }.toList
-
-              allTypes.flatMap { subtpe => merged.filter(_.subtpe.name == subtpe) }
-            }
-
-          (mergedSelects ::: mergedNarrows) match {
+          mergedSelects match {
             case Nil => Empty
             case List(one) => one
             case qs => Group(qs)
@@ -544,14 +542,29 @@ object Query {
 
     def flattenLevel(qs: List[Query]): List[Query] = {
       @tailrec
-      def loop(qs: List[Query], acc: List[Query]): List[Query] =
-        qs match {
-          case Nil => acc.reverse
-          case Group(gs) :: tl => loop(gs ++ tl, acc)
-          case Empty :: tl => loop(tl, acc)
-          case hd :: tl => loop(tl, hd :: acc)
-        }
-      loop(qs, Nil)
+      def loop(qs: Iterator[Query], prevNarrow: Option[(TypeRef, List[Query])], acc: List[Query]): List[Query] = {
+        def addNarrow: List[Query] =
+          prevNarrow match {
+            case None => acc
+            case Some((tpe, List(child))) => (Narrow(tpe, child) :: acc)
+            case Some((tpe, children)) => (Narrow(tpe, Group(children.reverse)) :: acc)
+          }
+        if(!qs.hasNext) addNarrow.reverse
+        else
+          qs.next() match {
+            case Narrow(tpe, child) =>
+              prevNarrow match {
+                case None => loop(qs, Some((tpe, List(child))), acc)
+                case Some((tpe0, children)) if tpe0.name == tpe.name => loop(qs, Some((tpe, child :: children)), acc)
+                case _ => loop(qs, Some((tpe, List(child))), addNarrow)
+              }
+            case Group(gs) => loop(gs.iterator ++ qs, prevNarrow, acc)
+            case Empty => loop(qs, prevNarrow, acc)
+            case hd => loop(qs, None, hd :: addNarrow)
+          }
+      }
+
+      loop(qs.iterator, None, Nil)
     }
 
     val Key: PartialFunction[Query, (String, Option[String])]
