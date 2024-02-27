@@ -504,7 +504,7 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
               ntpe <- i.tpnme.map(nme => schema.definition(nme))
               sels <- Some(collectSelects(List((ntpe.getOrElse(tpe), i.child))))
             } yield sels).getOrElse(Nil) // Undefined types will be reported later
-          case (_, f: UntypedFragment) =>
+          case (_, f: UntypedFragmentSpread) =>
             (for {
               frag <- frags.find(_.name == f.name)
               ntpe <- schema.definition(frag.tpnme)

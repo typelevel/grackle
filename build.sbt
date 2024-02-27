@@ -24,7 +24,7 @@ val sourcePosVersion       = "1.1.0"
 val typenameVersion        = "1.1.0"
 val whaleTailVersion       = "0.0.10"
 
-val Scala2 = "2.13.12"
+val Scala2 = "2.13.13"
 val Scala3 = "3.3.1"
 ThisBuild / scalaVersion        := Scala2
 ThisBuild / crossScalaVersions  := Seq(Scala2, Scala3)
@@ -68,6 +68,7 @@ ThisBuild / tlSitePublishBranch := Some("main")
 
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
+  scalacOptions ++= Seq("-Xlint:-named-booleans", "-Xlint:-pattern-shadow").filterNot(_ => tlIsScala3.value),
   libraryDependencies ++= Seq(
     "org.scalameta" %%% "munit"             % munitVersion % "test",
     "org.scalameta" %%% "munit-scalacheck"  % munitVersion % "test",
