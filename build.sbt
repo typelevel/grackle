@@ -68,6 +68,7 @@ ThisBuild / tlSitePublishBranch := Some("main")
 
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
+  scalacOptions ++= Seq("-Xlint:-named-booleans", "-Xlint:-pattern-shadow").filterNot(_ => tlIsScala3.value),
   libraryDependencies ++= Seq(
     "org.scalameta" %%% "munit"             % munitVersion % "test",
     "org.scalameta" %%% "munit-scalacheck"  % munitVersion % "test",
