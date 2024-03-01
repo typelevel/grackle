@@ -25,7 +25,7 @@ val typenameVersion        = "1.1.0"
 val whaleTailVersion       = "0.0.10"
 
 val Scala2 = "2.13.13"
-val Scala3 = "3.3.1"
+val Scala3 = "3.3.3"
 ThisBuild / scalaVersion        := Scala2
 ThisBuild / crossScalaVersions  := Seq(Scala2, Scala3)
 ThisBuild / tlJdkRelease        := Some(11)
