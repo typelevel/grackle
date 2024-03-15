@@ -407,6 +407,68 @@ final class CompilerSuite extends CatsEffectSuite {
 
     assertEquals(res, Result.failure(expected))
   }
+
+  test("operations: at least one required") {
+    val query = ""
+
+    val expected = Problem("At least one operation required")
+
+    val res = AtomicMapping.compiler.compile(query)
+
+    assertEquals(res, Result.Failure(NonEmptyChain(expected)))
+  }
+
+  test("operations: name required to select from multiple") {
+    val query =
+      """|query Foo { character(id: "1000") { name } }
+         |query Bar { character(id: "1001") { name } }
+         |""".stripMargin
+
+    val expected = Problem("Operation name required to select unique operation")
+
+    val res = AtomicMapping.compiler.compile(query)
+
+    assertEquals(res, Result.Failure(NonEmptyChain(expected)))
+  }
+
+  test("operations: query shorthand excludes multiple") {
+    val query =
+      """|query { character(id: "1000") { name } }
+         |query Bar { character(id: "1001") { name } }
+         |""".stripMargin
+
+    val expected = Problem("Query shorthand cannot be combined with multiple operations")
+
+    val res = AtomicMapping.compiler.compile(query, name = Some("Foo"))
+
+    assertEquals(res, Result.Failure(NonEmptyChain(expected)))
+  }
+
+  test("operations: specified name doesn't exist") {
+    val query =
+      """|query Foo { character(id: "1000") { name } }
+         |query Bar { character(id: "1001") { name } }
+         |""".stripMargin
+
+    val expected = Problem("No operation named 'Baz'")
+
+    val res = AtomicMapping.compiler.compile(query, name = Some("Baz"))
+
+    assertEquals(res, Result.Failure(NonEmptyChain(expected)))
+  }
+
+  test("operations: multiple with the specified name") {
+    val query =
+      """|query Foo { character(id: "1000") { name } }
+         |query Foo { character(id: "1001") { name } }
+         |""".stripMargin
+
+    val expected = Problem("Multiple operations named 'Foo'")
+
+    val res = AtomicMapping.compiler.compile(query, name = Some("Foo"))
+
+    assertEquals(res, Result.Failure(NonEmptyChain(expected)))
+  }
 }
 
 object AtomicMapping extends TestMapping {
