@@ -617,13 +617,22 @@ query&gt;</code>. For queries via POST, the query is embedded in a JSON value of
 
     </span><span class="keyword">val</span><span> </span><span class="identifier">httpApp</span><span> = </span><span class="type-name">Logger</span><span>.</span><span class="identifier">httpApp</span><span>(</span><span class="boolean-literal">true</span><span>, </span><span class="boolean-literal">false</span><span>)(</span><span class="identifier">httpApp0</span><span>)
 
+    </span><span class="keyword">val</span><span> </span><span class="identifier">withErrorLogging</span><span>: </span><span class="type-name">HttpApp</span><span>[</span><span class="type-name">IO</span><span>] = </span><span class="type-name">ErrorHandling</span><span>.</span><span class="type-name">Recover</span><span>.</span><span class="identifier">total</span><span>(
+      </span><span class="type-name">ErrorAction</span><span>.</span><span class="identifier">log</span><span>(
+        </span><span class="identifier">httpApp</span><span>,
+        </span><span class="identifier">messageFailureLogAction</span><span> = </span><span class="identifier">errorHandler</span><span>,
+        </span><span class="identifier">serviceErrorLogAction</span><span> = </span><span class="identifier">errorHandler</span><span>))
+
     </span><span class="comment">// Spin up the server ...
 </span><span>    </span><span class="type-name">EmberServerBuilder</span><span>.</span><span class="keyword">default</span><span>[</span><span class="type-name">IO</span><span>]
       .</span><span class="identifier">withHost</span><span>(</span><span class="string-literal">ip&quot;0.0.0.0&quot;</span><span>)
       .</span><span class="identifier">withPort</span><span>(</span><span class="string-literal">port&quot;8080&quot;</span><span>)
-      .</span><span class="identifier">withHttpApp</span><span>(</span><span class="identifier">httpApp</span><span>)
+      .</span><span class="identifier">withHttpApp</span><span>(</span><span class="identifier">withErrorLogging</span><span>)
       .</span><span class="identifier">build</span><span>.</span><span class="identifier">void</span><span>
   }
+
+  </span><span class="keyword">def</span><span> </span><span class="declaration-name">errorHandler</span><span>(</span><span class="identifier">t</span><span>: </span><span class="type-name">Throwable</span><span>, </span><span class="identifier">msg</span><span>: =&gt; </span><span class="type-name">String</span><span>) : </span><span class="type-name">IO</span><span>[</span><span class="type-name">Unit</span><span>] =
+    </span><span class="type-name">IO</span><span>.</span><span class="identifier">println</span><span>(</span><span class="identifier">msg</span><span>) &gt;&gt; </span><span class="type-name">IO</span><span>.</span><span class="identifier">println</span><span>(</span><span class="identifier">t</span><span>) &gt;&gt; </span><span class="type-name">IO</span><span>.</span><span class="identifier">println</span><span>(</span><span class="identifier">t</span><span>.</span><span class="identifier">printStackTrace</span><span>())
 }</span></code></pre>
 
         
