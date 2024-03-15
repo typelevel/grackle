@@ -230,8 +230,8 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
                     Result.failure("Operation name required to select unique operation")
                   case (ops, _) if ops.lengthCompare(1) > 0 && ops.exists(_._1.isEmpty) =>
                     Result.failure("Query shorthand cannot be combined with multiple operations")
-                  case (ops, name) =>
-                    ops.filter(_._1 == name) match {
+                  case (ops, on@Some(name)) =>
+                    ops.filter(_._1 == on) match {
                       case List((_, op)) =>
                         op.success
                       case Nil =>
