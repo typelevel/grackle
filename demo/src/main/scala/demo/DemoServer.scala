@@ -19,9 +19,9 @@ import cats.effect.IO
 import cats.effect.Resource
 import cats.syntax.all._
 import com.comcast.ip4s._
-import org.http4s.HttpRoutes
+import org.http4s.{HttpApp, HttpRoutes}
 import org.http4s.ember.server.EmberServerBuilder
-import org.http4s.server.middleware.Logger
+import org.http4s.server.middleware.{ErrorAction, ErrorHandling, Logger}
 import org.http4s.server.staticcontent.resourceServiceBuilder
 
 // #server
@@ -36,12 +36,21 @@ object DemoServer {
 
     val httpApp = Logger.httpApp(true, false)(httpApp0)
 
+    val withErrorLogging: HttpApp[IO] = ErrorHandling.Recover.total(
+      ErrorAction.log(
+        httpApp,
+        messageFailureLogAction = errorHandler,
+        serviceErrorLogAction = errorHandler))
+
     // Spin up the server ...
     EmberServerBuilder.default[IO]
       .withHost(ip"0.0.0.0")
       .withPort(port"8080")
-      .withHttpApp(httpApp)
+      .withHttpApp(withErrorLogging)
       .build.void
   }
+
+  def errorHandler(t: Throwable, msg: => String) : IO[Unit] =
+    IO.println(msg) >> IO.println(t) >> IO.println(t.printStackTrace())
 }
 // #server
