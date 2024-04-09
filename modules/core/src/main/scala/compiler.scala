@@ -1016,9 +1016,12 @@ object QueryCompiler {
      */
     def fragmentApplies(typeCond: NamedType, ctpe: NamedType): Boolean =
       (typeCond.dealias, ctpe.dealias) match {
-        case (_: InterfaceType, u: UnionType) => u.members.forall(_ <:< typeCond)
-        case (_, u: UnionType) => u.members.exists(typeCond <:< _)
-        case _ => typeCond <:< ctpe || ctpe <:< typeCond
+        case (u: UnionType, _) =>
+          u.members.exists(m => fragmentApplies(m, ctpe))
+        case (_, u: UnionType) =>
+          u.members.exists(m => fragmentApplies(typeCond, m))
+        case _ =>
+          typeCond <:< ctpe || ctpe <:< typeCond
       }
 
     def elaborateBinding(b: Binding, vars: Vars): Elab[Binding] =

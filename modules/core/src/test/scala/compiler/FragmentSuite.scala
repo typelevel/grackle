@@ -590,36 +590,33 @@ final class FragmentSuite extends CatsEffectSuite {
 
     val User = FragmentMapping.schema.ref("User")
     val Page = FragmentMapping.schema.ref("Page")
-    val UserOrPage = FragmentMapping.schema.ref("UserOrPage")
 
     val expected =
-      Group(List(
-        Select("user",
-          Unique(
-            Filter(Eql(FragmentMapping.UserType / "id", Const("1")),
-              Select("favourite",
-                Group(List(
-                  Introspect(FragmentMapping.schema, Select("__typename")),
-                  Narrow(
-                    User,
-                    Group(List(
-                      Select("id"),
-                      Select("name")
-                    ))
-                  ),
-                  Narrow(
-                    Page,
-                    Group(List(
-                      Select("id"),
-                      Select("title")
-                    ))
-                   )
-                ))
-              )
+      Select("user", None,
+        Unique(
+          Filter(Eql(FragmentMapping.UserType / "id", Const("1")),
+            Select("favourite", None,
+              Group(List(
+                Introspect(FragmentMapping.schema, Select("__typename", None, Empty)),
+                Narrow(
+                  User,
+                  Group(List(
+                    Select("id", None, Empty),
+                    Select("name", None, Empty)
+                  ))
+                ),
+                Narrow(
+                  Page,
+                  Group(List(
+                    Select("id", None, Empty),
+                    Select("title", None, Empty)
+                  ))
+                )
+              ))
             )
           )
-        ),
-      ))
+        )
+      )
 
     val expectedResult = json"""
       {

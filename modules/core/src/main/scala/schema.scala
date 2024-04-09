@@ -1749,7 +1749,7 @@ object SchemaValidator {
           case None => List(Problem(s"Undefined type '${member.name}' included in union '${tpe.name}'"))
           case Some(mtpe) =>
             mtpe match {
-              case (_: ObjectType) | (_: InterfaceType) => Nil
+              case (_: ObjectType) => Nil
               case _ => List(Problem(s"Non-object type '${member.name}' included in union '${tpe.name}'"))
             }
         }
