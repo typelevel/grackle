@@ -977,7 +977,7 @@ object QueryCompiler {
               f      <- Elab.fragment(nme)
               ctpe   =  c.tpe.underlyingNamed
               subtpe <- Elab.liftR(s.definition(f.tpnme).toResult(s"Unknown type '${f.tpnme}' in type condition of fragment '$nme'"))
-              _      <- Elab.failure(s"Fragment '$nme' is not compatible with type '${c.tpe}'").whenA(!fragmentApplies(subtpe, ctpe))
+              _      <- Elab.failure(s"Fragment '$nme' is not compatible with type '${c.tpe}'").whenA(!fragmentApplies(s, subtpe, ctpe))
               _      <- Elab.push(c.asType(subtpe), f.child)
               ec     <- transform(f.child)
               _      <- Elab.pop
@@ -999,7 +999,7 @@ object QueryCompiler {
                           case Some(tpnme) =>
                             Elab.liftR(s.definition(tpnme).toResult(s"Unknown type '$tpnme' in type condition inline fragment"))
                         }
-              _      <- Elab.failure(s"Inline fragment with type condition '$subtpe' is not compatible with type '$ctpe'").whenA(!fragmentApplies(subtpe, ctpe))
+              _      <- Elab.failure(s"Inline fragment with type condition '$subtpe' is not compatible with type '$ctpe'").whenA(!fragmentApplies(s, subtpe, ctpe))
               _      <- Elab.push(c.asType(subtpe), child)
               ec     <- transform(child)
               _      <- Elab.pop
@@ -1013,13 +1013,13 @@ object QueryCompiler {
 
     /**
      * Tests the supplied type condition is satisfied by the supplied context type
+     * https://spec.graphql.org/October2021/#sec-Fragment-spread-is-possible
      */
-    def fragmentApplies(typeCond: NamedType, ctpe: NamedType): Boolean =
-      (typeCond.dealias, ctpe.dealias) match {
-        case (_: InterfaceType, u: UnionType) => u.members.forall(_ <:< typeCond)
-        case (_, u: UnionType) => u.members.exists(typeCond <:< _)
-        case _ => typeCond <:< ctpe || ctpe <:< typeCond
-      }
+    def fragmentApplies(schema: Schema, typeCond: NamedType, ctpe: NamedType): Boolean = {
+      val typeCondPoss = schema.subtypes(typeCond.dealias)
+      val ctpePoss = schema.subtypes(ctpe.dealias)
+      typeCondPoss.exists(x => ctpePoss.exists(y => x =:= y))
+    }
 
     def elaborateBinding(b: Binding, vars: Vars): Elab[Binding] =
       Elab.liftR(Value.elaborateValue(b.value, vars).map(ev => b.copy(value = ev)))

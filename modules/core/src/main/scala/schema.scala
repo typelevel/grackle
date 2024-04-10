@@ -257,6 +257,9 @@ trait Schema {
       case _ => schemaType
     }
   }
+
+  /** Returns all subtypes of `tpe` */
+  def subtypes(tpe: NamedType): Set[NamedType] = types.filter(_ <:< tpe).toSet
 }
 
 object Schema {
@@ -575,6 +578,8 @@ sealed trait Type extends Product {
 
   def isUnion: Boolean = false
 
+  def isObject: Boolean = false
+
   def /(pathElement: String): Path =
     Path.from(this) / pathElement
 
@@ -784,7 +789,9 @@ case class ObjectType(
   fields: List[Field],
   interfaces: List[NamedType],
   directives: List[Directive]
-) extends TypeWithFields
+) extends TypeWithFields {
+  override def isObject: Boolean = true
+}
 
 /**
  * Object extensions allow additional fields to be added to a pre-existing object type
@@ -1749,7 +1756,7 @@ object SchemaValidator {
           case None => List(Problem(s"Undefined type '${member.name}' included in union '${tpe.name}'"))
           case Some(mtpe) =>
             mtpe match {
-              case (_: ObjectType) | (_: InterfaceType) => Nil
+              case (_: ObjectType) => Nil
               case _ => List(Problem(s"Non-object type '${member.name}' included in union '${tpe.name}'"))
             }
         }

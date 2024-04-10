@@ -331,10 +331,13 @@ final class SDLSuite extends CatsEffectSuite {
          |interface Intrf {
          |  bar: String
          |}
-         |type Obj implements Intrf {
+         |type Obj1 implements Intrf {
          |  bar: String
          |}
-         |union Union = Intrf | Obj
+         |type Obj2 implements Intrf {
+         |  bar: String
+         |}
+         |union Union = Obj1 | Obj2
          |enum Enum {
          |  A
          |  B
@@ -352,7 +355,11 @@ final class SDLSuite extends CatsEffectSuite {
          |extend interface Intrf @Intrf {
          |  baz: Boolean
          |}
-         |extend type Obj @Obj {
+         |extend type Obj1 @Obj {
+         |  baz: Boolean
+         |  quux: String
+         |}
+         |extend type Obj2 @Obj {
          |  baz: Boolean
          |  quux: String
          |}
@@ -378,7 +385,7 @@ final class SDLSuite extends CatsEffectSuite {
     assertEquals(ser, schema.success)
   }
 
-  test("round-trip extensions (no fields or members") {
+  test("round-trip extensions (no fields or members)") {
     val schema =
       """|schema {
          |  query: MyQuery
@@ -390,10 +397,13 @@ final class SDLSuite extends CatsEffectSuite {
          |interface Intrf {
          |  bar: String
          |}
-         |type Obj implements Intrf {
+         |type Obj1 implements Intrf {
          |  bar: String
          |}
-         |union Union = Intrf | Obj
+         |type Obj2 implements Intrf {
+         |  bar: String
+         |}
+         |union Union = Obj1 | Obj2
          |enum Enum {
          |  A
          |  B
@@ -404,7 +414,8 @@ final class SDLSuite extends CatsEffectSuite {
          |extend schema @Sch
          |extend scalar Scalar @Sca
          |extend interface Intrf @Intrf
-         |extend type Obj @Obj
+         |extend type Obj1 @Obj
+         |extend type Obj2 @Obj
          |extend union Union @Uni
          |extend enum Enum @Enu
          |extend input Input @Inp

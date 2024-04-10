@@ -561,6 +561,86 @@ final class FragmentSuite extends CatsEffectSuite {
     assertIO(res, List(expectedResult))
   }
 
+  test("typed union nested fragment query") {
+    val query = """
+      query FragmentUnionTyping {
+        user: user(id: "1") {
+          favourite {
+            __typename
+            ...userOrPageFragment
+          }
+        }
+      }
+
+      fragment userFragment on User {
+        id
+        name
+      }
+
+      fragment pageFragment on Page {
+        id
+        title
+      }
+
+      fragment userOrPageFragment on UserOrPage {
+        ...userFragment
+        ...pageFragment
+      }
+    """
+
+    val User = FragmentMapping.schema.ref("User")
+    val Page = FragmentMapping.schema.ref("Page")
+
+    val expected =
+      Select("user", None,
+        Unique(
+          Filter(Eql(FragmentMapping.UserType / "id", Const("1")),
+            Select("favourite", None,
+              Group(List(
+                Introspect(FragmentMapping.schema, Select("__typename", None, Empty)),
+                Narrow(
+                  User,
+                  Group(List(
+                    Select("id", None, Empty),
+                    Select("name", None, Empty)
+                  ))
+                ),
+                Narrow(
+                  Page,
+                  Group(List(
+                    Select("id", None, Empty),
+                    Select("title", None, Empty)
+                  ))
+                )
+              ))
+            )
+          )
+        )
+      )
+
+    val expectedResult = json"""
+      {
+        "data" : {
+          "user" : {
+            "favourite" : {
+              "__typename" : "User",
+              "id" : "2",
+              "name" : "Bob"
+            }
+          }
+        }
+      }
+    """
+
+    val compiled = FragmentMapping.compiler.compile(query)
+
+    assertEquals(compiled.map(_.query), Result.Success(expected))
+
+    val res = runOperation(compiled)
+
+    assertIO(res, List(expectedResult))
+  }
+
   test("supertype fragment query (1)") {
     val query = """
       query withFragments {

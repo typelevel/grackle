@@ -399,7 +399,7 @@ final class ExtensionsSuite extends CatsEffectSuite {
         interface Interface {
           id: String!
         }
-        union Union = Object | Interface
+        union Union = Object
         enum Enum { A, B, C }
         input Input { id: String! }
 
