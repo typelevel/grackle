@@ -26,7 +26,7 @@ import QueryCompiler._
 
 trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
 
-  def entityType: Codec
+  def entityType: TestCodec[EntityType]
 
   object entities extends TableDef("entities") {
     val id                     = col("id", text)
@@ -125,7 +125,6 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
         tpe = FilmType,
         fieldMappings =
           List(
-            SqlField("id", entities.id, key = true),
             SqlField("rating", entities.filmRating),
             SqlField("label", entities.filmLabel)
           )
@@ -134,7 +133,6 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
         tpe = SeriesType,
         fieldMappings =
           List(
-            SqlField("id", entities.id, key = true),
             SqlField("numberOfEpisodes", entities.seriesNumberOfEpisodes),
             SqlObject("episodes", Join(entities.id, episodes.seriesId)),
             SqlField("label", entities.seriesLabel)

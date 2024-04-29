@@ -1486,11 +1486,13 @@ final class IntrospectionSuite extends CatsEffectSuite {
   }
 }
 
-object TestMapping extends compiler.TestMapping {
+object TestMapping extends ValueMapping[IO] {
   val schema =
     schema"""
       type Query {
         users: [User!]!
+        kind: KindTest
+        deprecation: DeprecationTest
       }
 
       "User object type"
@@ -1547,6 +1549,76 @@ object TestMapping extends compiler.TestMapping {
         flags: Flags
       }
     """
+
+  val QueryType = schema.queryType
+  val UserType = schema.ref("User")
+  val ProfileType = schema.ref("Profile")
+  val DateType = schema.ref("Date")
+  val FlagsType = schema.ref("Flags")
+  val KindTestType = schema.ref("KindTest")
+  val DeprecationTestType = schema.ref("DeprecationTest")
+
+  val typeMappings =
+    List(
+      ValueObjectMapping[Unit](
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            ValueField("users", identity),
+            ValueField("kind", identity),
+            ValueField("deprecation", identity),
+          )
+      ),
+      ValueObjectMapping[Unit](
+        tpe = UserType,
+        fieldMappings =
+          List(
+            //ValueField("id", identity),
+            ValueField("name", identity),
+            ValueField("age", identity),
+            ValueField("birthday", identity)
+          )
+      ),
+      ValueObjectMapping[Unit](
+        tpe = ProfileType,
+        fieldMappings =
+          List(
+            ValueField("id", identity)
+          )
+      ),
+      ValueObjectMapping[Unit](
+        tpe = DateType,
+        fieldMappings =
+          List(
+            ValueField("day", identity),
+            ValueField("month", identity),
+            ValueField("year", identity)
+          )
+      ),
+      ValueObjectMapping[Unit](
+        tpe = KindTestType,
+        fieldMappings =
+          List(
+            ValueField("scalar", identity),
+            ValueField("object", identity),
+            ValueField("interface", identity),
+            ValueField("union", identity),
+            ValueField("enum", identity),
+            ValueField("list", identity),
+            ValueField("nonnull", identity),
+            ValueField("nonnulllistnonnull", identity)
+          )
+      ),
+      ValueObjectMapping[Unit](
+        tpe = DeprecationTestType,
+        fieldMappings =
+          List(
+            ValueField("user", identity),
+            ValueField("flags", identity)
+          )
+      ),
+      LeafMapping[String](FlagsType)
+  )
 }
 
 object SmallData {
@@ -1587,6 +1659,8 @@ object SmallMapping extends ValueMapping[IO] {
     """
 
   val QueryType = schema.queryType
+  val SubscriptionType = schema.subscriptionType.get
+  val MutationType = schema.mutationType.get
   val UserType = schema.ref("User")
   val ProfileType = schema.ref("Profile")
 
@@ -1598,6 +1672,20 @@ object SmallMapping extends ValueMapping[IO] {
           List(
             ValueField("users", _ => users),
             ValueField("profiles", _ => users)
+          )
+      ),
+      ObjectMapping(
+        tpe = SubscriptionType,
+        fieldMappings =
+          List(
+            ValueField.fromValue("dummy", 0)
+          )
+      ),
+      ObjectMapping(
+        tpe = MutationType,
+        fieldMappings =
+          List(
+            ValueField.fromValue("dummy", 1)
           )
       ),
       ValueObjectMapping[User](

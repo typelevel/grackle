@@ -43,7 +43,6 @@ trait SqlEmbeddingMapping[F[_]] extends SqlTestMapping[F] {
       type Query {
         films: [Film!]!
         series: [Series!]!
-        episodes: [Episode!]!
       }
       type Film {
         title: String!

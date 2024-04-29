@@ -210,7 +210,6 @@ class SqlComposedMapping[F[_] : Sync]
         cities(namePattern: String = "%"): [City!]
         country(code: String): Country
         countries: [Country!]
-        currencies: [Currency!]!
       }
       type City {
         name: String!

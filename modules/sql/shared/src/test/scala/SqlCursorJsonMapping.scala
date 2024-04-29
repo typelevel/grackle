@@ -98,8 +98,7 @@ trait SqlCursorJsonMapping[F[_]] extends SqlTestMapping[F] {
             SqlField("encodedCategories", brands.category, hidden = true),
             CursorFieldJson("categories", decodeCategories, List("encodedCategories"))
           )
-      ),
-      PrimitiveMapping(CategoryType)
+      )
     )
 
   override val selectElaborator = SelectElaborator {

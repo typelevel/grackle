@@ -188,124 +188,96 @@ object Introspection {
     val schema = Introspection.schema
 
     val typeMappings =
-      List(
-        ValueObjectMapping[Unit](
-          tpe = QueryType,
-          fieldMappings =
-            List(
-              ValueField("__schema", _ => targetSchema),
-              ValueField("__type", _ => allTypes.map(_.nullable))
-            )
+      TypeMappings(
+        ValueObjectMapping(QueryType).on[Unit](
+          ValueField("__schema", _ => targetSchema),
+          ValueField("__type", _ => allTypes.map(_.nullable))
         ),
-        ValueObjectMapping[Schema](
-          tpe = __SchemaType,
-          fieldMappings =
-            List(
-              ValueField("types", _ => allTypes.map(_.nullable)),
-              ValueField("queryType", _.queryType.dealias.nullable),
-              ValueField("mutationType", _.mutationType.map(_.dealias.nullable)),
-              ValueField("subscriptionType", _.subscriptionType.map(_.dealias.nullable)),
-              ValueField("directives", _.directives)
-            )
+        ValueObjectMapping(__SchemaType).on[Schema](
+          ValueField("types", _ => allTypes.map(_.nullable)),
+          ValueField("queryType", _.queryType.dealias.nullable),
+          ValueField("mutationType", _.mutationType.map(_.dealias.nullable)),
+          ValueField("subscriptionType", _.subscriptionType.map(_.dealias.nullable)),
+          ValueField("directives", _.directives)
         ),
-        ValueObjectMapping[Type](
-          tpe = __TypeType,
-          fieldMappings =
-            List(
-              ValueField("kind", flipNullityDealias andThen {
-                case _: ScalarType      => TypeKind.SCALAR
-                case _: ObjectType      => TypeKind.OBJECT
-                case _: UnionType       => TypeKind.UNION
-                case _: InterfaceType   => TypeKind.INTERFACE
-                case _: EnumType        => TypeKind.ENUM
-                case _: InputObjectType => TypeKind.INPUT_OBJECT
-                case _: ListType        => TypeKind.LIST
-                case _: NonNullType     => TypeKind.NON_NULL
-              }),
-              ValueField("name", flipNullityDealias andThen {
-                case nt: NamedType      => Some(nt.name)
-                case _ => None
-              }),
-              ValueField("description", flipNullityDealias andThen {
-                case nt: NamedType      => nt.description
-                case _ => None
-              }),
-              ValueField("fields", flipNullityDealias andThen {
-                case tf: TypeWithFields => Some(tf.fields)
-                case _ => None
-              }),
-              ValueField("interfaces", flipNullityDealias andThen {
-                case ot: ObjectType     => Some(ot.interfaces.map(_.nullable))
-                case _ => None
-              }),
-              ValueField("possibleTypes", flipNullityDealias andThen {
-                case u: UnionType       => Some(u.members.map(_.nullable))
-                case i: InterfaceType   =>
-                  Some(allTypes.collect {
-                    case o: ObjectType if o.interfaces.exists(_ =:= i) => NullableType(o)
-                  })
-                case _ => None
-              }),
-              ValueField("enumValues", flipNullityDealias andThen {
-                case e: EnumType        => Some(e.enumValues)
-                case _ => None
-              }),
-              ValueField("inputFields", flipNullityDealias andThen {
-                case i: InputObjectType => Some(i.inputFields)
-                case _ => None
-              }),
-              ValueField("ofType", flipNullityDealias andThen {
-                case l: ListType        => Some(l.ofType)
-                case NonNullType(t)     => Some(NullableType(t))
-                case _ => None
+        ValueObjectMapping(__TypeType).on[Type](
+          ValueField("kind", flipNullityDealias andThen {
+            case _: ScalarType      => TypeKind.SCALAR
+            case _: ObjectType      => TypeKind.OBJECT
+            case _: UnionType       => TypeKind.UNION
+            case _: InterfaceType   => TypeKind.INTERFACE
+            case _: EnumType        => TypeKind.ENUM
+            case _: InputObjectType => TypeKind.INPUT_OBJECT
+            case _: ListType        => TypeKind.LIST
+            case _: NonNullType     => TypeKind.NON_NULL
+          }),
+          ValueField("name", flipNullityDealias andThen {
+            case nt: NamedType      => Some(nt.name)
+            case _ => None
+          }),
+          ValueField("description", flipNullityDealias andThen {
+            case nt: NamedType      => nt.description
+            case _ => None
+          }),
+          ValueField("fields", flipNullityDealias andThen {
+            case tf: TypeWithFields => Some(tf.fields)
+            case _ => None
+          }),
+          ValueField("interfaces", flipNullityDealias andThen {
+            case ot: ObjectType     => Some(ot.interfaces.map(_.nullable))
+            case _ => None
+          }),
+          ValueField("possibleTypes", flipNullityDealias andThen {
+            case u: UnionType       => Some(u.members.map(_.nullable))
+            case i: InterfaceType   =>
+              Some(allTypes.collect {
+                case o: ObjectType if o.interfaces.exists(_ =:= i) => NullableType(o)
               })
-            )
+            case _ => None
+          }),
+          ValueField("enumValues", flipNullityDealias andThen {
+            case e: EnumType        => Some(e.enumValues)
+            case _ => None
+          }),
+          ValueField("inputFields", flipNullityDealias andThen {
+            case i: InputObjectType => Some(i.inputFields)
+            case _ => None
+          }),
+          ValueField("ofType", flipNullityDealias andThen {
+            case l: ListType        => Some(l.ofType)
+            case NonNullType(t)     => Some(NullableType(t))
+            case _ => None
+          })
         ),
-        ValueObjectMapping[Field](
-          tpe = __FieldType,
-          fieldMappings =
-            List(
-              ValueField("name", _.name),
-              ValueField("description", _.description),
-              ValueField("args", _.args),
-              ValueField("type", _.tpe.dealias),
-              ValueField("isDeprecated", _.isDeprecated),
-              ValueField("deprecationReason", _.deprecationReason)
-            )
+        ValueObjectMapping(__FieldType).on[Field](
+          ValueField("name", _.name),
+          ValueField("description", _.description),
+          ValueField("args", _.args),
+          ValueField("type", _.tpe.dealias),
+          ValueField("isDeprecated", _.isDeprecated),
+          ValueField("deprecationReason", _.deprecationReason)
         ),
-        ValueObjectMapping[InputValue](
-          tpe = __InputValueType,
-          fieldMappings =
-            List(
-              ValueField("name", _.name),
-              ValueField("description", _.description),
-              ValueField("type", _.tpe.dealias),
-              ValueField("defaultValue", _.defaultValue.map(SchemaRenderer.renderValue))
-            )
+        ValueObjectMapping(__InputValueType).on[InputValue](
+          ValueField("name", _.name),
+          ValueField("description", _.description),
+          ValueField("type", _.tpe.dealias),
+          ValueField("defaultValue", _.defaultValue.map(SchemaRenderer.renderValue))
         ),
-        ValueObjectMapping[EnumValueDefinition](
-          tpe = __EnumValueType,
-          fieldMappings =
-            List(
-              ValueField("name", _.name),
-              ValueField("description", _.description),
-              ValueField("isDeprecated", _.isDeprecated),
-              ValueField("deprecationReason", _.deprecationReason)
-            )
+        ValueObjectMapping(__EnumValueType).on[EnumValueDefinition](
+          ValueField("name", _.name),
+          ValueField("description", _.description),
+          ValueField("isDeprecated", _.isDeprecated),
+          ValueField("deprecationReason", _.deprecationReason)
         ),
-        ValueObjectMapping[DirectiveDef](
-          tpe = __DirectiveType,
-          fieldMappings =
-            List(
-              ValueField("name", _.name),
-              ValueField("description", _.description),
-              ValueField("locations", _.locations),
-              ValueField("args", _.args),
-              ValueField("isRepeatable", _.isRepeatable)
-            )
+        ValueObjectMapping(__DirectiveType).on[DirectiveDef](
+          ValueField("name", _.name),
+          ValueField("description", _.description),
+          ValueField("locations", _.locations),
+          ValueField("args", _.args),
+          ValueField("isRepeatable", _.isRepeatable)
         ),
         LeafMapping[TypeKind.Value](__TypeKindType),
         LeafMapping[Ast.DirectiveLocation](__DirectiveLocationType)
-    )
+      )
   }
 }

@@ -44,7 +44,7 @@ object CircePriorityMapping extends CirceMapping[IO] {
   val BarrelType = schema.ref("Barrel")
   val FooType    = schema.ref("Foo") 
 
-  val typeMappings: List[TypeMapping] =
+  val typeMappings =
     List(
       ObjectMapping(
         tpe = QueryType,

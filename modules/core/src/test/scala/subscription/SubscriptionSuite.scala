@@ -50,7 +50,7 @@ final class SubscriptionSuite extends CatsEffectSuite {
       val MutationType     = schema.ref("Mutation")
       val SubscriptionType = schema.ref("Subscription")
 
-      val typeMappings: List[TypeMapping] =
+      val typeMappings =
         List(
           ObjectMapping(QueryType, List(
             RootEffect.computeCursor("get")((path, env) => ref.get.map(n => Result(valueCursor(path, env, n))))

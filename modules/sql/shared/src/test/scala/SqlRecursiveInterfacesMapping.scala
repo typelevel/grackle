@@ -23,7 +23,7 @@ import syntax._
 import Predicate._
 
 trait SqlRecursiveInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
-  def itemType: Codec
+  def itemType: TestCodec[ItemType]
 
   object items extends TableDef("recursive_interface_items") {
     val id       = col("id", text)
@@ -88,7 +88,6 @@ trait SqlRecursiveInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
         tpe = ItemAType,
         fieldMappings =
           List(
-            SqlField("id", items.id, key = true),
             SqlObject("nextItem", Join(items.id, nextItems.id), Join(nextItems.nextItem, items.id))
           )
       ),
@@ -96,7 +95,6 @@ trait SqlRecursiveInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
         tpe = ItemBType,
         fieldMappings =
           List(
-            SqlField("id", items.id, key = true),
             SqlObject("nextItem", Join(items.id, nextItems.id), Join(nextItems.nextItem, items.id))
           )
       ),

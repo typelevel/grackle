@@ -370,7 +370,7 @@ object ExecutableDirectiveMapping extends Mapping[IO] {
   val MutationType = schema.mutationType.get
   val SubscriptionType = schema.subscriptionType.get
 
-  val typeMappings: List[TypeMapping] = Nil
+  val typeMappings = TypeMappings.empty
 
   override val selectElaborator = PreserveArgsElaborator
 

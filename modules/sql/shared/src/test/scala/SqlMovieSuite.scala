@@ -203,7 +203,7 @@ trait SqlMovieSuite extends CatsEffectSuite {
     assertWeaklyEqualIO(res, expected)
   }
 
-  test("query with ZonedDateTime argument") {
+  test("query with OffsetDateTime argument") {
     val query = """
       query {
         moviesShownBetween(from: "2020-05-01T10:30:00Z", to: "2020-05-19T18:00:00Z") {
@@ -469,6 +469,96 @@ trait SqlMovieSuite extends CatsEffectSuite {
             "message" : "No field 'isLong' for type Movie"
           }
         ]
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("query with set encoded as a bitfield") {
+    val query = """
+      query {
+        allMovies {
+          title
+          tags
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "allMovies" : [
+            {
+              "title" : "Le Pont du Nord",
+              "tags" : [
+                "tag1",
+                "tag2"
+              ]
+            },
+            {
+              "title" : "Last Year at Marienbad",
+              "tags" : [
+                "tag1",
+                "tag3"
+              ]
+            },
+            {
+              "title" : "Daisies",
+              "tags" : [
+                "tag2",
+                "tag3"
+              ]
+            },
+            {
+              "title" : "Celine et Julie Vont en Bateau",
+              "tags" : [
+                "tag1"
+              ]
+            },
+            {
+              "title" : "Stalker",
+              "tags" : [
+                "tag1",
+                "tag2",
+                "tag3"
+              ]
+            },
+            {
+              "title" : "Weekend",
+              "tags" : [
+                "tag2"
+              ]
+            },
+            {
+              "title" : "Zazie dans le Métro",
+              "tags" : [
+                "tag1",
+                "tag2"
+              ]
+            },
+            {
+              "title" : "L'Amour fou",
+              "tags" : [
+                "tag2"
+              ]
+            },
+            {
+              "title" : "Duelle",
+              "tags" : [
+                "tag1"
+              ]
+            },
+            {
+              "title" : "Alphaville",
+              "tags" : [
+                "tag3"
+              ]
+            }
+          ]
+        }
       }
     """
 

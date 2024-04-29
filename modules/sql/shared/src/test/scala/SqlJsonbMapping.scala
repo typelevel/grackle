@@ -91,7 +91,8 @@ trait SqlJsonbMapping[F[_]] extends SqlTestMapping[F] {
         fieldMappings =
           List(
             SqlField("id", records.id, key = true),
-            SqlJson("record", records.record)
+            SqlJson("record", records.record),
+            SqlJson("nonNullRecord", records.record)
           )
       ),
     )

@@ -34,23 +34,22 @@ trait GenericMappingLike[F[_]] extends ScalaVersionSpecificGenericMappingLike[F]
   override def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
     val context = parent.context
     val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
-    fieldMapping(context, fieldName) match {
-      case Some(GenericField(_, _, t, cb, _)) =>
+    typeMappings.fieldMapping(context, fieldName) match {
+      case Some(GenericField(_, t, cb, _)) =>
         cb().build(fieldContext, t, Some(parent), parent.env)
       case _ =>
         super.mkCursorForField(parent, fieldName, resultName)
     }
   }
 
-  case class GenericField[T](val tpe: Option[Type], val fieldName: String, t: T, cb: () => CursorBuilder[T], hidden: Boolean)(
+  case class GenericField[T](val fieldName: String, t: T, cb: () => CursorBuilder[T], hidden: Boolean)(
     implicit val pos: SourcePos
   ) extends FieldMapping {
-    def withParent(tpe: Type): GenericField[T] =
-      new GenericField(Some(tpe), fieldName, t, cb, hidden)
+    def subtree: Boolean = true
   }
 
   def GenericField[T](fieldName: String, t: T, hidden: Boolean = true)(implicit cb: => CursorBuilder[T], pos: SourcePos): GenericField[T] =
-    new GenericField(None, fieldName, t, () => cb, hidden)
+    new GenericField(fieldName, t, () => cb, hidden)
 
   object semiauto {
     final def deriveObjectCursorBuilder[T](tpe: Type)

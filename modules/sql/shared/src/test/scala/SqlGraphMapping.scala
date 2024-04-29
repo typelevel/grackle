@@ -38,6 +38,7 @@ trait SqlGraphMapping[F[_]] extends SqlTestMapping[F] {
     schema"""
       type Query {
         node(id: Int!): Node
+        edge(id: Int!): Edge
       }
       type Node {
         id: Int!
@@ -60,7 +61,8 @@ trait SqlGraphMapping[F[_]] extends SqlTestMapping[F] {
         tpe = QueryType,
         fieldMappings =
           List(
-            SqlObject("node")
+            SqlObject("node"),
+            SqlObject("edge")
           )
       ),
       ObjectMapping(
@@ -85,5 +87,7 @@ trait SqlGraphMapping[F[_]] extends SqlTestMapping[F] {
   override val selectElaborator = SelectElaborator {
     case (QueryType, "node", List(Binding("id", IntValue(id)))) =>
       Elab.transformChild(child => Unique(Filter(Eql(NodeType / "id", Const(id)), child)))
+    case (QueryType, "edge", List(Binding("id", IntValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(EdgeType / "id", Const(id)), child)))
   }
 }

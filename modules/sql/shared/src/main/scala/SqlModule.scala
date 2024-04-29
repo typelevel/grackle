@@ -32,6 +32,8 @@ trait SqlModule[F[_]] {
   /** Extract an encoder from a codec. */
   def toEncoder(c: Codec): Encoder
 
+  def isNullable(c: Codec): Boolean
+
   /** Typeclass for SQL fragments. */
   trait SqlFragment[T] extends Monoid[T] {
 

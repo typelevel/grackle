@@ -49,6 +49,7 @@ trait SkunkMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] { outer =
   type Fragment = _root_.skunk.AppliedFragment
 
   def toEncoder(c: Codec): Encoder = c._1
+  def isNullable(c: Codec): Boolean = c._2
 
   // Also we need to know how to encode the basic GraphQL types.
   def booleanEncoder = bool

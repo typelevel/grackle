@@ -18,6 +18,8 @@ package grackle.doobie.test
 import cats.effect.IO
 import doobie.implicits._
 import doobie.Meta
+import munit.catseffect.IOFixture
+
 
 import grackle.doobie.postgres.DoobieMonitor
 import grackle.sql.SqlStatsMonitor
@@ -81,7 +83,7 @@ final class GraphSuite extends DoobieDatabaseSuite with SqlGraphSuite {
 final class InterfacesSuite extends DoobieDatabaseSuite with SqlInterfacesSuite {
   lazy val mapping =
     new DoobieTestMapping(xa) with SqlInterfacesMapping[IO] {
-      def entityType: Codec =
+      def entityType: TestCodec[EntityType] =
         (Meta[Int].timap(EntityType.fromInt)(EntityType.toInt), false)
     }
 }
@@ -89,7 +91,7 @@ final class InterfacesSuite extends DoobieDatabaseSuite with SqlInterfacesSuite 
 final class InterfacesSuite2 extends DoobieDatabaseSuite with SqlInterfacesSuite2 {
   lazy val mapping =
     new DoobieTestMapping(xa) with SqlInterfacesMapping2[IO] {
-      def entityType: Codec =
+      def entityType: TestCodec[EntityType] =
         (Meta[Int].timap(EntityType.fromInt)(EntityType.toInt), false)
     }
 }
@@ -102,6 +104,21 @@ final class LikeSuite extends DoobieDatabaseSuite with SqlLikeSuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlLikeMapping[IO]
 }
 
+final class MappingValidatorValidSuite extends DoobieDatabaseSuite with SqlMappingValidatorValidSuite {
+  // no DB instance needed for this suite
+  lazy val mapping = new DoobieTestMapping(null) with SqlMappingValidatorValidMapping[IO] {
+    def genre: TestCodec[Genre] = (Meta[Int].imap(Genre.fromInt)(Genre.toInt), false)
+    def feature: TestCodec[Feature] = (Meta[String].imap(Feature.fromString)(_.toString), false)
+  }
+  override def munitFixtures: Seq[IOFixture[_]] = Nil
+}
+
+final class MappingValidatorInvalidSuite extends DoobieDatabaseSuite with SqlMappingValidatorInvalidSuite {
+  // no DB instance needed for this suite
+  lazy val mapping = new DoobieTestMapping(null) with SqlMappingValidatorInvalidMapping[IO]
+  override def munitFixtures: Seq[IOFixture[_]] = Nil
+}
+
 final class MixedSuite extends DoobieDatabaseSuite with SqlMixedSuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlMixedMapping[IO]
 }
@@ -109,8 +126,9 @@ final class MixedSuite extends DoobieDatabaseSuite with SqlMixedSuite {
 final class MovieSuite extends DoobieDatabaseSuite with SqlMovieSuite {
   lazy val mapping =
     new DoobieTestMapping(xa) with SqlMovieMapping[IO] {
-      def genre: Codec = (Meta[Int].imap(Genre.fromInt)(Genre.toInt), false)
-      def feature: Codec = (Meta[String].imap(Feature.fromString)(_.toString), false)
+      def genre: TestCodec[Genre] = (Meta[Int].imap(Genre.fromInt)(Genre.toInt), false)
+      def feature: TestCodec[Feature] = (Meta[String].imap(Feature.fromString)(_.toString), false)
+      def tagList: TestCodec[List[String]] = (Meta[Int].imap(Tags.fromInt)(Tags.toInt), false)
     }
 }
 
@@ -167,7 +185,7 @@ final class ProjectionSuite extends DoobieDatabaseSuite with SqlProjectionSuite 
 final class RecursiveInterfacesSuite extends DoobieDatabaseSuite with SqlRecursiveInterfacesSuite {
   lazy val mapping =
     new DoobieTestMapping(xa) with SqlRecursiveInterfacesMapping[IO] {
-      def itemType: Codec =
+      def itemType: TestCodec[ItemType] =
         (Meta[Int].timap(ItemType.fromInt)(ItemType.toInt), false)
     }
 }

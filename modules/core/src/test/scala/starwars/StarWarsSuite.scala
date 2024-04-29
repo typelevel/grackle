@@ -15,20 +15,10 @@
 
 package starwars
 
-import cats.implicits._
 import io.circe.literal._
 import munit.CatsEffectSuite
 
 final class StarWarsSuite extends CatsEffectSuite {
-
-  test("validate mapping") {
-    val es = StarWarsMapping.validator.validateMapping()
-    es match {
-      case Nil => ()
-      case _ => fail(es.foldMap(_.toErrorMessage))
-    }
-  }
-
   test("simple query") {
     val query = """
       query {

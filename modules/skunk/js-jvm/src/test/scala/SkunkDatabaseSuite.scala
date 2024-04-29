@@ -15,11 +15,14 @@
 
 package grackle.skunk.test
 
-import java.time.Duration
+import java.time.{Duration, LocalDate, LocalTime, OffsetDateTime}
+import java.util.UUID
 
 import cats.effect.{IO, Resource, Sync}
+import io.circe.Json
+import munit.catseffect.IOFixture
 import natchez.Trace.Implicits.noop
-import skunk.Session
+import skunk.{ Codec => SCodec, Session }
 import skunk.codec.{ all => codec }
 import skunk.circe.codec.{ all => ccodec }
 
@@ -45,39 +48,42 @@ trait SkunkDatabaseSuite extends SqlDatabaseSuite {
   }
 
   val poolFixture = ResourceSuiteLocalFixture("skunk", poolResource)
-  override def munitFixtures = Seq(poolFixture)
+  override def munitFixtures: Seq[IOFixture[_]] = Seq(poolFixture)
 
   def pool = Resource.eval(IO(poolFixture()))
 
   abstract class SkunkTestMapping[F[_]: Sync](pool: Resource[F,Session[F]], monitor: SkunkMonitor[F] = SkunkMonitor.noopMonitor[IO])
     extends SkunkMapping[F](pool, monitor) with SqlTestMapping[F] {
-    def bool: Codec = (codec.bool, false)
-    def text: Codec = (codec.text, false)
-    def varchar: Codec = (codec.varchar, false)
-    def bpchar(len: Int): Codec = (codec.bpchar(len), false)
-    def int2: Codec = (codec.int2.imap(_.toInt)(_.toShort), false)
-    def int4: Codec = (codec.int4, false)
-    def int8: Codec = (codec.int8, false)
-    def float4: Codec = (codec.float4, false)
-    def float8: Codec = (codec.float8, false)
-    def numeric(precision: Int, scale: Int): Codec = (codec.numeric(precision, scale), false)
 
-    def uuid: Codec = (codec.uuid, false)
-    def localDate: Codec = (codec.date, false)
-    def localTime: Codec = (codec.time, false)
-    def offsetDateTime: Codec = (codec.timestamptz, false)
-    def duration: Codec = (codec.int8.imap(Duration.ofMillis)(_.toMillis), false)
+    type TestCodec[T] = (SCodec[T], Boolean)
 
-    def jsonb: Codec = (ccodec.jsonb, false)
+    def bool: TestCodec[Boolean] = (codec.bool, false)
+    def text: TestCodec[String] = (codec.text, false)
+    def varchar: TestCodec[String] = (codec.varchar, false)
+    def bpchar(len: Int): TestCodec[String] = (codec.bpchar(len), false)
+    def int2: TestCodec[Int] = (codec.int2.imap(_.toInt)(_.toShort), false)
+    def int4: TestCodec[Int] = (codec.int4, false)
+    def int8: TestCodec[Long] = (codec.int8, false)
+    def float4: TestCodec[Float] = (codec.float4, false)
+    def float8: TestCodec[Double] = (codec.float8, false)
+    def numeric(precision: Int, scale: Int): TestCodec[BigDecimal] = (codec.numeric(precision, scale), false)
 
-    def nullable(c: Codec): Codec = (c._1.opt, true)
+    def uuid: TestCodec[UUID] = (codec.uuid, false)
+    def localDate: TestCodec[LocalDate] = (codec.date, false)
+    def localTime: TestCodec[LocalTime] = (codec.time, false)
+    def offsetDateTime: TestCodec[OffsetDateTime] = (codec.timestamptz, false)
+    def duration: TestCodec[Duration] = (codec.int8.imap(Duration.ofMillis)(_.toMillis), false)
 
-    def list(c: Codec): Codec = {
-      val cc = c._1.asInstanceOf[_root_.skunk.Codec[Any]]
+    def jsonb: TestCodec[Json] = (ccodec.jsonb, false)
+
+    def nullable[T](c: TestCodec[T]): TestCodec[T] = (c._1.opt, true).asInstanceOf[TestCodec[T]]
+
+    def list[T](c: TestCodec[T]): TestCodec[List[T]] = {
+      val cc = c._1.asInstanceOf[SCodec[Any]]
       val ty = _root_.skunk.data.Type(s"_${cc.types.head.name}", cc.types)
       val encode = (elem: Any) => cc.encode(elem).head.get
       val decode = (str: String) => cc.decode(0, List(Some(str))).left.map(_.message)
-      (_root_.skunk.Codec.array(encode, decode, ty), false)
+      (SCodec.array(encode, decode, ty), false).asInstanceOf[TestCodec[List[T]]]
     }
   }
 }

@@ -580,6 +580,10 @@ sealed trait Type extends Product {
 
   def isObject: Boolean = false
 
+  def isScalar: Boolean = false
+
+  def isEnum: Boolean = false
+
   def /(pathElement: String): Path =
     Path.from(this) / pathElement
 
@@ -641,6 +645,8 @@ case class ScalarType(
 ) extends Type with NamedType {
   import ScalarType._
 
+  override def isScalar: Boolean = true
+
   /** True if this is one of the five built-in Scalar types defined in the GraphQL Specification. */
   def isBuiltIn: Boolean =
     this match {
@@ -651,7 +657,6 @@ case class ScalarType(
            IDType      => true
       case _           => false
     }
-
 }
 
 object ScalarType {
@@ -738,6 +743,19 @@ sealed trait TypeWithFields extends NamedType {
   def interfaces: List[NamedType]
 
   override def fieldInfo(name: String): Option[Field] = fields.find(_.name == name)
+
+  def allInterfaces: List[NamedType] = {
+    @annotation.tailrec
+    def loop(pending: List[NamedType], acc: List[NamedType]): List[NamedType] =
+      pending match {
+        case Nil => acc.reverse
+        case (twf: TypeWithFields) :: tl =>
+          loop(twf.interfaces.filterNot(i => acc.exists(_.name == i.name)).map(_.dealias) ::: tl, twf :: acc)
+        case _ :: tl => loop(tl, acc)
+      }
+
+    loop(interfaces.map(_.dealias), Nil)
+  }
 }
 
 /**
@@ -844,6 +862,8 @@ case class EnumType(
   enumValues: List[EnumValueDefinition],
   directives: List[Directive]
 ) extends Type with NamedType {
+  override def isEnum: Boolean = true
+
   def hasValue(name: String): Boolean = enumValues.exists(_.name == name)
 
   def value(name: String): Option[EnumValue] = valueDefinition(name).map(_ => EnumValue(name))
@@ -1666,6 +1686,7 @@ object SchemaValidator {
     validateUniqueFields(schema) ++
     validateUnionMembers(schema) ++
     validateUniqueEnumValues(schema) ++
+    validateInterfaces(schema) ++
     validateImplementations(schema) ++
     validateTypeExtensions(defns, typeExtnDefns) ++
     Directive.validateDirectivesForSchema(schema)
@@ -1776,6 +1797,42 @@ object SchemaValidator {
 
       tpe.enumValues.map(_.name).distinct.collect {
         case nme if dupes.contains(nme) => Problem(s"Duplicate definition of enum value '$nme' for type '${tpe.name}'")
+      }
+    }
+  }
+
+  def validateInterfaces(schema: Schema): List[Problem] = {
+    val ifs = schema.types.collect { case i: InterfaceType => i }
+    if (ifs.isEmpty) Nil
+    else {
+      val ifRefs: Map[String, Set[String]] =
+        ifs.map { i => (i.name, i.interfaces.map(_.name).toSet) }.toMap
+
+      @annotation.tailrec
+      def checkCycle(pendingIfs: Set[String], seen: Set[String]): Option[Set[String]] = {
+        if (pendingIfs.isEmpty) Some(seen)
+        else {
+          val hd = pendingIfs.head
+          if (seen.contains(hd)) None
+          else checkCycle(ifRefs.getOrElse(hd, Set.empty) ++ pendingIfs.tail, seen + hd)
+        }
+      }
+
+      @annotation.tailrec
+      def loop(pendingIfs: Set[String]): Either[String, Set[String]] = {
+        if(pendingIfs.isEmpty) Right(Set.empty[String])
+        else {
+          val hd = pendingIfs.head
+          checkCycle(Set(hd), Set.empty[String]) match {
+            case None => Left(hd)
+            case Some(seen) => loop(pendingIfs.tail.diff(seen))
+          }
+        }
+      }
+
+      loop(ifs.map(_.name).toSet) match {
+        case Left(from) => List(Problem(s"Interface cycle starting from '$from'"))
+        case _ => Nil
       }
     }
   }

@@ -28,8 +28,10 @@ import Cursor.{DeferredCursor}
 abstract class ValueMapping[F[_]](implicit val M: MonadThrow[F]) extends Mapping[F] with ValueMappingLike[F]
 
 trait ValueMappingLike[F[_]] extends Mapping[F] {
+  import typeMappings._
+
   def mkCursor(context: Context, focus: Any, parent: Option[Cursor], env: Env): Cursor =
-    if(isLeaf(context.tpe))
+    if(context.tpe.isUnderlyingLeaf)
       LeafCursor(context, focus, parent, env)
     else
       ValueCursor(context, focus, parent, env)
@@ -58,34 +60,65 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
     }
   }
 
-  sealed trait ValueFieldMapping[T] extends FieldMapping
+  sealed trait ValueFieldMapping[T] extends FieldMapping {
+    def unwrap: FieldMapping
+  }
+
   object ValueFieldMapping {
     implicit def wrap[T](fm: FieldMapping): ValueFieldMapping[T] = Wrap(fm)
     case class Wrap[T](fm: FieldMapping)(implicit val pos: SourcePos) extends ValueFieldMapping[T] {
       def fieldName = fm.fieldName
       def hidden = fm.hidden
-      def withParent(tpe: Type): FieldMapping = fm.withParent(tpe)
+      def subtree = fm.subtree
+      def unwrap = fm
     }
   }
   case class ValueField[T](fieldName: String, f: T => Any, hidden: Boolean = false)(implicit val pos: SourcePos) extends ValueFieldMapping[T] {
-    def withParent(tpe: Type): ValueField[T] = this
+    def subtree: Boolean = false
+    def unwrap: FieldMapping = this
   }
   object ValueField {
     def fromValue[T](fieldName: String, t: T, hidden: Boolean = false)(implicit pos: SourcePos): ValueField[Unit] =
       new ValueField[Unit](fieldName, _ => t, hidden)
   }
 
-  case class ValueObjectMapping[T](
-    tpe: NamedType,
-    fieldMappings: List[FieldMapping],
-    classTag: ClassTag[T]
-  )(implicit val pos: SourcePos) extends ObjectMapping
+  object ValueObjectMapping {
+    case class DefaultValueObjectMapping(
+      predicate: MappingPredicate,
+      fieldMappings: Seq[FieldMapping],
+      classTag: ClassTag[_]
+    )(implicit val pos: SourcePos) extends ObjectMapping {
+      override def showMappingType: String = "ValueObjectMapping"
+    }
 
-  def ValueObjectMapping[T](
-    tpe: NamedType,
-    fieldMappings: List[ValueFieldMapping[T]]
-  )(implicit classTag: ClassTag[T], pos: SourcePos): ValueObjectMapping[T] =
-    new ValueObjectMapping(tpe, fieldMappings.map(_.withParent(tpe)), classTag)
+    class Builder(predicate: MappingPredicate, pos: SourcePos) {
+      def on[T](fieldMappings: ValueFieldMapping[T]*)(implicit classTag: ClassTag[T]): ObjectMapping =
+        DefaultValueObjectMapping(predicate, fieldMappings.map(_.unwrap), classTag)(pos)
+    }
+
+    def apply(predicate: MappingPredicate)(implicit pos: SourcePos): Builder =
+      new Builder(predicate, pos)
+
+    def apply(tpe: NamedType)(implicit pos: SourcePos): Builder =
+      new Builder(MappingPredicate.TypeMatch(tpe), pos)
+
+    def apply[T](
+      tpe: NamedType,
+      fieldMappings: List[ValueFieldMapping[T]]
+    )(implicit classTag: ClassTag[T], pos: SourcePos): ObjectMapping =
+      DefaultValueObjectMapping(MappingPredicate.TypeMatch(tpe), fieldMappings.map(_.unwrap), classTag)
+
+    def unapply(om: DefaultValueObjectMapping): Option[(MappingPredicate, Seq[FieldMapping], ClassTag[_])] = {
+      Some((om.predicate, om.fieldMappings, om.classTag))
+    }
+  }
+
+  override protected def unpackPrefixedMapping(prefix: List[String], om: ObjectMapping): ObjectMapping =
+    om match {
+      case vom: ValueObjectMapping.DefaultValueObjectMapping =>
+        vom.copy(predicate = MappingPredicate.PrefixedTypeMatch(prefix, om.predicate.tpe))
+      case _ => super.unpackPrefixedMapping(prefix, om)
+    }
 
   case class ValueCursor(
     context: Context,

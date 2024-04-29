@@ -453,6 +453,12 @@ case class Context(
     copy(path = fieldName :: path, resultPath = resultName.getOrElse(fieldName) :: resultPath, typePath = fieldTpe :: typePath)
   }
 
+  def forUnderlyingNamed: Context =
+    typePath match {
+      case Nil => copy(rootTpe.underlyingNamed.dealias)
+      case hd :: tl => copy(typePath = hd.underlyingNamed.dealias :: tl)
+    }
+
   override def equals(other: Any): Boolean =
     other match {
       case Context(oRootTpe, oPath, oResultPath, _) =>

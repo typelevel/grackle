@@ -59,7 +59,7 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
   override def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
     val context = parent.context
     val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
-    (fieldMapping(context, fieldName), parent.focus) match {
+    (typeMappings.fieldMapping(context, fieldName), parent.focus) match {
       case (Some(CirceField(_, json, _)), _) =>
         CirceCursor(fieldContext, json, Some(parent), parent.env).success
       case (Some(CursorFieldJson(_, f, _, _)), _) =>
@@ -70,7 +70,7 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
   }
 
   sealed trait CirceFieldMapping extends FieldMapping {
-    def withParent(tpe: Type): FieldMapping = this
+    def subtree: Boolean = true
   }
 
   case class CirceField(fieldName: String, value: Json, hidden: Boolean = false)(implicit val pos: SourcePos) extends CirceFieldMapping
@@ -174,7 +174,7 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
 
     def hasField(fieldName: String): Boolean =
       tpe.hasField(fieldName) && focus.asObject.exists(_.contains(fieldName)) ||
-      fieldMapping(context, fieldName).isDefined
+      typeMappings.fieldMapping(context, fieldName).isDefined
 
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
       val localField =
