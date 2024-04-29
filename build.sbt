@@ -216,12 +216,16 @@ lazy val skunk = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     name := "grackle-skunk",
     Test / parallelExecution := false,
     libraryDependencies ++= Seq(
-      "org.tpolecat" %%% "skunk-core"  % skunkVersion,
-      "org.tpolecat" %%% "skunk-circe" % skunkVersion,
+      "org.tpolecat"  %%% "skunk-core"    % skunkVersion,
+      "org.tpolecat"  %%% "skunk-circe"   % skunkVersion,
+      "org.typelevel" %%  "log4cats-core" % log4catsVersion
     )
   )
   .jvmSettings(
-    Test / fork := true
+    Test / fork := true,
+    libraryDependencies ++= Seq(
+      "ch.qos.logback" % "logback-classic" % logbackVersion % "test"
+    )
   )
   .jsSettings(
     scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.CommonJSModule))
