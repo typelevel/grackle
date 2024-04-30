@@ -94,6 +94,14 @@ final class InterfacesSuite2 extends DoobieDatabaseSuite with SqlInterfacesSuite
     }
 }
 
+final class Issue606Suite extends DoobieDatabaseSuite with SqlIssue606Suite {
+  lazy val mapping =
+    new DoobieTestMapping(xa) with SqlIssue606Mapping[IO] {
+      def stepType: Codec =
+        (Meta[Boolean].timap(StepCallType.fromBoolean)(StepCallType.toBoolean), false)
+    }
+}
+
 final class JsonbSuite extends DoobieDatabaseSuite with SqlJsonbSuite {
   lazy val mapping = new DoobieTestMapping(xa) with SqlJsonbMapping[IO]
 }
