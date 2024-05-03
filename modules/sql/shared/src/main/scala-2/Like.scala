@@ -51,6 +51,6 @@ trait Like0 {
     implicit val osInst: PossiblyOptionString[Option[String]] = new PossiblyOptionString[Option[String]] {}
   }
 
-  def apply[T](x: Term[T], pattern: String, caseInsensitive: Boolean)(implicit @annotation.nowarn ev: PossiblyOptionString[T]): Predicate =
+  def apply[T](x: Term[T], pattern: String, caseInsensitive: Boolean)(implicit ev: PossiblyOptionString[T]): Predicate =
     new Like(x, pattern, caseInsensitive)
 }
