@@ -236,43 +236,8 @@ abstract class Mapping[F[_]] {
         addProblems, seenType, seenTypeMappings, seenFieldMappings
       }
 
-      def allPrefixedMatchContexts(ctx: Context): Seq[Context] = {
-        def hasPath(ctx: Context, path: List[String]): Option[Context] =
-          if(path.isEmpty) Some(ctx)
-          else
-            ctx.tpe.underlyingNamed.dealias match {
-              case ot: ObjectType =>
-                ot.fieldInfo(path.head) match {
-                  case Some(_) =>
-                    hasPath(ctx.forFieldOrAttribute(path.head, None), path.tail)
-                  case None =>
-                    None
-                }
-              case it: InterfaceType =>
-                it.fieldInfo(path.head) match {
-                  case Some(_) =>
-                    hasPath(ctx.forFieldOrAttribute(path.head, None), path.tail)
-                  case None =>
-                    val implementors = schema.types.collect { case ot: ObjectType if ot <:< it => ot }
-                    implementors.collectFirstSome(tpe => hasPath(ctx.asType(tpe), path))
-                }
-              case ut: UnionType =>
-                ut.members.collectFirstSome(tpe => hasPath(ctx.asType(tpe), path))
-
-              case _ =>
-                None
-            }
-
-        mappings.flatMap { tm =>
-          tm.predicate match {
-            case p: MappingPredicate.PathMatch if p.path.rootTpe =:= ctx.tpe =>
-              hasPath(ctx, p.path.path)
-            case p: MappingPredicate.PrefixedTypeMatch =>
-              hasPath(ctx, p.prefix)
-            case _ => Nil
-          }
-        }
-      }
+      def allPrefixedMatchContexts(ctx: Context): Seq[Context] =
+        mappings.flatMap(_.predicate.continuationContext(ctx))
 
       def step(context: Context): MV[List[Context]] = {
         lazy val hasEnclosingSubtreeFieldMapping =
@@ -614,16 +579,60 @@ abstract class Mapping[F[_]] {
      * or `None` otherwise.
      */
     def apply(ctx: Context): Option[Int]
+
+    /**
+     * Given a Context, yield a strictly extended Context which would be matched by this
+     * predicate, if any, None otherwise.
+     */
+    def continuationContext(ctx: Context): Option[Context]
   }
 
   object MappingPredicate {
+    /**
+     * Extend the given context by the given path, if possible, navigating through interfaces
+     * and unions as necessary.
+     */
+    def extendContext(ctx: Context, path: List[String]): Option[Context] =
+      if(path.isEmpty) Some(ctx)
+      else
+        ctx.tpe.underlyingNamed.dealias match {
+          case ot: ObjectType =>
+            ot.fieldInfo(path.head) match {
+              case Some(_) =>
+                extendContext(ctx.forFieldOrAttribute(path.head, None), path.tail)
+              case None =>
+                None
+            }
+          case it: InterfaceType =>
+            it.fieldInfo(path.head) match {
+              case Some(_) =>
+                extendContext(ctx.forFieldOrAttribute(path.head, None), path.tail)
+              case None =>
+                val implementors = schema.types.collect { case ot: ObjectType if ot <:< it => ot }
+                implementors.collectFirstSome(tpe => extendContext(ctx.asType(tpe), path))
+            }
+          case ut: UnionType =>
+            ut.members.collectFirstSome(tpe => extendContext(ctx.asType(tpe), path))
+
+          case _ =>
+            None
+        }
+
     /** A predicate that matches a specific type in any context */
     case class TypeMatch(tpe: NamedType) extends MappingPredicate {
       def apply(ctx: Context): Option[Int] =
-        if (ctx.tpe =:= tpe)
+        if (ctx.tpe.underlyingNamed =:= tpe)
           Some(0)
         else
           None
+
+      /**
+       * Given a Context, yield a strictly extended Context which would be matched by this
+       * predicate, if any, None otherwise.
+       *
+       * For a TypeMatch predicate, there is no continuation context.
+       */
+      def continuationContext(ctx: Context): Option[Context] = None
     }
 
     /**
@@ -635,12 +644,22 @@ abstract class Mapping[F[_]] {
     case class PrefixedTypeMatch(prefix: List[String], tpe: NamedType) extends MappingPredicate {
       def apply(ctx: Context): Option[Int] =
         if (
-          ctx.tpe =:= tpe &&
+          ctx.tpe.underlyingNamed =:= tpe &&
           ctx.path.startsWith(prefix.reverse)
         )
           Some(prefix.length)
         else
           None
+
+      /**
+       * Given a Context, yield a strictly extended Context which would be matched by this
+       * predicate, if any, None otherwise.
+       *
+       * For a PrefixedTypeMatch predicate, the contination context is the given context
+       * extended by the prefix path, navigating through interfaces and unions as necessary.
+       */
+      def continuationContext(ctx: Context): Option[Context] =
+        extendContext(ctx, prefix)
     }
 
     /**
@@ -662,13 +681,25 @@ abstract class Mapping[F[_]] {
       lazy val tpe: NamedType = path.tpe.get.underlyingNamed
       def apply(ctx: Context): Option[Int] =
         if (
-          ctx.tpe =:= tpe &&
+          ctx.tpe.underlyingNamed =:= tpe &&
           ctx.path.startsWith(path.path.reverse) &&
-          ctx.typePath.drop(path.path.length).headOption.exists(_ =:= path.rootTpe)
+          ctx.typePath.drop(path.path.length).headOption.exists(_.underlyingNamed =:= path.rootTpe.underlyingNamed)
         )
           Some(path.path.length+1)
         else
           None
+
+      /**
+       * Given a Context, yield a strictly extended Context which would be matched by this
+       * predicate, if any, None otherwise.
+       *
+       * For a PathMatch predicate, the contination context is the given context
+       * extended by the prefix path, navigating through interfaces and unions as necessary,
+       * but only if the path root type matches the given context type.
+       */
+      def continuationContext(ctx: Context): Option[Context] =
+        if(path.rootTpe.underlyingNamed =:= ctx.tpe.underlyingNamed) extendContext(ctx, path.path)
+        else None
     }
   }
 
