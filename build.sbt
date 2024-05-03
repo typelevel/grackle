@@ -17,6 +17,7 @@ val logbackVersion         = "1.5.6"
 val log4catsVersion        = "2.7.0"
 val munitVersion           = "1.0.0-M11"
 val munitCatsEffectVersion = "2.0.0-M5"
+val munitScalaCheckVersion = "1.0.0-M11"
 val skunkVersion           = "0.6.3"
 val shapeless2Version      = "2.3.10"
 val shapeless3Version      = "3.4.1"
@@ -24,7 +25,7 @@ val sourcePosVersion       = "1.1.0"
 val typenameVersion        = "1.1.0"
 val whaleTailVersion       = "0.0.10"
 
-val Scala2 = "2.13.13"
+val Scala2 = "2.13.14"
 val Scala3 = "3.3.3"
 ThisBuild / scalaVersion        := Scala2
 ThisBuild / crossScalaVersions  := Seq(Scala2, Scala3)
@@ -68,10 +69,10 @@ ThisBuild / tlSitePublishBranch := Some("main")
 
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
-  scalacOptions ++= Seq("-Xlint:-named-booleans", "-Xlint:-pattern-shadow").filterNot(_ => tlIsScala3.value),
+  scalacOptions ++= Seq("-Xlint:-pattern-shadow").filterNot(_ => tlIsScala3.value),
   libraryDependencies ++= Seq(
     "org.scalameta" %%% "munit"             % munitVersion % "test",
-    "org.scalameta" %%% "munit-scalacheck"  % munitVersion % "test",
+    "org.scalameta" %%% "munit-scalacheck"  % munitScalaCheckVersion % "test",
     "org.typelevel" %%% "cats-laws"         % catsVersion % "test",
     "org.typelevel" %%% "discipline-munit"  % disciplineMunitVersion % "test",
     "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion % "test",
