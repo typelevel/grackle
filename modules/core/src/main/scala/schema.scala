@@ -631,6 +631,9 @@ case class TypeRef private[grackle] (schema: Schema, name: String) extends Named
   def description: Option[String] = dealias.description
 
   def directives: List[Directive] = dealias.directives
+
+  def withSchema(newSchema: Schema): TypeRef =
+    copy(schema = newSchema)
 }
 
 /**
