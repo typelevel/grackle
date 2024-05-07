@@ -677,13 +677,12 @@ abstract class Mapping[F[_]] {
      * circumstances and should be preferred to `PrefixedTypeMatch` unless the semantics
      * of the latter are absolutely required.
      */
-    case class PathMatch(path: Path) extends MappingPredicate {
-      lazy val tpe: NamedType = path.tpe.get.underlyingNamed
+    case class PathMatch(path: Path, tpe: NamedType) extends MappingPredicate {
       def apply(ctx: Context): Option[Int] =
         if (
           ctx.tpe.underlyingNamed =:= tpe &&
           ctx.path.startsWith(path.path.reverse) &&
-          ctx.typePath.drop(path.path.length).headOption.exists(_.underlyingNamed =:= path.rootTpe.underlyingNamed)
+          (ctx.typePath :+ ctx.rootTpe).drop(path.path.length).headOption.exists(_.underlyingNamed =:= path.rootTpe.underlyingNamed)
         )
           Some(path.path.length+1)
         else
@@ -701,6 +700,17 @@ abstract class Mapping[F[_]] {
         if(path.rootTpe.underlyingNamed =:= ctx.tpe.underlyingNamed) extendContext(ctx, path.path)
         else None
     }
+    object PathMatch {
+      /**
+       * Construct a PatchMatch with the type at the end of the path computed from the schema. Note that the
+       * computed type may not be as specific as the type you wish to match (in the case of a mapping for a
+       * specific subtype where an interface appears ib the schema); in this case an explicit type is required. 
+       */
+      def apply(path: Path): PathMatch =
+        apply(path, extendContext(Context(path.rootTpe.underlyingNamed), path.path).map(_.tpe.underlyingNamed).get)
+
+    }
+
   }
 
   abstract class ObjectMapping extends TypeMapping {
