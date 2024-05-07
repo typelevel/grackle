@@ -743,7 +743,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     final def subtree: Boolean = false
   }
   object SqlObject {
-    def apply(fieldName: String, joins: Join*): SqlObject = apply(fieldName, joins.toList)
+    def apply(fieldName: String, joins: Join*)(implicit pos: SourcePos): SqlObject = apply(fieldName, joins.toList)
   }
 
   case class SqlJson(fieldName: String, columnRef: ColumnRef)(
