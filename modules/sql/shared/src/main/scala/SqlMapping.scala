@@ -3935,7 +3935,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       s"""|Interface implementors are split across multiple tables.
           |
           |- The ${scala(objectMapping.showMappingType)} for type ${graphql(showNamedType(objectMapping.tpe))} at (1) has implementors (${intrfs.map(_.tpe.name).mkString(", ")}) which are split across multiple tables: ${sql(s"${tables.mkString(", ")}")}.
-          |- ${UNDERLINED}All implmentors of an interface must map to a single database table.$RESET
+          |- ${UNDERLINED}All implementors of an interface must map to a single database table.$RESET
           |
           |(1) ${objectMapping.pos}
           |""".stripMargin

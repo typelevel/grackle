@@ -26,7 +26,7 @@ import Value.IntValue
 // report the current offet, limit and total number of items in the
 // underlying list.
 //
-// This implmentation will only ever fetch up to the requested number
+// This implementation will only ever fetch up to the requested number
 // of items, and will include an SQL COUNT if the query includes `total`.
 trait SqlPaging1Mapping[F[_]] extends SqlTestMapping[F] {
   object root extends RootDef {
