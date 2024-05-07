@@ -34,6 +34,8 @@ abstract class ValidationFailure(val severity: Severity) extends AnsiColor {
       case Severity.Info    => "ℹ️  "
     }
 
+  private val padding: String = " "*prefix.length
+
   protected def graphql(a: Any) = s"$BLUE$a$RESET"
   protected def scala(a: Any) = s"$RED$a$RESET"
   protected def key: String =
@@ -43,7 +45,7 @@ abstract class ValidationFailure(val severity: Severity) extends AnsiColor {
   final def toErrorMessage: String =
     s"""|$formattedMessage
         |$key
-        |""".stripMargin.linesIterator.mkString(s"$prefix\n$prefix", s"\n$prefix", s"\n$prefix\n")
+        |""".stripMargin.linesIterator.mkString(s"\n$prefix", s"\n$padding", s"\n$padding\n")
 
   protected def typeKind(tpe: Type): String =
     tpe.dealias match {
