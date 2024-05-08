@@ -69,7 +69,17 @@ trait SkunkMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] { outer =
     implicit def notNullable[T]: IsNullable[T] = new IsNullable[T] { def isNullable = false }
   }
 
-  def col[T](colName: String, codec: _root_.skunk.Codec[T])(implicit tableName: TableName, typeName: TypeName[T], isNullable: IsNullable[T], pos: SourcePos): ColumnRef =
+  sealed trait NullableTypeName[T] {
+    def value: String
+  }
+  object NullableTypeName extends NullableTypeName0 {
+    implicit def nullable[T](implicit typeName: TypeName[T]): NullableTypeName[Option[T]] = new NullableTypeName[Option[T]] { def value = typeName.value }
+  }
+  trait NullableTypeName0 {
+    implicit def notNullable[T](implicit typeName: TypeName[T]): NullableTypeName[T] = new NullableTypeName[T] { def value = typeName.value }
+  }
+
+  def col[T](colName: String, codec: _root_.skunk.Codec[T])(implicit tableName: TableName, typeName: NullableTypeName[T], isNullable: IsNullable[T], pos: SourcePos): ColumnRef =
     ColumnRef(tableName.name, colName, (codec, isNullable.isNullable), typeName.value, pos)
 
   // We need to demonstrate that our `Fragment` type has certain compositional properties.
