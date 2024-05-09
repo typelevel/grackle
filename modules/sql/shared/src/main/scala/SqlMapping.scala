@@ -799,6 +799,15 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     ): ObjectMapping =
       DefaultInterfaceMapping(MappingPredicate.TypeMatch(tpe), fieldMappings, discriminator)
 
+    def apply(
+      path: Path,
+      discriminator: SqlDiscriminator
+    )(
+      fieldMappings: FieldMapping*
+    )(
+      implicit pos: SourcePos
+    ): ObjectMapping =
+      DefaultInterfaceMapping(MappingPredicate.PathMatch(path), fieldMappings, discriminator)
 
     def apply(
       tpe: NamedType,
@@ -840,6 +849,15 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     ): ObjectMapping =
       DefaultUnionMapping(MappingPredicate.TypeMatch(tpe), fieldMappings, discriminator)
 
+    def apply(
+      path: Path,
+      discriminator: SqlDiscriminator
+    )(
+      fieldMappings: FieldMapping*
+    )(
+      implicit pos: SourcePos
+    ): ObjectMapping =
+      DefaultUnionMapping(MappingPredicate.PathMatch(path), fieldMappings, discriminator)
 
     def apply(
       tpe: NamedType,

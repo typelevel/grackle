@@ -102,6 +102,9 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
     def apply(tpe: NamedType)(implicit pos: SourcePos): Builder =
       new Builder(MappingPredicate.TypeMatch(tpe), pos)
 
+    def apply(path: Path)(implicit pos: SourcePos): Builder =
+      new Builder(MappingPredicate.PathMatch(path), pos)
+
     def apply[T](
       tpe: NamedType,
       fieldMappings: List[ValueFieldMapping[T]]

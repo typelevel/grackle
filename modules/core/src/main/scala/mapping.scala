@@ -729,6 +729,11 @@ abstract class Mapping[F[_]] {
     ): ObjectMapping =
       DefaultObjectMapping(MappingPredicate.TypeMatch(tpe), fieldMappings)
 
+    def apply(path: Path)(fieldMappings: FieldMapping*)(
+      implicit pos: SourcePos
+    ): ObjectMapping =
+      DefaultObjectMapping(MappingPredicate.PathMatch(path), fieldMappings)
+
     def apply(tpe: NamedType, fieldMappings: List[FieldMapping])(
       implicit pos: SourcePos
     ): ObjectMapping =
@@ -903,6 +908,9 @@ abstract class Mapping[F[_]] {
 
     def apply[T: TypeName](tpe: NamedType)(implicit encoder: Encoder[T], pos: SourcePos): LeafMapping[T] =
       DefaultLeafMapping(MappingPredicate.TypeMatch(tpe), encoder, typeName)
+
+    def apply[T: TypeName](path: Path)(implicit encoder: Encoder[T], pos: SourcePos): LeafMapping[T] =
+      DefaultLeafMapping(MappingPredicate.PathMatch(path), encoder, typeName)
 
     def unapply[T](lm: LeafMapping[T]): Option[(Type, Encoder[T])] =
       Some((lm.tpe, lm.encoder))
