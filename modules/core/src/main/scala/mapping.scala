@@ -298,7 +298,7 @@ abstract class Mapping[F[_]] {
                   MV.unit
 
                 case (_, None) if !hasEnclosingSubtreeFieldMapping =>
-                  addProblem(MissingTypeMapping(context.tpe))
+                  addProblem(MissingTypeMapping(context))
 
                 case _ =>
                   MV.unit
@@ -350,8 +350,8 @@ abstract class Mapping[F[_]] {
           case (_: TypeRef | _: InputObjectType, _) =>
             MV.pure(Nil) // Errors will have been reported earlier
 
-          case (tpe, None) =>
-            addProblem(MissingTypeMapping(tpe)) *>
+          case (_, None) =>
+            addProblem(MissingTypeMapping(context)) *>
             MV.pure(Nil)
         }
       }
@@ -403,7 +403,7 @@ abstract class Mapping[F[_]] {
 
       val res =
         for {
-          _    <- addProblem(MissingTypeMapping(schema.uncheckedRef("Query"))).whenA(schema.schemaType.field("query").isEmpty)
+          _    <- addProblem(MissingTypeMapping(Context(schema.uncheckedRef("Query")))).whenA(schema.schemaType.field("query").isEmpty)
           _    <- validateAll(rootCtxts)
           seen <- seenTypeMappings
           _    <- unseenTypeMappings(seen).traverse_(tm => addProblem(UnusedTypeMapping(tm)))
@@ -677,12 +677,15 @@ abstract class Mapping[F[_]] {
      * circumstances and should be preferred to `PrefixedTypeMatch` unless the semantics
      * of the latter are absolutely required.
      */
-    case class PathMatch(path: Path, tpe: NamedType) extends MappingPredicate {
+    case class PathMatch(path: Path) extends MappingPredicate {
+      lazy val tpe: NamedType = path.tpe.underlyingNamed
+
       def apply(ctx: Context): Option[Int] =
         if (
           ctx.tpe.underlyingNamed =:= tpe &&
           ctx.path.startsWith(path.path.reverse) &&
-          (ctx.typePath :+ ctx.rootTpe).drop(path.path.length).headOption.exists(_.underlyingNamed =:= path.rootTpe.underlyingNamed)
+          ((ctx.path.lengthCompare(path.path) == 0 && ctx.rootTpe.underlyingNamed =:= path.rootTpe.underlyingNamed) ||
+           ctx.typePath.drop(path.path.length).headOption.exists(_.underlyingNamed =:= path.rootTpe.underlyingNamed))
         )
           Some(path.path.length+1)
         else
@@ -700,17 +703,6 @@ abstract class Mapping[F[_]] {
         if(path.rootTpe.underlyingNamed =:= ctx.tpe.underlyingNamed) extendContext(ctx, path.path)
         else None
     }
-    object PathMatch {
-      /**
-       * Construct a PatchMatch with the type at the end of the path computed from the schema. Note that the
-       * computed type may not be as specific as the type you wish to match (in the case of a mapping for a
-       * specific subtype where an interface appears ib the schema); in this case an explicit type is required. 
-       */
-      def apply(path: Path): PathMatch =
-        apply(path, extendContext(Context(path.rootTpe.underlyingNamed), path.path).map(_.tpe.underlyingNamed).get)
-
-    }
-
   }
 
   abstract class ObjectMapping extends TypeMapping {
@@ -1090,15 +1082,15 @@ abstract class Mapping[F[_]] {
     }
 
   /** Missing type mapping. */
-  case class MissingTypeMapping(tpe: Type)
+  case class MissingTypeMapping(ctx: Context)
     extends ValidationFailure(Severity.Error) {
     override def toString: String =
-      s"$productPrefix(${showNamedType(tpe)})"
+      s"$productPrefix(${showNamedType(ctx.tpe)})"
     override def formattedMessage: String =
       s"""|Missing type mapping.
           |
-          |- The type ${graphql(showNamedType(tpe))} is defined by a Schema at (1).
-          |- ${UNDERLINED}No mapping was found for this type.$RESET
+          |- The type ${graphql(showNamedType(ctx.tpe))} is defined by a Schema at (1).
+          |- ${UNDERLINED}No mapping was found for this type for path ${ctx.path.reverse.mkString("", "/", "")}.$RESET
           |
           |(1) ${schema.pos}
           |""".stripMargin

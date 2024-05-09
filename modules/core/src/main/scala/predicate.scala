@@ -62,31 +62,40 @@ trait TermLow {
     p.asTerm[List[A]]
 }
 
-/** A path starting from some root type. */
-case class Path(rootTpe: Type, path: List[String] = Nil) {
+trait Path {
+  def rootTpe: Type
+  def path: List[String]
+  def tpe: Type
+  def asTerm[A]: Term[A]
+
+  def /(elem: String): Path
+  def %(ntpe: NamedType): Path
 
   def isRoot = path.isEmpty
-
-  def asTerm[A]: Term[A] =
-    if (isList) PathTerm.ListPath(path).asInstanceOf[Term[A]]
-    else PathTerm.UniquePath(path)
-
-  lazy val isList: Boolean = rootTpe.pathIsList(path)
-  lazy val tpe: Option[Type] = rootTpe.path(path)
-
-  def prepend(prefix: List[String]): Path =
-    copy(path = prefix ++ path)
-
-  def /(elem: String): Path =
-    copy(path = path :+ elem)
 }
 
+/** A path starting from some root type. */
 object Path {
-
   /** Construct an empty `Path` rooted at the given type. */
   def from(tpe: Type): Path =
-    Path(tpe, Nil)
+    PathImpl(tpe, Nil, tpe)
 
+  case class PathImpl(rootTpe: Type, path: List[String], tpe: Type) extends Path {
+    def asTerm[A]: Term[A] =
+      if (isList) PathTerm.ListPath(path).asInstanceOf[Term[A]]
+      else PathTerm.UniquePath(path)
+
+    lazy val isList: Boolean = rootTpe.pathIsList(path)
+
+    def /(elem: String): Path = {
+      val ftpe = tpe.underlyingField(elem).getOrElse(ScalarType.AttributeType) // Matches Context#forFieldOrAttribute
+      copy(path = path :+ elem, tpe = ftpe)
+    }
+
+    def %(ntpe: NamedType): Path =
+      if(ntpe <:< tpe) copy(tpe = ntpe)
+      else throw new IllegalArgumentException(s"Type $ntpe is not a subtype of $tpe")
+  }
 }
 
 sealed trait PathTerm {
