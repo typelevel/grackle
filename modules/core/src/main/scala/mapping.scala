@@ -236,6 +236,31 @@ abstract class Mapping[F[_]] {
         addProblems, seenType, seenTypeMappings, seenFieldMappings
       }
 
+      def allTypeMappings(context: Context): Seq[TypeMapping] = {
+        val nt = context.tpe.underlyingNamed
+        val nme = nt.name
+        singleIndex.get(nme) match {
+          case Some(tm) => List(tm)
+          case None =>
+            multipleIndex.get(nme) match {
+              case None => Nil
+              case Some(tms) =>
+                val nc = context.asType(nt)
+                tms.mapFilter { tm =>
+                  tm.predicate(nc).map(prio => (prio, tm))
+                } match {
+                  case Seq() => Nil
+                  case Seq((_, tm)) => List(tm)
+                  case ptms =>
+                    // At least two ...
+                    val sorted = ptms.sortBy(-_._1)
+                    val topPrio = sorted.head._1
+                    sorted.takeWhile(_._1 == topPrio).map(_._2)
+                }
+            }
+        }
+      }
+
       def allPrefixedMatchContexts(ctx: Context): Seq[Context] =
         mappings.flatMap(_.predicate.continuationContext(ctx))
 
@@ -248,56 +273,56 @@ abstract class Mapping[F[_]] {
           validateTypeMapping(this, context, om) ++
             om.fieldMappings.reverse.flatMap(validateFieldMapping(this, context, om, _))
 
-        (context.tpe.underlyingNamed.dealias, typeMapping(context)) match {
-          case (lt@((_: ScalarType) | (_: EnumType)), Some(lm: LeafMapping[_])) =>
+        (context.tpe.underlyingNamed.dealias, allTypeMappings(context)) match {
+          case (lt@((_: ScalarType) | (_: EnumType)), List(lm: LeafMapping[_])) =>
             addSeenType(lt) *>
             addSeenTypeMapping(lm) *>
             MV.pure(Nil)
 
-          case (lt@((_: ScalarType) | (_: EnumType)), None) if hasEnclosingSubtreeFieldMapping =>
+          case (lt@((_: ScalarType) | (_: EnumType)), Nil) if hasEnclosingSubtreeFieldMapping =>
             addSeenType(lt) *>
             MV.pure(Nil)
 
-          case (lt@((_: ScalarType) | (_: EnumType)), Some(om: ObjectMapping)) =>
+          case (lt@((_: ScalarType) | (_: EnumType)), List(om: ObjectMapping)) =>
             addSeenType(lt) *>
             addSeenTypeMapping(om) *>
             addProblem(ObjectTypeExpected(om)) *>
             MV.pure(Nil)
 
-          case (ut: UnionType, Some(om: ObjectMapping)) =>
+          case (ut: UnionType, List(om: ObjectMapping)) =>
             val vs = ut.members.map(context.asType)
             addSeenType(ut) *>
             addSeenTypeMapping(om) *>
             addProblems(typeChecks(om)) *>
             MV.pure(vs)
 
-          case (ut: UnionType, Some(lm: LeafMapping[_])) =>
+          case (ut: UnionType, List(lm: LeafMapping[_])) =>
             val vs = ut.members.map(context.asType)
             addSeenType(ut) *>
             addSeenTypeMapping(lm) *>
             addProblem(LeafTypeExpected(lm)) *>
             MV.pure(vs)
 
-          case (ut: UnionType, None) =>
+          case (ut: UnionType, Nil) =>
             val vs = ut.members.map(context.asType)
             addSeenType(ut) *>
             MV.pure(vs)
 
-          case (twf: TypeWithFields, tm) =>
+          case (twf: TypeWithFields, tms) if tms.sizeCompare(1) <= 0 =>
             def objectCheck(seen: Boolean) =
-              (twf, tm) match {
-                case (_, Some(om: ObjectMapping)) =>
+              (twf, tms) match {
+                case (_, List(om: ObjectMapping)) =>
                   addSeenTypeMapping(om) *>
                   addProblems(typeChecks(om)).whenA(!seen)
 
-                case (_, Some(lm: LeafMapping[_])) =>
+                case (_, List(lm: LeafMapping[_])) =>
                   addSeenTypeMapping(lm) *>
                   addProblem(LeafTypeExpected(lm))
 
-                case (_: InterfaceType, None) =>
+                case (_: InterfaceType, Nil) =>
                   MV.unit
 
-                case (_, None) if !hasEnclosingSubtreeFieldMapping =>
+                case (_, Nil) if !hasEnclosingSubtreeFieldMapping =>
                   addProblem(MissingTypeMapping(context))
 
                 case _ =>
@@ -324,11 +349,11 @@ abstract class Mapping[F[_]] {
 
             def fieldCheck(fieldName: String): MV[Option[Context]] = {
               val fctx = context.forFieldOrAttribute(fieldName, None).forUnderlyingNamed
-              ((ancestralFieldMapping(context, fieldName), tm) match {
-                case (Some(fm), Some(om: ObjectMapping)) =>
+              ((ancestralFieldMapping(context, fieldName), tms) match {
+                case (Some(fm), List(om: ObjectMapping)) =>
                   addSeenFieldMapping(om, fm)
 
-                case (None, Some(om: ObjectMapping)) if !hasEnclosingSubtreeFieldMapping =>
+                case (None, List(om: ObjectMapping)) if !hasEnclosingSubtreeFieldMapping =>
                   val field = context.tpe.fieldInfo(fieldName).get
                   addProblem(MissingFieldMapping(om, field))
 
@@ -350,8 +375,21 @@ abstract class Mapping[F[_]] {
           case (_: TypeRef | _: InputObjectType, _) =>
             MV.pure(Nil) // Errors will have been reported earlier
 
-          case (_, None) =>
+          case (_, Nil) =>
             addProblem(MissingTypeMapping(context)) *>
+            MV.pure(Nil)
+
+          case (_, tms) =>
+            (tms.traverse_ { // Suppress false positive follow on errors
+              case om: ObjectMapping =>
+                for {
+                  _ <- addSeenTypeMapping(om)
+                  _ <- om.fieldMappings.traverse_(fm => addSeenFieldMapping(om, fm))
+                } yield ()
+              case tm =>
+                addSeenTypeMapping(tm)
+            }) *>
+            addProblem(AmbiguousTypeMappings(context, tms)) *>
             MV.pure(Nil)
         }
       }
@@ -687,7 +725,7 @@ abstract class Mapping[F[_]] {
           ((ctx.path.lengthCompare(path.path) == 0 && ctx.rootTpe.underlyingNamed =:= path.rootTpe.underlyingNamed) ||
            ctx.typePath.drop(path.path.length).headOption.exists(_.underlyingNamed =:= path.rootTpe.underlyingNamed))
         )
-          Some(path.path.length+1)
+          Some(if(path.path.isEmpty) 0 else path.path.length+1)
         else
           None
 
@@ -1102,6 +1140,27 @@ abstract class Mapping[F[_]] {
           |
           |(1) ${schema.pos}
           |""".stripMargin
+  }
+
+  /** Ambiguous type mappings. */
+  case class AmbiguousTypeMappings(ctx: Context, conflicts: Seq[TypeMapping])
+    extends ValidationFailure(Severity.Error) {
+    override def toString: String =
+      s"$productPrefix(${showNamedType(ctx.tpe)})"
+    override def formattedMessage: String = {
+      val n = conflicts.length
+      val ref = if(n > 2) s"(2)..(${n+1})" else "(2), (3)"
+      val posns = conflicts.zip(2 to n+1).map { case (c, n) => s"($n) ${c.pos}" }.mkString("\n")
+      s"""|Ambiguous type mappings.
+          |
+          |- The type ${graphql(showNamedType(ctx.tpe))} is defined by a Schema at (1).
+          |- Multiple equally specific mappings were found at $ref for this type for path ${ctx.path.reverse.mkString("", "/", "")}.
+          |- ${UNDERLINED}Mappings must be unambiguous.$RESET
+          |
+          |(1) ${schema.pos}
+          |$posns
+          |""".stripMargin
+    }
   }
 
   /** Object type `owner` declares `field` but no such mapping exists. */

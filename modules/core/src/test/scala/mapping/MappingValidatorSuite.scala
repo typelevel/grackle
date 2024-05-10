@@ -18,7 +18,7 @@ package validator
 import cats.syntax.all._
 import munit.CatsEffectSuite
 
-import grackle.ValidationException
+import grackle.{Path, ValidationException}
 import grackle.syntax._
 
 import compiler.TestMapping
@@ -54,6 +54,42 @@ final class ValidatorSuite extends CatsEffectSuite {
     val es = M.validate()
     es match {
       case List(M.MissingTypeMapping(_)) => ()
+      case _ => fail(es.foldMap(_.toErrorMessage))
+    }
+
+  }
+
+  test("ambiguous type mapping") {
+
+    object M extends TestMapping {
+      val schema =
+        schema"""
+          type Query {
+            foo: Foo
+          }
+
+          type Foo {
+            bar: String
+          }
+        """
+
+      override val typeMappings =
+        TypeMappings.unsafe(
+          ObjectMapping(schema.ref("Query"))(
+            CursorField[String]("foo", _ => ???, Nil)
+          ),
+          ObjectMapping(schema.ref("Foo"))(
+            CursorField[String]("bar", _ => ???, Nil)
+          ),
+          ObjectMapping(MappingPredicate.PathMatch(Path.from(schema.ref("Foo"))))(
+            CursorField[String]("bar", _ => ???, Nil)
+          )
+        )
+    }
+
+    val es = M.validate()
+    es match {
+      case List(M.AmbiguousTypeMappings(_, _)) => ()
       case _ => fail(es.foldMap(_.toErrorMessage))
     }
 

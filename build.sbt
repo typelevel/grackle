@@ -39,6 +39,7 @@ ThisBuild / developers       := List(
   Developer("tpolecat",   "Rob Norris",  "rnorris@gemini.edu",   url("http://www.tpolecat.org")),
 )
 
+ThisBuild / tlFatalWarnings         := true
 ThisBuild / tlCiScalafmtCheck       := false
 ThisBuild / tlCiReleaseBranches     := Seq("main")
 ThisBuild / tlSonatypeUseLegacyHost := false
