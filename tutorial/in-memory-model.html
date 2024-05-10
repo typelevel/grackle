@@ -505,15 +505,11 @@ type Human implements Character {
         the top level fields of the GraphQL schema. The root mappings enable the query interpreter to construct an appropriate
         initial <code>Cursor</code> for the query being evaluated.</p>
         <p>For the Star Wars model the root definitions are of the following form,</p>
-        <pre class="keep-together pdf epub"><code class="nohighlight"><span>      </span><span class="type-name">ObjectMapping</span><span>(
-        </span><span class="identifier">tpe</span><span> = </span><span class="type-name">QueryType</span><span>,
-        </span><span class="identifier">fieldMappings</span><span> =
-          </span><span class="type-name">List</span><span>(
-            </span><span class="type-name">GenericField</span><span>(</span><span class="string-literal">&quot;hero&quot;</span><span>, </span><span class="identifier">characters</span><span>),
-            </span><span class="type-name">GenericField</span><span>(</span><span class="string-literal">&quot;character&quot;</span><span>, </span><span class="identifier">characters</span><span>),
-            </span><span class="type-name">GenericField</span><span>(</span><span class="string-literal">&quot;human&quot;</span><span>, </span><span class="identifier">characters</span><span>.</span><span class="identifier">collect</span><span> { </span><span class="keyword">case</span><span> </span><span class="identifier">h</span><span>: </span><span class="type-name">Human</span><span> =&gt; </span><span class="identifier">h</span><span> }),
-            </span><span class="type-name">GenericField</span><span>(</span><span class="string-literal">&quot;droid&quot;</span><span>, </span><span class="identifier">characters</span><span>.</span><span class="identifier">collect</span><span> { </span><span class="keyword">case</span><span> </span><span class="identifier">d</span><span>: </span><span class="type-name">Droid</span><span> =&gt; </span><span class="identifier">d</span><span> })
-          )
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span>      </span><span class="type-name">ObjectMapping</span><span>(</span><span class="type-name">QueryType</span><span>)(
+        </span><span class="type-name">GenericField</span><span>(</span><span class="string-literal">&quot;hero&quot;</span><span>, </span><span class="identifier">characters</span><span>),
+        </span><span class="type-name">GenericField</span><span>(</span><span class="string-literal">&quot;character&quot;</span><span>, </span><span class="identifier">characters</span><span>),
+        </span><span class="type-name">GenericField</span><span>(</span><span class="string-literal">&quot;human&quot;</span><span>, </span><span class="identifier">characters</span><span>.</span><span class="identifier">collect</span><span> { </span><span class="keyword">case</span><span> </span><span class="identifier">h</span><span>: </span><span class="type-name">Human</span><span> =&gt; </span><span class="identifier">h</span><span> }),
+        </span><span class="type-name">GenericField</span><span>(</span><span class="string-literal">&quot;droid&quot;</span><span>, </span><span class="identifier">characters</span><span>.</span><span class="identifier">collect</span><span> { </span><span class="keyword">case</span><span> </span><span class="identifier">d</span><span>: </span><span class="type-name">Droid</span><span> =&gt; </span><span class="identifier">d</span><span> })
       )</span></code></pre>
         <p>The first argument of the <code>GenericField</code> constructor corresponds to the top-level selection of the query (see the
         schema above) and the second argument is the initial model value for which a <code>Cursor</code> will be derived.  When the query
