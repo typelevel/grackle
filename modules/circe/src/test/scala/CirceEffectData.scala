@@ -87,7 +87,7 @@ class TestCirceEffectMapping[F[_]: Sync](ref: SignallingRef[F, Int]) extends Cir
           // Compute a CirceCursor focussed on the root
           RootEffect.computeCursor("qux")((p, e) =>
             ref.update(_+1).as(
-              Result(circeCursor(Path(p.rootTpe), e,
+              Result(circeCursor(Path.from(p.rootTpe), e,
                 Json.obj(
                   "qux" ->
                     Json.obj(

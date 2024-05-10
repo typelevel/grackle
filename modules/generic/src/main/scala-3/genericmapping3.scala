@@ -74,7 +74,7 @@ trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: Ge
       def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
       override def hasField(fieldName: String): Boolean =
-        fieldMap.contains(fieldName) || fieldMapping(context, fieldName).isDefined
+        fieldMap.contains(fieldName) || typeMappings.fieldMapping(context, fieldName).isDefined
 
       override def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
         val localField =

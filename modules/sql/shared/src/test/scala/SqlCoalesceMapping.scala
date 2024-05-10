@@ -16,7 +16,7 @@
 package grackle.sql.test
 
 import grackle.syntax._
-import java.time.ZonedDateTime
+import java.time.OffsetDateTime
 
 trait SqlCoalesceMapping[F[_]] extends SqlTestMapping[F] {
 
@@ -121,6 +121,6 @@ trait SqlCoalesceMapping[F[_]] extends SqlTestMapping[F] {
             SqlField("c", cc.c)
           )
       ),
-      LeafMapping[ZonedDateTime](DateTimeType)
+      LeafMapping[OffsetDateTime](DateTimeType)
     )
 }

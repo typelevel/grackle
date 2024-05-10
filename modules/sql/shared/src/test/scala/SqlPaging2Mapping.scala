@@ -25,7 +25,7 @@ import Value._
 // Mapping illustrating paging in "has more" style: paged results can
 // report whether there are more elements beyond the current sub list.
 //
-// This implmentation will only ever fetch up to the requested number
+// This implementation will only ever fetch up to the requested number
 // of items, and will include an SQL COUNT if the query includes `hasMore`.
 trait SqlPaging2Mapping[F[_]] extends SqlTestMapping[F] {
   object root extends RootDef {

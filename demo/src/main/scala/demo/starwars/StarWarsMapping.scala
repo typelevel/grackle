@@ -69,17 +69,13 @@ trait StarWarsMapping[F[_]] extends GenericMapping[F] { self: StarWarsData[F] =>
   val DroidType = schema.ref("Droid")
 
   val typeMappings =
-    List(
+    TypeMappings(
       // #root
-      ObjectMapping(
-        tpe = QueryType,
-        fieldMappings =
-          List(
-            GenericField("hero", characters),
-            GenericField("character", characters),
-            GenericField("human", characters.collect { case h: Human => h }),
-            GenericField("droid", characters.collect { case d: Droid => d })
-          )
+      ObjectMapping(QueryType)(
+        GenericField("hero", characters),
+        GenericField("character", characters),
+        GenericField("human", characters.collect { case h: Human => h }),
+        GenericField("droid", characters.collect { case d: Droid => d })
       )
       // #root
     )

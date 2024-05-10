@@ -16,6 +16,7 @@
 package compiler
 
 import cats.data.NonEmptyChain
+import cats.effect.IO
 import cats.implicits._
 import munit.CatsEffectSuite
 
@@ -351,7 +352,7 @@ final class CompilerSuite extends CatsEffectSuite {
         )
       )
 
-    val res = ComposedMapping.compiler.compile(query)
+    val res = TestComposedMapping.compiler.compile(query)
 
     assertEquals(res.map(_.query), Result.Success(expected))
   }
@@ -500,7 +501,7 @@ object ComponentA extends DummyComponent
 object ComponentB extends DummyComponent
 object ComponentC extends DummyComponent
 
-object ComposedMapping extends TestMapping {
+object TestComposedMapping extends ComposedMapping[IO] {
   val schema =
     schema"""
       type Query {

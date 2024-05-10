@@ -13,13 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package compiler
+package grackle.sql.test
 
-import cats.MonadThrow
 import cats.effect.IO
+import cats.implicits._
+import grackle.sql._
+import munit.CatsEffectSuite
 
-import grackle._
+trait SqlMappingValidatorValidSuite extends CatsEffectSuite {
+  def mapping: SqlMappingLike[IO]
 
-abstract class TestMapping(implicit val M: MonadThrow[IO]) extends Mapping[IO] {
-  val typeMappings: TypeMappings = TypeMappings.empty
+  lazy val M = mapping
+
+  test("valid mapping is valid") {
+    val es = M.validate()
+
+    es match {
+      case Nil => ()
+      case _   => fail(es.foldMap(_.toErrorMessage))
+    }
+  }
 }

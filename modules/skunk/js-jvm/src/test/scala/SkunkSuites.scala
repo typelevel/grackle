@@ -16,6 +16,7 @@
 package grackle.skunk.test
 
 import cats.effect.IO
+import munit.catseffect.IOFixture
 import skunk.codec.{all => codec}
 import skunk.implicits._
 
@@ -83,7 +84,7 @@ final class GraphSuite extends SkunkDatabaseSuite with SqlGraphSuite {
 final class InterfacesSuite extends SkunkDatabaseSuite with SqlInterfacesSuite {
   lazy val mapping =
     new SkunkTestMapping(pool) with SqlInterfacesMapping[IO] {
-      def entityType: Codec =
+      def entityType: TestCodec[EntityType] =
         (codec.int4.imap(EntityType.fromInt)(EntityType.toInt), false)
     }
 }
@@ -91,7 +92,7 @@ final class InterfacesSuite extends SkunkDatabaseSuite with SqlInterfacesSuite {
 final class InterfacesSuite2 extends SkunkDatabaseSuite with SqlInterfacesSuite2 {
   lazy val mapping =
     new SkunkTestMapping(pool) with SqlInterfacesMapping2[IO] {
-      def entityType: Codec =
+      def entityType: TestCodec[EntityType] =
         (codec.int4.imap(EntityType.fromInt)(EntityType.toInt), false)
     }
 }
@@ -104,6 +105,22 @@ final class LikeSuite extends SkunkDatabaseSuite with SqlLikeSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlLikeMapping[IO]
 }
 
+final class MappingValidatorValidSuite extends SkunkDatabaseSuite with SqlMappingValidatorValidSuite {
+  // no DB instance needed for this suite
+  lazy val mapping =
+    new SkunkTestMapping(null) with SqlMappingValidatorValidMapping[IO] {
+      def genre: TestCodec[Genre] = (codec.int4.imap(Genre.fromInt)(Genre.toInt), false)
+      def feature: TestCodec[Feature] = (codec.varchar.imap(Feature.fromString)(_.toString), false)
+    }
+  override def munitFixtures: Seq[IOFixture[_]] = Nil
+}
+
+final class MappingValidatorInvalidSuite extends SkunkDatabaseSuite with SqlMappingValidatorInvalidSuite {
+  // no DB instance needed for this suite
+  lazy val mapping = new SkunkTestMapping(null) with SqlMappingValidatorInvalidMapping[IO]
+  override def munitFixtures: Seq[IOFixture[_]] = Nil
+}
+
 final class MixedSuite extends SkunkDatabaseSuite with SqlMixedSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlMixedMapping[IO]
 }
@@ -111,8 +128,9 @@ final class MixedSuite extends SkunkDatabaseSuite with SqlMixedSuite {
 final class MovieSuite extends SkunkDatabaseSuite with SqlMovieSuite {
   lazy val mapping =
     new SkunkTestMapping(pool) with SqlMovieMapping[IO] {
-      def genre: Codec = (codec.int4.imap(Genre.fromInt)(Genre.toInt), false)
-      def feature: Codec = (codec.varchar.imap(Feature.fromString)(_.toString), false)
+      def genre: TestCodec[Genre] = (codec.int4.imap(Genre.fromInt)(Genre.toInt), false)
+      def feature: TestCodec[Feature] = (codec.varchar.imap(Feature.fromString)(_.toString), false)
+      def tagList: TestCodec[List[String]] = (codec.int4.imap(Tags.fromInt)(Tags.toInt), false)
     }
 }
 
@@ -172,7 +190,7 @@ final class ProjectionSuite extends SkunkDatabaseSuite with SqlProjectionSuite {
 final class RecursiveInterfacesSuite extends SkunkDatabaseSuite with SqlRecursiveInterfacesSuite {
   lazy val mapping =
     new SkunkTestMapping(pool) with SqlRecursiveInterfacesMapping[IO] {
-      def itemType: Codec =
+      def itemType: TestCodec[ItemType] =
         (codec.int4.imap(ItemType.fromInt)(ItemType.toInt), false)
     }
 }

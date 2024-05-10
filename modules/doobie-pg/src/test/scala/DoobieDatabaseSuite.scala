@@ -46,32 +46,34 @@ trait DoobieDatabaseSuite extends SqlDatabaseSuite {
   abstract class DoobieTestMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F] = DoobieMonitor.noopMonitor[IO])
     extends DoobieMapping[F](transactor, monitor) with SqlTestMapping[F] {
 
-    def bool: Codec = (Meta[Boolean], false)
-    def text: Codec = (Meta[String], false)
-    def varchar: Codec = (Meta[String], false)
-    def bpchar(len: Int): Codec = (Meta[String], false)
-    def int2: Codec = (Meta[Int], false)
-    def int4: Codec = (Meta[Int], false)
-    def int8: Codec = (Meta[Long], false)
-    def float4: Codec = (Meta[Float], false)
-    def float8: Codec = (Meta[Double], false)
-    def numeric(precision: Int, scale: Int): Codec = (Meta[BigDecimal], false)
+    type TestCodec[T] = (Meta[T], Boolean)
 
-    def uuid: Codec = (Meta[UUID], false)
-    def localDate: Codec = (Meta[LocalDate], false)
-    def localTime: Codec = (Meta[LocalTime], false)
-    def offsetDateTime: Codec = (Meta[OffsetDateTime], false)
-    def duration: Codec = (Meta[Long].timap(Duration.ofMillis)(_.toMillis), false)
+    def bool: TestCodec[Boolean] = (Meta[Boolean], false)
+    def text: TestCodec[String] = (Meta[String], false)
+    def varchar: TestCodec[String] = (Meta[String], false)
+    def bpchar(len: Int): TestCodec[String] = (Meta[String], false)
+    def int2: TestCodec[Int] = (Meta[Int], false)
+    def int4: TestCodec[Int] = (Meta[Int], false)
+    def int8: TestCodec[Long] = (Meta[Long], false)
+    def float4: TestCodec[Float] = (Meta[Float], false)
+    def float8: TestCodec[Double] = (Meta[Double], false)
+    def numeric(precision: Int, scale: Int): TestCodec[BigDecimal] = (Meta[BigDecimal], false)
 
-    def jsonb: Codec = (new Meta(Get[Json], Put[Json]), false)
+    def uuid: TestCodec[UUID] = (Meta[UUID], false)
+    def localDate: TestCodec[LocalDate] = (Meta[LocalDate], false)
+    def localTime: TestCodec[LocalTime] = (Meta[LocalTime], false)
+    def offsetDateTime: TestCodec[OffsetDateTime] = (Meta[OffsetDateTime], false)
+    def duration: TestCodec[Duration] = (Meta[Long].timap(Duration.ofMillis)(_.toMillis), false)
 
-    def nullable(c: Codec): Codec = (c._1, true)
+    def jsonb: TestCodec[Json] = (new Meta(Get[Json], Put[Json]), false)
 
-    def list(c: Codec): Codec = {
-      val cm = c._1.asInstanceOf[Meta[Any]]
-      val decode = cm.get.get.k.asInstanceOf[String => Any]
-      val encode = cm.put.put.k.asInstanceOf[Any => String]
-      val cl: Meta[List[Any]] = Meta.Advanced.array[String]("VARCHAR", "_VARCHAR").imap(_.toList.map(decode))(_.map(encode).toArray)
+    def nullable[T](c: TestCodec[T]): TestCodec[T] = (c._1, true)
+
+    def list[T](c: TestCodec[T]): TestCodec[List[T]] = {
+      val cm = c._1
+      val decode = cm.get.get.k.asInstanceOf[String => T]
+      val encode = cm.put.put.k.asInstanceOf[T => String]
+      val cl = Meta.Advanced.array[String]("VARCHAR", "_VARCHAR").imap(_.toList.map(decode))(_.map(encode).toArray)
       (cl, false)
     }
   }

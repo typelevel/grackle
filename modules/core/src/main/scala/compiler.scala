@@ -400,7 +400,7 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
         else {
           val hd = pendingFrags.head
           if (seen.contains(hd)) None
-          else checkCycle(fragRefs(hd)._2 ++ pendingFrags.tail, seen + hd)
+          else checkCycle(fragRefs.get(hd).map(_._2).getOrElse(Set.empty) ++ pendingFrags.tail, seen + hd)
         }
       }
 
@@ -1231,7 +1231,7 @@ object QueryCompiler {
 
     case class ComponentMapping[F[_]](tpe: TypeRef, fieldName: String, mapping: Mapping[F], join: (Query, Cursor) => Result[Query] = TrivialJoin)
 
-    def apply[F[_]](mappings: List[ComponentMapping[F]]): ComponentElaborator[F] =
+    def apply[F[_]](mappings: Seq[ComponentMapping[F]]): ComponentElaborator[F] =
       new ComponentElaborator(mappings.map(m => ((m.tpe, m.fieldName), (m.mapping, m.join))).toMap)
   }
 
@@ -1279,7 +1279,7 @@ object QueryCompiler {
   object EffectElaborator {
     case class EffectMapping[F[_]](tpe: TypeRef, fieldName: String, handler: EffectHandler[F])
 
-    def apply[F[_]](mappings: List[EffectMapping[F]]): EffectElaborator[F] =
+    def apply[F[_]](mappings: Seq[EffectMapping[F]]): EffectElaborator[F] =
       new EffectElaborator(mappings.map(m => ((m.tpe, m.fieldName), m.handler)).toMap)
   }
 

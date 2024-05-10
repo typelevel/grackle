@@ -125,7 +125,7 @@ trait SqlCoalesceSuite extends CatsEffectSuite {
     }
   }
 
-  test("zoned-date-time coalesced query") {
+  test("offset-date-time coalesced query") {
     val query = """
       query {
         r {

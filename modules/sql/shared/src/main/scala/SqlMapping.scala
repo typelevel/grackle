@@ -25,20 +25,18 @@ import cats.data.{NonEmptyList, OptionT, StateT}
 import cats.implicits._
 import io.circe.Json
 import org.tpolecat.sourcepos.SourcePos
+import org.tpolecat.typename.typeName
 
+import circe.CirceMappingLike
 import syntax._
 import Predicate._
 import Query._
-import circe.CirceMappingLike
+import ValidationFailure.Severity
 
 abstract class SqlMapping[F[_]](implicit val M: MonadThrow[F]) extends Mapping[F] with SqlMappingLike[F]
 
 /** An abstract mapping that is backed by a SQL database. */
 trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self =>
-
-  override val validator: SqlMappingValidator =
-    SqlMappingValidator(this)
-
   import SqlQuery.{EmptySqlQuery, SqlJoin, SqlSelect, SqlUnion}
   import TableExpr.{DerivedTableRef, SubqueryRef, TableRef, WithRef}
 
@@ -706,7 +704,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
   def rootFieldMapping(context: Context, query: Query): Option[FieldMapping] =
     for {
       rn <- Query.rootName(query)
-      fm <- fieldMapping(context, rn._1)
+      fm <- typeMappings.fieldMapping(context, rn._1)
     } yield fm
 
   def isLocallyMapped(context: Context, query: Query): Boolean =
@@ -715,7 +713,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       case Some(fm) if fm.isInstanceOf[SqlFieldMapping] => true
       case Some(re: EffectMapping) =>
         val fieldContext = context.forFieldOrAttribute(re.fieldName, None)
-        objectMapping(fieldContext).exists { om =>
+        typeMappings.objectMapping(fieldContext).exists { om =>
           om.fieldMappings.exists {
             //case _: SqlFieldMapping => true // Scala 3 thinks this is unreachable
             case fm if fm.isInstanceOf[SqlFieldMapping] => true
@@ -725,9 +723,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       case _ => false
     }
 
-  sealed trait SqlFieldMapping extends FieldMapping {
-    final def withParent(tpe: Type): FieldMapping = this
-  }
+  sealed trait SqlFieldMapping extends FieldMapping
 
   case class SqlField(
     fieldName: String,
@@ -736,21 +732,25 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     discriminator: Boolean = false,
     hidden: Boolean = false,
     associative: Boolean = false // a key which is also associative might occur multiple times in the table, ie. it is not a DB primary key
-  )(implicit val pos: SourcePos) extends SqlFieldMapping
+  )(implicit val pos: SourcePos) extends SqlFieldMapping {
+    def subtree: Boolean = false
+  }
 
   case class SqlObject(fieldName: String, joins: List[Join])(
     implicit val pos: SourcePos
   ) extends SqlFieldMapping {
     final def hidden = false
+    final def subtree: Boolean = false
   }
   object SqlObject {
-    def apply(fieldName: String, joins: Join*): SqlObject = apply(fieldName, joins.toList)
+    def apply(fieldName: String, joins: Join*)(implicit pos: SourcePos): SqlObject = apply(fieldName, joins.toList)
   }
 
   case class SqlJson(fieldName: String, columnRef: ColumnRef)(
     implicit val pos: SourcePos
   ) extends SqlFieldMapping {
     def hidden: Boolean = false
+    def subtree: Boolean = true
   }
 
   /**
@@ -773,53 +773,125 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
   object SqlInterfaceMapping {
 
-    case class DefaultInterfaceMapping(tpe: NamedType, fieldMappings: List[FieldMapping], path: List[String], discriminator: SqlDiscriminator)(
+    case class DefaultInterfaceMapping(predicate: MappingPredicate, fieldMappings: Seq[FieldMapping], discriminator: SqlDiscriminator)(
       implicit val pos: SourcePos
-    ) extends SqlInterfaceMapping
+    ) extends SqlInterfaceMapping {
+      override def showMappingType: String = "SqlInterfaceMapping"
+    }
+
+    def apply(
+      predicate: MappingPredicate,
+      discriminator: SqlDiscriminator
+    )(
+      fieldMappings: FieldMapping*
+    )(
+      implicit pos: SourcePos
+    ): ObjectMapping =
+      DefaultInterfaceMapping(predicate, fieldMappings, discriminator)
+
+    def apply(
+      tpe: NamedType,
+      discriminator: SqlDiscriminator
+    )(
+      fieldMappings: FieldMapping*
+    )(
+      implicit pos: SourcePos
+    ): ObjectMapping =
+      DefaultInterfaceMapping(MappingPredicate.TypeMatch(tpe), fieldMappings, discriminator)
+
+    def apply(
+      path: Path,
+      discriminator: SqlDiscriminator
+    )(
+      fieldMappings: FieldMapping*
+    )(
+      implicit pos: SourcePos
+    ): ObjectMapping =
+      DefaultInterfaceMapping(MappingPredicate.PathMatch(path), fieldMappings, discriminator)
 
     def apply(
       tpe: NamedType,
       fieldMappings: List[FieldMapping],
-      path: List[String] = Nil,
       discriminator: SqlDiscriminator
     )(
       implicit pos: SourcePos
     ): ObjectMapping =
-      DefaultInterfaceMapping(tpe, fieldMappings.map(_.withParent(tpe)), path, discriminator)
+      DefaultInterfaceMapping(MappingPredicate.TypeMatch(tpe), fieldMappings, discriminator)
   }
 
   sealed trait SqlUnionMapping extends ObjectMapping with SqlDiscriminatedType
 
   object SqlUnionMapping {
 
-    case class DefaultUnionMapping(tpe: NamedType, fieldMappings: List[FieldMapping], path: List[String], discriminator: SqlDiscriminator)(
+    case class DefaultUnionMapping(predicate: MappingPredicate, fieldMappings: Seq[FieldMapping], discriminator: SqlDiscriminator)(
       implicit val pos: SourcePos
-    ) extends SqlUnionMapping
+    ) extends SqlUnionMapping {
+      override def showMappingType: String = "SqlUnionMapping"
+    }
+
+    def apply(
+      predicate: MappingPredicate,
+      discriminator: SqlDiscriminator
+    )(
+      fieldMappings: FieldMapping*
+    )(
+      implicit pos: SourcePos
+    ): ObjectMapping =
+      DefaultUnionMapping(predicate, fieldMappings, discriminator)
+
+    def apply(
+      tpe: NamedType,
+      discriminator: SqlDiscriminator
+    )(
+      fieldMappings: FieldMapping*
+    )(
+      implicit pos: SourcePos
+    ): ObjectMapping =
+      DefaultUnionMapping(MappingPredicate.TypeMatch(tpe), fieldMappings, discriminator)
+
+    def apply(
+      path: Path,
+      discriminator: SqlDiscriminator
+    )(
+      fieldMappings: FieldMapping*
+    )(
+      implicit pos: SourcePos
+    ): ObjectMapping =
+      DefaultUnionMapping(MappingPredicate.PathMatch(path), fieldMappings, discriminator)
 
     def apply(
       tpe: NamedType,
       fieldMappings: List[FieldMapping],
-      path: List[String] = Nil,
       discriminator: SqlDiscriminator,
     )(
       implicit pos: SourcePos
     ): ObjectMapping =
-      DefaultUnionMapping(tpe, fieldMappings.map(_.withParent(tpe)), path, discriminator)
+      DefaultUnionMapping(MappingPredicate.TypeMatch(tpe), fieldMappings, discriminator)
   }
+
+  override protected def unpackPrefixedMapping(prefix: List[String], om: ObjectMapping): ObjectMapping =
+    om match {
+      case im: SqlInterfaceMapping.DefaultInterfaceMapping =>
+        im.copy(predicate = MappingPredicate.PrefixedTypeMatch(prefix, om.predicate.tpe))
+      case um: SqlUnionMapping.DefaultUnionMapping =>
+        um.copy(predicate = MappingPredicate.PrefixedTypeMatch(prefix, om.predicate.tpe))
+      case _ => super.unpackPrefixedMapping(prefix, om)
+    }
+
 
   /** Returns the discriminator columns for the context type */
   def discriminatorColumnsForType(context: Context): List[SqlColumn] =
-    objectMapping(context).map(_.fieldMappings.collect {
+    typeMappings.objectMapping(context).map(_.fieldMappings.iterator.collect {
       case cm: SqlField if cm.discriminator => SqlColumn.TableColumn(context, cm.columnRef, cm.fieldName :: context.resultPath)
-    }).getOrElse(Nil)
+    }.toList).getOrElse(Nil)
 
   /** Returns the key columns for the context type */
   def keyColumnsForType(context: Context): List[SqlColumn] = {
     val cols =
-      objectMapping(context).map { obj =>
-        val objectKeys = obj.fieldMappings.collect {
+      typeMappings.objectMapping(context).map { obj =>
+        val objectKeys = obj.fieldMappings.iterator.collect {
           case cm: SqlField if cm.key => SqlColumn.TableColumn(context, cm.columnRef, cm.fieldName :: context.resultPath)
-        }
+        }.toList
 
         val interfaceKeys = context.tpe.underlyingObject match {
           case Some(ot: ObjectType) =>
@@ -837,7 +909,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
   /** Returns the columns for leaf field `fieldName` in `context` */
   def columnsForLeaf(context: Context, fieldName: String): Result[List[SqlColumn]] =
-    fieldMapping(context, fieldName) match {
+    typeMappings.fieldMapping(context, fieldName) match {
       case Some(SqlField(_, cr, _, _, _, _)) => List(SqlColumn.TableColumn(context, cr, fieldName :: context.resultPath)).success
       case Some(SqlJson(_, cr)) => List(SqlColumn.TableColumn(context, cr, fieldName :: context.resultPath)).success
       case Some(CursorFieldJson(_, _, required, _)) =>
@@ -867,7 +939,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
   /** Returns the aliased column corresponding to the atomic field `fieldName` in `context` */
   def columnForAtomicField(context: Context, fieldName: String): Result[SqlColumn] = {
-    fieldMapping(context, fieldName) match {
+    typeMappings.fieldMapping(context, fieldName) match {
       case Some(SqlField(_, cr, _, _, _, _)) => SqlColumn.TableColumn(context, cr, fieldName :: context.resultPath).success
       case Some(SqlJson(_, cr)) => SqlColumn.TableColumn(context, cr, fieldName :: context.resultPath).success
       case _ => Result.internalError(s"No column for atomic field '$fieldName' in context $context")
@@ -892,7 +964,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
   /** Returns the discriminator for the type at `context` */
   def discriminatorForType(context: Context): Option[SqlDiscriminatedType] =
-    objectMapping(context) collect {
+    typeMappings.objectMapping(context) collect {
       //case d: SqlDiscriminatedType => d  // Fails in 2.13.6 due to https://github.com/scala/bug/issues/12398
       case i: SqlInterfaceMapping => i
       case u: SqlUnionMapping => u
@@ -901,7 +973,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
   /** Returns the table for the type at `context` */
   def parentTableForType(context: Context): Result[TableRef] = {
     def noTable = s"No table for type ${context.tpe}"
-    objectMapping(context).toResultOrError(noTable).flatMap { om =>
+    typeMappings.objectMapping(context).toResultOrError(noTable).flatMap { om =>
       om.fieldMappings.collectFirst { case SqlField(_, cr, _, _, _, _) => TableRef(context, cr.table) }.toResultOrError(noTable).orElse {
         context.tpe.underlyingObject match {
           case Some(ot: ObjectType) =>
@@ -914,7 +986,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
   /** Is `fieldName` in `context` Jsonb? */
   def isJsonb(context: Context, fieldName: String): Boolean =
-    fieldMapping(context, fieldName) match {
+    typeMappings.fieldMapping(context, fieldName) match {
       case Some(_: SqlJson) => true
       case Some(_: CursorFieldJson) => true
       case _ => false
@@ -922,7 +994,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
   /** Is `fieldName` in `context` computed? */
   def isComputedField(context: Context, fieldName: String): Boolean =
-    fieldMapping(context, fieldName) match {
+    typeMappings.fieldMapping(context, fieldName) match {
       case Some(_: CursorField[_]) => true
       case _ => false
     }
@@ -942,7 +1014,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
   /** Is the context type mapped to an associative table? */
   def isAssociative(context: Context): Boolean =
-    objectMapping(context).exists(_.fieldMappings.exists {
+    typeMappings.objectMapping(context).exists(_.fieldMappings.exists {
       case sf: SqlField => sf.associative
       case _ => false
     })
@@ -951,7 +1023,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
   def nonLeafList(context: Context, fieldName: String): Boolean =
     context.tpe.underlyingField(fieldName).exists { fieldTpe =>
       fieldTpe.nonNull.isList && (
-        fieldMapping(context, fieldName).exists {
+        typeMappings.fieldMapping(context, fieldName).exists {
           case SqlObject(_, joins) => joins.nonEmpty
           case _ => false
         }
@@ -1638,7 +1710,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
     def isEmbeddedIn(inner: Context, outer: Context): Boolean = {
       def directlyEmbedded(child: Context, parent: Context): Boolean =
-        fieldMapping(parent, child.path.head) match {
+        typeMappings.fieldMapping(parent, child.path.head) match {
           case Some(_: CursorFieldJson) | Some(SqlObject(_, Nil)) => true
           case _ => false
         }
@@ -1894,7 +1966,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
           val fieldName = context.path.head
           val nested =
-            fieldMapping(parentContext, fieldName) match {
+            typeMappings.fieldMapping(parentContext, fieldName) match {
               case Some(_: CursorFieldJson) | Some(SqlObject(_, Nil)) =>
                 val embeddedCols = cols.map { col =>
                   if(table.owns(col)) SqlColumn.EmbeddedColumn(parentTable, col)
@@ -2783,7 +2855,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         }
 
         def isEmbedded(context: Context, fieldName: String): Boolean =
-          fieldMapping(context, fieldName) match {
+          typeMappings.fieldMapping(context, fieldName) match {
             case Some(_: CursorFieldJson) | Some(SqlObject(_, Nil)) => true
             case _ => false
           }
@@ -2806,7 +2878,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         def parentConstraintsFromJoins(parentContext: Context, fieldName: String, resultName: String): Result[List[List[(SqlColumn, SqlColumn)]]] = {
           val tableContext = unembed(parentContext)
           parentContext.forField(fieldName, resultName).map { childContext =>
-            fieldMapping(parentContext, fieldName) match {
+            typeMappings.fieldMapping(parentContext, fieldName) match {
               case Some(SqlObject(_, Nil)) => Nil
 
               case Some(SqlObject(_, join :: Nil)) =>
@@ -3450,13 +3522,13 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     }
 
     def hasField(fieldName: String): Boolean =
-      fieldMapping(context, fieldName).isDefined
+      typeMappings.fieldMapping(context, fieldName).isDefined
 
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
       val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
       val fieldTpe = fieldContext.tpe
       val localField =
-        fieldMapping(context, fieldName) match {
+        typeMappings.fieldMapping(context, fieldName) match {
           case Some(_: SqlJson) =>
             asTable.flatMap { table =>
               def mkCirceCursor(f: Json): Result[Cursor] =
@@ -3507,6 +3579,543 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     override def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
       roots.find(_.mapped.containsRoot(fieldName, resultName)).map(_.field(fieldName, resultName)).
         getOrElse(Result.internalError(s"No field '$fieldName' for type ${context.tpe}"))
+    }
+  }
+
+  /** Check SqlMapping specific TypeMapping validity */
+  override protected def validateTypeMapping(mappings: TypeMappings, context: Context, tm: TypeMapping): List[ValidationFailure] = {
+    // ObjectMappings must have a key column
+    // Associative fields must be keys
+    // Unions and interfaces must have a discriminator
+    // ObjectMappings must have columnRefs in the same table
+    // Implementors of interfaces must have columns in the same table
+    // Members of unions must have columns in the same table
+    // Union mappings have no SqlObjects or SqlJson fields
+    // Union field mappings must be hidden
+
+    def hasKey(om: ObjectMapping): List[ValidationFailure] = {
+      def hasKey(om: ObjectMapping, context: Context): Boolean =
+        om.fieldMappings.exists {
+          case sf: SqlField => sf.key
+          case _ => false
+        } || (context.tpe.underlyingObject match {
+          case Some(ot: ObjectType) =>
+            ot.interfaces.exists { nt =>
+              val ctx = context.asType(nt)
+              val nom = mappings.objectMapping(ctx)
+              nom.map(hasKey(_, ctx)).getOrElse(false)
+            }
+          case _ => false
+        })
+
+      if (hasKey(om, context)) Nil
+      else List(NoKeyInObjectTypeMapping(om))
+    }
+
+    def checkAssoc(om: ObjectMapping): List[ValidationFailure] =
+      om.fieldMappings.iterator.collect {
+        case sf: SqlField if sf.associative && !sf.key =>
+          AssocFieldNotKey(om, sf)
+      }.toList
+
+    def hasDiscriminator(om: ObjectMapping): List[ValidationFailure] = {
+      val hasDiscriminator = om.fieldMappings.exists {
+        case sf: SqlField => sf.discriminator
+        case _ => false
+      }
+      if (hasDiscriminator) Nil
+      else List(NoDiscriminatorInObjectTypeMapping(om))
+    }
+
+    def checkSplit(om: ObjectMapping): List[ValidationFailure] = {
+      val tables = allTables(List(om))
+      val split = tables.sizeCompare(1) > 0
+      if (!split) Nil
+      else List(SplitObjectTypeMapping(om, tables))
+    }
+
+    def checkSuperInterfaces(om: ObjectMapping): List[ValidationFailure] = {
+      val allMappings = om.tpe.dealias match {
+        case twf: TypeWithFields => om :: twf.allInterfaces.flatMap(nt => mappings.objectMapping(context.asType(nt)))
+        case _ => Nil
+      }
+      val tables = allTables(allMappings)
+      val split = tables.sizeCompare(1) > 0
+      if (!split) Nil
+      else List(SplitInterfaceTypeMapping(om, allMappings, tables))
+    }
+
+    def checkUnionMembers(om: ObjectMapping): List[ValidationFailure] = {
+      om.tpe.dealias match {
+        case ut: UnionType =>
+          val allMappings = ut.members.flatMap(nt => mappings.objectMapping(context.asType(nt)))
+          val tables = allTables(allMappings)
+          val split = tables.sizeCompare(1) > 0
+          if (!split) Nil
+          else List(SplitUnionTypeMapping(om, allMappings, tables))
+
+        case _ => Nil
+      }
+    }
+
+    def checkUnionFields(om: ObjectMapping): List[ValidationFailure] =
+      om.fieldMappings.iterator.collect {
+        case so: SqlObject =>
+          IllegalSubobjectInUnionTypeMapping(om, so)
+        case sj: SqlJson =>
+          IllegalJsonInUnionTypeMapping(om, sj)
+        case sf: SqlField if !sf.hidden =>
+          NonHiddenUnionFieldMapping(om, sf)
+      }.toList
+
+    def isSql(om: ObjectMapping): Boolean =
+      om.fieldMappings.exists {
+        case sf: SqlField => !TableName.isRoot(sf.columnRef.table)
+        case sj: SqlJson => !TableName.isRoot(sj.columnRef.table)
+        case SqlObject(_, joins) => joins.nonEmpty
+        case _ => false
+      }
+
+    tm match {
+      case im: SqlInterfaceMapping =>
+        hasKey(im) ++
+        checkAssoc(im) ++
+        hasDiscriminator(im) ++
+        checkSplit(im) ++
+        checkSuperInterfaces(im)
+      case um: SqlUnionMapping =>
+        hasKey(um) ++
+        checkAssoc(um) ++
+        hasDiscriminator(um) ++
+        checkSplit(um) ++
+        checkUnionMembers(um) ++
+        checkUnionFields(um)
+      case om: ObjectMapping if isSql(om) =>
+        (if(schema.isRootType(om.tpe)) Nil else hasKey(om)) ++
+        checkAssoc(om) ++
+        checkSplit(om) ++
+        checkSuperInterfaces(om)
+      case _ =>
+        super.validateTypeMapping(mappings, context, tm)
+    }
+  }
+
+  /** Check SqlMapping specific FieldMapping validity */
+  override protected def validateFieldMapping(mappings: TypeMappings, context: Context, om: ObjectMapping, fm: FieldMapping): List[ValidationFailure] = {
+    // GraphQL and DB schema nullability must be compatible
+    // GraphQL and DB schema types must be compatible
+    // Embedded objects are in the same table as their parent
+    // Joins must have at least one join condition
+    // Parallel joins must relate the same tables
+    // Serial joins must chain correctly
+
+    val IntTypeName = typeName[Int]
+    val LongTypeName = typeName[Long]
+    val FloatTypeName = typeName[Float]
+    val DoubleTypeName = typeName[Double]
+    val BigDecimalTypeName = typeName[BigDecimal]
+    val JsonTypeName = typeName[Json]
+
+    val tpe = om.tpe.dealias
+
+    (fm, tpe.fieldInfo(fm.fieldName)) match {
+      case (sf: SqlField, Some(field)) =>
+        val fieldIsNullable = field.tpe.isNullable
+        val colIsNullable = isNullable(sf.columnRef.codec)
+
+        val fieldContext = context.forFieldOrAttribute(sf.fieldName, None)
+        val leafMapping0 = mappings.typeMapping(fieldContext).collectFirst { case lm: LeafMapping[_] => lm }
+        (field.tpe.dealias.nonNull, leafMapping0) match {
+          case ((_: ScalarType)|(_: EnumType), Some(leafMapping)) =>
+            if(colIsNullable != fieldIsNullable)
+              List(InconsistentlyNullableFieldMapping(om, sf, field, sf.columnRef, colIsNullable))
+            else
+              (sf.columnRef.scalaTypeName, leafMapping.scalaTypeName) match {
+                case (t0, t1) if t0 == t1 => Nil
+                case (LongTypeName, IntTypeName) => Nil
+                case (DoubleTypeName, FloatTypeName) => Nil
+                case (BigDecimalTypeName, FloatTypeName) => Nil
+                case _ =>
+                  List(InconsistentFieldLeafMapping(om, sf, field, sf.columnRef, leafMapping))
+              }
+
+          case _ =>
+            // Fallback to check only matching top level nullability
+            // Missing LeafMapping will be reported elsewhere
+            if(colIsNullable != fieldIsNullable)
+              List(InconsistentlyNullableFieldMapping(om, sf, field, sf.columnRef, colIsNullable))
+            else Nil
+
+        }
+
+      case (sj: SqlJson, Some(field)) =>
+        if(sj.columnRef.scalaTypeName != JsonTypeName)
+          List(InconsistentFieldTypeMapping(om, sj, field, sj.columnRef, JsonTypeName))
+        else Nil
+
+      case (fm@SqlObject(fieldName, Nil), _) if !schema.isRootType(tpe) =>
+        val parentTables0 = allTables(List(om))
+        if(parentTables0.forall(TableName.isRoot)) Nil
+        else {
+          val parentTables = parentTables0.filterNot(TableName.isRoot)
+          (for {
+            fieldContext <- context.forField(fieldName, None).toOption
+            com          <- mappings.objectMapping(fieldContext)
+          } yield {
+            val childTables = allTables(List(com))
+            if (parentTables.sameElements(childTables)) Nil
+            else List(SplitEmbeddedObjectTypeMapping(om, fm, com, parentTables, childTables))
+          }).getOrElse(Nil)
+        }
+
+      case (SqlObject(fieldName, joins), _) if !schema.isRootType(tpe) =>
+        val com0 =
+          for {
+            fieldContext <- context.forField(fieldName, None).toOption
+            com          <- mappings.objectMapping(fieldContext)
+          } yield com
+
+        com0 match {
+          case None => Nil // Missing mapping will be reported elsewhere
+          case Some(com) =>
+            val parentTables = allTables(List(om)).filterNot(TableName.isRoot)
+            val childTables = allTables(List(com)).filterNot(TableName.isRoot)
+
+            (parentTables, childTables) match {
+              case (parentTable :: _, childTable :: _) =>
+                val nonEmpty =
+                  if(joins.forall(_.conditions.nonEmpty)) Nil
+                  else List(NoJoinConditions(om, fm))
+
+                def consistentConditions(j: Join): Boolean =
+                  j.conditions match {
+                    case Nil => true
+                    case hd :: tl =>
+                      val parent = hd._1.table
+                      val child = hd._2.table
+                      tl.forall { case (p, c) => p.table == parent && c.table == child }
+                  }
+
+                val parConsistent = joins.filterNot(consistentConditions).map { j =>
+                  InconsistentJoinConditions(om, fm, j.conditions.map(_._1.table).distinct, j.conditions.map(_._2.table).distinct)
+                }
+
+                val serConsistent = {
+                  val nonEmptyJoins = joins.filter(_.conditions.nonEmpty)
+                  nonEmptyJoins match {
+                    case Nil => Nil // Empty joins will be reported elsewhere
+                    case hd :: tl =>
+                      val headIsParent = hd.conditions.head._1.table == parentTable
+                      val lastIsChild  = nonEmptyJoins.last.conditions.head._2.table == childTable
+                      val consistentChain =
+                        nonEmptyJoins.zip(tl).forall {
+                          case (j0, j1) => j0.conditions.head._2.table == j1.conditions.head._1.table
+                        }
+
+                      if(headIsParent && lastIsChild && consistentChain) Nil
+                      else {
+                        val path = nonEmptyJoins.map(j => (j.conditions.head._1.table, j.conditions.last._2.table))
+
+                        List(MisalignedJoins(om, fm, parentTable, childTable, path))
+                      }
+                  }
+                }
+
+                nonEmpty ++ parConsistent ++ serConsistent
+
+              case _ => Nil // No or multiple tables will be reported elsewhere
+            }
+        }
+
+      case (other, _) =>
+        super.validateFieldMapping(mappings, context, om, other)
+    }
+  }
+
+  private def allTables(oms: List[ObjectMapping]): List[String] =
+    oms.flatMap(_.fieldMappings.flatMap {
+      case SqlField(_, columnRef, _, _, _, _) => List(columnRef.table)
+      case SqlJson(_, columnRef) => List(columnRef.table)
+      case SqlObject(_, Nil) => Nil
+      case SqlObject(_, joins) => joins.head.conditions.map(_._1.table)
+      case _ => Nil
+    }).distinct
+
+  abstract class SqlValidationFailure(severity: Severity) extends ValidationFailure(severity) {
+    protected def sql(a: Any) = s"$GREEN$a$RESET"
+    protected override def key: String =
+      s"Color Key: ${scala("◼")} Scala | ${graphql("◼")} GraphQL | ${sql("◼")} SQL"
+  }
+
+  /* Join has no join conditions */
+  case class NoJoinConditions(objectMapping: ObjectMapping, fieldMapping: FieldMapping)
+    extends SqlValidationFailure(Severity.Error) {
+    override def toString: String =
+      s"$productPrefix(${objectMapping.showMappingType}, ${showNamedType(objectMapping.tpe)}, ${fieldMapping.fieldName})"
+    override def formattedMessage: String =
+      s"""|No join conditions in field mapping.
+          |
+          |- The ${scala(objectMapping.showMappingType)} for type ${graphql(showNamedType(objectMapping.tpe))} at (1) has a ${scala("SqlObject")} field mapping for the field ${graphql(fieldMapping.fieldName)} at (2) with a ${scala("Join")} with no join conditions.
+          |- ${UNDERLINED}Joins must include at least one join condition.$RESET
+          |
+          |(1) ${objectMapping.pos}
+          |(2) ${fieldMapping.pos}
+          |""".stripMargin
+  }
+
+  /** Parallel joins relate different tables */
+  case class InconsistentJoinConditions(objectMapping: ObjectMapping, fieldMapping: FieldMapping, parents: List[String], children: List[String])
+    extends SqlValidationFailure(Severity.Error) {
+    override def toString: String =
+      s"$productPrefix(${objectMapping.showMappingType}, ${showNamedType(objectMapping.tpe)}, ${fieldMapping.fieldName}, (${parents.mkString(", ")}), (${children.mkString(", ")}))"
+    override def formattedMessage: String =
+      s"""|Inconsistent join conditions in field mapping.
+          |
+          |- The ${scala(objectMapping.showMappingType)} for type ${graphql(showNamedType(objectMapping.tpe))} at (1) has a ${scala("SqlObject")} field mapping for the field ${graphql(fieldMapping.fieldName)} at (2) with a Join with inconsistent join conditions: ${sql(s"(${parents.mkString(", ")}) -> (${children.mkString(", ")})")}.
+          |- ${UNDERLINED}All join conditions must relate the same tables.$RESET
+          |
+          |(1) ${objectMapping.pos}
+          |(2) ${fieldMapping.pos}
+          |""".stripMargin
+  }
+
+  /** Serial joins are misaligned */
+  case class MisalignedJoins(objectMapping: ObjectMapping, fieldMapping: FieldMapping, parent: String, child: String, path: List[(String, String)])
+    extends SqlValidationFailure(Severity.Error) {
+    override def toString: String =
+      s"$productPrefix(${objectMapping.showMappingType}, ${showNamedType(objectMapping.tpe)}, ${fieldMapping.fieldName}, $parent, $child, ${path.mkString(", ")})"
+    override def formattedMessage: String =
+      s"""|Misaligned joins in field mapping.
+          |
+          |- The ${scala(objectMapping.showMappingType)} for type ${graphql(showNamedType(objectMapping.tpe))} at (1) has a ${scala("SqlObject")} field mapping for the field ${graphql(fieldMapping.fieldName)} at (2) with misaligned joins: ${sql(s"$parent, $child, ${path.mkString(", ")}")}.
+          |- ${UNDERLINED}Sequential joins must relate the parent table to the child table and chain correctly.$RESET
+          |
+          |(1) ${objectMapping.pos}
+          |(2) ${fieldMapping.pos}
+          |""".stripMargin
+  }
+
+  /** Object type mapping has no key */
+  case class NoKeyInObjectTypeMapping(objectMapping: ObjectMapping)
+    extends SqlValidationFailure(Severity.Error) {
+    override def toString: String =
+      s"$productPrefix(${objectMapping.showMappingType}, ${showNamedType(objectMapping.tpe)})"
+    override def formattedMessage: String =
+      s"""|No key field mapping in object type mapping.
+          |
+          |- The ${scala(objectMapping.showMappingType)} for type ${graphql(showNamedType(objectMapping.tpe))} at (1) has no direct or inherited key field mapping.
+          |- ${UNDERLINED}Object type mappings must include at least one direct or inherited key field mapping.$RESET
+          |
+          |(1) ${objectMapping.pos}
+          |""".stripMargin
+  }
+
+  /** Object type mapping is split across multiple tables */
+  case class SplitObjectTypeMapping(objectMapping: ObjectMapping, tables: List[String])
+    extends SqlValidationFailure(Severity.Error) {
+    override def toString: String =
+      s"$productPrefix(${objectMapping.showMappingType}, ${showNamedType(objectMapping.tpe)}, (${tables.mkString(", ")}))"
+    override def formattedMessage: String =
+      s"""|Object type mapping is split across multiple tables.
+          |
+          |- The ${scala(objectMapping.showMappingType)} for type ${graphql(showNamedType(objectMapping.tpe))} defined at (1) is split across multiple tables: ${sql(s"${tables.mkString(", ")}")}.
+          |- ${UNDERLINED}Object types must map to a single database table.$RESET
+          |
+          |(1) ${objectMapping.pos}
+          |""".stripMargin
+  }
+
+  /** Embedded object type mapping is split across non-parent tables */
+  case class SplitEmbeddedObjectTypeMapping(parent: ObjectMapping, parentField: FieldMapping, child: ObjectMapping, parentTables: List[String], childTables: List[String])
+    extends SqlValidationFailure(Severity.Error) {
+    override def toString: String =
+      s"$productPrefix(${parent.showMappingType}, ${showNamedType(parent.tpe)}.${parentField.fieldName}, ${child.showMappingType}, ${showNamedType(child.tpe)}, (${childTables.mkString(", ")}))"
+    override def formattedMessage: String =
+      s"""|Embedded object type maps to non-parent tables.
+          |
+          |- The ${scala(parent.showMappingType)} for type ${graphql(showNamedType(parent.tpe))} defined at (1) embeds the ${scala(child.showMappingType)} for type ${graphql(showNamedType(child.tpe))} defined at (2) via field mapping ${graphql(s"${showNamedType(parent.tpe)}.${parentField.fieldName}")} at (3).
+          |- The parent object is in table(s) ${sql(parentTables.mkString(", "))}.
+          |- The embedded object is in non-parent table(s) ${sql(childTables.mkString(", "))}.
+          |- ${UNDERLINED}Embedded objects must map to the same database tables as their parents.$RESET
+          |
+          |(1) ${parent.pos}
+          |(2) ${child.pos}
+          |(3) ${parentField.pos}
+          |""".stripMargin
+  }
+
+  /** Interface/union implementation mappings split across multiple tables */
+  case class SplitInterfaceTypeMapping(objectMapping: ObjectMapping, intrfs: List[ObjectMapping], tables: List[String])
+    extends SqlValidationFailure(Severity.Error) {
+    override def toString: String =
+      s"$productPrefix(${objectMapping.showMappingType}, ${showNamedType(objectMapping.tpe)}, (${intrfs.map(_.tpe.name).mkString(", ")}), (${tables.mkString(", ")}))"
+    override def formattedMessage: String =
+      s"""|Interface implementors are split across multiple tables.
+          |
+          |- The ${scala(objectMapping.showMappingType)} for type ${graphql(showNamedType(objectMapping.tpe))} at (1) has implementors (${intrfs.map(_.tpe.name).mkString(", ")}) which are split across multiple tables: ${sql(s"${tables.mkString(", ")}")}.
+          |- ${UNDERLINED}All implementors of an interface must map to a single database table.$RESET
+          |
+          |(1) ${objectMapping.pos}
+          |""".stripMargin
+  }
+
+  /** Interface/union implementation mappings split across multiple tables */
+  case class SplitUnionTypeMapping(objectMapping: ObjectMapping, members: List[ObjectMapping], tables: List[String])
+    extends SqlValidationFailure(Severity.Error) {
+    override def toString: String =
+      s"$productPrefix(${objectMapping.showMappingType}, ${showNamedType(objectMapping.tpe)}, (${members.map(_.tpe.name).mkString(", ")}), (${tables.mkString(", ")}))"
+    override def formattedMessage: String =
+      s"""|Union member mappings are split across multiple tables.
+          |
+          |- The ${scala(objectMapping.showMappingType)} for type ${graphql(showNamedType(objectMapping.tpe))} at (1) has members (${members.map(_.tpe.name).mkString(", ")}) which are split across multiple tables: ${sql(s"${tables.mkString(", ")}")}.
+          |- ${UNDERLINED}All members of a union must map to a single database table.$RESET
+          |
+          |(1) ${objectMapping.pos}
+          |""".stripMargin
+  }
+
+  /** Interface/union type mapping has no discriminator */
+  case class NoDiscriminatorInObjectTypeMapping(objectMapping: ObjectMapping)
+    extends SqlValidationFailure(Severity.Error) {
+    override def toString: String =
+      s"$productPrefix(${objectMapping.showMappingType}, ${showNamedType(objectMapping.tpe)})"
+    override def formattedMessage: String =
+      s"""|No discriminator field mapping in interface/union type mapping.
+          |
+          |- The ${scala(objectMapping.showMappingType)} for type ${graphql(showNamedType(objectMapping.tpe))} at (1) has no discriminator field mapping.
+          |- ${UNDERLINED}interface/union type mappings must include at least one discriminator field mapping.$RESET
+          |
+          |(1) ${objectMapping.pos}
+          |""".stripMargin
+  }
+
+  /** Subobject field mappings not allowed in union type mappings */
+  case class IllegalSubobjectInUnionTypeMapping(objectMapping: ObjectMapping, fieldMapping: FieldMapping)
+    extends SqlValidationFailure(Severity.Error) {
+    override def toString: String =
+      s"$productPrefix(${objectMapping.showMappingType}, ${showNamedType(objectMapping.tpe)}.${fieldMapping.fieldName})"
+    override def formattedMessage: String =
+      s"""|Illegal subobject field mapping in union type mapping.
+          |
+          |- The ${scala(objectMapping.showMappingType)} for type ${graphql(showNamedType(objectMapping.tpe))} at (1) contains a subobject field mapping ${graphql(fieldMapping.fieldName)} at (2).
+          |- ${UNDERLINED}Subobject field mappings are not allowed in union type mappings.$RESET
+          |
+          |(1) ${objectMapping.pos}
+          |(2) ${fieldMapping.pos}
+          |""".stripMargin
+  }
+
+  /** SqlJson field mappings not allowed in union type mappings */
+  case class IllegalJsonInUnionTypeMapping(objectMapping: ObjectMapping, fieldMapping: FieldMapping)
+    extends SqlValidationFailure(Severity.Error) {
+    override def toString: String =
+      s"$productPrefix(${objectMapping.showMappingType}, ${showNamedType(objectMapping.tpe)}.${fieldMapping.fieldName})"
+    override def formattedMessage: String =
+      s"""|Illegal json field mapping in union type mapping.
+          |
+          |- The ${scala(objectMapping.showMappingType)} for type ${graphql(showNamedType(objectMapping.tpe))} at (1) contains a subobject field mapping ${graphql(fieldMapping.fieldName)} at (2).
+          |- ${UNDERLINED}SqlJson field mappings are not allowed in union type mappings.$RESET
+          |
+          |(1) ${objectMapping.pos}
+          |(2) ${fieldMapping.pos}
+          |""".stripMargin
+  }
+
+  /** Associative field must be a key */
+  case class AssocFieldNotKey(objectMapping: ObjectMapping, fieldMapping: FieldMapping)
+    extends SqlValidationFailure(Severity.Error) {
+    override def toString: String =
+      s"$productPrefix(${objectMapping.showMappingType}, ${showNamedType(objectMapping.tpe)}.${fieldMapping.fieldName})"
+    override def formattedMessage: String =
+      s"""|Non-key associatitve field mapping in object type mapping.
+          |
+          |- The ${scala(objectMapping.showMappingType)} for type ${graphql(showNamedType(objectMapping.tpe))} at (1) contains an associative field mapping ${graphql(fieldMapping.fieldName)} at (2) which is not a key.
+          |- ${UNDERLINED}All associative field mappings must be keys.$RESET
+          |
+          |(1) ${objectMapping.pos}
+          |(2) ${fieldMapping.pos}
+          |""".stripMargin
+  }
+
+  /** Union field mappings must be hidden */
+  case class NonHiddenUnionFieldMapping(objectMapping: ObjectMapping, fieldMapping: FieldMapping)
+    extends SqlValidationFailure(Severity.Error) {
+    override def toString: String =
+      s"$productPrefix(${objectMapping.showMappingType}, ${showNamedType(objectMapping.tpe)}.${fieldMapping.fieldName})"
+    override def formattedMessage: String =
+      s"""|Non-hidden field mapping in union type mapping.
+          |
+          |- The ${scala(objectMapping.showMappingType)} for type ${graphql(showNamedType(objectMapping.tpe))} at (1) contains a field mapping ${graphql(fieldMapping.fieldName)} at (2) which is not hidden.
+          |- ${UNDERLINED}All fields mappings in a union type mapping must be hidden.$RESET
+          |
+          |(1) ${objectMapping.pos}
+          |(2) ${fieldMapping.pos}
+          |""".stripMargin
+  }
+
+  /** SqlField codec and LeafMapping are inconsistent. */
+  case class InconsistentFieldLeafMapping(objectMapping: ObjectMapping, fieldMapping: FieldMapping, field: Field, columnRef: ColumnRef, leafMapping: LeafMapping[_])
+    extends SqlValidationFailure(Severity.Error) {
+    override def toString() =
+      s"$productPrefix(${objectMapping.showMappingType}, ${showNamedType(objectMapping.tpe)}.${fieldMapping.fieldName}, ${columnRef.table}.${columnRef.column}:${columnRef.scalaTypeName}, ${showNamedType(leafMapping.tpe)}:${leafMapping.scalaTypeName})"
+    override def formattedMessage: String = {
+      s"""|Inconsistent field leaf mapping.
+          |
+          |- The field ${graphql(s"${showNamedType(objectMapping.tpe)}.${fieldMapping.fieldName}: ${showType(field.tpe)}")} is defined by a Schema at (1).
+          |- The ${scala(fieldMapping.showMappingType)} at (2) and ColumnRef for ${sql(s"${columnRef.table}.${columnRef.column}")} at (3) map ${graphql(showNamedType(leafMapping.tpe))} to Scala type ${scala(columnRef.scalaTypeName)}.
+          |- A ${scala(leafMapping.showMappingType)} at (4) maps ${graphql(showNamedType(leafMapping.tpe))} to Scala type ${scala(leafMapping.scalaTypeName)}.
+          |- ${UNDERLINED}The Scala types are inconsistent.$RESET
+          |
+          |(1) ${schema.pos}
+          |(2) ${fieldMapping.pos}
+          |(3) ${columnRef.pos}
+          |(4) ${leafMapping.pos}
+          |""".stripMargin
+    }
+  }
+
+  /** SqlField codec and LeafMapping are inconsistent. */
+  case class InconsistentFieldTypeMapping(objectMapping: ObjectMapping, fieldMapping: FieldMapping, field: Field, columnRef: ColumnRef, scalaTypeName: String)
+    extends SqlValidationFailure(Severity.Error) {
+    override def toString() =
+      s"$productPrefix(${objectMapping.showMappingType}, ${showNamedType(objectMapping.tpe)}.${fieldMapping.fieldName}:${showType(field.tpe)}, ${columnRef.table}.${columnRef.column}:${columnRef.scalaTypeName}, ${scalaTypeName})"
+    override def formattedMessage: String = {
+      s"""|Inconsistent field type mapping.
+          |
+          |- The field ${graphql(s"${showNamedType(objectMapping.tpe)}.${fieldMapping.fieldName}: ${showType(field.tpe)}")} is defined by a Schema at (1).
+          |- The ${scala(fieldMapping.showMappingType)} at (2) and ColumnRef for ${sql(s"${columnRef.table}.${columnRef.column}")} at (3) map to Scala type ${scala(columnRef.scalaTypeName)}.
+          |- The expected Scala type is ${scala(scalaTypeName)}.
+          |- ${UNDERLINED}The Scala types are inconsistent.$RESET
+          |
+          |(1) ${schema.pos}
+          |(2) ${fieldMapping.pos}
+          |(3) ${columnRef.pos}
+          |""".stripMargin
+    }
+  }
+
+
+  /** SqlField codec and LeafMapping are inconsistent. */
+  case class InconsistentlyNullableFieldMapping(objectMapping: ObjectMapping, fieldMapping: FieldMapping, field: Field, columnRef: ColumnRef, colIsNullable: Boolean)
+    extends SqlValidationFailure(Severity.Error) {
+    override def toString() =
+      s"$productPrefix(${objectMapping.showMappingType}, ${showNamedType(objectMapping.tpe)}.${fieldMapping.fieldName}, ${columnRef.table}.${columnRef.column})"
+    override def formattedMessage: String = {
+      val fieldNullability = if(field.tpe.isNullable) "nullable" else "not nullable"
+      val colNullability = if(colIsNullable) "nullable" else "not nullable"
+
+      s"""|Inconsistently nullable field mapping.
+          |
+          |- The ${scala(objectMapping.showMappingType)} for type ${graphql(showNamedType(objectMapping.tpe))} at (1) contains a field mapping ${graphql(fieldMapping.fieldName)} at (2).
+          |- In the schema at (3) the field is ${fieldNullability}.
+          |- The corresponding ColumnRef for ${sql(s"${columnRef.table}.${columnRef.column}")} at (4) is ${colNullability}.
+          |- ${UNDERLINED}The nullabilities are inconsistent.$RESET
+          |
+          |(1) ${objectMapping.pos}
+          |(2) ${fieldMapping.pos}
+          |(3) ${schema.pos}
+          |(3) ${columnRef.pos}
+          |""".stripMargin
     }
   }
 }

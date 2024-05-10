@@ -340,6 +340,66 @@ final class SchemaSuite extends CatsEffectSuite {
     }
   }
 
+  test("schema validation: direct interface cycles") {
+    val schema = Schema(
+      """
+        type Query {
+          node: Node
+        }
+
+        interface Node implements Named & Node {
+          id: ID!
+          name: String
+        }
+
+        interface Named implements Node & Named {
+          id: ID!
+          name: String
+        }
+      """
+    )
+
+    schema match {
+      case Result.Failure(ps) =>
+        assertEquals(ps.map(_.message), NonEmptyChain("Interface cycle starting from 'Node'"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
+  test("schema validation: indirect interface cycles") {
+    val schema = Schema(
+      """
+        type Query {
+          node: Node
+        }
+
+        interface Node implements Tagged {
+          id: ID!
+          name: String
+          tag: String
+        }
+
+        interface Named implements Node {
+          id: ID!
+          name: String
+          tag: String
+        }
+
+        interface Tagged implements Named {
+          id: ID!
+          name: String
+          tag: String
+        }
+      """
+    )
+
+    schema match {
+      case Result.Failure(ps) =>
+        assertEquals(ps.map(_.message), NonEmptyChain("Interface cycle starting from 'Node'"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
   test("explicit Schema type (complete)") {
 
     val schema =

@@ -48,6 +48,7 @@ trait DoobieMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] {
   type Fragment   = DoobieFragment
 
   def toEncoder(c: Codec): Encoder = (c._1.put, c._2)
+  def isNullable(c: Codec): Boolean = c._2
 
   def intCodec       = (Meta[Int], false)
   def intEncoder     = (Put[Int], false)

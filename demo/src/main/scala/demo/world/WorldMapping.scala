@@ -119,65 +119,53 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
   val LanguageType = schema.ref("Language")
 
   val typeMappings =
-    List(
+    TypeMappings(
       // #root
-      ObjectMapping(
-        tpe = QueryType,
-        fieldMappings = List(
-          SqlObject("cities"),
-          SqlObject("city"),
-          SqlObject("country"),
-          SqlObject("countries"),
-          SqlObject("language"),
-          SqlObject("search"),
-          SqlObject("search2")
-        )
+      ObjectMapping(QueryType)(
+        SqlObject("cities"),
+        SqlObject("city"),
+        SqlObject("country"),
+        SqlObject("countries"),
+        SqlObject("language"),
+        SqlObject("search"),
+        SqlObject("search2")
       ),
       // #root
       // #type_mappings
-      ObjectMapping(
-        tpe = CountryType,
-        fieldMappings = List(
-          SqlField("code",           country.code, key = true),
-          SqlField("name",           country.name),
-          SqlField("continent",      country.continent),
-          SqlField("region",         country.region),
-          SqlField("surfacearea",    country.surfacearea),
-          SqlField("indepyear",      country.indepyear),
-          SqlField("population",     country.population),
-          SqlField("lifeexpectancy", country.lifeexpectancy),
-          SqlField("gnp",            country.gnp),
-          SqlField("gnpold",         country.gnpold),
-          SqlField("localname",      country.localname),
-          SqlField("governmentform", country.governmentform),
-          SqlField("headofstate",    country.headofstate),
-          SqlField("capitalId",      country.capitalId),
-          SqlField("code2",          country.code2),
-          SqlField("numCities",      country.numCities),
-          SqlObject("cities",        Join(country.code, city.countrycode)),
-          SqlObject("languages",     Join(country.code, countrylanguage.countrycode))
-        ),
+      ObjectMapping(CountryType)(
+        SqlField("code",           country.code, key = true),
+        SqlField("name",           country.name),
+        SqlField("continent",      country.continent),
+        SqlField("region",         country.region),
+        SqlField("surfacearea",    country.surfacearea),
+        SqlField("indepyear",      country.indepyear),
+        SqlField("population",     country.population),
+        SqlField("lifeexpectancy", country.lifeexpectancy),
+        SqlField("gnp",            country.gnp),
+        SqlField("gnpold",         country.gnpold),
+        SqlField("localname",      country.localname),
+        SqlField("governmentform", country.governmentform),
+        SqlField("headofstate",    country.headofstate),
+        SqlField("capitalId",      country.capitalId),
+        SqlField("code2",          country.code2),
+        SqlField("numCities",      country.numCities),
+        SqlObject("cities",        Join(country.code, city.countrycode)),
+        SqlObject("languages",     Join(country.code, countrylanguage.countrycode))
       ),
-      ObjectMapping(
-        tpe = CityType,
-        fieldMappings = List(
-          SqlField("id", city.id, key = true, hidden = true),
-          SqlField("countrycode", city.countrycode, hidden = true),
-          SqlField("name", city.name),
-          SqlField("district", city.district),
-          SqlField("population", city.population),
-          SqlObject("country", Join(city.countrycode, country.code)),
-        )
+      ObjectMapping(CityType)(
+        SqlField("id", city.id, key = true, hidden = true),
+        SqlField("countrycode", city.countrycode, hidden = true),
+        SqlField("name", city.name),
+        SqlField("district", city.district),
+        SqlField("population", city.population),
+        SqlObject("country", Join(city.countrycode, country.code)),
       ),
-      ObjectMapping(
-        tpe = LanguageType,
-        fieldMappings = List(
-          SqlField("language", countrylanguage.language, key = true, associative = true),
-          SqlField("isOfficial", countrylanguage.isOfficial),
-          SqlField("percentage", countrylanguage.percentage),
-          SqlField("countrycode", countrylanguage.countrycode, hidden = true),
-          SqlObject("countries", Join(countrylanguage.countrycode, country.code))
-        )
+      ObjectMapping(LanguageType)(
+        SqlField("language", countrylanguage.language, key = true, associative = true),
+        SqlField("isOfficial", countrylanguage.isOfficial),
+        SqlField("percentage", countrylanguage.percentage),
+        SqlField("countrycode", countrylanguage.countrycode, hidden = true),
+        SqlObject("countries", Join(countrylanguage.countrycode, country.code))
       )
       // #type_mappings
     )

@@ -34,8 +34,9 @@ import QueryCompiler._
 
 trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
 
-  def genre: Codec
-  def feature: Codec
+  def genre: TestCodec[Genre]
+  def feature: TestCodec[Feature]
+  def tagList: TestCodec[List[String]]
 
   object movies extends TableDef("movies") {
     val id = col("id", uuid)
@@ -47,6 +48,7 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
     val duration = col("duration", self.duration)
     val categories = col("categories", list(varchar))
     val features = col("features", list(feature))
+    val tags = col("tags", tagList)
   }
 
   val schema =
@@ -60,6 +62,7 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
           moviesShownLaterThan(time: Time!): [Movie!]!
           moviesShownBetween(from: DateTime!, to: DateTime!): [Movie!]!
           longMovies: [Movie!]!
+          allMovies: [Movie!]!
         }
         scalar UUID
         scalar Time
@@ -86,6 +89,7 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
           duration: Interval!
           categories: [String!]!
           features: [Feature!]!
+          tags: [String!]!
         }
       """
 
@@ -112,7 +116,8 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
             SqlObject("moviesLongerThan"),
             SqlObject("moviesShownLaterThan"),
             SqlObject("moviesShownBetween"),
-            SqlObject("longMovies")
+            SqlObject("longMovies"),
+            SqlObject("allMovies")
           )
       ),
       ObjectMapping(
@@ -129,7 +134,8 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
             SqlField("duration", movies.duration),
             SqlField("categories", movies.categories),
             SqlField("features", movies.features),
-            CursorField("isLong", isLong, List("duration"), hidden = true)
+            CursorField("isLong", isLong, List("duration"), hidden = true),
+            SqlField("tags", movies.tags)
           )
       ),
       LeafMapping[UUID](UUIDType),
@@ -138,8 +144,7 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
       LeafMapping[OffsetDateTime](DateTimeType),
       LeafMapping[Duration](IntervalType),
       LeafMapping[Genre](GenreType),
-      LeafMapping[Feature](FeatureType),
-      LeafMapping[List[Feature]](ListType(FeatureType))
+      LeafMapping[Feature](FeatureType)
     )
 
   def nextEnding(c: Cursor): Result[OffsetDateTime] =
@@ -286,6 +291,23 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
 
     implicit def featureEncoder: io.circe.Encoder[Feature] =
       Encoder[String].contramap(_.toString)
+  }
+
+  object Tags {
+    val tags = List("tag1", "tag2", "tag3")
+
+
+    def fromInt(i: Int): List[String] = {
+      def getTag(m: Int): List[String] =
+        if((i&(1 << m)) != 0) List(tags(m)) else Nil
+      (0 to 2).flatMap(getTag).toList
+    }
+
+    def toInt(tags: List[String]): Int = {
+      def getBit(m: Int): Int =
+        if(tags.contains(tags(m))) 1 << m else 0
+      (0 to 2).foldLeft(0)((acc, m) => acc | getBit(m))
+    }
   }
 
   implicit val localDateOrder: Order[LocalDate] =
