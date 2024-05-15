@@ -60,8 +60,8 @@ libraryDependencies += "org.typelevel" %% "grackle-skunk" % "0.19.0"
 ## Community
 
 Grackle is proud to be a [Typelevel](https://typelevel.org/) project. We are committed to providing a friendly, safe
-and welcoming environment for all, and ask that the community adhere to the [Scala Code of
-Conduct](https://www.scala-lang.org/conduct/) in all venues.
+and welcoming environment for all, and ask that the community adhere to the [Typelevel Code of
+Conduct](https://typelevel.org/code-of-conduct.html) in all venues.
 
 Conversations around Grackle are currently happening on [GitHub issues][grackle-issues], [PR
 discussions][grackle-pulls], and [discord][grackle-dev].
