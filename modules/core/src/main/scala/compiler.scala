@@ -794,7 +794,10 @@ object QueryCompiler {
           for {
             s      <- Elab.schema
             c      <- Elab.context
-            subtpe <- Elab.liftR(Result.fromOption(s.definition(tpnme), s"Unknown type '$tpnme' in type condition"))
+            subtpe <- Elab.liftR(Result.fromOption(
+                        s.definition(tpnme).orElse(Introspection.schema.definition(tpnme)),
+                        s"Unknown type '$tpnme' in type condition of inline fragment"
+                      ))
             _      <- Elab.push(c.asType(subtpe), child)
             ec     <- transform(child)
             _      <- Elab.pop
@@ -997,7 +1000,7 @@ object QueryCompiler {
                           case None =>
                             Elab.pure(ctpe)
                           case Some(tpnme) =>
-                            Elab.liftR(s.definition(tpnme).toResult(s"Unknown type '$tpnme' in type condition inline fragment"))
+                            Elab.liftR(s.definition(tpnme).toResult(s"Unknown type '$tpnme' in type condition of inline fragment"))
                         }
               _      <- Elab.failure(s"Inline fragment with type condition '$subtpe' is not compatible with type '$ctpe'").whenA(!fragmentApplies(s, subtpe, ctpe))
               _      <- Elab.push(c.asType(subtpe), child)

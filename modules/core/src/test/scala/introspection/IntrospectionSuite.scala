@@ -1288,6 +1288,43 @@ final class IntrospectionSuite extends CatsEffectSuite {
     assertIO(res, Some(expected))
   }
 
+  test("introspection types in inline fragments") {
+    val query = """
+      query IntrospectionQuery {
+        __type(name: "User") {
+          ...TypeRef
+        }
+      }
+
+      fragment TypeRef on __Type {
+        name
+        kind
+        ofType {
+          name
+          ... on __Type {
+            kind
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "__type" : {
+            "name" : "User",
+            "kind" : "OBJECT",
+            "ofType" : null
+          }
+        }
+      }
+    """
+
+    val res = SmallMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
   test("typename query") {
     val query = """
       {
