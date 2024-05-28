@@ -1,7 +1,7 @@
 import nl.zolotko.sbt.jfr.{JfrRecording, JfrRecorderOptions}
 import scala.concurrent.duration.DurationInt
 
-val catsVersion            = "2.10.0"
+val catsVersion            = "2.11.0"
 val catsParseVersion       = "1.0.0"
 val catsEffectVersion      = "3.5.4"
 val circeVersion           = "0.14.7"
