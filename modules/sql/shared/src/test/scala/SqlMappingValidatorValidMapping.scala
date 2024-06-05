@@ -207,7 +207,7 @@ trait SqlMappingValidatorValidMapping[F[_]] extends SqlTestMapping[F] {
   val SubObj2Type = schema.ref("SubObj2")
 
   override val typeMappings =
-    TypeMappings.unsafe(
+    TypeMappings.unchecked(
       List(
         ObjectMapping(
           tpe = QueryType,

@@ -133,7 +133,7 @@ trait SqlMappingValidatorInvalidMapping[F[_]] extends SqlTestMapping[F] {
   val SubObj3Type = schema.ref("SubObj3")
 
   override val typeMappings =
-    TypeMappings.unsafe(
+    TypeMappings.unchecked(
       List(
         ObjectMapping(
           tpe = QueryType,

@@ -709,14 +709,12 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
   def isLocallyMapped(context: Context, query: Query): Boolean =
     rootFieldMapping(context, query) match {
-      //case Some(_: SqlFieldMapping) => true // Scala 3 thinks this is unreachable
-      case Some(fm) if fm.isInstanceOf[SqlFieldMapping] => true
+      case Some(_: SqlFieldMapping) => true
       case Some(re: EffectMapping) =>
         val fieldContext = context.forFieldOrAttribute(re.fieldName, None)
         typeMappings.objectMapping(fieldContext).exists { om =>
           om.fieldMappings.exists {
-            //case _: SqlFieldMapping => true // Scala 3 thinks this is unreachable
-            case fm if fm.isInstanceOf[SqlFieldMapping] => true
+            case _: SqlFieldMapping => true
             case _ => false
           }
         }
@@ -894,15 +892,13 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         }.toList
 
         val interfaceKeys = context.tpe.underlyingObject match {
-          case Some(ot: ObjectType) =>
-            ot.interfaces.flatMap(nt => keyColumnsForType(context.asType(nt)))
+          case Some(twf: TypeWithFields) =>
+            twf.interfaces.flatMap(nt => keyColumnsForType(context.asType(nt)))
           case _ => Nil
         }
 
         (objectKeys ++ interfaceKeys).distinct
       }.getOrElse(Nil)
-
-    assert(cols.nonEmpty || parentTableForType(context).map(_.isRoot).getOrElse(false), s"No key columns for type ${context.tpe}")
 
     cols
   }
@@ -3521,14 +3517,11 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       } else Result.internalError(s"Cannot narrow $tpe to $subtpe")
     }
 
-    def hasField(fieldName: String): Boolean =
-      typeMappings.fieldMapping(context, fieldName).isDefined
-
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
       val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
       val fieldTpe = fieldContext.tpe
       val localField =
-        typeMappings.fieldMapping(context, fieldName) match {
+        typeMappings.fieldMapping(this, fieldName) match {
           case Some(_: SqlJson) =>
             asTable.flatMap { table =>
               def mkCirceCursor(f: Json): Result[Cursor] =
@@ -3575,7 +3568,6 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     def withEnv(env0: Env): MultiRootCursor = copy(roots = roots.map(_.withEnv(env0)))
     def context: Context = roots.head.context
 
-    override def hasField(fieldName: String): Boolean = roots.exists(_.hasField(fieldName))
     override def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
       roots.find(_.mapped.containsRoot(fieldName, resultName)).map(_.field(fieldName, resultName)).
         getOrElse(Result.internalError(s"No field '$fieldName' for type ${context.tpe}"))
@@ -3593,24 +3585,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     // Union mappings have no SqlObjects or SqlJson fields
     // Union field mappings must be hidden
 
-    def hasKey(om: ObjectMapping): List[ValidationFailure] = {
-      def hasKey(om: ObjectMapping, context: Context): Boolean =
-        om.fieldMappings.exists {
-          case sf: SqlField => sf.key
-          case _ => false
-        } || (context.tpe.underlyingObject match {
-          case Some(ot: ObjectType) =>
-            ot.interfaces.exists { nt =>
-              val ctx = context.asType(nt)
-              val nom = mappings.objectMapping(ctx)
-              nom.map(hasKey(_, ctx)).getOrElse(false)
-            }
-          case _ => false
-        })
-
-      if (hasKey(om, context)) Nil
+    def checkKey(om: ObjectMapping): List[ValidationFailure] =
+      if (keyColumnsForType(context).nonEmpty || parentTableForType(context).map(_.isRoot).getOrElse(false)) Nil
       else List(NoKeyInObjectTypeMapping(om))
-    }
 
     def checkAssoc(om: ObjectMapping): List[ValidationFailure] =
       om.fieldMappings.iterator.collect {
@@ -3618,14 +3595,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           AssocFieldNotKey(om, sf)
       }.toList
 
-    def hasDiscriminator(om: ObjectMapping): List[ValidationFailure] = {
-      val hasDiscriminator = om.fieldMappings.exists {
-        case sf: SqlField => sf.discriminator
-        case _ => false
-      }
-      if (hasDiscriminator) Nil
+    def hasDiscriminator(om: ObjectMapping): List[ValidationFailure] =
+      if (discriminatorColumnsForType(context).nonEmpty) Nil
       else List(NoDiscriminatorInObjectTypeMapping(om))
-    }
 
     def checkSplit(om: ObjectMapping): List[ValidationFailure] = {
       val tables = allTables(List(om))
@@ -3636,7 +3608,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
     def checkSuperInterfaces(om: ObjectMapping): List[ValidationFailure] = {
       val allMappings = om.tpe.dealias match {
-        case twf: TypeWithFields => om :: twf.allInterfaces.flatMap(nt => mappings.objectMapping(context.asType(nt)))
+        case twf: TypeWithFields => om :: twf.interfaces.flatMap(nt => mappings.objectMapping(context.asType(nt)))
         case _ => Nil
       }
       val tables = allTables(allMappings)
@@ -3678,20 +3650,20 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
     tm match {
       case im: SqlInterfaceMapping =>
-        hasKey(im) ++
+        checkKey(im) ++
         checkAssoc(im) ++
         hasDiscriminator(im) ++
         checkSplit(im) ++
         checkSuperInterfaces(im)
       case um: SqlUnionMapping =>
-        hasKey(um) ++
+        checkKey(um) ++
         checkAssoc(um) ++
         hasDiscriminator(um) ++
         checkSplit(um) ++
         checkUnionMembers(um) ++
         checkUnionFields(um)
       case om: ObjectMapping if isSql(om) =>
-        (if(schema.isRootType(om.tpe)) Nil else hasKey(om)) ++
+        (if(schema.isRootType(om.tpe)) Nil else checkKey(om)) ++
         checkAssoc(om) ++
         checkSplit(om) ++
         checkSuperInterfaces(om)

@@ -15,6 +15,8 @@
 
 package grackle
 
+import scala.collection.mutable.{ Map => MMap }
+
 import cats.implicits._
 import io.circe.Json
 import org.tpolecat.sourcepos.SourcePos
@@ -179,6 +181,21 @@ trait Schema {
       case _ => true
     }
   }
+
+  private lazy val implIndex: MMap[String, List[ObjectType]] = {
+    val allIfs = types.collect { case i: InterfaceType => i }
+    val allObjs = types.collect { case o: ObjectType if o.interfaces.nonEmpty => o }
+    val grouped =
+      allIfs.map { i =>
+        val impls = allObjs.filter(_ <:< i)
+        (i.name, impls)
+      }
+    MMap.from(grouped)
+  }
+
+  /** Yields the `ObjectType` implementations of the given `InterfaceType`. */
+  def implementations(it: InterfaceType): List[ObjectType] =
+    implIndex.getOrElse(it.name, Nil)
 
   override def toString = SchemaRenderer.renderSchema(this)
 
@@ -744,18 +761,8 @@ sealed trait TypeWithFields extends NamedType {
 
   override def fieldInfo(name: String): Option[Field] = fields.find(_.name == name)
 
-  def allInterfaces: List[NamedType] = {
-    @annotation.tailrec
-    def loop(pending: List[NamedType], acc: List[NamedType]): List[NamedType] =
-      pending match {
-        case Nil => acc.reverse
-        case (twf: TypeWithFields) :: tl =>
-          loop(twf.interfaces.filterNot(i => acc.exists(_.name == i.name)).map(_.dealias) ::: tl, twf :: acc)
-        case _ :: tl => loop(tl, acc)
-      }
-
-    loop(interfaces.map(_.dealias), Nil)
-  }
+  @deprecated("Use interfaces instead", "0.20.0")
+  def allInterfaces: List[NamedType] = interfaces
 }
 
 /**
@@ -1838,38 +1845,68 @@ object SchemaValidator {
   }
 
   def validateImplementations(schema: Schema): List[Problem] = {
-
     def validateImplementor(impl: TypeWithFields): List[Problem] = {
       import impl.{name, fields, interfaces}
 
-      interfaces.flatMap(_.dealias match {
-        case iface: InterfaceType =>
-          iface.fields.flatMap { ifField =>
-            fields.find(_.name == ifField.name).map { implField =>
-              val ifTpe = ifField.tpe
-              val implTpe = implField.tpe
+      val duplicateImplementsProblems = {
+        val dupes = interfaces.groupBy(identity).collect { case (i, occurrences) if occurrences.sizeCompare(1) > 0 => i.name }
+        if (dupes.isEmpty) Nil
+        else {
+          val plural = if (dupes.sizeCompare(1) > 0) "s:" else ""
+          List(Problem(s"Implements clause of type '$name' has duplicate occurrences of interface$plural ${dupes.map(d => s"'$d'").mkString(", ")}"))
+        }
+      }
 
-              val rp =
-                if (implTpe <:< ifTpe) Nil
-                else List(Problem(s"Field '${implField.name}' of type '$name' has type '${renderType(implTpe)}', however implemented interface '${iface.name}' requires it to be a subtype of '${renderType(ifTpe)}'"))
-
-              val argsMatch =
-                implField.args.corresponds(ifField.args) { case (arg0, arg1) =>
-                  arg0.name == arg1.name && arg0.tpe == arg1.tpe
-                }
-
-              val ap =
-                if (argsMatch) Nil
-                else List(Problem(s"Field '${implField.name}' of type '$name' has has an argument list that does not conform to that specified by implemented interface '${iface.name}'"))
-
-              rp ++ ap
-            }.getOrElse(List(Problem(s"Field '${ifField.name}' from interface '${iface.name}' is not defined by implementing type '$name'")))
+      def transitiveImplementsProblems = {
+        @annotation.tailrec
+        def loop(pending: List[NamedType], acc: Set[String]): Set[String] =
+          pending match {
+            case Nil => acc
+            case (twf: TypeWithFields) :: tl =>
+              val unseen = twf.interfaces.filterNot(i => acc.contains(i.name)).map(_.dealias)
+              loop(unseen ::: tl, acc ++ unseen.map(_.name))
+            case _ :: tl => loop(tl, acc)
           }
-        case undefined: TypeRef =>
-          List(Problem(s"Undefined type '${undefined.name}' declared as implemented by type '$name'"))
-        case other =>
-          List(Problem(s"Non-interface type '${other.name}' declared as implemented by type '$name'"))
-      })
+
+        val missingTransitives = loop(interfaces.map(_.dealias), Set.empty) -- interfaces.map(_.name) - name
+        if (missingTransitives.isEmpty) Nil
+        else {
+          val plural = if (missingTransitives.sizeCompare(1) > 0) "s:" else ""
+          List(Problem(s"Type '$name' does not directly implement transitively implemented interface$plural ${missingTransitives.map(i => s"'$i'").mkString(", ")}"))
+        }
+      }
+
+      val implementationProblems =
+        interfaces.flatMap(_.dealias match {
+          case iface: InterfaceType =>
+            iface.fields.flatMap { ifField =>
+              fields.find(_.name == ifField.name).map { implField =>
+                val ifTpe = ifField.tpe
+                val implTpe = implField.tpe
+
+                val rp =
+                  if (implTpe <:< ifTpe) Nil
+                  else List(Problem(s"Field '${implField.name}' of type '$name' has type '${renderType(implTpe)}', however implemented interface '${iface.name}' requires it to be a subtype of '${renderType(ifTpe)}'"))
+
+                val argsMatch =
+                  implField.args.corresponds(ifField.args) { case (arg0, arg1) =>
+                    arg0.name == arg1.name && arg0.tpe == arg1.tpe
+                  }
+
+                val ap =
+                  if (argsMatch) Nil
+                  else List(Problem(s"Field '${implField.name}' of type '$name' has has an argument list that does not conform to that specified by implemented interface '${iface.name}'"))
+
+                rp ++ ap
+              }.getOrElse(List(Problem(s"Field '${ifField.name}' from interface '${iface.name}' is not defined by implementing type '$name'")))
+            }
+          case undefined: TypeRef =>
+            List(Problem(s"Undefined type '${undefined.name}' declared as implemented by type '$name'"))
+          case other =>
+            List(Problem(s"Non-interface type '${other.name}' declared as implemented by type '$name'"))
+        })
+
+      duplicateImplementsProblems ++ transitiveImplementsProblems ++ implementationProblems
     }
 
     val impls = schema.types.collect { case impl: TypeWithFields => impl }

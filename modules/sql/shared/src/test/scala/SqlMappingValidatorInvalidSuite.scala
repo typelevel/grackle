@@ -168,6 +168,15 @@ trait SqlMappingValidatorInvalidSuite extends CatsEffectSuite {
       }
   }
 
+  object UFM {
+    def unapply(vf: ValidationFailure): Option[(String, String)] =
+      vf match {
+        case M.UnusedFieldMapping(om, fm) =>
+          Some((om.tpe.name, fm.fieldName))
+        case _ => None
+      }
+  }
+
   object TypeNames {
     val BooleanTypeName = typeName[Boolean]
     val IntTypeName = typeName[Int]
@@ -212,7 +221,8 @@ trait SqlMappingValidatorInvalidSuite extends CatsEffectSuite {
           NHUFM("Union", "id"),
           SUM("Union", List("Obj1", "Obj2"), List("obj1", "obj2")),
           ND("Union"),
-          NK("Union")
+          NK("Union"),
+          UFM("Intrf", "id")
         ) =>
     }
   }

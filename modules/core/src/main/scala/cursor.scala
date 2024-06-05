@@ -137,9 +137,6 @@ trait Cursor {
    */
   def narrow(subtpe: TypeRef): Result[Cursor]
 
-  /** Does the value at this `Cursor` have a field named `fieldName`? */
-  def hasField(fieldName: String): Boolean
-
   /**
    * Yield a `Cursor` corresponding to the value of the field `fieldName` of the
    * value at this `Cursor`, or an error on the left hand side if there is no
@@ -162,18 +159,6 @@ trait Cursor {
     })
 
   /**
-   * Does the possibly nullable value at this `Cursor` have a field named
-   * `fieldName`?
-   */
-  def nullableHasField(fieldName: String): Boolean =
-    if (isNullable)
-      asNullable match {
-        case Result.Success(Some(c)) => c.nullableHasField(fieldName)
-        case _ => false
-      }
-    else hasField(fieldName)
-
-  /**
    * Yield a `Cursor` corresponding to the value of the possibly nullable field
    * `fieldName` of the value at this `Cursor`, or an error on the left hand
    * side if there is no such field.
@@ -185,19 +170,6 @@ trait Cursor {
         case None => Result.internalError(s"Expected non-null for field '$fieldName'")
       }
     else field(fieldName, None)
-
-  /** Does the value at this `Cursor` have a field identified by the path `fns`? */
-  def hasPath(fns: List[String]): Boolean = fns match {
-    case Nil => true
-    case fieldName :: rest =>
-      nullableHasField(fieldName) && {
-        nullableField(fieldName) match {
-          case Result.Success(c) =>
-            !c.isList && c.hasPath(rest)
-          case _ => false
-        }
-      }
-  }
 
   /**
    * Yield a `Cursor` corresponding to the value of the field identified by path
@@ -211,28 +183,6 @@ trait Cursor {
         case Result.Success(c) => c.path(rest)
         case _ => Result.internalError(s"Bad path")
       }
-  }
-
-  /**
-   * Does the value at this `Cursor` generate a list along the path `fns`?
-   *
-   * `true` if `fns` is a valid path from the value at this `Cursor` and passes
-   * through at least one field with a list type.
-   */
-  def hasListPath(fns: List[String]): Boolean = {
-    def loop(c: Cursor, fns: List[String], seenList: Boolean): Boolean = fns match {
-      case Nil => seenList
-      case fieldName :: rest =>
-        c.nullableHasField(fieldName) && {
-          c.nullableField(fieldName) match {
-            case Result.Success(c) =>
-              loop(c, rest, c.isList)
-            case _ => false
-          }
-        }
-    }
-
-    loop(this, fns, false)
   }
 
   /**
@@ -306,8 +256,6 @@ object Cursor {
     def narrow(subtpe: TypeRef): Result[Cursor] =
       Result.internalError(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
 
-    def hasField(fieldName: String): Boolean = false
-
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
       Result.internalError(s"No field '$fieldName' for type ${tpe.underlying}")
   }
@@ -345,8 +293,6 @@ object Cursor {
     def narrowsTo(subtpe: TypeRef): Boolean = underlying.narrowsTo(subtpe)
 
     def narrow(subtpe: TypeRef): Result[Cursor] = underlying.narrow(subtpe)
-
-    def hasField(fieldName: String): Boolean = underlying.hasField(fieldName)
 
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] = underlying.field(fieldName, resultName)
   }
@@ -386,8 +332,6 @@ object Cursor {
   case class DeferredCursor(context: Context, parent: Option[Cursor], env: Env, deferredPath: List[String], mkCursor: (Context, Cursor) => Result[Cursor]) extends AbstractCursor {
     def focus: Any = Result.internalError(s"Empty cursor has no focus")
     def withEnv(env0: Env): DeferredCursor = copy(env = env.add(env0))
-
-    override def hasField(fieldName: String): Boolean = fieldName == deferredPath.head
 
     override def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
       if(fieldName != deferredPath.head) Result.internalError(s"No field '$fieldName' for type ${tpe.underlying}")

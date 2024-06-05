@@ -104,84 +104,75 @@ abstract class Mapping[F[_]] {
 
     def focus: Any = ()
 
-    override def hasField(fieldName: String): Boolean =
-      typeMappings.fieldMapping(context, fieldName).isDefined
-
     override def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
       mkCursorForField(this, fieldName, resultName)
   }
 
   /**
     * Yields a `Cursor` suitable for traversing the query result corresponding to
-    * the `fieldName` child of `parent`.
+    * the `fieldName` child of `parent`, and with the given field `Context` and
+    * `FieldMapping`.
     *
     * This method is typically overridden in and delegated to by `Mapping` subtypes.
     */
-  def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
-    val context = parent.context
-    val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
-
+  protected def mkCursorForMappedField(parent: Cursor, fieldContext: Context, fm: FieldMapping): Result[Cursor] = {
     def mkLeafCursor(focus: Any): Result[Cursor] =
       LeafCursor(fieldContext, focus, Some(parent), parent.env).success
 
-    typeMappings.fieldMapping(context, fieldName) match {
-      case Some(_ : EffectMapping) =>
+    fm match {
+      case _ : EffectMapping =>
         mkLeafCursor(parent.focus)
-      case Some(CursorField(_, f, _, _, _)) =>
+      case CursorField(_, f, _, _, _) =>
         f(parent).flatMap(res => mkLeafCursor(res))
       case _ =>
-        Result.failure(s"No field '$fieldName' for type ${parent.tpe}")
+        Result.internalError(s"Unhandled mapping of type ${fm.getClass.getName} for field '${fieldContext.path.head}' for type ${parent.tpe}")
     }
   }
 
-  case class TypeMappings private (mappings: Seq[TypeMapping], unsafe: Boolean) {
+  /**
+    * Yields a `Cursor` suitable for traversing the query result corresponding to
+    * the `fieldName` child of `parent`.
+    */
+  protected final def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
+    val context = parent.context
+    val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
+
+    typeMappings.fieldMapping(parent, fieldName).
+      toResultOrError(s"No mapping for field '$fieldName' for type ${parent.tpe}").
+        flatMap(mkCursorForMappedField(parent, fieldContext, _))
+  }
+
+  final class TypeMappings private (
+    val mappings: Seq[TypeMapping],
+    typeIndex: MMap[String, TypeMapping],
+    predicatedTypeIndex: MMap[String, Seq[TypeMapping]],
+    typeFieldIndex: MMap[String, MMap[String, FieldMapping]],
+    predicatedTypeFieldIndex: MMap[String, Seq[(ObjectMapping, MMap[String, FieldMapping])]],
+    unchecked: Boolean
+  ) {
+    import TypeMappings.{InheritedFieldMapping, PolymorphicFieldMapping}
+
     /** Yields the `TypeMapping` associated with the provided context, if any. */
     def typeMapping(context: Context): Option[TypeMapping] = {
       val nt = context.tpe.underlyingNamed
       val nme = nt.name
-      singleIndex.get(nme).orElse {
+      typeIndex.get(nme).orElse {
         val nc = context.asType(nt)
-        multipleIndex.get(nme).getOrElse(Nil).mapFilter { tm =>
+        predicatedTypeIndex.getOrElse(nme, Nil).mapFilter { tm =>
           tm.predicate(nc).map(prio => (prio, tm))
         }.maxByOption(_._1).map(_._2)
       }
     }
 
-    private val (singleIndex, multipleIndex): (MMap[String, TypeMapping], MMap[String, Seq[TypeMapping]]) = {
-      val defaultLeafMappings: Seq[TypeMapping] = {
-        val intTypeEncoder: Encoder[Any] =
-          new Encoder[Any] {
-            def apply(i: Any): Json = (i: @unchecked) match {
-              case i: Int => Json.fromInt(i)
-              case l: Long => Json.fromLong(l)
-            }
-          }
-
-        val floatTypeEncoder: Encoder[Any] =
-          new Encoder[Any] {
-            def apply(f: Any): Json = (f: @unchecked) match {
-              case f: Float => Json.fromFloatOrString(f)
-              case d: Double => Json.fromDoubleOrString(d)
-              case d: BigDecimal => Json.fromBigDecimal(d)
-            }
-          }
-
-        Seq(
-          LeafMapping[String](ScalarType.StringType),
-          LeafMapping.DefaultLeafMapping[Any](MappingPredicate.TypeMatch(ScalarType.IntType), intTypeEncoder, typeName[Int]),
-          LeafMapping.DefaultLeafMapping[Any](MappingPredicate.TypeMatch(ScalarType.FloatType), floatTypeEncoder, typeName[Float]),
-          LeafMapping[Boolean](ScalarType.BooleanType),
-          LeafMapping[String](ScalarType.IDType)
-        )
+    private def fieldIndex(context: Context): Option[MMap[String, FieldMapping]] = {
+      val nt = context.tpe.underlyingNamed
+      val nme = nt.name
+      typeFieldIndex.get(nme).orElse {
+        val nc = context.asType(nt)
+        predicatedTypeFieldIndex.getOrElse(nme, Nil).mapFilter { tm =>
+          tm._1.predicate(nc).map(prio => (prio, tm))
+        }.maxByOption(_._1).map(_._2._2)
       }
-
-      val grouped = (mappings ++ defaultLeafMappings).groupBy(_.tpe.underlyingNamed.name)
-      val (single, multiple) =
-        grouped.partitionMap {
-          case (nme, tms) if tms.sizeCompare(1) == 0 => Left(nme -> tms.head)
-          case (nme, tms) => Right(nme -> tms)
-        }
-      (MMap.from(single), MMap.from(multiple))
     }
 
     /** Yields the `ObjectMapping` associated with the provided context, if any. */
@@ -192,13 +183,30 @@ abstract class Mapping[F[_]] {
 
     /** Yields the `FieldMapping` associated with `fieldName` in `context`, if any. */
     def fieldMapping(context: Context, fieldName: String): Option[FieldMapping] =
-      objectMapping(context).flatMap(_.fieldMapping(fieldName)).orElse {
-        context.tpe.underlyingObject match {
-          case Some(ot: ObjectType) =>
-            ot.interfaces.collectFirstSome(nt => fieldMapping(context.asType(nt), fieldName))
-          case _ => None
-        }
+      fieldIndex(context).flatMap(_.get(fieldName)).flatMap {
+        case ifm: InheritedFieldMapping =>
+          ifm.select(context)
+        case pfm: PolymorphicFieldMapping =>
+          pfm.select(context)
+        case fm =>
+          Some(fm)
       }
+
+    /**
+     *  Yields the `FieldMapping` associated with `fieldName` in the runtime context
+     *  determined by the given `Cursor`, if any.
+     */
+    def fieldMapping(parent: Cursor, fieldName: String): Option[FieldMapping] = {
+      val context = parent.context
+      fieldIndex(context).flatMap(_.get(fieldName)).flatMap {
+        case ifm: InheritedFieldMapping =>
+          ifm.select(parent.context)
+        case pfm: PolymorphicFieldMapping =>
+          pfm.select(parent)
+        case fm =>
+          Some(fm)
+      }
+    }
 
     /** Yields the `FieldMapping` directly or ancestrally associated with `fieldName` in `context`, if any. */
     def ancestralFieldMapping(context: Context, fieldName: String): Option[FieldMapping] =
@@ -210,22 +218,34 @@ abstract class Mapping[F[_]] {
         } yield fm
       }
 
-    /** Yields the `ObjectMapping` and `FieldMapping` associated with `fieldName` in `context`, if any. */
-    def objectAndFieldMapping(context: Context, fieldName: String): Option[(ObjectMapping, FieldMapping)] =
-      objectMapping(context).flatMap(om => om.fieldMapping(fieldName).map(fm => (om, fm))).orElse {
-        context.tpe.underlyingObject match {
-          case Some(ot: ObjectType) =>
-            ot.interfaces.collectFirstSome(nt => objectAndFieldMapping(context.asType(nt), fieldName))
-          case _ => None
-        }
-      }
-
-    /** Validates these type mappings against an unfolding of the schema */
-    def validate: List[ValidationFailure] = {
+    /**
+    * Validatate this Mapping, yielding a list of `ValidationFailure`s of severity equal to or greater than the
+    * specified `Severity`.
+    */
+    def validate(severity: Severity = Severity.Warning): List[ValidationFailure] = {
       val queryType = schema.schemaType.field("query").flatMap(_.nonNull.asNamed)
       val topLevelContexts = (queryType.toList ::: schema.mutationType.toList ::: schema.subscriptionType.toList).map(Context(_))
-      validateRoots(topLevelContexts)
+      validateRoots(topLevelContexts).filter(_.severity >= severity)
     }
+
+    /**
+    * Validate this mapping, raising a `ValidationException` in `F` if there are any failures of
+    * severity equal to or greater than the specified `Severity`.
+    */
+    def validateInto[G[_]](severity: Severity = Severity.Warning)(
+      implicit ev: ApplicativeError[G, Throwable]
+    ): G[Unit] =
+      NonEmptyList.fromList(validate(severity)).foldMapA(nec => ev.raiseError(ValidationException(nec)))
+
+    /**
+    * Validate this Mapping, throwing a `ValidationException` if there are any failures of severity equal
+    * to or greater than the specified `Severity`.
+    */
+    def unsafeValidate(severity: Severity = Severity.Warning): Unit =
+      validateInto[Either[Throwable, *]](severity).fold(throw _, _ => ())
+
+    private[Mapping] def unsafeValidateIfChecked(): Unit =
+      if(!unchecked) unsafeValidate()
 
     /** Validates these type mappings against an unfolding of the schema */
     @nowarn3
@@ -239,10 +259,10 @@ abstract class Mapping[F[_]] {
       def allTypeMappings(context: Context): Seq[TypeMapping] = {
         val nt = context.tpe.underlyingNamed
         val nme = nt.name
-        singleIndex.get(nme) match {
+        typeIndex.get(nme) match {
           case Some(tm) => List(tm)
           case None =>
-            multipleIndex.get(nme) match {
+            predicatedTypeIndex.get(nme) match {
               case None => Nil
               case Some(tms) =>
                 val nc = context.asType(nt)
@@ -332,9 +352,7 @@ abstract class Mapping[F[_]] {
             val implCtxts =
               twf match {
                 case it: InterfaceType =>
-                  schema.types.collect {
-                    case ot: ObjectType if ot <:< it => context.asType(ot)
-                  }
+                  schema.implementations(it).map(context.asType)
                 case _ => Nil
               }
 
@@ -349,11 +367,19 @@ abstract class Mapping[F[_]] {
 
             def fieldCheck(fieldName: String): MV[Option[Context]] = {
               val fctx = context.forFieldOrAttribute(fieldName, None).forUnderlyingNamed
+              lazy val allImplsHaveFieldMapping =
+                implCtxts.nonEmpty &&
+                implCtxts.forall { implCtxt =>
+                  objectMapping(implCtxt).exists { om =>
+                    om.fieldMapping(fieldName).isDefined
+                  }
+                }
+
               ((ancestralFieldMapping(context, fieldName), tms) match {
-                case (Some(fm), List(om: ObjectMapping)) =>
+                case (Some(fm), List(om: ObjectMapping)) if !allImplsHaveFieldMapping =>
                   addSeenFieldMapping(om, fm)
 
-                case (None, List(om: ObjectMapping)) if !hasEnclosingSubtreeFieldMapping =>
+                case (None, List(om: ObjectMapping)) if !(hasEnclosingSubtreeFieldMapping || allImplsHaveFieldMapping) =>
                   val field = context.tpe.fieldInfo(fieldName).get
                   addProblem(MissingFieldMapping(om, field))
 
@@ -367,7 +393,7 @@ abstract class Mapping[F[_]] {
               seen    <- seenType(twf)
               _       <- addSeenType(twf)
               _       <- objectCheck(seen)
-              ifCtxts <- twf.allInterfaces.traverseFilter(interfaceContext)
+              ifCtxts <- twf.interfaces.traverseFilter(interfaceContext)
               fCtxts  <- fieldNames.traverseFilter(fieldCheck)
               pfCtxts <- MV.pure(if (!seen) allPrefixedMatchContexts(context) else Nil)
             } yield implCtxts ++ ifCtxts ++ fCtxts ++ pfCtxts
@@ -431,7 +457,7 @@ abstract class Mapping[F[_]] {
           case om: ObjectMapping if !om.tpe.dealias.isUnion =>
             for {
               sfms  <- seenFieldMappings(om)
-              usfms =  om.fieldMappings.filterNot { case _: Delegate => true ; case fm => fm.hidden || sfms(fm) }
+              usfms =  om.fieldMappings.filterNot { case (_: Delegate) => true ; case fm => fm.hidden || sfms(fm) }
               _     <- usfms.traverse_(fm => addProblem(UnusedFieldMapping(om, fm)))
             } yield ()
           case _ =>
@@ -453,21 +479,193 @@ abstract class Mapping[F[_]] {
   }
 
   object TypeMappings {
+    private val builtinLeafMappings: Seq[TypeMapping] = {
+      val intTypeEncoder: Encoder[Any] =
+        new Encoder[Any] {
+          def apply(i: Any): Json = (i: @unchecked) match {
+            case i: Int => Json.fromInt(i)
+            case l: Long => Json.fromLong(l)
+          }
+        }
+
+      val floatTypeEncoder: Encoder[Any] =
+        new Encoder[Any] {
+          def apply(f: Any): Json = (f: @unchecked) match {
+            case f: Float => Json.fromFloatOrString(f)
+            case d: Double => Json.fromDoubleOrString(d)
+            case d: BigDecimal => Json.fromBigDecimal(d)
+          }
+        }
+
+      Seq(
+        LeafMapping[String](ScalarType.StringType),
+        LeafMapping.DefaultLeafMapping[Any](MappingPredicate.TypeMatch(ScalarType.IntType), intTypeEncoder, typeName[Int]),
+        LeafMapping.DefaultLeafMapping[Any](MappingPredicate.TypeMatch(ScalarType.FloatType), floatTypeEncoder, typeName[Float]),
+        LeafMapping[Boolean](ScalarType.BooleanType),
+        LeafMapping[String](ScalarType.IDType)
+      )
+    }
+
+    /** A synthetic field mapping representing a field mapped in an implemented interface */
+    private case class InheritedFieldMapping(candidates: Seq[(MappingPredicate, FieldMapping)])(implicit val pos: SourcePos) extends FieldMapping {
+      def fieldName: String = candidates.head._2.fieldName
+      def hidden: Boolean = false
+      def subtree: Boolean = false
+
+      def select(context: Context): Option[FieldMapping] = {
+        val applicable =
+          candidates.mapFilter { case (pred, fm) =>
+            pred(context.asType(pred.tpe)).map(prio => (prio, fm))
+          }
+        applicable.maxByOption(_._1).map(_._2)
+      }
+    }
+
+    /** A synthetic field mapping representing a field mapped by one or more implementing types */
+    private case class PolymorphicFieldMapping(candidates: Seq[(MappingPredicate, FieldMapping)])(implicit val pos: SourcePos) extends FieldMapping {
+      def fieldName: String = candidates.head._2.fieldName
+      def hidden: Boolean = false
+      def subtree: Boolean = false
+
+      def select(cursor: Cursor): Option[FieldMapping] = {
+        val context = cursor.context
+        val applicable =
+          candidates.mapFilter {
+            case (pred, fm) if cursor.narrowsTo(schema.uncheckedRef(pred.tpe)) =>
+              pred(context.asType(pred.tpe)).map(prio => (prio, fm))
+            case _ =>
+              None
+          }
+        applicable.maxByOption(_._1).map(_._2)
+      }
+
+      def select(context: Context): Option[FieldMapping] = {
+        val applicable =
+          candidates.mapFilter { case (pred, fm) =>
+            pred(context).map(prio => (prio, fm))
+          }
+        applicable.maxByOption(_._1).map(_._2)
+      }
+    }
+
+    private def mkMappings(mappings: Seq[TypeMapping], unchecked: Boolean): TypeMappings = {
+      val groupedMappings = (mappings ++ builtinLeafMappings).groupBy(_.tpe.underlyingNamed.name)
+      val (typeIndex0, predicatedTypeIndex0) =
+        groupedMappings.partitionMap {
+          case (nme, tms) if tms.sizeCompare(1) == 0 => Left(nme -> tms.head)
+          case (nme, tms) => Right(nme -> tms)
+        }
+
+      val typeIndex = MMap.from(typeIndex0)
+      val predicatedTypeIndex = MMap.from(predicatedTypeIndex0)
+
+      val interfaceMappingIndex =
+        MMap.from(mappings.collect { case om: ObjectMapping if om.tpe.dealias.isInterface => om.tpe.name -> om })
+
+      val objectFieldIndices = mappings.collect {
+        case om: ObjectMapping if om.tpe.dealias.isObject =>
+          om.tpe.underlying match {
+            case o: ObjectType if o.interfaces.nonEmpty && !o.fields.forall(f => om.fieldMapping(f.name).isDefined) =>
+              val ims = o.interfaces.flatMap { i => interfaceMappingIndex.get(i.name).collect { case im: ObjectMapping => im } }
+              val attrs = om.fieldMappings.filterNot(fm => o.hasField(fm.fieldName))
+              val newFields =
+                o.fields.flatMap { f =>
+                  om.fieldMapping(f.name).map(Seq(_)).getOrElse {
+                    val candidates =
+                      ims.flatMap { im =>
+                        im.fieldMapping(f.name).map { fm => (im.predicate, fm) }
+                      }
+
+                    if (candidates.isEmpty) Seq.empty
+                    else Seq(InheritedFieldMapping(candidates))
+                  }
+                }
+              val index = MMap.from((newFields ++ attrs).map(fm => fm.fieldName -> fm))
+              (om, index)
+
+            case _ =>
+              val index = MMap.from(om.fieldMappings.map(fm => fm.fieldName -> fm))
+              (om, index)
+          }
+      }.groupBy(_._1.tpe.underlyingNamed.name)
+
+      val nonObjectFieldIndices =
+        mappings.collect {
+          case im: ObjectMapping if !im.tpe.dealias.isObject =>
+            im.tpe.underlying match {
+              case i: InterfaceType =>
+                val impls = schema.implementations(i)
+                val ms = impls.flatMap(impl => objectFieldIndices.getOrElse(impl.name, Seq.empty))
+                val attrs = im.fieldMappings.filterNot(fm => i.hasField(fm.fieldName))
+                val newFields =
+                  i.fields.flatMap { f =>
+                    val candidates: Seq[(MappingPredicate, FieldMapping)] =
+                      ms.flatMap { case (om, ofi) =>
+                        ofi.get(f.name).toSeq.flatMap {
+                          case InheritedFieldMapping(ifms) => ifms.filterNot { case (p, _) => p.tpe =:= i }
+                          case fm => Seq((om.predicate, fm))
+                        }
+                      }
+
+                    val dfm = im.fieldMapping(f.name).toSeq
+                    if (candidates.isEmpty) dfm
+                    else {
+                      val dfm0 = dfm.map(ifm => (im.predicate, ifm))
+                      val (tps, ifs) =
+                        (dfm0 ++ candidates).partitionMap {
+                          case pfm@(p, _) =>
+                            if (p.tpe.dealias.isInterface) Right(pfm)
+                            else Left(pfm)
+                        }
+                      val cands = tps ++ ifs
+                      Seq(PolymorphicFieldMapping(cands))
+                    }
+                  }
+
+                val index = MMap.from((newFields ++ attrs).map(fm => fm.fieldName -> fm))
+                (im, index)
+
+              case _ =>
+                val index = MMap.from(im.fieldMappings.map(fm => fm.fieldName -> fm))
+                (im, index)
+            }
+        }.groupBy(_._1.tpe.underlyingNamed.name)
+
+      val (typeFieldIndex0, predicatedTypeFieldIndex0) =
+        (objectFieldIndices ++ nonObjectFieldIndices).partitionMap {
+          case (nme, tms) if tms.sizeCompare(1) == 0 => Left(nme -> tms.head._2)
+          case (nme, tms) => Right(nme -> tms)
+        }
+
+      val typeFieldIndex = MMap.from(typeFieldIndex0)
+      val predicatedTypeFieldIndex = MMap.from(predicatedTypeFieldIndex0)
+
+      new TypeMappings(mappings, typeIndex, predicatedTypeIndex, typeFieldIndex, predicatedTypeFieldIndex, unchecked)
+    }
+
     def apply(mappings: Seq[TypeMapping]): TypeMappings =
-      new TypeMappings(mappings, false)
+      mkMappings(mappings, false)
 
     def apply(mappings: TypeMapping*)(implicit dummy: DummyImplicit): TypeMappings =
       apply(mappings)
 
-    def unsafe(mappings: Seq[TypeMapping]): TypeMappings =
-      new TypeMappings(mappings, true)
+    def unchecked(mappings: Seq[TypeMapping]): TypeMappings =
+      mkMappings(mappings, true)
 
+    def unchecked(mappings: TypeMapping*)(implicit dummy: DummyImplicit): TypeMappings =
+      unchecked(mappings)
+
+    @deprecated("Use `unchecked` instead", "0.20.0")
+    def unsafe(mappings: Seq[TypeMapping]): TypeMappings =
+      unchecked(mappings)
+
+    @deprecated("Use `unchecked` instead", "0.20.0")
     def unsafe(mappings: TypeMapping*)(implicit dummy: DummyImplicit): TypeMappings =
-      unsafe(mappings)
+      unchecked(mappings)
 
     implicit def fromList(mappings: List[TypeMappingCompat]): TypeMappings = TypeMappings(mappings.flatMap(_.unwrap))
 
-    val empty: TypeMappings = unsafe(Nil)
+    val empty: TypeMappings = unchecked(Nil)
 
     private type MappingValidator[T] = StateT[Id, MappingValidator.State, T]
     private object MappingValidator {
@@ -530,25 +728,23 @@ abstract class Mapping[F[_]] {
    * Validatate this Mapping, yielding a chain of `Failure`s of severity equal to or greater than the
    * specified `Severity`.
    */
-  def validate(severity: Severity = Severity.Warning): List[ValidationFailure] = {
-    typeMappings.validate.filter(_.severity >= severity)
-  }
+  def validate(severity: Severity = Severity.Warning): List[ValidationFailure] =
+    typeMappings.validate(severity)
 
   /**
-   * Run this validator, raising a `ValidationException` in `F` if there are any failures of
+   * Validate this mapping, raising a `ValidationException` in `F` if there are any failures of
    * severity equal to or greater than the specified `Severity`.
    */
   def validateInto[G[_]](severity: Severity = Severity.Warning)(
     implicit ev: ApplicativeError[G, Throwable]
-  ): G[Unit] =
-    NonEmptyList.fromList(validate(severity)).foldMapA(nec => ev.raiseError(ValidationException(nec)))
+  ): G[Unit] = typeMappings.validateInto(severity)(ev)
 
   /**
-   * Run this validator, raising a `ValidationException` if there are any failures of severity equal
+   * Validate this Mapping, throwing a `ValidationException` if there are any failures of severity equal
    * to or greater than the specified `Severity`.
    */
   def unsafeValidate(severity: Severity = Severity.Warning): Unit =
-    validateInto[Either[Throwable, *]](severity).fold(throw _, _ => ())
+    typeMappings.unsafeValidate(severity)
 
   /** Yields the `RootEffect`, if any, associated with `fieldName`. */
   def rootEffect(context: Context, fieldName: String): Option[RootEffect] =
@@ -646,8 +842,7 @@ abstract class Mapping[F[_]] {
               case Some(_) =>
                 extendContext(ctx.forFieldOrAttribute(path.head, None), path.tail)
               case None =>
-                val implementors = schema.types.collect { case ot: ObjectType if ot <:< it => ot }
-                implementors.collectFirstSome(tpe => extendContext(ctx.asType(tpe), path))
+                schema.implementations(it).collectFirstSome(tpe => extendContext(ctx.asType(tpe), path))
             }
           case ut: UnionType =>
             ut.members.collectFirstSome(tpe => extendContext(ctx.asType(tpe), path))
@@ -744,10 +939,9 @@ abstract class Mapping[F[_]] {
   }
 
   abstract class ObjectMapping extends TypeMapping {
-    private lazy val fieldMappingIndex = fieldMappings.map(fm => (fm.fieldName, fm)).toMap
-
     def fieldMappings: Seq[FieldMapping]
-    def fieldMapping(fieldName: String): Option[FieldMapping] = fieldMappingIndex.get(fieldName)
+    def fieldMapping(fieldName: String): Option[FieldMapping] =
+      fieldMappings.find(_.fieldName == fieldName)
   }
 
   object ObjectMapping {
@@ -983,7 +1177,7 @@ abstract class Mapping[F[_]] {
             case Delegate(fieldName, mapping, join) =>
               ComponentElaborator.ComponentMapping(schema.uncheckedRef(om.tpe), fieldName, mapping, join)
           }
-        case _ => Nil
+        case _ => Seq.empty
       }
 
     ComponentElaborator(componentMappings)
@@ -997,7 +1191,7 @@ abstract class Mapping[F[_]] {
             case EffectField(fieldName, handler, _, _) =>
               EffectElaborator.EffectMapping(schema.uncheckedRef(om.tpe), fieldName, handler)
           }
-        case _ => Nil
+        case _ => Seq.empty
       }
 
     EffectElaborator(effectMappings)
@@ -1009,13 +1203,8 @@ abstract class Mapping[F[_]] {
   lazy val graphQLParser: GraphQLParser = GraphQLParser(parserConfig)
   lazy val queryParser: QueryParser = QueryParser(graphQLParser)
 
-  private def deferredValidate(): Unit = {
-    if(!typeMappings.unsafe)
-      unsafeValidate()
-  }
-
   lazy val compiler: QueryCompiler = {
-    deferredValidate()
+    typeMappings.unsafeValidateIfChecked()
     new QueryCompiler(queryParser, schema, compilerPhases)
   }
 
@@ -1083,7 +1272,6 @@ abstract class Mapping[F[_]] {
     def narrow(subtpe: TypeRef): Result[Cursor] =
       Result.failure(s"Cannot narrow $tpe to $subtpe")
 
-    def hasField(fieldName: String): Boolean = false
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
       Result.failure(s"Cannot select field '$fieldName' from leaf type $tpe")
   }

@@ -39,7 +39,7 @@ final class ValidatorSuite extends CatsEffectSuite {
         """
 
       override val typeMappings =
-        TypeMappings.unsafe(
+        TypeMappings.unchecked(
           List(
             ObjectMapping(
               schema.ref("Query"),
@@ -74,7 +74,7 @@ final class ValidatorSuite extends CatsEffectSuite {
         """
 
       override val typeMappings =
-        TypeMappings.unsafe(
+        TypeMappings.unchecked(
           ObjectMapping(schema.ref("Query"))(
             CursorField[String]("foo", _ => ???, Nil)
           ),
@@ -110,7 +110,7 @@ final class ValidatorSuite extends CatsEffectSuite {
         """
 
       override val typeMappings =
-        TypeMappings.unsafe(
+        TypeMappings.unchecked(
           List(
             ObjectMapping(
               schema.ref("Query"),
@@ -147,7 +147,7 @@ final class ValidatorSuite extends CatsEffectSuite {
         """
 
       override val typeMappings =
-        TypeMappings.unsafe(
+        TypeMappings.unchecked(
           List(
             ObjectMapping(
               schema.ref("Query"),
@@ -186,7 +186,7 @@ final class ValidatorSuite extends CatsEffectSuite {
         """
 
       override val typeMappings =
-        TypeMappings.unsafe(
+        TypeMappings.unchecked(
           List(
             ObjectMapping(
               schema.ref("Query"),
@@ -357,7 +357,7 @@ final class ValidatorSuite extends CatsEffectSuite {
         """
 
       override val typeMappings =
-        TypeMappings.unsafe(
+        TypeMappings.unchecked(
           List(
             ObjectMapping(
               schema.ref("Query"),
@@ -396,7 +396,7 @@ final class ValidatorSuite extends CatsEffectSuite {
         """
 
       override val typeMappings =
-        TypeMappings.unsafe(
+        TypeMappings.unchecked(
           List(
             ObjectMapping(
               schema.ref("Query"),
@@ -474,7 +474,7 @@ final class ValidatorSuite extends CatsEffectSuite {
         """
 
       override val typeMappings =
-        TypeMappings.unsafe(
+        TypeMappings.unchecked(
           List(
             ObjectMapping(
               schema.ref("Query"),

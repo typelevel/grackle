@@ -478,4 +478,230 @@ final class StarWarsSuite extends CatsEffectSuite {
 
     assertIO(res, expected)
   }
+
+  test("interface variant (1)") {
+    val query = """
+      query {
+        characters(offset: 3, limit: 4) {
+          ... on Human {
+            taggedId1
+          }
+          ... on Droid {
+            taggedId1
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "characters" : [
+            {
+              "taggedId1" : "human-1003"
+            },
+            {
+              "taggedId1" : "human-1004"
+            },
+            {
+              "taggedId1" : "character-2000"
+            },
+            {
+              "taggedId1" : "character-2001"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = StarWarsMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("interface variant (2)") {
+    val query = """
+      query {
+        characters(offset: 3, limit: 4) {
+          taggedId1
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "characters" : [
+            {
+              "taggedId1" : "human-1003"
+            },
+            {
+              "taggedId1" : "human-1004"
+            },
+            {
+              "taggedId1" : "character-2000"
+            },
+            {
+              "taggedId1" : "character-2001"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = StarWarsMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("interface variant (3)") {
+    val query = """
+      query {
+        characters(offset: 3, limit: 4) {
+          taggedId1
+          ... on Human {
+            taggedId1
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "characters" : [
+            {
+              "taggedId1" : "human-1003"
+            },
+            {
+              "taggedId1" : "human-1004"
+            },
+            {
+              "taggedId1" : "character-2000"
+            },
+            {
+              "taggedId1" : "character-2001"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = StarWarsMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("interface variant (4)") {
+    val query = """
+      query {
+        characters(offset: 3, limit: 4) {
+          ... on Human {
+            taggedId2
+          }
+          ... on Droid {
+            taggedId2
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "characters" : [
+            {
+              "taggedId2" : "human2-1003"
+            },
+            {
+              "taggedId2" : "human2-1004"
+            },
+            {
+              "taggedId2" : "droid2-2000"
+            },
+            {
+              "taggedId2" : "droid2-2001"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = StarWarsMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("interface variant (5)") {
+    val query = """
+      query {
+        characters(offset: 3, limit: 4) {
+          taggedId2
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "characters" : [
+            {
+              "taggedId2" : "human2-1003"
+            },
+            {
+              "taggedId2" : "human2-1004"
+            },
+            {
+              "taggedId2" : "droid2-2000"
+            },
+            {
+              "taggedId2" : "droid2-2001"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = StarWarsMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("interface variant (6)") {
+    val query = """
+      query {
+        characters(offset: 3, limit: 4) {
+          taggedId2
+          ... on Human {
+            taggedId2
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "characters" : [
+            {
+              "taggedId2" : "human2-1003"
+            },
+            {
+              "taggedId2" : "human2-1004"
+            },
+            {
+              "taggedId2" : "droid2-2000"
+            },
+            {
+              "taggedId2" : "droid2-2001"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = StarWarsMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
 }
