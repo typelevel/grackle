@@ -565,22 +565,22 @@ abstract class Mapping[F[_]] {
       val objectFieldIndices = mappings.collect {
         case om: ObjectMapping if om.tpe.dealias.isObject =>
           om.tpe.underlying match {
-            case o: ObjectType if o.interfaces.nonEmpty && !o.fields.forall(f => om.fieldMapping(f.name).isDefined) =>
+            case o: ObjectType if o.interfaces.nonEmpty =>
               val ims = o.interfaces.flatMap { i => interfaceMappingIndex.get(i.name).collect { case im: ObjectMapping => im } }
-              val attrs = om.fieldMappings.filterNot(fm => o.hasField(fm.fieldName))
+              val allFieldsAndAttrs = (om.fieldMappings.map(_.fieldName) ++ ims.flatMap(_.fieldMappings.map(_.fieldName)) ++ o.fields.map(_.name)).distinct
               val newFields =
-                o.fields.flatMap { f =>
-                  om.fieldMapping(f.name).map(Seq(_)).getOrElse {
+                allFieldsAndAttrs.flatMap { fnme =>
+                  om.fieldMapping(fnme).map(Seq(_)).getOrElse {
                     val candidates =
                       ims.flatMap { im =>
-                        im.fieldMapping(f.name).map { fm => (im.predicate, fm) }
+                        im.fieldMapping(fnme).map { fm => (im.predicate, fm) }
                       }
 
                     if (candidates.isEmpty) Seq.empty
                     else Seq(InheritedFieldMapping(candidates))
                   }
                 }
-              val index = MMap.from((newFields ++ attrs).map(fm => fm.fieldName -> fm))
+              val index = MMap.from((newFields).map(fm => fm.fieldName -> fm))
               (om, index)
 
             case _ =>
@@ -596,18 +596,18 @@ abstract class Mapping[F[_]] {
               case i: InterfaceType =>
                 val impls = schema.implementations(i)
                 val ms = impls.flatMap(impl => objectFieldIndices.getOrElse(impl.name, Seq.empty))
-                val attrs = im.fieldMappings.filterNot(fm => i.hasField(fm.fieldName))
+                val allFieldsAndAttrs = (im.fieldMappings.map(_.fieldName) ++ i.fields.map(_.name)).distinct
                 val newFields =
-                  i.fields.flatMap { f =>
+                  allFieldsAndAttrs.flatMap { fnme =>
                     val candidates: Seq[(MappingPredicate, FieldMapping)] =
                       ms.flatMap { case (om, ofi) =>
-                        ofi.get(f.name).toSeq.flatMap {
+                        ofi.get(fnme).toSeq.flatMap {
                           case InheritedFieldMapping(ifms) => ifms.filterNot { case (p, _) => p.tpe =:= i }
                           case fm => Seq((om.predicate, fm))
                         }
                       }
 
-                    val dfm = im.fieldMapping(f.name).toSeq
+                    val dfm = im.fieldMapping(fnme).toSeq
                     if (candidates.isEmpty) dfm
                     else {
                       val dfm0 = dfm.map(ifm => (im.predicate, ifm))
@@ -622,7 +622,7 @@ abstract class Mapping[F[_]] {
                     }
                   }
 
-                val index = MMap.from((newFields ++ attrs).map(fm => fm.fieldName -> fm))
+                val index = MMap.from((newFields).map(fm => fm.fieldName -> fm))
                 (im, index)
 
               case _ =>
