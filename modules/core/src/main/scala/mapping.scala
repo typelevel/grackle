@@ -381,6 +381,7 @@ abstract class Mapping[F[_]] {
 
               ((ancestralFieldMapping(context, fieldName), tms) match {
                 case (Some(fm), List(om: ObjectMapping)) if !allImplsHaveFieldMapping =>
+                  addProblem(DeclaredFieldMappingIsHidden(om, fm)).whenA(fm.hidden) *>
                   addSeenFieldMapping(om, fm)
 
                 case (None, List(om: ObjectMapping)) if !(hasEnclosingSubtreeFieldMapping || allImplsHaveFieldMapping) =>
@@ -1368,6 +1369,25 @@ abstract class Mapping[F[_]] {
           |
           |(1) ${schema.pos}
           |(2) ${objectMapping.pos}
+          |""".stripMargin
+  }
+
+  /** Referenced field does not exist. */
+  case class DeclaredFieldMappingIsHidden(objectMapping: ObjectMapping, fieldMapping: FieldMapping)
+    extends ValidationFailure(Severity.Error) {
+    override def toString: String =
+      s"$productPrefix(${showNamedType(objectMapping.tpe)}.${fieldMapping.fieldName})"
+    override def formattedMessage: String =
+      s"""|Declared field mapping is hidden.
+          |
+          |- The field ${graphql(s"${showNamedType(objectMapping.tpe)}.${fieldMapping.fieldName}")} is defined by a Schema at (1).
+          |- The ${scala(objectMapping.showMappingType)} at (2) contains a ${scala(fieldMapping.showMappingType)} mapping for field ${graphql(fieldMapping.fieldName)} at (3).
+          |- This field mapping is marked as hidden.
+          |- ${UNDERLINED}The mappings for declared fields must not be hidden.$RESET
+          |
+          |(1) ${schema.pos}
+          |(2) ${objectMapping.pos}
+          |(3) ${fieldMapping.pos}
           |""".stripMargin
   }
 

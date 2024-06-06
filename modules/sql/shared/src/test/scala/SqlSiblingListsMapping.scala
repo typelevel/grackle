@@ -86,7 +86,7 @@ trait SqlSiblingListsData[F[_]] extends SqlTestMapping[F] {
         tpe = AType,
         fieldMappings =
           List(
-            SqlField("id", aTable.id, key = true, hidden = true),
+            SqlField("id", aTable.id, key = true),
             SqlObject("bs", Join(aTable.id, bTable.aId))
           )
       ),
@@ -94,7 +94,7 @@ trait SqlSiblingListsData[F[_]] extends SqlTestMapping[F] {
         tpe = BType,
         fieldMappings =
           List(
-            SqlField("id", bTable.id, key = true, hidden = true),
+            SqlField("id", bTable.id, key = true),
             SqlObject("cs", Join(bTable.id, cTable.bId)),
             SqlObject("ds", Join(bTable.id, dTable.bId))
           )
@@ -103,7 +103,7 @@ trait SqlSiblingListsData[F[_]] extends SqlTestMapping[F] {
         tpe = CType,
         fieldMappings =
           List(
-            SqlField("id", cTable.id, key = true, hidden = true),
+            SqlField("id", cTable.id, key = true),
             SqlField("nameC", cTable.nameC)
           )
       ),
@@ -111,7 +111,7 @@ trait SqlSiblingListsData[F[_]] extends SqlTestMapping[F] {
         tpe = DType,
         fieldMappings =
           List(
-            SqlField("id", dTable.id, key = true, hidden = true),
+            SqlField("id", dTable.id, key = true),
             SqlField("nameD", dTable.nameD)
           )
       )

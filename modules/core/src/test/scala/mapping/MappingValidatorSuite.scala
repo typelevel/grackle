@@ -462,6 +462,45 @@ final class ValidatorSuite extends CatsEffectSuite {
 
   }
 
+  test("declared fields must not be hidden") {
+
+    object M extends TestMapping {
+      val schema =
+        schema"""
+          type Query {
+            foo: Foo
+          }
+
+          type Foo {
+            bar: String
+          }
+        """
+
+      override val typeMappings =
+        List(
+          ObjectMapping(
+            schema.ref("Query"),
+            List(
+              CursorField[String]("foo", _ => ???, Nil)
+            )
+          ),
+          ObjectMapping(
+            schema.ref("Foo"),
+            List(
+              CursorField[String]("bar", _ => ???, Nil, hidden = true),
+            ),
+          )
+        )
+    }
+
+    val es = M.validate()
+    es match {
+      case List(M.DeclaredFieldMappingIsHidden(_, _)) => ()
+      case _ => fail(es.foldMap(_.toErrorMessage))
+    }
+  }
+
+
   test("unsafeValidate") {
     object M extends TestMapping {
       val schema =

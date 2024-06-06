@@ -45,7 +45,7 @@ trait GenericMappingLike[F[_]] extends ScalaVersionSpecificGenericMappingLike[F]
     def subtree: Boolean = true
   }
 
-  def GenericField[T](fieldName: String, t: T, hidden: Boolean = true)(implicit cb: => CursorBuilder[T], pos: SourcePos): GenericField[T] =
+  def GenericField[T](fieldName: String, t: T, hidden: Boolean = false)(implicit cb: => CursorBuilder[T], pos: SourcePos): GenericField[T] =
     new GenericField(fieldName, t, () => cb, hidden)
 
   object semiauto {
