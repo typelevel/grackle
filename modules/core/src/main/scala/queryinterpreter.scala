@@ -204,8 +204,8 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
           (tpe.dealias match {
             case o: ObjectType => Some(o.name)
             case i: InterfaceType =>
-              (schema.types.collectFirst {
-                case o: ObjectType if o <:< i && cursor.narrowsTo(schema.uncheckedRef(o)) => o.name
+              (schema.implementations(i).collectFirst {
+                case o if cursor.narrowsTo(schema.uncheckedRef(o)) => o.name
               })
             case u: UnionType =>
               (u.members.map(_.dealias).collectFirst {

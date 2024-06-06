@@ -83,9 +83,6 @@ trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: Ge
       extends AbstractCursor {
       def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
-      override def hasField(fieldName: String): Boolean =
-        fieldMap.contains(fieldName) || typeMappings.fieldMapping(context, fieldName).isDefined
-
       override def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
         val localField =
           fieldMap.get(fieldName).toResult(s"No field '$fieldName' for type $tpe").flatMap { f =>
@@ -136,8 +133,6 @@ trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: Ge
 
       def focus: Any = cursor.focus
       val context: Context = cursor.context.asType(tpe0)
-
-      override def hasField(fieldName: String): Boolean = cursor.hasField(fieldName)
 
       override def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
         cursor.field(fieldName, resultName) orElse mkCursorForField(this, fieldName, resultName)

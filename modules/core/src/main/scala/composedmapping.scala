@@ -21,25 +21,14 @@ import Cursor.AbstractCursor
 import syntax._
 
 abstract class ComposedMapping[F[_]](implicit val M: MonadThrow[F]) extends Mapping[F] {
-  override def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
-    val context = parent.context
-    val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
-    typeMappings.fieldMapping(context, fieldName) match {
-      case Some(_) =>
-        ComposedCursor(fieldContext, parent.env).success
-      case _ =>
-        super.mkCursorForField(parent, fieldName, resultName)
-    }
-  }
+  override def mkCursorForMappedField(parent: Cursor, fieldContext: Context, fm: FieldMapping): Result[Cursor] =
+    ComposedCursor(fieldContext, parent.env).success
 
   case class ComposedCursor(context: Context, env: Env) extends AbstractCursor {
     val focus = null
     val parent = None
 
     def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
-
-    override def hasField(fieldName: String): Boolean =
-      typeMappings.fieldMapping(context, fieldName).isDefined
 
     override def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
       mkCursorForField(this, fieldName, resultName)

@@ -224,15 +224,12 @@ object Introspection {
             case _ => None
           }),
           ValueField("interfaces", flipNullityDealias andThen {
-            case ot: ObjectType     => Some(ot.interfaces.map(_.nullable))
+            case tf: TypeWithFields => Some(tf.interfaces.map(_.nullable))
             case _ => None
           }),
           ValueField("possibleTypes", flipNullityDealias andThen {
             case u: UnionType       => Some(u.members.map(_.nullable))
-            case i: InterfaceType   =>
-              Some(allTypes.collect {
-                case o: ObjectType if o.interfaces.exists(_ =:= i) => NullableType(o)
-              })
+            case i: InterfaceType   => Some(targetSchema.implementations(i).map(_.nullable))
             case _ => None
           }),
           ValueField("enumValues", flipNullityDealias andThen {

@@ -43,11 +43,9 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
       DeferredCursor(path, (context, parent) => mkCursor(context, t, Some(parent), env).success)
     }
 
-  override def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
-    val context = parent.context
-    val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
-    fieldMapping(context, fieldName) match {
-      case Some(ValueField(_, f, _)) =>
+  override def mkCursorForMappedField(parent: Cursor, fieldContext: Context, fm: FieldMapping): Result[Cursor] =
+    fm match {
+      case ValueField(_, f, _) =>
         val parentFocus: Any = parent match {
           case vc: ValueCursor => vc.focus
           case _ => ()
@@ -56,9 +54,8 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
         mkCursor(fieldContext, childFocus, Some(parent), Env.empty).success
 
       case _ =>
-        super.mkCursorForField(parent, fieldName, resultName)
+        super.mkCursorForMappedField(parent, fieldContext, fm)
     }
-  }
 
   sealed trait ValueFieldMapping[T] extends FieldMapping {
     def unwrap: FieldMapping
@@ -192,9 +189,6 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
         mkChild(context.asType(subtpe)).success
       else
         Result.internalError(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
-
-    def hasField(fieldName: String): Boolean =
-      fieldMapping(context, fieldName).isDefined
 
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
       mkCursorForField(this, fieldName, resultName)

@@ -56,18 +56,15 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
     else
       DeferredCursor(path, (context, parent) => CirceCursor(context, value, Some(parent), env).success)
 
-  override def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
-    val context = parent.context
-    val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
-    (typeMappings.fieldMapping(context, fieldName), parent.focus) match {
-      case (Some(CirceField(_, json, _)), _) =>
+  override def mkCursorForMappedField(parent: Cursor, fieldContext: Context, fm: FieldMapping): Result[Cursor] =
+    (fm, parent.focus) match {
+      case (CirceField(_, json, _), _) =>
         CirceCursor(fieldContext, json, Some(parent), parent.env).success
-      case (Some(CursorFieldJson(_, f, _, _)), _) =>
+      case (CursorFieldJson(_, f, _, _), _) =>
         f(parent).map(res => CirceCursor(fieldContext, focus = res, parent = Some(parent), env = parent.env))
       case _ =>
-        super.mkCursorForField(parent, fieldName, resultName)
+        super.mkCursorForMappedField(parent, fieldContext, fm)
     }
-  }
 
   sealed trait CirceFieldMapping extends FieldMapping {
     def subtree: Boolean = true
@@ -171,10 +168,6 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
         mkChild(context.asType(subtpe)).success
       else
         Result.internalError(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
-
-    def hasField(fieldName: String): Boolean =
-      tpe.hasField(fieldName) && focus.asObject.exists(_.contains(fieldName)) ||
-      typeMappings.fieldMapping(context, fieldName).isDefined
 
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
       val localField =

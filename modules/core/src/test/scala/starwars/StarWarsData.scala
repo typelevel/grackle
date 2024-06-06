@@ -145,6 +145,8 @@ object StarWarsMapping extends ValueMapping[IO] {
       }
       interface Character {
         id: String!
+        taggedId1: String!
+        taggedId2: String!
         name: String
         numberOfFriends: Int
         friends: [Character!]
@@ -152,6 +154,8 @@ object StarWarsMapping extends ValueMapping[IO] {
       }
       type Human implements Character {
         id: String!
+        taggedId1: String!
+        taggedId2: String!
         name: String
         numberOfFriends: Int
         friends: [Character!]
@@ -160,6 +164,8 @@ object StarWarsMapping extends ValueMapping[IO] {
       }
       type Droid implements Character {
         id: String!
+        taggedId1: String!
+        taggedId2: String!
         name: String
         numberOfFriends: Int
         friends: [Character!]
@@ -192,6 +198,7 @@ object StarWarsMapping extends ValueMapping[IO] {
         fieldMappings =
           List(
             ValueField("id", _.id),
+            ValueField("taggedId1", c => s"character-${c.id}"),
             ValueField("name", _.name),
             ValueField("appearsIn", _.appearsIn),
             ValueField("numberOfFriends", _ => 0),
@@ -202,6 +209,8 @@ object StarWarsMapping extends ValueMapping[IO] {
         tpe = HumanType,
         fieldMappings =
           List(
+            ValueField("taggedId1", h => s"human-${h.id}"),
+            ValueField("taggedId2", h => s"human2-${h.id}"),
             ValueField("homePlanet", _.homePlanet)
           )
       ),
@@ -209,6 +218,7 @@ object StarWarsMapping extends ValueMapping[IO] {
         tpe = DroidType,
         fieldMappings =
           List(
+            ValueField("taggedId2", h => s"droid2-${h.id}"),
             ValueField("primaryFunction", _.primaryFunction)
           )
       ),

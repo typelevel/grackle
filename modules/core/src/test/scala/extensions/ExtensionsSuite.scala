@@ -173,7 +173,7 @@ final class ExtensionsSuite extends CatsEffectSuite {
           extinct: Boolean
         }
 
-        extend type Human {
+        extend type Human implements Organism {
           id: ID!
           extinct: Boolean
         }
@@ -192,7 +192,7 @@ final class ExtensionsSuite extends CatsEffectSuite {
     schema.definition("Human") match {
       case Some(obj: ObjectType) =>
         assertEquals(obj.fields.map(_.name), List("name", "species", "id", "extinct"))
-        assertEquals(obj.interfaces.map(_.name), List("Animal"))
+        assertEquals(obj.interfaces.map(_.name), List("Animal", "Organism"))
       case _ => fail("Human type not found")
     }
   }
@@ -218,6 +218,8 @@ final class ExtensionsSuite extends CatsEffectSuite {
         }
 
         extend interface Animal implements Organism @Intrf
+
+        extend type Human implements Organism
 
         directive @Intrf on INTERFACE
       """
@@ -594,6 +596,7 @@ final class ExtensionsSuite extends CatsEffectSuite {
     val expected =
       NonEmptyChain(
         "Duplicate definition of field 'species' for type 'Animal'",
+        "Type 'Human' does not directly implement transitively implemented interfaces: 'Organism', 'Mineral'",
         "Field 'extinct' from interface 'Organism' is not defined by implementing type 'Animal'",
         "Undefined type 'Mineral' declared as implemented by type 'Animal'",
         "Directive 'Sca' is not allowed on INTERFACE"

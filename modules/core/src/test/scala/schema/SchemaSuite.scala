@@ -156,6 +156,35 @@ final class SchemaSuite extends CatsEffectSuite {
     }
   }
 
+  test("schema validation: object implementing duplicate interfaces") {
+    val schema = Schema(
+      """
+        interface Character {
+          id: ID!
+          name: String!
+          email: String!
+        }
+
+        type Human implements Character & Character {
+          id: ID!
+          name: String!
+          email: String!
+        }
+      """
+    )
+
+    schema match {
+      case Result.Failure(ps) =>
+        assertEquals(
+          ps.map(_.message),
+          NonEmptyChain(
+            "Implements clause of type 'Human' has duplicate occurrences of interface 'Character'"
+          )
+        )
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
   test("schema validation: object failing to implement interface fields") {
     val schema = Schema(
       """
@@ -173,7 +202,12 @@ final class SchemaSuite extends CatsEffectSuite {
 
     schema match {
       case Result.Failure(ps) =>
-        assertEquals(ps.map(_.message), NonEmptyChain("Field 'id' from interface 'Character' is not defined by implementing type 'Human'", "Field 'email' from interface 'Character' is not defined by implementing type 'Human'"))
+        assertEquals(ps.map(_.message),
+          NonEmptyChain(
+            "Field 'id' from interface 'Character' is not defined by implementing type 'Human'",
+            "Field 'email' from interface 'Character' is not defined by implementing type 'Human'"
+          )
+        )
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -195,7 +229,12 @@ final class SchemaSuite extends CatsEffectSuite {
 
     schema match {
       case Result.Failure(ps) =>
-        assertEquals(ps.map(_.message), NonEmptyChain("Field 'id' from interface 'Character' is not defined by implementing type 'Named'", "Field 'email' from interface 'Character' is not defined by implementing type 'Named'"))
+        assertEquals(ps.map(_.message),
+          NonEmptyChain(
+            "Field 'id' from interface 'Character' is not defined by implementing type 'Named'",
+            "Field 'email' from interface 'Character' is not defined by implementing type 'Named'"
+          )
+        )
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -215,7 +254,11 @@ final class SchemaSuite extends CatsEffectSuite {
 
     schema match {
       case Result.Failure(ps) =>
-        assertEquals(ps.map(_.message), NonEmptyChain("Field 'name' of type 'Human' has type 'Int!', however implemented interface 'Character' requires it to be a subtype of 'String!'"))
+        assertEquals(ps.map(_.message),
+          NonEmptyChain(
+            "Field 'name' of type 'Human' has type 'Int!', however implemented interface 'Character' requires it to be a subtype of 'String!'"
+          )
+        )
       case unexpected => fail(s"This was unexpected: ${unexpected.getClass.getSimpleName}")
     }
   }
@@ -235,7 +278,11 @@ final class SchemaSuite extends CatsEffectSuite {
 
     schema match {
       case Result.Failure(ps) =>
-        assertEquals(ps.map(_.message), NonEmptyChain("Field 'name' of type 'Human' has has an argument list that does not conform to that specified by implemented interface 'Character'"))
+        assertEquals(ps.map(_.message),
+          NonEmptyChain(
+            "Field 'name' of type 'Human' has has an argument list that does not conform to that specified by implemented interface 'Character'"
+          )
+        )
       case unexpected => fail(s"This was unexpected: ${unexpected.getClass.getSimpleName}")
     }
   }
@@ -260,7 +307,12 @@ final class SchemaSuite extends CatsEffectSuite {
 
     schema match {
       case Result.Failure(ps) =>
-        assertEquals(ps.map(_.message), NonEmptyChain("Field 'id' from interface 'Character' is not defined by implementing type 'Human'", "Field 'id' from interface 'Character' is not defined by implementing type 'Dog'"))
+        assertEquals(ps.map(_.message),
+          NonEmptyChain(
+            "Field 'id' from interface 'Character' is not defined by implementing type 'Human'",
+            "Field 'id' from interface 'Character' is not defined by implementing type 'Dog'"
+          )
+        )
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -285,7 +337,12 @@ final class SchemaSuite extends CatsEffectSuite {
 
     schema match {
       case Result.Failure(ps) =>
-        assertEquals(ps.map(_.message), NonEmptyChain("Field 'id' from interface 'Character' is not defined by implementing type 'Human'", "Field 'email' from interface 'Contactable' is not defined by implementing type 'Human'"))
+        assertEquals(ps.map(_.message),
+          NonEmptyChain(
+            "Field 'id' from interface 'Character' is not defined by implementing type 'Human'",
+            "Field 'email' from interface 'Contactable' is not defined by implementing type 'Human'"
+          )
+        )
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -311,6 +368,32 @@ final class SchemaSuite extends CatsEffectSuite {
 
     schema match {
       case Result.Success(a) => assertEquals(a.types.map(_.name), List("Node", "Resource", "Human"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
+  test("schema validation: object failing to implement transitive interface") {
+    val schema = Schema(
+      """
+        interface Node {
+          id: ID!
+        }
+
+        interface Resource implements Node {
+          id: ID!
+          url: String
+        }
+
+        type Human implements Resource {
+          id: ID!
+          url: String
+        }
+      """
+    )
+
+    schema match {
+      case Result.Failure(ps) =>
+        assertEquals(ps.map(_.message), NonEmptyChain("Type 'Human' does not directly implement transitively implemented interface 'Node'"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -373,19 +456,19 @@ final class SchemaSuite extends CatsEffectSuite {
           node: Node
         }
 
-        interface Node implements Tagged {
+        interface Node implements Tagged & Named {
           id: ID!
           name: String
           tag: String
         }
 
-        interface Named implements Node {
+        interface Named implements Node & Tagged {
           id: ID!
           name: String
           tag: String
         }
 
-        interface Tagged implements Named {
+        interface Tagged implements Named & Node {
           id: ID!
           name: String
           tag: String

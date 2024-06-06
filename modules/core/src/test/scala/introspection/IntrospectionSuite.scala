@@ -473,7 +473,8 @@ final class IntrospectionSuite extends CatsEffectSuite {
               {
                 "name" : "interface",
                 "type" : {
-                  "interfaces" : null
+                  "interfaces" : [
+                  ]
                 }
               },
               {
@@ -1209,7 +1210,8 @@ final class IntrospectionSuite extends CatsEffectSuite {
                   }
                 ],
                 "inputFields" : null,
-                "interfaces" : null,
+                "interfaces" : [
+                ],
                 "enumValues" : null,
                 "possibleTypes" : [
                   {
