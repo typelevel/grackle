@@ -181,9 +181,13 @@ abstract class Mapping[F[_]] {
         case om: ObjectMapping => om
       }
 
+    /** Yields the unexpanded `FieldMapping` associated with `fieldName` in `context`, if any. */
+    def rawFieldMapping(context: Context, fieldName: String): Option[FieldMapping] =
+      fieldIndex(context).flatMap(_.get(fieldName))
+
     /** Yields the `FieldMapping` associated with `fieldName` in `context`, if any. */
     def fieldMapping(context: Context, fieldName: String): Option[FieldMapping] =
-      fieldIndex(context).flatMap(_.get(fieldName)).flatMap {
+      rawFieldMapping(context, fieldName).flatMap {
         case ifm: InheritedFieldMapping =>
           ifm.select(context)
         case pfm: PolymorphicFieldMapping =>
@@ -507,7 +511,7 @@ abstract class Mapping[F[_]] {
     }
 
     /** A synthetic field mapping representing a field mapped in an implemented interface */
-    private case class InheritedFieldMapping(candidates: Seq[(MappingPredicate, FieldMapping)])(implicit val pos: SourcePos) extends FieldMapping {
+    case class InheritedFieldMapping(candidates: Seq[(MappingPredicate, FieldMapping)])(implicit val pos: SourcePos) extends FieldMapping {
       def fieldName: String = candidates.head._2.fieldName
       def hidden: Boolean = false
       def subtree: Boolean = false
@@ -522,7 +526,7 @@ abstract class Mapping[F[_]] {
     }
 
     /** A synthetic field mapping representing a field mapped by one or more implementing types */
-    private case class PolymorphicFieldMapping(candidates: Seq[(MappingPredicate, FieldMapping)])(implicit val pos: SourcePos) extends FieldMapping {
+    case class PolymorphicFieldMapping(candidates: Seq[(MappingPredicate, FieldMapping)])(implicit val pos: SourcePos) extends FieldMapping {
       def fieldName: String = candidates.head._2.fieldName
       def hidden: Boolean = false
       def subtree: Boolean = false

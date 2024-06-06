@@ -3595,6 +3595,20 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           AssocFieldNotKey(om, sf)
       }.toList
 
+    def checkDiscriminator(om: ObjectMapping): List[ValidationFailure] = {
+      val dnmes = om.fieldMappings.collect { case sf: SqlField if sf.discriminator => sf.fieldName }
+      dnmes.collectFirstSome { dnme =>
+        typeMappings.rawFieldMapping(context, dnme) match {
+          case Some(pf: TypeMappings.PolymorphicFieldMapping) => Some((pf.candidates.head._2, pf.candidates.map(_._1.tpe.name)))
+          case _ => None
+        }
+      } match {
+        case None => Nil
+        case Some((dfm, impls)) =>
+          List(IllegalPolymorphicDiscriminatorFieldMapping(om, dfm, impls.toList))
+      }
+    }
+
     def hasDiscriminator(om: ObjectMapping): List[ValidationFailure] =
       if (discriminatorColumnsForType(context).nonEmpty) Nil
       else List(NoDiscriminatorInObjectTypeMapping(om))
@@ -3653,6 +3667,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         checkKey(im) ++
         checkAssoc(im) ++
         hasDiscriminator(im) ++
+        checkDiscriminator(im) ++
         checkSplit(im) ++
         checkSuperInterfaces(im)
       case um: SqlUnionMapping =>
@@ -3958,6 +3973,23 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           |- ${UNDERLINED}interface/union type mappings must include at least one discriminator field mapping.$RESET
           |
           |(1) ${objectMapping.pos}
+          |""".stripMargin
+  }
+
+  /** Interface/union type mapping has a polymorphic discriminator */
+  case class IllegalPolymorphicDiscriminatorFieldMapping(objectMapping: ObjectMapping, fieldMapping: FieldMapping, impls: List[String])
+    extends SqlValidationFailure(Severity.Error) {
+    override def toString: String =
+      s"$productPrefix(${objectMapping.showMappingType}, ${showNamedType(objectMapping.tpe)}.${fieldMapping.fieldName}, (${impls.mkString(", ")}))"
+    override def formattedMessage: String =
+      s"""|Illegal polymorphic discriminator field mapping.
+          |
+          |- The ${scala(objectMapping.showMappingType)} for type ${graphql(showNamedType(objectMapping.tpe))} at (1) contains a discriminator field mapping ${graphql(fieldMapping.fieldName)} at (2).
+          |- This discriminator has variant field mappings in the type mappings for subtypes: ${impls.mkString(", ")}.
+          |- ${UNDERLINED}Discriminator field mappings must not be polymorphic.$RESET
+          |
+          |(1) ${objectMapping.pos}
+          |(2) ${fieldMapping.pos}
           |""".stripMargin
   }
 
