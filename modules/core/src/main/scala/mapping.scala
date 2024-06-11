@@ -212,6 +212,12 @@ abstract class Mapping[F[_]] {
       }
     }
 
+    def fieldIsPolymorphic(context: Context, fieldName: String): Boolean =
+      rawFieldMapping(context, fieldName).exists {
+        case _: PolymorphicFieldMapping => true
+        case _ => false
+      }
+
     /** Yields the `FieldMapping` directly or ancestrally associated with `fieldName` in `context`, if any. */
     def ancestralFieldMapping(context: Context, fieldName: String): Option[FieldMapping] =
       fieldMapping(context, fieldName).orElse {

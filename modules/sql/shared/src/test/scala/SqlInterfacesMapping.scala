@@ -59,12 +59,14 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
         entityType: EntityType!
         title: String
         synopses: Synopses
+        imageUrl: String
       }
       type Film implements Entity {
         id: ID!
         entityType: EntityType!
         title: String
         synopses: Synopses
+        imageUrl: String
         rating: String
         label: Int
       }
@@ -73,6 +75,7 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
         entityType: EntityType!
         title: String
         synopses: Synopses
+        imageUrl: String
         numberOfEpisodes: Int
         episodes: [Episode!]!
         label: String
@@ -126,7 +129,8 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
         fieldMappings =
           List(
             SqlField("rating", entities.filmRating),
-            SqlField("label", entities.filmLabel)
+            SqlField("label", entities.filmLabel),
+            CursorField("imageUrl", mkFilmImageUrl, List("title"))
           )
       ),
       ObjectMapping(
@@ -135,7 +139,8 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
           List(
             SqlField("numberOfEpisodes", entities.seriesNumberOfEpisodes),
             SqlObject("episodes", Join(entities.id, episodes.seriesId)),
-            SqlField("label", entities.seriesLabel)
+            SqlField("label", entities.seriesLabel),
+            CursorField("imageUrl", mkSeriesImageUrl, List("title"))
           )
       ),
       ObjectMapping(
@@ -208,6 +213,12 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
       }
     }
   }
+
+  def mkFilmImageUrl(c: Cursor): Result[Option[String]] =
+    c.fieldAs[Option[String]]("title").map(_.map(title => s"http://example.com/film/$title.jpg"))
+
+  def mkSeriesImageUrl(c: Cursor): Result[Option[String]] =
+    c.fieldAs[Option[String]]("title").map(_.map(title => s"http://example.com/series/$title.jpg"))
 
   override val selectElaborator = SelectElaborator {
     case (QueryType, "films", Nil) =>

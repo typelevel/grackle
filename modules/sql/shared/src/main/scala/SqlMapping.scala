@@ -2826,6 +2826,53 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     /** Compile the given GraphQL query to SQL in the given `Context` */
     def apply(q: Query, context: Context): Result[MappedQuery] = {
       def loop(q: Query, context: Context, parentConstraints: List[List[(SqlColumn, SqlColumn)]], exposeJoins: Boolean): Result[SqlQuery] = {
+
+        object TypeCase {
+          def unapply(q: Query): Option[(Query, List[Narrow])] = {
+            def isPolySelect(q: Query): Boolean =
+              q match {
+                case Select(fieldName, _, _) =>
+                  typeMappings.fieldIsPolymorphic(context, fieldName)
+                case _ => false
+              }
+
+            def branch(q: Query): Option[TypeRef] =
+              q match {
+                case Narrow(subtpe, _) => Some(subtpe)
+                case _ => None
+              }
+
+            val ungrouped = ungroup(q).flatMap {
+              case sel@Select(fieldName, _, _) if isPolySelect(sel) =>
+                typeMappings.rawFieldMapping(context, fieldName) match {
+                  case Some(TypeMappings.PolymorphicFieldMapping(cands)) =>
+                    cands.map { case (pred, _) => Narrow(schema.uncheckedRef(pred.tpe), q) }
+                  case _ => Seq(sel)
+                }
+
+              case other => Seq(other)
+            }
+
+            val grouped = ungrouped.groupBy(branch).toList
+            val (default0, narrows0) = grouped.partition(_._1.isEmpty)
+            if (narrows0.isEmpty) None
+            else {
+              val default = default0.flatMap(_._2) match {
+                case Nil => Empty
+                case children => Group(children)
+              }
+              val narrows = narrows0.collect {
+                case (Some(subtpe), narrows) =>
+                  narrows.collect { case Narrow(_, child) => child } match {
+                    case List(child) => Narrow(subtpe, child)
+                    case children => Narrow(subtpe, Group(children))
+                  }
+              }
+              Some((default, narrows))
+            }
+          }
+        }
+
         def group(queries: List[Query]): Result[SqlQuery] = {
           queries.foldLeft(List.empty[SqlQuery].success) {
             case (nodes, q) =>
