@@ -2846,7 +2846,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               case sel@Select(fieldName, _, _) if isPolySelect(sel) =>
                 typeMappings.rawFieldMapping(context, fieldName) match {
                   case Some(TypeMappings.PolymorphicFieldMapping(cands)) =>
-                    cands.map { case (pred, _) => Narrow(schema.uncheckedRef(pred.tpe), q) }
+                    cands.map { case (pred, _) => Narrow(schema.uncheckedRef(pred.tpe), sel) }
                   case _ => Seq(sel)
                 }
 
