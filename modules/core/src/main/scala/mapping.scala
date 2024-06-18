@@ -134,12 +134,13 @@ abstract class Mapping[F[_]] {
     * the `fieldName` child of `parent`.
     */
   protected final def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
-    val context = parent.context
-    val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
-
     typeMappings.fieldMapping(parent, fieldName).
       toResultOrError(s"No mapping for field '$fieldName' for type ${parent.tpe}").
-        flatMap(mkCursorForMappedField(parent, fieldContext, _))
+        flatMap {
+          case (np, fm) =>
+            val fieldContext = np.context.forFieldOrAttribute(fieldName, resultName)
+            mkCursorForMappedField(np, fieldContext, fm)
+        }
   }
 
   final class TypeMappings private (
@@ -200,15 +201,15 @@ abstract class Mapping[F[_]] {
      *  Yields the `FieldMapping` associated with `fieldName` in the runtime context
      *  determined by the given `Cursor`, if any.
      */
-    def fieldMapping(parent: Cursor, fieldName: String): Option[FieldMapping] = {
+    def fieldMapping(parent: Cursor, fieldName: String): Option[(Cursor, FieldMapping)] = {
       val context = parent.context
       fieldIndex(context).flatMap(_.get(fieldName)).flatMap {
         case ifm: InheritedFieldMapping =>
-          ifm.select(parent.context)
+          ifm.select(parent.context).map((parent, _))
         case pfm: PolymorphicFieldMapping =>
           pfm.select(parent)
         case fm =>
-          Some(fm)
+          Some((parent, fm))
       }
     }
 
@@ -538,12 +539,14 @@ abstract class Mapping[F[_]] {
       def hidden: Boolean = false
       def subtree: Boolean = false
 
-      def select(cursor: Cursor): Option[FieldMapping] = {
-        val context = cursor.context
+      def select(cursor: Cursor): Option[(Cursor, FieldMapping)] = {
         val applicable =
           candidates.mapFilter {
             case (pred, fm) if cursor.narrowsTo(schema.uncheckedRef(pred.tpe)) =>
-              pred(context.asType(pred.tpe)).map(prio => (prio, fm))
+              for {
+                nc   <- cursor.narrow(schema.uncheckedRef(pred.tpe)).toOption
+                prio <- pred(nc.context)
+              } yield (prio, (nc, fm))
             case _ =>
               None
           }

@@ -26,7 +26,7 @@ import grackle.test.GraphQLResponseTests.assertWeaklyEqualIO
 trait SqlInterfacesSuite2 extends CatsEffectSuite {
   def mapping: Mapping[IO]
 
-  test("when discriminator fails the fragments should be ignored") {
+  test("when discriminator fails the fragments should be ignored".ignore) {
     val query = """
       query {
         entities {

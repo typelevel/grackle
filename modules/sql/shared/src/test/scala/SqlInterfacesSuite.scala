@@ -827,27 +827,27 @@ trait SqlInterfacesSuite extends CatsEffectSuite {
           "entities" : [
             {
               "id" : "4",
-              "imageUrl" : "http://example.com/series/Series 1.jpg"
+              "imageUrl" : "http://example.com/series/hidden_series1.jpg"
             },
             {
               "id" : "5",
-              "imageUrl" : "http://example.com/series/Series 2.jpg"
+              "imageUrl" : "http://example.com/series/hidden_series2.jpg"
             },
             {
               "id" : "2",
-              "imageUrl" : "http://example.com/film/Film 2.jpg"
+              "imageUrl" : "http://www.example.com/film2.jpg"
             },
             {
               "id" : "3",
-              "imageUrl" : "http://example.com/film/Film 3.jpg"
+              "imageUrl" : "http://www.example.com/film3.jpg"
             },
             {
               "id" : "6",
-              "imageUrl" : "http://example.com/series/Series 3.jpg"
+              "imageUrl" : "http://example.com/series/hidden_series3.jpg"
             },
             {
               "id" : "1",
-              "imageUrl" : "http://example.com/film/Film 1.jpg"
+              "imageUrl" : "http://www.example.com/film1.jpg"
             }
           ]
         }
@@ -875,27 +875,27 @@ trait SqlInterfacesSuite extends CatsEffectSuite {
           "entities" : [
             {
               "id" : "4",
-              "imageUrl" : "http://example.com/series/Series 1.jpg"
+              "imageUrl" : "http://example.com/series/hidden_series1.jpg"
             },
             {
               "id" : "5",
-              "imageUrl" : "http://example.com/series/Series 2.jpg"
+              "imageUrl" : "http://example.com/series/hidden_series2.jpg"
             },
             {
               "id" : "2",
-              "imageUrl" : "http://example.com/film/Film 2.jpg"
+              "imageUrl" : "http://www.example.com/film2.jpg"
             },
             {
               "id" : "3",
-              "imageUrl" : "http://example.com/film/Film 3.jpg"
+              "imageUrl" : "http://www.example.com/film3.jpg"
             },
             {
               "id" : "6",
-              "imageUrl" : "http://example.com/series/Series 3.jpg"
+              "imageUrl" : "http://example.com/series/hidden_series3.jpg"
             },
             {
               "id" : "1",
-              "imageUrl" : "http://example.com/film/Film 1.jpg"
+              "imageUrl" : "http://www.example.com/film1.jpg"
             }
           ]
         }
