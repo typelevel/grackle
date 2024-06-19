@@ -48,7 +48,6 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
     val headofstate    = col("headofstate", Meta[String], nullable = true)
     val capitalId      = col("capital", Meta[Int], nullable = true)
     val numCities      = col("num_cities", Meta[Long])
-    val code2          = col("code2", Meta[String])
   }
 
   object city extends TableDef("city") {
@@ -62,8 +61,6 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
   object countrylanguage extends TableDef("countrylanguage") {
     val countrycode = col("countrycode", Meta[String])
     val language = col("language", Meta[String])
-    val isOfficial = col("isOfficial", Meta[Boolean])
-    val percentage = col("percentage", Meta[Float])
   }
   // #db_tables
 
@@ -71,25 +68,25 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
   val schema =
     schema"""
       type Query {
-        cities(namePattern: String = "%"): [City!]
         city(id: Int): City
+        cities(namePattern: String = "%"): [City!]
         country(code: String): Country
-        countries(limit: Int = -1, offset: Int = 0, minPopulation: Int = 0,
-                  byPopulation: Boolean = false): [Country!]
-        language(language: String): Language
-        search(minPopulation: Int!, indepSince: Int!): [Country!]!
-        search2(indep: Boolean!, limit: Int!): [Country!]!
+        countries(
+          maxPopulation: Int = -1,
+          sortByPopulation: Boolean = false,
+          offset: Int = -1,
+          limit: Int = -1
+        ): [Country!]
       }
       type City {
+        id: Int!
         name: String!
         country: Country!
         district: String!
         population: Int!
       }
       type Language {
-        language: String!
-        isOfficial: Boolean!
-        percentage: Float!
+        name: String!
         countries: [Country!]!
       }
       type Country {
@@ -107,7 +104,6 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
         headofstate: String
         capitalId: Int
         code: String!
-        code2: String!
         numCities(namePattern: String): Int!
         cities: [City!]!
         languages: [Language!]!
@@ -124,13 +120,10 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
     TypeMappings(
       // #root
       ObjectMapping(QueryType)(
-        SqlObject("cities"),
-        SqlObject("city"),
         SqlObject("country"),
         SqlObject("countries"),
-        SqlObject("language"),
-        SqlObject("search"),
-        SqlObject("search2")
+        SqlObject("city"),
+        SqlObject("cities")
       ),
       // #root
       // #type_mappings
@@ -149,13 +142,12 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
         SqlField("governmentform", country.governmentform),
         SqlField("headofstate",    country.headofstate),
         SqlField("capitalId",      country.capitalId),
-        SqlField("code2",          country.code2),
         SqlField("numCities",      country.numCities),
         SqlObject("cities",        Join(country.code, city.countrycode)),
         SqlObject("languages",     Join(country.code, countrylanguage.countrycode))
       ),
       ObjectMapping(CityType)(
-        SqlField("id", city.id, key = true, hidden = true),
+        SqlField("id", city.id, key = true),
         SqlField("countrycode", city.countrycode, hidden = true),
         SqlField("name", city.name),
         SqlField("district", city.district),
@@ -163,9 +155,7 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
         SqlObject("country", Join(city.countrycode, country.code)),
       ),
       ObjectMapping(LanguageType)(
-        SqlField("language", countrylanguage.language, key = true, associative = true),
-        SqlField("isOfficial", countrylanguage.isOfficial),
-        SqlField("percentage", countrylanguage.percentage),
+        SqlField("name", countrylanguage.language, key = true, associative = true),
         SqlField("countrycode", countrylanguage.countrycode, hidden = true),
         SqlObject("countries", Join(countrylanguage.countrycode, country.code))
       )
@@ -179,45 +169,38 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
         Unique(Filter(Eql(CountryType / "code", Const(code)), child))
       }
 
-    case (QueryType, "city", List(Binding("id", IntValue(id)))) =>
-      Elab.transformChild(child => Unique(Filter(Eql(CityType / "id", Const(id)), child)))
-
-    case (
-           QueryType, "countries",
+    case (QueryType, "countries",
            List(
-             Binding("limit", IntValue(num)),
+             Binding("maxPopulation", IntValue(max)),
+             Binding("sortByPopulation", BooleanValue(sortByPop)),
              Binding("offset", IntValue(off)),
-             Binding("minPopulation", IntValue(min)),
-             Binding("byPopulation", BooleanValue(byPop))
+             Binding("limit", IntValue(lim))
            )
          ) =>
-      def limit(query: Query): Query =
-        if (num < 1) query
-        else Limit(num, query)
+      def filter(query: Query): Query =
+        if (max < 0) query
+        else Filter(LtEql(CountryType / "population", Const(max)), query)
+
+      def order(query: Query): Query =
+        if (!sortByPop) query
+        else
+          OrderBy(
+            OrderSelections(List(OrderSelection[Int](CountryType / "population"))),
+            query
+          )
 
       def offset(query: Query): Query =
         if (off < 1) query
         else Offset(off, query)
 
-      def order(query: Query): Query = {
-        if (byPop)
-          OrderBy(
-            OrderSelections(List(OrderSelection[Int](CountryType / "population"))),
-            query
-          )
-        else if (num > 0 || off > 0)
-          OrderBy(
-            OrderSelections(List(OrderSelection[String](CountryType / "code"))),
-            query
-          )
-        else query
-      }
-
-      def filter(query: Query): Query =
-        if (min == 0) query
-        else Filter(GtEql(CountryType / "population", Const(min)), query)
+      def limit(query: Query): Query =
+        if (lim < 0) query
+        else Limit(lim, query)
 
       Elab.transformChild(child => limit(offset(order(filter(child)))))
+
+    case (QueryType, "city", List(Binding("id", IntValue(id)))) =>
+      Elab.transformChild(child => Unique(Filter(Eql(CityType / "id", Const(id)), child)))
 
     case (QueryType, "cities", List(Binding("namePattern", StringValue(namePattern)))) =>
       if (namePattern == "%")
@@ -226,37 +209,6 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
         Elab.transformChild { child =>
           Filter(Like(CityType / "name", namePattern, true), child)
         }
-
-    case (QueryType, "language", List(Binding("language", StringValue(language)))) =>
-      Elab.transformChild { child =>
-        Unique(Filter(Eql(LanguageType / "language", Const(language)), child))
-      }
-
-    case (QueryType, "search",
-           List(
-             Binding("minPopulation", IntValue(min)),
-             Binding("indepSince", IntValue(year))
-            )
-          ) =>
-      Elab.transformChild(child =>
-        Filter(
-          And(
-            Not(Lt(CountryType / "population", Const(min))),
-            Not(Lt(CountryType / "indepyear", Const(Option(year))))
-          ),
-          child
-        )
-      )
-
-    case (QueryType, "search2",
-           List(
-             Binding("indep", BooleanValue(indep)),
-             Binding("limit", IntValue(num))
-           )
-         ) =>
-      Elab.transformChild { child =>
-        Limit(num, Filter(IsNull[Int](CountryType / "indepyear", isNull = !indep), child))
-      }
 
     case (CountryType, "numCities", List(Binding("namePattern", AbsentValue))) =>
       Elab.transformChild { _ =>
