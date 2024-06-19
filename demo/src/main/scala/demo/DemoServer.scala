@@ -26,7 +26,7 @@ import org.http4s.server.staticcontent.resourceServiceBuilder
 
 // #server
 object DemoServer {
-  def resource(graphQLRoutes: HttpRoutes[IO]): Resource[IO, Unit] = {
+  def mkServer(graphQLRoutes: HttpRoutes[IO]): Resource[IO, Unit] = {
     val httpApp0 = (
       // Routes for static resources, i.e. GraphQL Playground
       resourceServiceBuilder[IO]("/assets").toRoutes <+>

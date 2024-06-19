@@ -7,7 +7,6 @@ val catsEffectVersion      = "3.5.4"
 val circeVersion           = "0.14.8"
 val disciplineMunitVersion = "2.0.0-M3"
 val doobieVersion          = "1.0.0-RC5"
-val flywayVersion          = "10.15.0"
 val fs2Version             = "3.10.2"
 val http4sVersion          = "0.23.27"
 val jnrUnixsocketVersion   = "0.38.22"
@@ -252,24 +251,23 @@ lazy val generic = crossProject(JVMPlatform, JSPlatform, NativePlatform)
 lazy val demo = project
   .in(file("demo"))
   .enablePlugins(NoPublishPlugin, AutomateHeaderPlugin)
-  .dependsOn(core.jvm, generic.jvm, doobie)
+  .dependsOn(buildInfo.jvm, core.jvm, generic.jvm, doobie)
   .settings(commonSettings)
   .settings(
     name := "grackle-demo",
     coverageEnabled := false,
     libraryDependencies ++= Seq(
-      "org.typelevel"     %% "log4cats-slf4j"             % log4catsVersion,
-      "ch.qos.logback"    %  "logback-classic"            % logbackVersion,
-      "org.tpolecat"      %% "doobie-core"                % doobieVersion,
-      "org.tpolecat"      %% "doobie-postgres"            % doobieVersion,
-      "org.tpolecat"      %% "doobie-hikari"              % doobieVersion,
-      "org.http4s"        %% "http4s-ember-server"        % http4sVersion,
-      "org.http4s"        %% "http4s-ember-client"        % http4sVersion,
-      "org.http4s"        %% "http4s-circe"               % http4sVersion,
-      "org.http4s"        %% "http4s-dsl"                 % http4sVersion,
-      "org.flywaydb"      %  "flyway-database-postgresql" % flywayVersion,
-      "io.chrisdavenport" %% "whale-tail-manager"         % whaleTailVersion,
-      "com.github.jnr"    % "jnr-unixsocket"              % jnrUnixsocketVersion
+      "org.typelevel"     %% "log4cats-slf4j"      % log4catsVersion,
+      "ch.qos.logback"    %  "logback-classic"     % logbackVersion,
+      "org.tpolecat"      %% "doobie-core"         % doobieVersion,
+      "org.tpolecat"      %% "doobie-postgres"     % doobieVersion,
+      "org.tpolecat"      %% "doobie-hikari"       % doobieVersion,
+      "org.http4s"        %% "http4s-ember-server" % http4sVersion,
+      "org.http4s"        %% "http4s-ember-client" % http4sVersion,
+      "org.http4s"        %% "http4s-circe"        % http4sVersion,
+      "org.http4s"        %% "http4s-dsl"          % http4sVersion,
+      "io.chrisdavenport" %% "whale-tail-manager"  % whaleTailVersion,
+      "com.github.jnr"    % "jnr-unixsocket"       % jnrUnixsocketVersion
     )
   )
 

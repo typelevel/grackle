@@ -337,11 +337,10 @@ Finally we need to run all of this on top of http4s. Here we have a simple `IOAp
 ```scala
 object Main extends IOApp {
   def run(args: List[String]): IO[ExitCode] = {
-    val starWarsGraphQLRoutes = GraphQLService.routes[IO](
-      "starwars",
-      GraphQLService.fromMapping(new StarWarsMapping[IO] with StarWarsData[IO])
-    )
-    DemoServer.resource(starWarsGraphQLRoutes).useForever
+    (for {
+      starWarsRoutes <- StarWarsMapping[IO].map(mkRoutes("starwars"))
+      _              <- mkServer(starWarsRoutes)
+    } yield ()).useForever
   }
 }
 ```

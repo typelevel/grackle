@@ -24,17 +24,8 @@ import org.http4s.dsl.Http4sDsl
 import org.http4s.{HttpRoutes, InvalidMessageBodyFailure, ParseFailure, QueryParamDecoder}
 
 // #service
-trait GraphQLService[F[_]] {
-  def runQuery(op: Option[String], vars: Option[Json], query: String): F[Json]
-}
-
 object GraphQLService {
-
-  def fromMapping[F[_]: Concurrent](mapping: Mapping[F]): GraphQLService[F] =
-    (op: Option[String], vars: Option[Json], query: String) =>
-      mapping.compileAndRun(query, op, vars)
-
-  def routes[F[_]: Concurrent](prefix: String, svc: GraphQLService[F]): HttpRoutes[F] = {
+  def mkRoutes[F[_]: Concurrent](prefix: String)(mapping: Mapping[F]): HttpRoutes[F] = {
     val dsl = new Http4sDsl[F]{}
     import dsl._
 
@@ -60,7 +51,7 @@ object GraphQLService {
           errors => BadRequest(errors.map(_.sanitized).mkString_("", ",", "")),
           vars =>
             for {
-              result <- svc.runQuery(op, vars, query)
+              result <- mapping.compileAndRun(query, op, vars)
               resp   <- Ok(result)
             } yield resp
         )
@@ -77,7 +68,7 @@ object GraphQLService {
                     )
           op     =  obj("operationName").flatMap(_.asString)
           vars   =  obj("variables")
-          result <- svc.runQuery(op, vars, query)
+          result <- mapping.compileAndRun(query, op, vars)
           resp   <- Ok(result)
         } yield resp
     }
