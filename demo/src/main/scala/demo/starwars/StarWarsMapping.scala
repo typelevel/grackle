@@ -15,7 +15,9 @@
 
 package demo.starwars
 
+import cats.MonadThrow
 import cats.syntax.all._
+import cats.effect.Resource
 import grackle.Predicate._
 import grackle.Query._
 import grackle.QueryCompiler._
@@ -104,6 +106,11 @@ trait StarWarsMapping[F[_]] extends GenericMapping[F] { self: StarWarsData[F] =>
       }
   }
   // #elaborator
+}
+
+object StarWarsMapping {
+  def apply[F[_]: MonadThrow]: Resource[F, StarWarsMapping[F]] =
+    Resource.pure(new StarWarsMapping[F] with StarWarsData[F])
 }
 
 // The types and values for the in-memory Star Wars example.

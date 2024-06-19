@@ -117,8 +117,8 @@ println(grackle.docs.Output.snip("demo/src/main/scala/demo/world/WorldMapping.sc
 To expose the GraphQL API via http4s we will use the `GraphQLService` and `DemoServer` from the [in-memory
 example](in-memory-model.md#the-service).
 
-The `run` method starts the dockerized PostgreSQL database, creates the database schema, writes initial data and
-exposes the GraphQL API for both the in-memory and the db-backend models,
+The `run` method starts the dockerized PostgreSQL database, and exposes the GraphQL API for both the in-memory and the
+db-backend models,
 
 ```scala mdoc:passthrough
 println(grackle.docs.Output.snip("demo/src/main/scala/demo/Main.scala", "#main"))

@@ -15,8 +15,8 @@
 
 package demo.world
 
-import _root_.doobie.{Meta, Transactor}
-import cats.effect.Sync
+import cats.effect.{Async, Resource, Sync}
+import doobie.{Meta, Transactor}
 import grackle.Predicate._
 import grackle.Query._
 import grackle.QueryCompiler._
@@ -27,6 +27,8 @@ import grackle.sql.Like
 import grackle.syntax._
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
+
+import WorldData._
 
 trait WorldMapping[F[_]] extends DoobieMapping[F] {
   // #db_tables
@@ -278,8 +280,15 @@ object WorldMapping extends LoggedDoobieMappingCompanion {
   def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): WorldMapping[F] =
     new DoobieMapping(transactor, monitor) with WorldMapping[F]
 
-  def mkMappingFromTransactor[F[_]: Sync](transactor: Transactor[F]): Mapping[F] = {
-    implicit val logger: Logger[F] = Slf4jLogger.getLoggerFromName[F]("SqlQueryLogger")
-    mkMapping(transactor)
+  def mkMappingFromTransactor[F[_]: Sync](transactor: Transactor[F]): WorldMapping[F] = {
+    val logger: Logger[F] = Slf4jLogger.getLoggerFromName[F]("SqlQueryLogger")
+    val monitor: DoobieMonitor[F] = DoobieMonitor.loggerMonitor[F](logger)
+    mkMapping(transactor, monitor)
   }
+
+  def apply[F[_]: Async]: Resource[F, WorldMapping[F]] =
+    for {
+      connInfo   <- mkContainer[F]
+      transactor <- mkTransactor[F](connInfo)
+    } yield mkMappingFromTransactor[F](transactor)
 }
