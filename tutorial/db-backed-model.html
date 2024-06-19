@@ -182,8 +182,6 @@ demo INFO  - Ember-Server service bound to address: [::]:8080</code></pre>
         <pre><code class="nohighlight"><span>  </span><span class="keyword">val</span><span> </span><span class="identifier">schema</span><span> =
     </span><span class="string-literal">schema&quot;&quot;&quot;
       type Query {
-        city(id: Int): City
-        cities(namePattern: String = &quot;%&quot;): [City!]
         country(code: String): Country
         countries(
           maxPopulation: Int = -1,
@@ -191,17 +189,8 @@ demo INFO  - Ember-Server service bound to address: [::]:8080</code></pre>
           offset: Int = -1,
           limit: Int = -1
         ): [Country!]
-      }
-      type City {
-        id: Int!
-        name: String!
-        country: Country!
-        district: String!
-        population: Int!
-      }
-      type Language {
-        name: String!
-        countries: [Country!]!
+        city(id: Int): City
+        cities(namePattern: String = &quot;%&quot;): [City!]
       }
       type Country {
         name: String!
@@ -221,6 +210,17 @@ demo INFO  - Ember-Server service bound to address: [::]:8080</code></pre>
         numCities(namePattern: String): Int!
         cities: [City!]!
         languages: [Language!]!
+      }
+      type City {
+        id: Int!
+        name: String!
+        country: Country!
+        district: String!
+        population: Int!
+      }
+      type Language {
+        name: String!
+        countries: [Country!]!
       }
     &quot;&quot;&quot;</span></code></pre>
         <p>The use of the <code>schema</code> string interpolator here causes the content of the string literal to be evaluated and checked
