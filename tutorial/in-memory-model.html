@@ -518,17 +518,8 @@ type Human implements Character {
         <h2 id="the-service" class="section"><a class="anchor-link left" href="#the-service"><i class="icofont-laika link">&#xef71;</i></a>The service</h2>
         <p>What we&#39;ve seen so far allows us to compile and execute GraphQL queries against our in-memory model. We now need to
         expose that via HTTP. The following shows how we do that for http4s,</p>
-        <pre><code class="nohighlight"><span class="keyword">trait</span><span> </span><span class="type-name">GraphQLService</span><span>[</span><span class="type-name">F</span><span>[</span><span class="identifier">_</span><span>]] {
-  </span><span class="keyword">def</span><span> </span><span class="declaration-name">runQuery</span><span>(</span><span class="identifier">op</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">String</span><span>], </span><span class="identifier">vars</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">Json</span><span>], </span><span class="identifier">query</span><span>: </span><span class="type-name">String</span><span>): </span><span class="type-name">F</span><span>[</span><span class="type-name">Json</span><span>]
-}
-
-</span><span class="keyword">object</span><span> </span><span class="type-name">GraphQLService</span><span> {
-
-  </span><span class="keyword">def</span><span> </span><span class="declaration-name">fromMapping</span><span>[</span><span class="type-name">F</span><span>[</span><span class="identifier">_</span><span>]: </span><span class="type-name">Concurrent</span><span>](</span><span class="identifier">mapping</span><span>: </span><span class="type-name">Mapping</span><span>[</span><span class="type-name">F</span><span>]): </span><span class="type-name">GraphQLService</span><span>[</span><span class="type-name">F</span><span>] =
-    (</span><span class="identifier">op</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">String</span><span>], </span><span class="identifier">vars</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">Json</span><span>], </span><span class="identifier">query</span><span>: </span><span class="type-name">String</span><span>) =&gt;
-      </span><span class="identifier">mapping</span><span>.</span><span class="identifier">compileAndRun</span><span>(</span><span class="identifier">query</span><span>, </span><span class="identifier">op</span><span>, </span><span class="identifier">vars</span><span>)
-
-  </span><span class="keyword">def</span><span> </span><span class="declaration-name">routes</span><span>[</span><span class="type-name">F</span><span>[</span><span class="identifier">_</span><span>]: </span><span class="type-name">Concurrent</span><span>](</span><span class="identifier">prefix</span><span>: </span><span class="type-name">String</span><span>, </span><span class="identifier">svc</span><span>: </span><span class="type-name">GraphQLService</span><span>[</span><span class="type-name">F</span><span>]): </span><span class="type-name">HttpRoutes</span><span>[</span><span class="type-name">F</span><span>] = {
+        <pre><code class="nohighlight"><span class="keyword">object</span><span> </span><span class="type-name">GraphQLService</span><span> {
+  </span><span class="keyword">def</span><span> </span><span class="declaration-name">mkRoutes</span><span>[</span><span class="type-name">F</span><span>[</span><span class="identifier">_</span><span>]: </span><span class="type-name">Concurrent</span><span>](</span><span class="identifier">prefix</span><span>: </span><span class="type-name">String</span><span>)(</span><span class="identifier">mapping</span><span>: </span><span class="type-name">Mapping</span><span>[</span><span class="type-name">F</span><span>]): </span><span class="type-name">HttpRoutes</span><span>[</span><span class="type-name">F</span><span>] = {
     </span><span class="keyword">val</span><span> </span><span class="identifier">dsl</span><span> = </span><span class="keyword">new</span><span> </span><span class="type-name">Http4sDsl</span><span>[</span><span class="type-name">F</span><span>]{}
     </span><span class="keyword">import</span><span> </span><span class="identifier">dsl</span><span>.</span><span class="identifier">_</span><span>
 
@@ -554,7 +545,7 @@ type Human implements Character {
           </span><span class="identifier">errors</span><span> =&gt; </span><span class="type-name">BadRequest</span><span>(</span><span class="identifier">errors</span><span>.</span><span class="identifier">map</span><span>(</span><span class="identifier">_</span><span>.</span><span class="identifier">sanitized</span><span>).</span><span class="identifier">mkString_</span><span>(</span><span class="string-literal">&quot;&quot;</span><span>, </span><span class="string-literal">&quot;,&quot;</span><span>, </span><span class="string-literal">&quot;&quot;</span><span>)),
           </span><span class="identifier">vars</span><span> =&gt;
             </span><span class="keyword">for</span><span> {
-              </span><span class="identifier">result</span><span> &lt;- </span><span class="identifier">svc</span><span>.</span><span class="identifier">runQuery</span><span>(</span><span class="identifier">op</span><span>, </span><span class="identifier">vars</span><span>, </span><span class="identifier">query</span><span>)
+              </span><span class="identifier">result</span><span> &lt;- </span><span class="identifier">mapping</span><span>.</span><span class="identifier">compileAndRun</span><span>(</span><span class="identifier">query</span><span>, </span><span class="identifier">op</span><span>, </span><span class="identifier">vars</span><span>)
               </span><span class="identifier">resp</span><span>   &lt;- </span><span class="type-name">Ok</span><span>(</span><span class="identifier">result</span><span>)
             } </span><span class="keyword">yield</span><span> </span><span class="identifier">resp</span><span>
         )
@@ -571,7 +562,7 @@ type Human implements Character {
                     )
           </span><span class="identifier">op</span><span>     =  </span><span class="identifier">obj</span><span>(</span><span class="string-literal">&quot;operationName&quot;</span><span>).</span><span class="identifier">flatMap</span><span>(</span><span class="identifier">_</span><span>.</span><span class="identifier">asString</span><span>)
           </span><span class="identifier">vars</span><span>   =  </span><span class="identifier">obj</span><span>(</span><span class="string-literal">&quot;variables&quot;</span><span>)
-          </span><span class="identifier">result</span><span> &lt;- </span><span class="identifier">svc</span><span>.</span><span class="identifier">runQuery</span><span>(</span><span class="identifier">op</span><span>, </span><span class="identifier">vars</span><span>, </span><span class="identifier">query</span><span>)
+          </span><span class="identifier">result</span><span> &lt;- </span><span class="identifier">mapping</span><span>.</span><span class="identifier">compileAndRun</span><span>(</span><span class="identifier">query</span><span>, </span><span class="identifier">op</span><span>, </span><span class="identifier">vars</span><span>)
           </span><span class="identifier">resp</span><span>   &lt;- </span><span class="type-name">Ok</span><span>(</span><span class="identifier">result</span><span>)
         } </span><span class="keyword">yield</span><span> </span><span class="identifier">resp</span><span>
     }
@@ -595,15 +586,14 @@ query&gt;</code>. For queries via POST, the query is embedded in a JSON value of
         <code>StarWarsService</code> defined above, and a <code>ResourceService</code> to serve the GraphQL Playground web client,</p>
         <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">object</span><span> </span><span class="type-name">Main</span><span> </span><span class="keyword">extends</span><span> </span><span class="type-name">IOApp</span><span> {
   </span><span class="keyword">def</span><span> </span><span class="declaration-name">run</span><span>(</span><span class="identifier">args</span><span>: </span><span class="type-name">List</span><span>[</span><span class="type-name">String</span><span>]): </span><span class="type-name">IO</span><span>[</span><span class="type-name">ExitCode</span><span>] = {
-    </span><span class="keyword">val</span><span> </span><span class="identifier">starWarsGraphQLRoutes</span><span> = </span><span class="type-name">GraphQLService</span><span>.</span><span class="identifier">routes</span><span>[</span><span class="type-name">IO</span><span>](
-      </span><span class="string-literal">&quot;starwars&quot;</span><span>,
-      </span><span class="type-name">GraphQLService</span><span>.</span><span class="identifier">fromMapping</span><span>(</span><span class="keyword">new</span><span> </span><span class="type-name">StarWarsMapping</span><span>[</span><span class="type-name">IO</span><span>] </span><span class="keyword">with</span><span> </span><span class="type-name">StarWarsData</span><span>[</span><span class="type-name">IO</span><span>])
-    )
-    </span><span class="type-name">DemoServer</span><span>.</span><span class="identifier">resource</span><span>(</span><span class="identifier">starWarsGraphQLRoutes</span><span>).</span><span class="identifier">useForever</span><span>
+    (</span><span class="keyword">for</span><span> {
+      </span><span class="identifier">starWarsRoutes</span><span> &lt;- </span><span class="type-name">StarWarsMapping</span><span>[</span><span class="type-name">IO</span><span>].</span><span class="identifier">map</span><span>(</span><span class="identifier">mkRoutes</span><span>(</span><span class="string-literal">&quot;starwars&quot;</span><span>))
+      </span><span class="identifier">_</span><span>              &lt;- </span><span class="identifier">mkServer</span><span>(</span><span class="identifier">starWarsRoutes</span><span>)
+    } </span><span class="keyword">yield</span><span> ()).</span><span class="identifier">useForever</span><span>
   }
 }</span></code></pre>
         <pre><code class="nohighlight"><span class="keyword">object</span><span> </span><span class="type-name">DemoServer</span><span> {
-  </span><span class="keyword">def</span><span> </span><span class="declaration-name">resource</span><span>(</span><span class="identifier">graphQLRoutes</span><span>: </span><span class="type-name">HttpRoutes</span><span>[</span><span class="type-name">IO</span><span>]): </span><span class="type-name">Resource</span><span>[</span><span class="type-name">IO</span><span>, </span><span class="type-name">Unit</span><span>] = {
+  </span><span class="keyword">def</span><span> </span><span class="declaration-name">mkServer</span><span>(</span><span class="identifier">graphQLRoutes</span><span>: </span><span class="type-name">HttpRoutes</span><span>[</span><span class="type-name">IO</span><span>]): </span><span class="type-name">Resource</span><span>[</span><span class="type-name">IO</span><span>, </span><span class="type-name">Unit</span><span>] = {
     </span><span class="keyword">val</span><span> </span><span class="identifier">httpApp0</span><span> = (
       </span><span class="comment">// Routes for static resources, i.e. GraphQL Playground
 </span><span>      </span><span class="identifier">resourceServiceBuilder</span><span>[</span><span class="type-name">IO</span><span>](</span><span class="string-literal">&quot;/assets&quot;</span><span>).</span><span class="identifier">toRoutes</span><span> &lt;+&gt;

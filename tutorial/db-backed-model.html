@@ -426,25 +426,19 @@ demo INFO  - Ember-Server service bound to address: [::]:8080</code></pre>
         <h2 id="putting-it-all-together" class="section"><a class="anchor-link left" href="#putting-it-all-together"><i class="icofont-laika link">&#xef71;</i></a>Putting it all together</h2>
         <p>To expose the GraphQL API via http4s we will use the <code>GraphQLService</code> and <code>DemoServer</code> from the <a href="in-memory-model.html#the-service">in-memory
         example</a>.</p>
-        <p>The <code>run</code> method starts the dockerized PostgreSQL database, creates the database schema, writes initial data and
-        exposes the GraphQL API for both the in-memory and the db-backend models,</p>
-        <pre><code class="nohighlight"><span class="keyword">object</span><span> </span><span class="type-name">Main</span><span> </span><span class="keyword">extends</span><span> </span><span class="type-name">IOApp</span><span> {
+        <p>The <code>run</code> method starts the dockerized PostgreSQL database, and exposes the GraphQL API for both the in-memory and the
+        db-backend models,</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">object</span><span> </span><span class="type-name">Main</span><span> </span><span class="keyword">extends</span><span> </span><span class="type-name">IOApp</span><span> {
   </span><span class="keyword">def</span><span> </span><span class="declaration-name">run</span><span>(</span><span class="identifier">args</span><span>: </span><span class="type-name">List</span><span>[</span><span class="type-name">String</span><span>]): </span><span class="type-name">IO</span><span>[</span><span class="type-name">ExitCode</span><span>] = {
-    </span><span class="type-name">DBSetup</span><span>.</span><span class="identifier">run</span><span> { </span><span class="identifier">xa</span><span> =&gt;
-      </span><span class="keyword">val</span><span> </span><span class="identifier">worldGraphQLRoutes</span><span> = </span><span class="type-name">GraphQLService</span><span>.</span><span class="identifier">routes</span><span>(
-        </span><span class="string-literal">&quot;world&quot;</span><span>,
-        </span><span class="type-name">GraphQLService</span><span>.</span><span class="identifier">fromMapping</span><span>(</span><span class="type-name">WorldMapping</span><span>.</span><span class="identifier">mkMappingFromTransactor</span><span>(</span><span class="identifier">xa</span><span>))
-      )
-      </span><span class="keyword">val</span><span> </span><span class="identifier">starWarsGraphQLRoutes</span><span> = </span><span class="type-name">GraphQLService</span><span>.</span><span class="identifier">routes</span><span>[</span><span class="type-name">IO</span><span>](
-        </span><span class="string-literal">&quot;starwars&quot;</span><span>,
-        </span><span class="type-name">GraphQLService</span><span>.</span><span class="identifier">fromMapping</span><span>(</span><span class="keyword">new</span><span> </span><span class="type-name">StarWarsMapping</span><span>[</span><span class="type-name">IO</span><span>] </span><span class="keyword">with</span><span> </span><span class="type-name">StarWarsData</span><span>[</span><span class="type-name">IO</span><span>])
-      )
-      </span><span class="type-name">DemoServer</span><span>.</span><span class="identifier">resource</span><span>(</span><span class="identifier">worldGraphQLRoutes</span><span> &lt;+&gt; </span><span class="identifier">starWarsGraphQLRoutes</span><span>)
-    }
+    (</span><span class="keyword">for</span><span> {
+      </span><span class="identifier">starWarsRoutes</span><span> &lt;- </span><span class="type-name">StarWarsMapping</span><span>[</span><span class="type-name">IO</span><span>].</span><span class="identifier">map</span><span>(</span><span class="identifier">mkRoutes</span><span>(</span><span class="string-literal">&quot;starwars&quot;</span><span>))
+      </span><span class="identifier">worldRoutes</span><span>    &lt;- </span><span class="type-name">WorldMapping</span><span>[</span><span class="type-name">IO</span><span>].</span><span class="identifier">map</span><span>(</span><span class="identifier">mkRoutes</span><span>(</span><span class="string-literal">&quot;world&quot;</span><span>))
+      </span><span class="identifier">_</span><span>              &lt;- </span><span class="identifier">mkServer</span><span>(</span><span class="identifier">starWarsRoutes</span><span> &lt;+&gt; </span><span class="identifier">worldRoutes</span><span>)
+    } </span><span class="keyword">yield</span><span> ()).</span><span class="identifier">useForever</span><span>
   }
 }</span></code></pre>
         <pre><code class="nohighlight"><span class="keyword">object</span><span> </span><span class="type-name">DemoServer</span><span> {
-  </span><span class="keyword">def</span><span> </span><span class="declaration-name">resource</span><span>(</span><span class="identifier">graphQLRoutes</span><span>: </span><span class="type-name">HttpRoutes</span><span>[</span><span class="type-name">IO</span><span>]): </span><span class="type-name">Resource</span><span>[</span><span class="type-name">IO</span><span>, </span><span class="type-name">Unit</span><span>] = {
+  </span><span class="keyword">def</span><span> </span><span class="declaration-name">mkServer</span><span>(</span><span class="identifier">graphQLRoutes</span><span>: </span><span class="type-name">HttpRoutes</span><span>[</span><span class="type-name">IO</span><span>]): </span><span class="type-name">Resource</span><span>[</span><span class="type-name">IO</span><span>, </span><span class="type-name">Unit</span><span>] = {
     </span><span class="keyword">val</span><span> </span><span class="identifier">httpApp0</span><span> = (
       </span><span class="comment">// Routes for static resources, i.e. GraphQL Playground
 </span><span>      </span><span class="identifier">resourceServiceBuilder</span><span>[</span><span class="type-name">IO</span><span>](</span><span class="string-literal">&quot;/assets&quot;</span><span>).</span><span class="identifier">toRoutes</span><span> &lt;+&gt;
