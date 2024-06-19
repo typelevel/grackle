@@ -68,8 +68,6 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
   val schema =
     schema"""
       type Query {
-        city(id: Int): City
-        cities(namePattern: String = "%"): [City!]
         country(code: String): Country
         countries(
           maxPopulation: Int = -1,
@@ -77,17 +75,8 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
           offset: Int = -1,
           limit: Int = -1
         ): [Country!]
-      }
-      type City {
-        id: Int!
-        name: String!
-        country: Country!
-        district: String!
-        population: Int!
-      }
-      type Language {
-        name: String!
-        countries: [Country!]!
+        city(id: Int): City
+        cities(namePattern: String = "%"): [City!]
       }
       type Country {
         name: String!
@@ -107,6 +96,17 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
         numCities(namePattern: String): Int!
         cities: [City!]!
         languages: [Language!]!
+      }
+      type City {
+        id: Int!
+        name: String!
+        country: Country!
+        district: String!
+        population: Int!
+      }
+      type Language {
+        name: String!
+        countries: [Country!]!
       }
     """
   // #schema
