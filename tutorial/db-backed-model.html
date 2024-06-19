@@ -182,25 +182,25 @@ demo INFO  - Ember-Server service bound to address: [::]:8080</code></pre>
         <pre><code class="nohighlight"><span>  </span><span class="keyword">val</span><span> </span><span class="identifier">schema</span><span> =
     </span><span class="string-literal">schema&quot;&quot;&quot;
       type Query {
-        cities(namePattern: String = &quot;%&quot;): [City!]
         city(id: Int): City
+        cities(namePattern: String = &quot;%&quot;): [City!]
         country(code: String): Country
-        countries(limit: Int = -1, offset: Int = 0, minPopulation: Int = 0,
-                  byPopulation: Boolean = false): [Country!]
-        language(language: String): Language
-        search(minPopulation: Int!, indepSince: Int!): [Country!]!
-        search2(indep: Boolean!, limit: Int!): [Country!]!
+        countries(
+          maxPopulation: Int = -1,
+          sortByPopulation: Boolean = false,
+          offset: Int = -1,
+          limit: Int = -1
+        ): [Country!]
       }
       type City {
+        id: Int!
         name: String!
         country: Country!
         district: String!
         population: Int!
       }
       type Language {
-        language: String!
-        isOfficial: Boolean!
-        percentage: Float!
+        name: String!
         countries: [Country!]!
       }
       type Country {
@@ -218,7 +218,6 @@ demo INFO  - Ember-Server service bound to address: [::]:8080</code></pre>
         headofstate: String
         capitalId: Int
         code: String!
-        code2: String!
         numCities(namePattern: String): Int!
         cities: [City!]!
         languages: [Language!]!
@@ -249,7 +248,6 @@ demo INFO  - Ember-Server service bound to address: [::]:8080</code></pre>
     </span><span class="keyword">val</span><span> </span><span class="identifier">headofstate</span><span>    = </span><span class="identifier">col</span><span>(</span><span class="string-literal">&quot;headofstate&quot;</span><span>, </span><span class="type-name">Meta</span><span>[</span><span class="type-name">String</span><span>], </span><span class="identifier">nullable</span><span> = </span><span class="boolean-literal">true</span><span>)
     </span><span class="keyword">val</span><span> </span><span class="identifier">capitalId</span><span>      = </span><span class="identifier">col</span><span>(</span><span class="string-literal">&quot;capital&quot;</span><span>, </span><span class="type-name">Meta</span><span>[</span><span class="type-name">Int</span><span>], </span><span class="identifier">nullable</span><span> = </span><span class="boolean-literal">true</span><span>)
     </span><span class="keyword">val</span><span> </span><span class="identifier">numCities</span><span>      = </span><span class="identifier">col</span><span>(</span><span class="string-literal">&quot;num_cities&quot;</span><span>, </span><span class="type-name">Meta</span><span>[</span><span class="type-name">Long</span><span>])
-    </span><span class="keyword">val</span><span> </span><span class="identifier">code2</span><span>          = </span><span class="identifier">col</span><span>(</span><span class="string-literal">&quot;code2&quot;</span><span>, </span><span class="type-name">Meta</span><span>[</span><span class="type-name">String</span><span>])
   }
 
   </span><span class="keyword">object</span><span> </span><span class="identifier">city</span><span> </span><span class="keyword">extends</span><span> </span><span class="type-name">TableDef</span><span>(</span><span class="string-literal">&quot;city&quot;</span><span>) {
@@ -263,20 +261,15 @@ demo INFO  - Ember-Server service bound to address: [::]:8080</code></pre>
   </span><span class="keyword">object</span><span> </span><span class="identifier">countrylanguage</span><span> </span><span class="keyword">extends</span><span> </span><span class="type-name">TableDef</span><span>(</span><span class="string-literal">&quot;countrylanguage&quot;</span><span>) {
     </span><span class="keyword">val</span><span> </span><span class="identifier">countrycode</span><span> = </span><span class="identifier">col</span><span>(</span><span class="string-literal">&quot;countrycode&quot;</span><span>, </span><span class="type-name">Meta</span><span>[</span><span class="type-name">String</span><span>])
     </span><span class="keyword">val</span><span> </span><span class="identifier">language</span><span> = </span><span class="identifier">col</span><span>(</span><span class="string-literal">&quot;language&quot;</span><span>, </span><span class="type-name">Meta</span><span>[</span><span class="type-name">String</span><span>])
-    </span><span class="keyword">val</span><span> </span><span class="identifier">isOfficial</span><span> = </span><span class="identifier">col</span><span>(</span><span class="string-literal">&quot;isOfficial&quot;</span><span>, </span><span class="type-name">Meta</span><span>[</span><span class="type-name">Boolean</span><span>])
-    </span><span class="keyword">val</span><span> </span><span class="identifier">percentage</span><span> = </span><span class="identifier">col</span><span>(</span><span class="string-literal">&quot;percentage&quot;</span><span>, </span><span class="type-name">Meta</span><span>[</span><span class="type-name">Float</span><span>])
   }</span></code></pre>
         <p>For each column we need to provide its name and doobie codec of type <code>Meta</code>. We should also mark if the value is
         nullable.</p>
         <p>We define the top-level GraphQL fields as <code>SqlObject</code> mappings,</p>
         <pre class="keep-together pdf epub"><code class="nohighlight"><span>      </span><span class="type-name">ObjectMapping</span><span>(</span><span class="type-name">QueryType</span><span>)(
-        </span><span class="type-name">SqlObject</span><span>(</span><span class="string-literal">&quot;cities&quot;</span><span>),
-        </span><span class="type-name">SqlObject</span><span>(</span><span class="string-literal">&quot;city&quot;</span><span>),
         </span><span class="type-name">SqlObject</span><span>(</span><span class="string-literal">&quot;country&quot;</span><span>),
         </span><span class="type-name">SqlObject</span><span>(</span><span class="string-literal">&quot;countries&quot;</span><span>),
-        </span><span class="type-name">SqlObject</span><span>(</span><span class="string-literal">&quot;language&quot;</span><span>),
-        </span><span class="type-name">SqlObject</span><span>(</span><span class="string-literal">&quot;search&quot;</span><span>),
-        </span><span class="type-name">SqlObject</span><span>(</span><span class="string-literal">&quot;search2&quot;</span><span>)
+        </span><span class="type-name">SqlObject</span><span>(</span><span class="string-literal">&quot;city&quot;</span><span>),
+        </span><span class="type-name">SqlObject</span><span>(</span><span class="string-literal">&quot;cities&quot;</span><span>)
       ),</span></code></pre>
         <p>Now, we need to map each type from the GraphQL schema using columns from the database,</p>
         <pre><code class="nohighlight"><span>      </span><span class="type-name">ObjectMapping</span><span>(</span><span class="type-name">CountryType</span><span>)(
@@ -294,13 +287,12 @@ demo INFO  - Ember-Server service bound to address: [::]:8080</code></pre>
         </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;governmentform&quot;</span><span>, </span><span class="identifier">country</span><span>.</span><span class="identifier">governmentform</span><span>),
         </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;headofstate&quot;</span><span>,    </span><span class="identifier">country</span><span>.</span><span class="identifier">headofstate</span><span>),
         </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;capitalId&quot;</span><span>,      </span><span class="identifier">country</span><span>.</span><span class="identifier">capitalId</span><span>),
-        </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;code2&quot;</span><span>,          </span><span class="identifier">country</span><span>.</span><span class="identifier">code2</span><span>),
         </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;numCities&quot;</span><span>,      </span><span class="identifier">country</span><span>.</span><span class="identifier">numCities</span><span>),
         </span><span class="type-name">SqlObject</span><span>(</span><span class="string-literal">&quot;cities&quot;</span><span>,        </span><span class="type-name">Join</span><span>(</span><span class="identifier">country</span><span>.</span><span class="identifier">code</span><span>, </span><span class="identifier">city</span><span>.</span><span class="identifier">countrycode</span><span>)),
         </span><span class="type-name">SqlObject</span><span>(</span><span class="string-literal">&quot;languages&quot;</span><span>,     </span><span class="type-name">Join</span><span>(</span><span class="identifier">country</span><span>.</span><span class="identifier">code</span><span>, </span><span class="identifier">countrylanguage</span><span>.</span><span class="identifier">countrycode</span><span>))
       ),
       </span><span class="type-name">ObjectMapping</span><span>(</span><span class="type-name">CityType</span><span>)(
-        </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;id&quot;</span><span>, </span><span class="identifier">city</span><span>.</span><span class="identifier">id</span><span>, </span><span class="identifier">key</span><span> = </span><span class="boolean-literal">true</span><span>, </span><span class="identifier">hidden</span><span> = </span><span class="boolean-literal">true</span><span>),
+        </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;id&quot;</span><span>, </span><span class="identifier">city</span><span>.</span><span class="identifier">id</span><span>, </span><span class="identifier">key</span><span> = </span><span class="boolean-literal">true</span><span>),
         </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;countrycode&quot;</span><span>, </span><span class="identifier">city</span><span>.</span><span class="identifier">countrycode</span><span>, </span><span class="identifier">hidden</span><span> = </span><span class="boolean-literal">true</span><span>),
         </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;name&quot;</span><span>, </span><span class="identifier">city</span><span>.</span><span class="identifier">name</span><span>),
         </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;district&quot;</span><span>, </span><span class="identifier">city</span><span>.</span><span class="identifier">district</span><span>),
@@ -308,9 +300,7 @@ demo INFO  - Ember-Server service bound to address: [::]:8080</code></pre>
         </span><span class="type-name">SqlObject</span><span>(</span><span class="string-literal">&quot;country&quot;</span><span>, </span><span class="type-name">Join</span><span>(</span><span class="identifier">city</span><span>.</span><span class="identifier">countrycode</span><span>, </span><span class="identifier">country</span><span>.</span><span class="identifier">code</span><span>)),
       ),
       </span><span class="type-name">ObjectMapping</span><span>(</span><span class="type-name">LanguageType</span><span>)(
-        </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;language&quot;</span><span>, </span><span class="identifier">countrylanguage</span><span>.</span><span class="identifier">language</span><span>, </span><span class="identifier">key</span><span> = </span><span class="boolean-literal">true</span><span>, </span><span class="identifier">associative</span><span> = </span><span class="boolean-literal">true</span><span>),
-        </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;isOfficial&quot;</span><span>, </span><span class="identifier">countrylanguage</span><span>.</span><span class="identifier">isOfficial</span><span>),
-        </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;percentage&quot;</span><span>, </span><span class="identifier">countrylanguage</span><span>.</span><span class="identifier">percentage</span><span>),
+        </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;name&quot;</span><span>, </span><span class="identifier">countrylanguage</span><span>.</span><span class="identifier">language</span><span>, </span><span class="identifier">key</span><span> = </span><span class="boolean-literal">true</span><span>, </span><span class="identifier">associative</span><span> = </span><span class="boolean-literal">true</span><span>),
         </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;countrycode&quot;</span><span>, </span><span class="identifier">countrylanguage</span><span>.</span><span class="identifier">countrycode</span><span>, </span><span class="identifier">hidden</span><span> = </span><span class="boolean-literal">true</span><span>),
         </span><span class="type-name">SqlObject</span><span>(</span><span class="string-literal">&quot;countries&quot;</span><span>, </span><span class="type-name">Join</span><span>(</span><span class="identifier">countrylanguage</span><span>.</span><span class="identifier">countrycode</span><span>, </span><span class="identifier">country</span><span>.</span><span class="identifier">code</span><span>))
       )</span></code></pre>
@@ -328,45 +318,38 @@ demo INFO  - Ember-Server service bound to address: [::]:8080</code></pre>
         </span><span class="type-name">Unique</span><span>(</span><span class="type-name">Filter</span><span>(</span><span class="type-name">Eql</span><span>(</span><span class="type-name">CountryType</span><span> / </span><span class="string-literal">&quot;code&quot;</span><span>, </span><span class="type-name">Const</span><span>(</span><span class="identifier">code</span><span>)), </span><span class="identifier">child</span><span>))
       }
 
-    </span><span class="keyword">case</span><span> (</span><span class="type-name">QueryType</span><span>, </span><span class="string-literal">&quot;city&quot;</span><span>, </span><span class="type-name">List</span><span>(</span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;id&quot;</span><span>, </span><span class="type-name">IntValue</span><span>(</span><span class="identifier">id</span><span>)))) =&gt;
-      </span><span class="type-name">Elab</span><span>.</span><span class="identifier">transformChild</span><span>(</span><span class="identifier">child</span><span> =&gt; </span><span class="type-name">Unique</span><span>(</span><span class="type-name">Filter</span><span>(</span><span class="type-name">Eql</span><span>(</span><span class="type-name">CityType</span><span> / </span><span class="string-literal">&quot;id&quot;</span><span>, </span><span class="type-name">Const</span><span>(</span><span class="identifier">id</span><span>)), </span><span class="identifier">child</span><span>)))
-
-    </span><span class="keyword">case</span><span> (
-           </span><span class="type-name">QueryType</span><span>, </span><span class="string-literal">&quot;countries&quot;</span><span>,
+    </span><span class="keyword">case</span><span> (</span><span class="type-name">QueryType</span><span>, </span><span class="string-literal">&quot;countries&quot;</span><span>,
            </span><span class="type-name">List</span><span>(
-             </span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;limit&quot;</span><span>, </span><span class="type-name">IntValue</span><span>(</span><span class="identifier">num</span><span>)),
+             </span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;maxPopulation&quot;</span><span>, </span><span class="type-name">IntValue</span><span>(</span><span class="identifier">max</span><span>)),
+             </span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;sortByPopulation&quot;</span><span>, </span><span class="type-name">BooleanValue</span><span>(</span><span class="identifier">sortByPop</span><span>)),
              </span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;offset&quot;</span><span>, </span><span class="type-name">IntValue</span><span>(</span><span class="identifier">off</span><span>)),
-             </span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;minPopulation&quot;</span><span>, </span><span class="type-name">IntValue</span><span>(</span><span class="identifier">min</span><span>)),
-             </span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;byPopulation&quot;</span><span>, </span><span class="type-name">BooleanValue</span><span>(</span><span class="identifier">byPop</span><span>))
+             </span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;limit&quot;</span><span>, </span><span class="type-name">IntValue</span><span>(</span><span class="identifier">lim</span><span>))
            )
          ) =&gt;
-      </span><span class="keyword">def</span><span> </span><span class="declaration-name">limit</span><span>(</span><span class="identifier">query</span><span>: </span><span class="type-name">Query</span><span>): </span><span class="type-name">Query</span><span> =
-        </span><span class="keyword">if</span><span> (</span><span class="identifier">num</span><span> &lt; </span><span class="number-literal">1</span><span>) </span><span class="identifier">query</span><span>
-        </span><span class="keyword">else</span><span> </span><span class="type-name">Limit</span><span>(</span><span class="identifier">num</span><span>, </span><span class="identifier">query</span><span>)
+      </span><span class="keyword">def</span><span> </span><span class="declaration-name">filter</span><span>(</span><span class="identifier">query</span><span>: </span><span class="type-name">Query</span><span>): </span><span class="type-name">Query</span><span> =
+        </span><span class="keyword">if</span><span> (</span><span class="identifier">max</span><span> &lt; </span><span class="number-literal">0</span><span>) </span><span class="identifier">query</span><span>
+        </span><span class="keyword">else</span><span> </span><span class="type-name">Filter</span><span>(</span><span class="type-name">LtEql</span><span>(</span><span class="type-name">CountryType</span><span> / </span><span class="string-literal">&quot;population&quot;</span><span>, </span><span class="type-name">Const</span><span>(</span><span class="identifier">max</span><span>)), </span><span class="identifier">query</span><span>)
+
+      </span><span class="keyword">def</span><span> </span><span class="declaration-name">order</span><span>(</span><span class="identifier">query</span><span>: </span><span class="type-name">Query</span><span>): </span><span class="type-name">Query</span><span> =
+        </span><span class="keyword">if</span><span> (!</span><span class="identifier">sortByPop</span><span>) </span><span class="identifier">query</span><span>
+        </span><span class="keyword">else</span><span>
+          </span><span class="type-name">OrderBy</span><span>(
+            </span><span class="type-name">OrderSelections</span><span>(</span><span class="type-name">List</span><span>(</span><span class="type-name">OrderSelection</span><span>[</span><span class="type-name">Int</span><span>](</span><span class="type-name">CountryType</span><span> / </span><span class="string-literal">&quot;population&quot;</span><span>))),
+            </span><span class="identifier">query</span><span>
+          )
 
       </span><span class="keyword">def</span><span> </span><span class="declaration-name">offset</span><span>(</span><span class="identifier">query</span><span>: </span><span class="type-name">Query</span><span>): </span><span class="type-name">Query</span><span> =
         </span><span class="keyword">if</span><span> (</span><span class="identifier">off</span><span> &lt; </span><span class="number-literal">1</span><span>) </span><span class="identifier">query</span><span>
         </span><span class="keyword">else</span><span> </span><span class="type-name">Offset</span><span>(</span><span class="identifier">off</span><span>, </span><span class="identifier">query</span><span>)
 
-      </span><span class="keyword">def</span><span> </span><span class="declaration-name">order</span><span>(</span><span class="identifier">query</span><span>: </span><span class="type-name">Query</span><span>): </span><span class="type-name">Query</span><span> = {
-        </span><span class="keyword">if</span><span> (</span><span class="identifier">byPop</span><span>)
-          </span><span class="type-name">OrderBy</span><span>(
-            </span><span class="type-name">OrderSelections</span><span>(</span><span class="type-name">List</span><span>(</span><span class="type-name">OrderSelection</span><span>[</span><span class="type-name">Int</span><span>](</span><span class="type-name">CountryType</span><span> / </span><span class="string-literal">&quot;population&quot;</span><span>))),
-            </span><span class="identifier">query</span><span>
-          )
-        </span><span class="keyword">else</span><span> </span><span class="keyword">if</span><span> (</span><span class="identifier">num</span><span> &gt; </span><span class="number-literal">0</span><span> || </span><span class="identifier">off</span><span> &gt; </span><span class="number-literal">0</span><span>)
-          </span><span class="type-name">OrderBy</span><span>(
-            </span><span class="type-name">OrderSelections</span><span>(</span><span class="type-name">List</span><span>(</span><span class="type-name">OrderSelection</span><span>[</span><span class="type-name">String</span><span>](</span><span class="type-name">CountryType</span><span> / </span><span class="string-literal">&quot;code&quot;</span><span>))),
-            </span><span class="identifier">query</span><span>
-          )
-        </span><span class="keyword">else</span><span> </span><span class="identifier">query</span><span>
-      }
-
-      </span><span class="keyword">def</span><span> </span><span class="declaration-name">filter</span><span>(</span><span class="identifier">query</span><span>: </span><span class="type-name">Query</span><span>): </span><span class="type-name">Query</span><span> =
-        </span><span class="keyword">if</span><span> (</span><span class="identifier">min</span><span> == </span><span class="number-literal">0</span><span>) </span><span class="identifier">query</span><span>
-        </span><span class="keyword">else</span><span> </span><span class="type-name">Filter</span><span>(</span><span class="type-name">GtEql</span><span>(</span><span class="type-name">CountryType</span><span> / </span><span class="string-literal">&quot;population&quot;</span><span>, </span><span class="type-name">Const</span><span>(</span><span class="identifier">min</span><span>)), </span><span class="identifier">query</span><span>)
+      </span><span class="keyword">def</span><span> </span><span class="declaration-name">limit</span><span>(</span><span class="identifier">query</span><span>: </span><span class="type-name">Query</span><span>): </span><span class="type-name">Query</span><span> =
+        </span><span class="keyword">if</span><span> (</span><span class="identifier">lim</span><span> &lt; </span><span class="number-literal">0</span><span>) </span><span class="identifier">query</span><span>
+        </span><span class="keyword">else</span><span> </span><span class="type-name">Limit</span><span>(</span><span class="identifier">lim</span><span>, </span><span class="identifier">query</span><span>)
 
       </span><span class="type-name">Elab</span><span>.</span><span class="identifier">transformChild</span><span>(</span><span class="identifier">child</span><span> =&gt; </span><span class="identifier">limit</span><span>(</span><span class="identifier">offset</span><span>(</span><span class="identifier">order</span><span>(</span><span class="identifier">filter</span><span>(</span><span class="identifier">child</span><span>)))))
+
+    </span><span class="keyword">case</span><span> (</span><span class="type-name">QueryType</span><span>, </span><span class="string-literal">&quot;city&quot;</span><span>, </span><span class="type-name">List</span><span>(</span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;id&quot;</span><span>, </span><span class="type-name">IntValue</span><span>(</span><span class="identifier">id</span><span>)))) =&gt;
+      </span><span class="type-name">Elab</span><span>.</span><span class="identifier">transformChild</span><span>(</span><span class="identifier">child</span><span> =&gt; </span><span class="type-name">Unique</span><span>(</span><span class="type-name">Filter</span><span>(</span><span class="type-name">Eql</span><span>(</span><span class="type-name">CityType</span><span> / </span><span class="string-literal">&quot;id&quot;</span><span>, </span><span class="type-name">Const</span><span>(</span><span class="identifier">id</span><span>)), </span><span class="identifier">child</span><span>)))
 
     </span><span class="keyword">case</span><span> (</span><span class="type-name">QueryType</span><span>, </span><span class="string-literal">&quot;cities&quot;</span><span>, </span><span class="type-name">List</span><span>(</span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;namePattern&quot;</span><span>, </span><span class="type-name">StringValue</span><span>(</span><span class="identifier">namePattern</span><span>)))) =&gt;
       </span><span class="keyword">if</span><span> (</span><span class="identifier">namePattern</span><span> == </span><span class="string-literal">&quot;%&quot;</span><span>)
@@ -375,37 +358,6 @@ demo INFO  - Ember-Server service bound to address: [::]:8080</code></pre>
         </span><span class="type-name">Elab</span><span>.</span><span class="identifier">transformChild</span><span> { </span><span class="identifier">child</span><span> =&gt;
           </span><span class="type-name">Filter</span><span>(</span><span class="type-name">Like</span><span>(</span><span class="type-name">CityType</span><span> / </span><span class="string-literal">&quot;name&quot;</span><span>, </span><span class="identifier">namePattern</span><span>, </span><span class="boolean-literal">true</span><span>), </span><span class="identifier">child</span><span>)
         }
-
-    </span><span class="keyword">case</span><span> (</span><span class="type-name">QueryType</span><span>, </span><span class="string-literal">&quot;language&quot;</span><span>, </span><span class="type-name">List</span><span>(</span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;language&quot;</span><span>, </span><span class="type-name">StringValue</span><span>(</span><span class="identifier">language</span><span>)))) =&gt;
-      </span><span class="type-name">Elab</span><span>.</span><span class="identifier">transformChild</span><span> { </span><span class="identifier">child</span><span> =&gt;
-        </span><span class="type-name">Unique</span><span>(</span><span class="type-name">Filter</span><span>(</span><span class="type-name">Eql</span><span>(</span><span class="type-name">LanguageType</span><span> / </span><span class="string-literal">&quot;language&quot;</span><span>, </span><span class="type-name">Const</span><span>(</span><span class="identifier">language</span><span>)), </span><span class="identifier">child</span><span>))
-      }
-
-    </span><span class="keyword">case</span><span> (</span><span class="type-name">QueryType</span><span>, </span><span class="string-literal">&quot;search&quot;</span><span>,
-           </span><span class="type-name">List</span><span>(
-             </span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;minPopulation&quot;</span><span>, </span><span class="type-name">IntValue</span><span>(</span><span class="identifier">min</span><span>)),
-             </span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;indepSince&quot;</span><span>, </span><span class="type-name">IntValue</span><span>(</span><span class="identifier">year</span><span>))
-            )
-          ) =&gt;
-      </span><span class="type-name">Elab</span><span>.</span><span class="identifier">transformChild</span><span>(</span><span class="identifier">child</span><span> =&gt;
-        </span><span class="type-name">Filter</span><span>(
-          </span><span class="type-name">And</span><span>(
-            </span><span class="type-name">Not</span><span>(</span><span class="type-name">Lt</span><span>(</span><span class="type-name">CountryType</span><span> / </span><span class="string-literal">&quot;population&quot;</span><span>, </span><span class="type-name">Const</span><span>(</span><span class="identifier">min</span><span>))),
-            </span><span class="type-name">Not</span><span>(</span><span class="type-name">Lt</span><span>(</span><span class="type-name">CountryType</span><span> / </span><span class="string-literal">&quot;indepyear&quot;</span><span>, </span><span class="type-name">Const</span><span>(</span><span class="type-name">Option</span><span>(</span><span class="identifier">year</span><span>))))
-          ),
-          </span><span class="identifier">child</span><span>
-        )
-      )
-
-    </span><span class="keyword">case</span><span> (</span><span class="type-name">QueryType</span><span>, </span><span class="string-literal">&quot;search2&quot;</span><span>,
-           </span><span class="type-name">List</span><span>(
-             </span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;indep&quot;</span><span>, </span><span class="type-name">BooleanValue</span><span>(</span><span class="identifier">indep</span><span>)),
-             </span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;limit&quot;</span><span>, </span><span class="type-name">IntValue</span><span>(</span><span class="identifier">num</span><span>))
-           )
-         ) =&gt;
-      </span><span class="type-name">Elab</span><span>.</span><span class="identifier">transformChild</span><span> { </span><span class="identifier">child</span><span> =&gt;
-        </span><span class="type-name">Limit</span><span>(</span><span class="identifier">num</span><span>, </span><span class="type-name">Filter</span><span>(</span><span class="type-name">IsNull</span><span>[</span><span class="type-name">Int</span><span>](</span><span class="type-name">CountryType</span><span> / </span><span class="string-literal">&quot;indepyear&quot;</span><span>, </span><span class="identifier">isNull</span><span> = !</span><span class="identifier">indep</span><span>), </span><span class="identifier">child</span><span>))
-      }
 
     </span><span class="keyword">case</span><span> (</span><span class="type-name">CountryType</span><span>, </span><span class="string-literal">&quot;numCities&quot;</span><span>, </span><span class="type-name">List</span><span>(</span><span class="type-name">Binding</span><span>(</span><span class="string-literal">&quot;namePattern&quot;</span><span>, </span><span class="type-name">AbsentValue</span><span>))) =&gt;
       </span><span class="type-name">Elab</span><span>.</span><span class="identifier">transformChild</span><span> { </span><span class="identifier">_</span><span> =&gt;
