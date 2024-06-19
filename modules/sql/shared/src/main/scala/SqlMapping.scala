@@ -2826,6 +2826,53 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     /** Compile the given GraphQL query to SQL in the given `Context` */
     def apply(q: Query, context: Context): Result[MappedQuery] = {
       def loop(q: Query, context: Context, parentConstraints: List[List[(SqlColumn, SqlColumn)]], exposeJoins: Boolean): Result[SqlQuery] = {
+
+        object TypeCase {
+          def unapply(q: Query): Option[(Query, List[Narrow])] = {
+            def isPolySelect(q: Query): Boolean =
+              q match {
+                case Select(fieldName, _, _) =>
+                  typeMappings.fieldIsPolymorphic(context, fieldName)
+                case _ => false
+              }
+
+            def branch(q: Query): Option[TypeRef] =
+              q match {
+                case Narrow(subtpe, _) => Some(subtpe)
+                case _ => None
+              }
+
+            val ungrouped = ungroup(q).flatMap {
+              case sel@Select(fieldName, _, _) if isPolySelect(sel) =>
+                typeMappings.rawFieldMapping(context, fieldName) match {
+                  case Some(TypeMappings.PolymorphicFieldMapping(cands)) =>
+                    cands.map { case (pred, _) => Narrow(schema.uncheckedRef(pred.tpe), sel) }
+                  case _ => Seq(sel)
+                }
+
+              case other => Seq(other)
+            }
+
+            val grouped = ungrouped.groupBy(branch).toList
+            val (default0, narrows0) = grouped.partition(_._1.isEmpty)
+            if (narrows0.isEmpty) None
+            else {
+              val default = default0.flatMap(_._2) match {
+                case Nil => Empty
+                case children => Group(children)
+              }
+              val narrows = narrows0.collect {
+                case (Some(subtpe), narrows) =>
+                  narrows.collect { case Narrow(_, child) => child } match {
+                    case List(child) => Narrow(subtpe, child)
+                    case children => Narrow(subtpe, Group(children))
+                  }
+              }
+              Some((default, narrows))
+            }
+          }
+        }
+
         def group(queries: List[Query]): Result[SqlQuery] = {
           queries.foldLeft(List.empty[SqlQuery].success) {
             case (nodes, q) =>
@@ -3518,14 +3565,14 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     }
 
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
-      val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
-      val fieldTpe = fieldContext.tpe
       val localField =
         typeMappings.fieldMapping(this, fieldName) match {
-          case Some(_: SqlJson) =>
+          case Some((np, _: SqlJson)) =>
+            val fieldContext = np.context.forFieldOrAttribute(fieldName, resultName)
+            val fieldTpe = fieldContext.tpe
             asTable.flatMap { table =>
               def mkCirceCursor(f: Json): Result[Cursor] =
-                CirceCursor(fieldContext, focus = f, parent = Some(this), Env.empty).success
+                CirceCursor(fieldContext, focus = f, parent = Some(np), Env.empty).success
               mapped.selectAtomicField(context, fieldName, table).flatMap(_ match {
                 case Some(j: Json) if fieldTpe.isNullable => mkCirceCursor(j)
                 case None => mkCirceCursor(Json.Null)
@@ -3535,7 +3582,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               })
             }
 
-          case Some(_: SqlField) =>
+          case Some((np, _: SqlField)) =>
+            val fieldContext = np.context.forFieldOrAttribute(fieldName, resultName)
+            val fieldTpe = fieldContext.tpe
             asTable.flatMap(table =>
               mapped.selectAtomicField(context, fieldName, table).map { leaf =>
                 val leafFocus = leaf match {
@@ -3543,11 +3592,12 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                   case other => other
                 }
                 assert(leafFocus != FailedJoin)
-                LeafCursor(fieldContext, leafFocus, Some(this), Env.empty)
+                LeafCursor(fieldContext, leafFocus, Some(np), Env.empty)
               }
             )
 
-          case Some(_: SqlObject) | Some(_: EffectMapping) =>
+          case Some((np, (_: SqlObject | _: EffectMapping))) =>
+            val fieldContext = np.context.forFieldOrAttribute(fieldName, resultName)
             asTable.map { table =>
               val focussed = mapped.narrow(fieldContext, table)
               mkChild(context = fieldContext, focus = focussed)

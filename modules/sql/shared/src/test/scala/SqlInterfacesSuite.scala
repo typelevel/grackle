@@ -805,4 +805,105 @@ trait SqlInterfacesSuite extends CatsEffectSuite {
 
     assertWeaklyEqualIO(res, expected)
   }
+
+  test("interface query with polymorphic cursor field (1)") {
+    val query = """
+      query {
+        entities {
+          id
+          ... on Film {
+            imageUrl
+          }
+          ... on Series {
+            imageUrl
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "entities" : [
+            {
+              "id" : "4",
+              "imageUrl" : "http://example.com/series/hidden_series1.jpg"
+            },
+            {
+              "id" : "5",
+              "imageUrl" : "http://example.com/series/hidden_series2.jpg"
+            },
+            {
+              "id" : "2",
+              "imageUrl" : "http://www.example.com/film2.jpg"
+            },
+            {
+              "id" : "3",
+              "imageUrl" : "http://www.example.com/film3.jpg"
+            },
+            {
+              "id" : "6",
+              "imageUrl" : "http://example.com/series/hidden_series3.jpg"
+            },
+            {
+              "id" : "1",
+              "imageUrl" : "http://www.example.com/film1.jpg"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("interface query with polymorphic cursor field (2)") {
+    val query = """
+      query {
+        entities {
+          id
+          imageUrl
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "entities" : [
+            {
+              "id" : "4",
+              "imageUrl" : "http://example.com/series/hidden_series1.jpg"
+            },
+            {
+              "id" : "5",
+              "imageUrl" : "http://example.com/series/hidden_series2.jpg"
+            },
+            {
+              "id" : "2",
+              "imageUrl" : "http://www.example.com/film2.jpg"
+            },
+            {
+              "id" : "3",
+              "imageUrl" : "http://www.example.com/film3.jpg"
+            },
+            {
+              "id" : "6",
+              "imageUrl" : "http://example.com/series/hidden_series3.jpg"
+            },
+            {
+              "id" : "1",
+              "imageUrl" : "http://www.example.com/film1.jpg"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
 }
