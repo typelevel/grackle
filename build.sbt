@@ -22,7 +22,7 @@ val shapeless2Version      = "2.3.11"
 val shapeless3Version      = "3.4.1"
 val sourcePosVersion       = "1.1.0"
 val typenameVersion        = "1.1.0"
-val whaleTailVersion       = "0.0.10"
+val whaleTailVersion       = "0.0.11"
 
 val Scala2 = "2.13.14"
 val Scala3 = "3.3.3"
