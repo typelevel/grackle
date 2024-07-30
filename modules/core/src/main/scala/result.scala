@@ -418,6 +418,15 @@ object ResultT {
   def liftF[F[_]: Functor, A](fa: F[A]): ResultT[F, A] =
     ResultT(fa.map(Result.success))
 
+  def unit[F[_]](implicit F: Applicative[F]): ResultT[F, Unit] =
+      pure(())
+
+  def pure[F[_], A](a: A)(implicit F: Applicative[F]): ResultT[F, A] =
+    fromResult(Result.pure(a))
+
+  def fromResult[F[_], A](a: Result[A])(implicit F: Applicative[F]): ResultT[F, A] =
+    ResultT(a.pure[F])
+
   def success[F[_]: Applicative, A](a: A): ResultT[F, A] = 
     ResultT(Result.success(a).pure[F])
 
