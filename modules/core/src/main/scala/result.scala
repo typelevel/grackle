@@ -414,4 +414,44 @@ object ResultT {
         }
       )
     }
+
+  def liftF[F[_]: Functor, A](fa: F[A]): ResultT[F, A] =
+    ResultT(fa.map(Result.success))
+
+  def unit[F[_]](implicit F: Applicative[F]): ResultT[F, Unit] =
+      pure(())
+
+  def pure[F[_], A](a: A)(implicit F: Applicative[F]): ResultT[F, A] =
+    fromResult(Result.pure(a))
+
+  def fromResult[F[_], A](a: Result[A])(implicit F: Applicative[F]): ResultT[F, A] =
+    ResultT(a.pure[F])
+
+  def success[F[_]: Applicative, A](a: A): ResultT[F, A] = 
+    ResultT(Result.success(a).pure[F])
+
+  def warning[F[_]: Applicative, A](warning: NonEmptyChain[Problem], value: A): ResultT[F, A] =
+    ResultT(Result.Warning(warning, value).pure[F].widen)
+
+  def warning[F[_]: Applicative, A](warning: Problem, value: A): ResultT[F, A] =
+    ResultT(Result.warning(warning, value).pure[F])
+
+  def warning[F[_]: Applicative, A](warning: String, value: A): ResultT[F, A] =
+    ResultT(Result.warning(warning, value).pure[F])
+
+  def failure[F[_]: Applicative, A](s: String): ResultT[F, A] =
+    ResultT(Result.failure[A](s).pure[F])
+
+  def failure[F[_]: Applicative, A](p: Problem): ResultT[F, A] =
+    ResultT(Result.failure[A](p).pure[F])
+
+  def failure[F[_]: Applicative, A](ps: NonEmptyChain[Problem]): ResultT[F, A] =
+    ResultT(Result.Failure(ps).pure[F].widen)
+
+  def internalError[F[_]: Applicative, A](err: Throwable): ResultT[F, A] =
+    ResultT(Result.internalError[A](err).pure[F])
+
+  def internalError[F[_]: Applicative, A](err: String): ResultT[F, A] =
+    ResultT(Result.internalError[A](err).pure[F])
+
 }
