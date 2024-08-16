@@ -145,6 +145,12 @@ sealed trait Result[+T] {
       case _ => false
     }
 
+  def isFailure: Boolean =
+    this match {
+      case Result.Failure(_) => true
+      case _ => false
+    }
+
   def hasProblems: Boolean =
     this match {
       case Result.Warning(_, _) => true

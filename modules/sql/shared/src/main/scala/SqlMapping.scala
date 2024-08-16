@@ -3557,7 +3557,13 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             Result.failure(s"No field '$fieldName' for type ${context.tpe}")
         }
 
-      localField orElse mkCursorForField(this, fieldName, resultName)
+      // Fall back to the general implementation if it's a logic failure, 
+      // but retain success and internal errors.
+      if (localField.isFailure) 
+        mkCursorForField(this, fieldName, resultName) 
+      else
+        localField
+
     }
   }
 
