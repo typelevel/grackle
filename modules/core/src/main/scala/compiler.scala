@@ -1243,7 +1243,8 @@ object QueryCompiler {
    * multiple effect handlers.
    *
    * This phase transforms the input query by assigning subtrees to effect
-   * handlers as specified by the supplied `emapping`.
+   * handlers as specified by the supplied `effects`, which takes a `Context` and
+   * fieldName, retuning an `EffectHandler` (if any).
    *
    * The mapping has `Type` and field name pairs as keys and effect handlers
    * as values. When the traversal of the input query visits a `Select` node
@@ -1254,21 +1255,18 @@ object QueryCompiler {
    *    and evaluating the subquery against its result.
    * 2. the subquery which will be evaluated by the effect handler.
    */
-  class EffectElaborator[F[_]] private (emapping: Map[(Type, String), EffectHandler[F]]) extends Phase {
+  class EffectElaborator[F[_]] private (effects: (Context, String) => Option[EffectHandler[F]]) extends Phase {
     override def transform(query: Query): Elab[Query] =
       query match {
         case s@Select(fieldName, resultName, child) =>
           for {
             c        <- Elab.context
-            obj      <- Elab.liftR(c.tpe.underlyingObject.toResultOrError(s"Type ${c.tpe} is not an object or interface type"))
             childCtx =  c.forFieldOrAttribute(fieldName, resultName)
             _        <- Elab.push(childCtx, child)
             ec       <- transform(child)
             _        <- Elab.pop
-            schema   <- Elab.schema
-            ref      =  schema.uncheckedRef(obj)
           } yield
-            emapping.get((ref, fieldName)) match {
+            effects(c, fieldName) match {
               case Some(handler) =>
                 Select(fieldName, resultName, Effect(handler, s.copy(child = ec)))
               case None =>
@@ -1282,8 +1280,9 @@ object QueryCompiler {
   object EffectElaborator {
     case class EffectMapping[F[_]](tpe: TypeRef, fieldName: String, handler: EffectHandler[F])
 
-    def apply[F[_]](mappings: Seq[EffectMapping[F]]): EffectElaborator[F] =
-      new EffectElaborator(mappings.map(m => ((m.tpe, m.fieldName), m.handler)).toMap)
+    def apply[F[_]](effects: (Context, String) => Option[EffectHandler[F]]): EffectElaborator[F] =
+      new EffectElaborator(effects)
+
   }
 
   /**

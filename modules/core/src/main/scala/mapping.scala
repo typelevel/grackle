@@ -1188,19 +1188,12 @@ abstract class Mapping[F[_]] {
     ComponentElaborator(componentMappings)
   }
 
-  lazy val effectElaborator = {
-    val effectMappings =
-      typeMappings.mappings.flatMap {
-        case om: ObjectMapping =>
-          om.fieldMappings.collect {
-            case EffectField(fieldName, handler, _, _) =>
-              EffectElaborator.EffectMapping(schema.uncheckedRef(om.tpe), fieldName, handler)
-          }
-        case _ => Seq.empty
+  lazy val effectElaborator: EffectElaborator[F] =
+    EffectElaborator { (ctx, fieldName) =>
+      typeMappings.fieldMapping(ctx, fieldName).collect {
+        case e: EffectField => e.handler
       }
-
-    EffectElaborator(effectMappings)
-  }
+    }
 
   def compilerPhases: List[QueryCompiler.Phase] = List(selectElaborator, componentElaborator, effectElaborator)
 
