@@ -41,7 +41,7 @@ ThisBuild / developers       := List(
 ThisBuild / tlFatalWarnings         := true
 ThisBuild / tlCiScalafmtCheck       := false
 ThisBuild / tlCiReleaseBranches     := Seq("main")
-ThisBuild / sonatypeCredentialHost  := xerial.sbt.Sonatype.sonatypeLegacy
+ThisBuild / tlSonatypeUseLegacyHost := false
 ThisBuild / githubWorkflowBuild     ~= { steps =>
   WorkflowStep.Sbt(
     commands = List("headerCheckAll"),
