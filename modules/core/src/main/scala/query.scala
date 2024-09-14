@@ -456,35 +456,6 @@ object Query {
     }
   }
 
-  /** Extractor for grouped Narrow patterns in the query algebra */
-  object TypeCase {
-    def unapply(q: Query): Option[(Query, List[Narrow])] = {
-      def branch(q: Query): Option[TypeRef] =
-        q match {
-          case Narrow(subtpe, _) => Some(subtpe)
-          case _ => None
-        }
-
-      val grouped = ungroup(q).groupBy(branch).toList
-      val (default0, narrows0) = grouped.partition(_._1.isEmpty)
-      if (narrows0.isEmpty) None
-      else {
-        val default = default0.flatMap(_._2) match {
-          case Nil => Empty
-          case children => Group(children)
-        }
-        val narrows = narrows0.collect {
-          case (Some(subtpe), narrows) =>
-            narrows.collect { case Narrow(_, child) => child } match {
-              case List(child) => Narrow(subtpe, child)
-              case children => Narrow(subtpe, Group(children))
-            }
-        }
-        Some((default, narrows))
-      }
-    }
-  }
-
   /** Construct a query which yields all the supplied paths */
   def mkPathQuery(paths: List[List[String]]): List[Query] =
     paths match {

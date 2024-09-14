@@ -805,4 +805,553 @@ trait SqlInterfacesSuite extends CatsEffectSuite {
 
     assertWeaklyEqualIO(res, expected)
   }
+
+  test("interface query with polymorphic cursor field (1)") {
+    val query = """
+      query {
+        entities {
+          id
+          ... on Film {
+            imageUrl
+          }
+          ... on Series {
+            imageUrl
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "entities" : [
+            {
+              "id" : "4",
+              "imageUrl" : "http://example.com/series/hidden_series1.jpg"
+            },
+            {
+              "id" : "5",
+              "imageUrl" : "http://example.com/series/hidden_series2.jpg"
+            },
+            {
+              "id" : "2",
+              "imageUrl" : "http://www.example.com/film2.jpg"
+            },
+            {
+              "id" : "3",
+              "imageUrl" : "http://www.example.com/film3.jpg"
+            },
+            {
+              "id" : "6",
+              "imageUrl" : "http://example.com/series/hidden_series3.jpg"
+            },
+            {
+              "id" : "1",
+              "imageUrl" : "http://www.example.com/film1.jpg"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("interface query with polymorphic cursor field (2)") {
+    val query = """
+      query {
+        entities {
+          id
+          imageUrl
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "entities" : [
+            {
+              "id" : "4",
+              "imageUrl" : "http://example.com/series/hidden_series1.jpg"
+            },
+            {
+              "id" : "5",
+              "imageUrl" : "http://example.com/series/hidden_series2.jpg"
+            },
+            {
+              "id" : "2",
+              "imageUrl" : "http://www.example.com/film2.jpg"
+            },
+            {
+              "id" : "3",
+              "imageUrl" : "http://www.example.com/film3.jpg"
+            },
+            {
+              "id" : "6",
+              "imageUrl" : "http://example.com/series/hidden_series3.jpg"
+            },
+            {
+              "id" : "1",
+              "imageUrl" : "http://www.example.com/film1.jpg"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("interface query with polymorphic cursor field (3)") {
+    val query = """
+      query {
+        entities {
+          id
+          imageUrl
+          ... on Film {
+            rating
+            imageUrl
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "entities" : [
+            {
+              "id" : "4",
+              "imageUrl" : "http://example.com/series/hidden_series1.jpg"
+            },
+            {
+              "id" : "5",
+              "imageUrl" : "http://example.com/series/hidden_series2.jpg"
+            },
+            {
+              "id" : "2",
+              "imageUrl" : "http://www.example.com/film2.jpg",
+              "rating" : "U"
+            },
+            {
+              "id" : "3",
+              "imageUrl" : "http://www.example.com/film3.jpg",
+              "rating" : "15"
+            },
+            {
+              "id" : "6",
+              "imageUrl" : "http://example.com/series/hidden_series3.jpg"
+            },
+            {
+              "id" : "1",
+              "imageUrl" : "http://www.example.com/film1.jpg",
+              "rating" : "PG"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("interface query with polymorphic cursor field (4)") {
+    val query = """
+      query {
+        entities {
+          id
+          imageUrl
+          ... FilmFields
+        }
+      }
+
+      fragment FilmFields on Film {
+        rating
+        imageUrl
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "entities" : [
+            {
+              "id" : "4",
+              "imageUrl" : "http://example.com/series/hidden_series1.jpg"
+            },
+            {
+              "id" : "5",
+              "imageUrl" : "http://example.com/series/hidden_series2.jpg"
+            },
+            {
+              "id" : "2",
+              "imageUrl" : "http://www.example.com/film2.jpg",
+              "rating" : "U"
+            },
+            {
+              "id" : "3",
+              "imageUrl" : "http://www.example.com/film3.jpg",
+              "rating" : "15"
+            },
+            {
+              "id" : "6",
+              "imageUrl" : "http://example.com/series/hidden_series3.jpg"
+            },
+            {
+              "id" : "1",
+              "imageUrl" : "http://www.example.com/film1.jpg",
+              "rating" : "PG"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("interface query with polymorphic cursor field (5)") {
+    val query = """
+      query {
+        entities {
+          id
+          ... on Film {
+            rating
+            imageUrl
+          }
+          imageUrl
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "entities" : [
+            {
+              "id" : "4",
+              "imageUrl" : "http://example.com/series/hidden_series1.jpg"
+            },
+            {
+              "id" : "5",
+              "imageUrl" : "http://example.com/series/hidden_series2.jpg"
+            },
+            {
+              "id" : "2",
+              "rating" : "U",
+              "imageUrl" : "http://www.example.com/film2.jpg"
+            },
+            {
+              "id" : "3",
+              "rating" : "15",
+              "imageUrl" : "http://www.example.com/film3.jpg"
+            },
+            {
+              "id" : "6",
+              "imageUrl" : "http://example.com/series/hidden_series3.jpg"
+            },
+            {
+              "id" : "1",
+              "rating" : "PG",
+              "imageUrl" : "http://www.example.com/film1.jpg"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("interface query with polymorphic cursor field (6)") {
+    val query = """
+      query {
+        entities {
+          id
+          ... FilmFields
+          imageUrl
+        }
+      }
+
+      fragment FilmFields on Film {
+        rating
+        imageUrl
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "entities" : [
+            {
+              "id" : "4",
+              "imageUrl" : "http://example.com/series/hidden_series1.jpg"
+            },
+            {
+              "id" : "5",
+              "imageUrl" : "http://example.com/series/hidden_series2.jpg"
+            },
+            {
+              "id" : "2",
+              "rating" : "U",
+              "imageUrl" : "http://www.example.com/film2.jpg"
+            },
+            {
+              "id" : "3",
+              "rating" : "15",
+              "imageUrl" : "http://www.example.com/film3.jpg"
+            },
+            {
+              "id" : "6",
+              "imageUrl" : "http://example.com/series/hidden_series3.jpg"
+            },
+            {
+              "id" : "1",
+              "rating" : "PG",
+              "imageUrl" : "http://www.example.com/film1.jpg"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("interface query with polymorphic cursor field (7)") {
+    val query = """
+      query {
+        entities {
+          id
+          imageUrl
+          ... on Series {
+            label
+            imageUrl
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "entities" : [
+            {
+              "id" : "4",
+              "imageUrl" : "http://example.com/series/hidden_series1.jpg",
+              "label" : "One"
+            },
+            {
+              "id" : "5",
+              "imageUrl" : "http://example.com/series/hidden_series2.jpg",
+              "label" : "Two"
+            },
+            {
+              "id" : "2",
+              "imageUrl" : "http://www.example.com/film2.jpg"
+            },
+            {
+              "id" : "3",
+              "imageUrl" : "http://www.example.com/film3.jpg"
+            },
+            {
+              "id" : "6",
+              "imageUrl" : "http://example.com/series/hidden_series3.jpg",
+              "label" : "Three"
+            },
+            {
+              "id" : "1",
+              "imageUrl" : "http://www.example.com/film1.jpg"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("interface query with polymorphic cursor field (8)") {
+    val query = """
+      query {
+        entities {
+          id
+          imageUrl
+          ... SeriesFields
+        }
+      }
+
+      fragment SeriesFields on Series {
+        label
+        imageUrl
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "entities" : [
+            {
+              "id" : "4",
+              "imageUrl" : "http://example.com/series/hidden_series1.jpg",
+              "label" : "One"
+            },
+            {
+              "id" : "5",
+              "imageUrl" : "http://example.com/series/hidden_series2.jpg",
+              "label" : "Two"
+            },
+            {
+              "id" : "2",
+              "imageUrl" : "http://www.example.com/film2.jpg"
+            },
+            {
+              "id" : "3",
+              "imageUrl" : "http://www.example.com/film3.jpg"
+            },
+            {
+              "id" : "6",
+              "imageUrl" : "http://example.com/series/hidden_series3.jpg",
+              "label" : "Three"
+            },
+            {
+              "id" : "1",
+              "imageUrl" : "http://www.example.com/film1.jpg"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("interface query with polymorphic cursor field (9)") {
+    val query = """
+      query {
+        entities {
+          id
+          ... on Series {
+            label
+            imageUrl
+          }
+          imageUrl
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "entities" : [
+            {
+              "id" : "4",
+              "label" : "One",
+              "imageUrl" : "http://example.com/series/hidden_series1.jpg"
+            },
+            {
+              "id" : "5",
+              "label" : "Two",
+              "imageUrl" : "http://example.com/series/hidden_series2.jpg"
+            },
+            {
+              "id" : "2",
+              "imageUrl" : "http://www.example.com/film2.jpg"
+            },
+            {
+              "id" : "3",
+              "imageUrl" : "http://www.example.com/film3.jpg"
+            },
+            {
+              "id" : "6",
+              "label" : "Three",
+              "imageUrl" : "http://example.com/series/hidden_series3.jpg"
+            },
+            {
+              "id" : "1",
+              "imageUrl" : "http://www.example.com/film1.jpg"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
+  test("interface query with polymorphic cursor field (10)") {
+    val query = """
+      query {
+        entities {
+          id
+          ... SeriesFields
+          imageUrl
+        }
+      }
+
+      fragment SeriesFields on Series {
+        label
+        imageUrl
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "entities" : [
+            {
+              "id" : "4",
+              "label" : "One",
+              "imageUrl" : "http://example.com/series/hidden_series1.jpg"
+            },
+            {
+              "id" : "5",
+              "label" : "Two",
+              "imageUrl" : "http://example.com/series/hidden_series2.jpg"
+            },
+            {
+              "id" : "2",
+              "imageUrl" : "http://www.example.com/film2.jpg"
+            },
+            {
+              "id" : "3",
+              "imageUrl" : "http://www.example.com/film3.jpg"
+            },
+            {
+              "id" : "6",
+              "label" : "Three",
+              "imageUrl" : "http://example.com/series/hidden_series3.jpg"
+            },
+            {
+              "id" : "1",
+              "imageUrl" : "http://www.example.com/film1.jpg"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
 }

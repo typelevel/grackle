@@ -761,7 +761,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
   /** Discriminator for the branches of an interface/union */
   trait SqlDiscriminator {
     /** yield a predicate suitable for filtering row corresponding to the supplied type */
-    def narrowPredicate(tpe: Type): Option[Predicate]
+    def narrowPredicate(tpe: Type): Result[Predicate]
 
     /** compute the concrete type of the value at the cursor */
     def discriminate(cursor: Cursor): Result[Type]
@@ -2826,6 +2826,53 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     /** Compile the given GraphQL query to SQL in the given `Context` */
     def apply(q: Query, context: Context): Result[MappedQuery] = {
       def loop(q: Query, context: Context, parentConstraints: List[List[(SqlColumn, SqlColumn)]], exposeJoins: Boolean): Result[SqlQuery] = {
+
+        object TypeCase {
+          def unapply(q: Query): Option[(Query, List[Narrow])] = {
+            def isPolySelect(q: Query): Boolean =
+              q match {
+                case Select(fieldName, _, _) =>
+                  typeMappings.fieldIsPolymorphic(context, fieldName)
+                case _ => false
+              }
+
+            def branch(q: Query): Option[TypeRef] =
+              q match {
+                case Narrow(subtpe, _) => Some(subtpe)
+                case _ => None
+              }
+
+            val ungrouped = ungroup(q).flatMap {
+              case sel@Select(fieldName, _, _) if isPolySelect(sel) =>
+                typeMappings.rawFieldMapping(context, fieldName) match {
+                  case Some(TypeMappings.PolymorphicFieldMapping(cands)) =>
+                    cands.map { case (pred, _) => Narrow(schema.uncheckedRef(pred.tpe), sel) }
+                  case _ => Seq(sel)
+                }
+
+              case other => Seq(other)
+            }
+
+            val grouped = ungrouped.groupBy(branch).toList
+            val (default0, narrows0) = grouped.partition(_._1.isEmpty)
+            if (narrows0.isEmpty) None
+            else {
+              val default = default0.flatMap(_._2) match {
+                case Nil => Empty
+                case children => Group(children)
+              }
+              val narrows = narrows0.collect {
+                case (Some(subtpe), narrows) =>
+                  narrows.collect { case Narrow(_, child) => child } match {
+                    case List(child) => Narrow(subtpe, child)
+                    case children => Narrow(subtpe, Group(children))
+                  }
+              }
+              Some((default, narrows))
+            }
+          }
+        }
+
         def group(queries: List[Query]): Result[SqlQuery] = {
           queries.foldLeft(List.empty[SqlQuery].success) {
             case (nodes, q) =>
@@ -3019,11 +3066,6 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             assert(supertpe.underlying.isInterface || supertpe.underlying.isUnion || (subtpes.sizeCompare(1) == 0 && subtpes.head =:= supertpe))
             subtpes.foreach(subtpe => assert(subtpe <:< supertpe))
 
-            val discriminator = discriminatorForType(context)
-            val narrowPredicates = subtpes.map { subtpe =>
-              (subtpe, discriminator.flatMap(_.discriminator.narrowPredicate(subtpe)))
-            }
-
             val exhaustive = schema.exhaustive(supertpe, subtpes)
             val exclusive = default == Empty
             val allSimple = narrows.forall(narrow => isSimple(narrow.child))
@@ -3050,24 +3092,24 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
               val dquery =
                 if(exhaustive) EmptySqlQuery(context).success
-                else {
-                  val allPreds = narrowPredicates.collect {
-                    case (_, Some(pred)) => pred
-                  }
-                  if (exclusive) {
-                    for {
-                      parentTable <- parentTableForType(context)
-                      allPreds0   <- allPreds.traverse(pred => SqlQuery.contextualiseWhereTerms(context, parentTable, pred).map(Not(_)))
-                    } yield {
+                else
+                  discriminatorForType(context).map { disc =>
+                    subtpes.traverse(disc.discriminator.narrowPredicate)
+                  }.getOrElse(Nil.success).flatMap { allPreds =>
+                    if (exclusive) {
+                      for {
+                        parentTable <- parentTableForType(context)
+                        allPreds0   <- allPreds.traverse(pred => SqlQuery.contextualiseWhereTerms(context, parentTable, pred).map(Not(_)))
+                      } yield {
+                        val defaultPredicate = And.combineAll(allPreds0)
+                        SqlSelect(context, Nil, parentTable, extraCols, Nil, defaultPredicate :: Nil, Nil, None, None, Nil, true, false)
+                      }
+                    } else {
+                      val allPreds0 = allPreds.map(Not(_))
                       val defaultPredicate = And.combineAll(allPreds0)
-                      SqlSelect(context, Nil, parentTable, extraCols, Nil, defaultPredicate :: Nil, Nil, None, None, Nil, true, false)
+                      loop(Filter(defaultPredicate, default), context, parentConstraints, exposeJoins).flatMap(_.withContext(context, extraCols, Nil))
                     }
-                  } else {
-                    val allPreds0 = allPreds.map(Not(_))
-                    val defaultPredicate = And.combineAll(allPreds0)
-                    loop(Filter(defaultPredicate, default), context, parentConstraints, exposeJoins).flatMap(_.withContext(context, extraCols, Nil))
                   }
-                }
 
               for {
                 dquery0   <- dquery
@@ -3496,36 +3538,39 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         case _ => Result.internalError(s"Not nullable at ${context.path}")
       }
 
-    def narrowsTo(subtpe: TypeRef): Boolean = {
+    def narrowsTo(subtpe: TypeRef): Result[Boolean] = {
       def check(ctpe: Type): Boolean =
         if (ctpe =:= tpe) asTable.map(table => mapped.narrowsTo(context.asType(subtpe), table)).toOption.getOrElse(false)
         else ctpe <:< subtpe
 
-      (subtpe <:< tpe) &&
-        (discriminatorForType(context) match {
-          case Some(disc) => disc.discriminator.discriminate(this).map(check).getOrElse(false)
-          case _ => check(tpe)
-        })
+      if (!(subtpe <:< tpe)) false.success
+      else
+        discriminatorForType(context) match {
+          case Some(disc) => disc.discriminator.discriminate(this).map(check)
+          case _ => check(tpe).success
+        }
     }
 
     def narrow(subtpe: TypeRef): Result[Cursor] = {
-      if (narrowsTo(subtpe)) {
-        val narrowedContext = context.asType(subtpe)
-        asTable.map { table =>
-          mkChild(context = narrowedContext, focus = mapped.narrow(narrowedContext, table))
-        }
-      } else Result.internalError(s"Cannot narrow $tpe to $subtpe")
+      narrowsTo(subtpe).flatMap { n =>
+        if (n) {
+          val narrowedContext = context.asType(subtpe)
+          asTable.map { table =>
+            mkChild(context = narrowedContext, focus = mapped.narrow(narrowedContext, table))
+          }
+        } else Result.internalError(s"Cannot narrow $tpe to $subtpe")
+      }
     }
 
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
-      val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
-      val fieldTpe = fieldContext.tpe
       val localField =
-        typeMappings.fieldMapping(this, fieldName) match {
-          case Some(_: SqlJson) =>
+        typeMappings.fieldMapping(this, fieldName).flatMap {
+          case Some((np, _: SqlJson)) =>
+            val fieldContext = np.context.forFieldOrAttribute(fieldName, resultName)
+            val fieldTpe = fieldContext.tpe
             asTable.flatMap { table =>
               def mkCirceCursor(f: Json): Result[Cursor] =
-                CirceCursor(fieldContext, focus = f, parent = Some(this), Env.empty).success
+                CirceCursor(fieldContext, focus = f, parent = Some(np), Env.empty).success
               mapped.selectAtomicField(context, fieldName, table).flatMap(_ match {
                 case Some(j: Json) if fieldTpe.isNullable => mkCirceCursor(j)
                 case None => mkCirceCursor(Json.Null)
@@ -3535,7 +3580,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               })
             }
 
-          case Some(_: SqlField) =>
+          case Some((np, _: SqlField)) =>
+            val fieldContext = np.context.forFieldOrAttribute(fieldName, resultName)
+            val fieldTpe = fieldContext.tpe
             asTable.flatMap(table =>
               mapped.selectAtomicField(context, fieldName, table).map { leaf =>
                 val leafFocus = leaf match {
@@ -3543,11 +3590,12 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                   case other => other
                 }
                 assert(leafFocus != FailedJoin)
-                LeafCursor(fieldContext, leafFocus, Some(this), Env.empty)
+                LeafCursor(fieldContext, leafFocus, Some(np), Env.empty)
               }
             )
 
-          case Some(_: SqlObject) | Some(_: EffectMapping) =>
+          case Some((np, (_: SqlObject | _: EffectMapping))) =>
+            val fieldContext = np.context.forFieldOrAttribute(fieldName, resultName)
             asTable.map { table =>
               val focussed = mapped.narrow(fieldContext, table)
               mkChild(context = fieldContext, focus = focussed)

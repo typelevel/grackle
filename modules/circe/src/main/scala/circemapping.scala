@@ -152,8 +152,8 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
       case _ => Result.internalError(s"Expected Nullable type, found $focus for $tpe")
     }
 
-    def narrowsTo(subtpe: TypeRef): Boolean =
-      subtpe <:< tpe &&
+    def narrowsTo(subtpe: TypeRef): Result[Boolean] =
+      (subtpe <:< tpe &&
         ((subtpe.dealias, focus.asObject) match {
           case (nt: TypeWithFields, Some(obj)) =>
             nt.fields.forall { f =>
@@ -161,13 +161,15 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
             } && obj.keys.forall(nt.hasField)
 
           case _ => false
-        })
+        })).success
 
     def narrow(subtpe: TypeRef): Result[Cursor] =
-      if (narrowsTo(subtpe))
-        mkChild(context.asType(subtpe)).success
-      else
-        Result.internalError(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
+      narrowsTo(subtpe).flatMap { n =>
+        if (n)
+          mkChild(context.asType(subtpe)).success
+        else
+          Result.internalError(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
+      }
 
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
       val localField =

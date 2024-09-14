@@ -116,12 +116,14 @@ trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: Ge
       override def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
         cursor.field(fieldName, resultName) orElse mkCursorForField(this, fieldName, resultName)
 
-      override def narrowsTo(subtpe: TypeRef): Boolean =
-        subtpe <:< tpe && rtpe <:< subtpe
+      override def narrowsTo(subtpe: TypeRef): Result[Boolean] =
+        (subtpe <:< tpe && rtpe <:< subtpe).success
 
       override def narrow(subtpe: TypeRef): Result[Cursor] =
-        if (narrowsTo(subtpe)) copy(tpe0 = subtpe).success
-        else Result.internalError(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
+        narrowsTo(subtpe).flatMap { n =>
+          if (n) copy(tpe0 = subtpe).success
+          else Result.internalError(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
+        }
     }
   }
 }

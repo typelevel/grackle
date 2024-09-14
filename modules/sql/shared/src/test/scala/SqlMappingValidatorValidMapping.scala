@@ -326,9 +326,10 @@ trait SqlMappingValidatorValidMapping[F[_]] extends SqlTestMapping[F] {
 
   lazy val objectTypeDiscriminator = new SqlDiscriminator {
     def discriminate(c: Cursor): Result[Type] =
-      Result.failure("discriminator not implemented")
+      Result.internalError("discriminator not implemented")
 
-    def narrowPredicate(subtpe: Type): Option[Predicate] = None
+    def narrowPredicate(subtpe: Type): Result[Predicate] =
+      Result.internalError("discriminator not implemented")
   }
 
   sealed trait Genre extends Product with Serializable

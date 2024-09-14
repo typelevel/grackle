@@ -128,7 +128,7 @@ trait Cursor {
   def isDefined: Result[Boolean]
 
   /** Is the value at this `Cursor` narrowable to `subtpe`? */
-  def narrowsTo(subtpe: TypeRef): Boolean
+  def narrowsTo(subtpe: TypeRef): Result[Boolean]
 
   /**
    * Yield a `Cursor` corresponding to the value at this `Cursor` narrowed to
@@ -251,7 +251,7 @@ object Cursor {
     def isDefined: Result[Boolean] =
       Result.internalError(s"Expected Nullable type, found $focus for $tpe")
 
-    def narrowsTo(subtpe: TypeRef): Boolean = false
+    def narrowsTo(subtpe: TypeRef): Result[Boolean] = false.success
 
     def narrow(subtpe: TypeRef): Result[Cursor] =
       Result.internalError(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
@@ -290,7 +290,7 @@ object Cursor {
 
     def isDefined: Result[Boolean] = underlying.isDefined
 
-    def narrowsTo(subtpe: TypeRef): Boolean = underlying.narrowsTo(subtpe)
+    def narrowsTo(subtpe: TypeRef): Result[Boolean] = underlying.narrowsTo(subtpe)
 
     def narrow(subtpe: TypeRef): Result[Cursor] = underlying.narrow(subtpe)
 
