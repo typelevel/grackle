@@ -111,14 +111,14 @@ trait SqlRecursiveInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
       }
     }
 
-    def narrowPredicate(subtpe: Type): Option[Predicate] = {
-      def mkPredicate(tpe: ItemType): Option[Predicate] =
-        Some(Eql(IType / "itemType", Const(tpe)))
+    def narrowPredicate(subtpe: Type): Result[Predicate] = {
+      def mkPredicate(tpe: ItemType): Result[Predicate] =
+        Eql(IType / "itemType", Const(tpe)).success
 
       subtpe match {
         case ItemAType => mkPredicate(ItemType.ItemA)
         case ItemBType => mkPredicate(ItemType.ItemB)
-        case _ => None
+        case _ => Result.internalError(s"Invalid discriminator: $subtpe")
       }
     }
   }

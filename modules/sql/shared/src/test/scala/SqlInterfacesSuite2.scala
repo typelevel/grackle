@@ -16,17 +16,14 @@
 package grackle.sql.test
 
 import cats.effect.IO
-import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
 
-import grackle.test.GraphQLResponseTests.assertWeaklyEqualIO
-
 trait SqlInterfacesSuite2 extends CatsEffectSuite {
   def mapping: Mapping[IO]
 
-  test("when discriminator fails the fragments should be ignored") {
+  test("when discriminator fails the entire query should fail") {
     val query = """
       query {
         entities {
@@ -43,47 +40,10 @@ trait SqlInterfacesSuite2 extends CatsEffectSuite {
       }
     """
 
-    val expected = json"""
-      {
-        "data" : {
-          "entities" : [
-            {
-              "id" : "1",
-              "entityType" : "FILM",
-              "title" : "Film 1"
-            },
-            {
-              "id" : "2",
-              "entityType" : "FILM",
-              "title" : "Film 2"
-            },
-            {
-              "id" : "3",
-              "entityType" : "FILM",
-              "title" : "Film 3"
-            },
-            {
-              "id" : "4",
-              "entityType" : "SERIES",
-              "title" : "Series 1"
-            },
-            {
-              "id" : "5",
-              "entityType" : "SERIES",
-              "title" : "Series 2"
-            },
-            {
-              "id" : "6",
-              "entityType" : "SERIES",
-              "title" : "Series 3"
-            }
-          ]
-        }
-      }
-    """
+    val expected = Left("Boom!!!")
 
-    val res = mapping.compileAndRun(query)
+    val res = mapping.compileAndRun(query).attempt
 
-    assertWeaklyEqualIO(res, expected)
+    assertIO(res.map(_.left.map(_.getMessage)), expected)
   }
 }

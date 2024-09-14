@@ -16,6 +16,7 @@
 package grackle.sql.test
 
 import grackle._
+import grackle.syntax._
 import Predicate._
 
 trait SqlInterfacesMapping2[F[_]] extends SqlInterfacesMapping[F] { self =>
@@ -24,19 +25,18 @@ trait SqlInterfacesMapping2[F[_]] extends SqlInterfacesMapping[F] { self =>
 
     // discriminator always fails
     def discriminate(c: Cursor): Result[Type] =
-      Result.failure("no")
+      Result.internalError("Boom!!!")
 
     // same as in SqlInterfacesMapping
-    def narrowPredicate(subtpe: Type): Option[Predicate] = {
-      def mkPredicate(tpe: EntityType): Option[Predicate] =
-        Some(Eql(EType / "entityType", Const(tpe)))
+    def narrowPredicate(subtpe: Type): Result[Predicate] = {
+      def mkPredicate(tpe: EntityType): Result[Predicate] =
+        Eql(EType / "entityType", Const(tpe)).success
 
       subtpe match {
         case FilmType => mkPredicate(EntityType.Film)
         case SeriesType => mkPredicate(EntityType.Series)
-        case _ => None
+        case _ => Result.internalError(s"Invalid discriminator: $subtpe")
       }
     }
   }
-
 }

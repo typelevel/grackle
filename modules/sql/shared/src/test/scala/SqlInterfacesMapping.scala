@@ -38,6 +38,8 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
     val seriesLabel            = col("series_label", nullable(text))
     val synopsisShort          = col("synopsis_short", nullable(text))
     val synopsisLong           = col("synopsis_long", nullable(text))
+    val imageUrl               = col("image_url", nullable(text))
+    val hiddenImageUrl         = col("hidden_image_url", nullable(text))
   }
 
   object episodes extends TableDef("episodes") {
@@ -59,12 +61,14 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
         entityType: EntityType!
         title: String
         synopses: Synopses
+        imageUrl: String
       }
       type Film implements Entity {
         id: ID!
         entityType: EntityType!
         title: String
         synopses: Synopses
+        imageUrl: String
         rating: String
         label: Int
       }
@@ -73,6 +77,7 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
         entityType: EntityType!
         title: String
         synopses: Synopses
+        imageUrl: String
         numberOfEpisodes: Int
         episodes: [Episode!]!
         label: String
@@ -126,16 +131,20 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
         fieldMappings =
           List(
             SqlField("rating", entities.filmRating),
-            SqlField("label", entities.filmLabel)
+            SqlField("label", entities.filmLabel),
+            SqlField("imageUrl", entities.imageUrl)
           )
       ),
       ObjectMapping(
         tpe = SeriesType,
         fieldMappings =
           List(
+            SqlField("title", entities.title),
             SqlField("numberOfEpisodes", entities.seriesNumberOfEpisodes),
             SqlObject("episodes", Join(entities.id, episodes.seriesId)),
-            SqlField("label", entities.seriesLabel)
+            SqlField("label", entities.seriesLabel),
+            SqlField("hiddenImageUrl", entities.hiddenImageUrl, hidden = true),
+            CursorField("imageUrl", mkSeriesImageUrl, List("hiddenImageUrl"))
           )
       ),
       ObjectMapping(
@@ -197,17 +206,20 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
       }
     }
 
-    def narrowPredicate(subtpe: Type): Option[Predicate] = {
-      def mkPredicate(tpe: EntityType): Option[Predicate] =
-        Some(Eql(EType / "entityType", Const(tpe)))
+    def narrowPredicate(subtpe: Type): Result[Predicate] = {
+      def mkPredicate(tpe: EntityType): Result[Predicate] =
+        Eql(EType / "entityType", Const(tpe)).success
 
       subtpe match {
         case FilmType => mkPredicate(EntityType.Film)
         case SeriesType => mkPredicate(EntityType.Series)
-        case _ => None
+        case _ => Result.internalError(s"Invalid discriminator: $subtpe")
       }
     }
   }
+
+  def mkSeriesImageUrl(c: Cursor): Result[Option[String]] =
+    c.fieldAs[Option[String]]("hiddenImageUrl").map(_.map(hiu => s"http://example.com/series/$hiu"))
 
   override val selectElaborator = SelectElaborator {
     case (QueryType, "films", Nil) =>

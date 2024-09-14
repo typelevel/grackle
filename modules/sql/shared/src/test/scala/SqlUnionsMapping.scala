@@ -92,14 +92,14 @@ trait SqlUnionsMapping[F[_]] extends SqlTestMapping[F] {
         case "ItemB" => ItemBType
       }
 
-    def narrowPredicate(subtpe: Type): Option[Predicate] = {
-      def mkPredicate(tpe: String): Option[Predicate] =
-        Some(Eql(ItemType / "itemType", Const(tpe)))
+    def narrowPredicate(subtpe: Type): Result[Predicate] = {
+      def mkPredicate(tpe: String): Result[Predicate] =
+        Eql(ItemType / "itemType", Const(tpe)).success
 
       subtpe match {
         case ItemAType => mkPredicate("ItemA")
         case ItemBType => mkPredicate("ItemB")
-        case _ => None
+        case _ => Result.internalError(s"Invalid discriminator: $subtpe")
       }
     }
   }

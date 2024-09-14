@@ -201,22 +201,23 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
           siblings.flatTraverse(query => runFields(query, tpe, cursor))
 
         case Introspect(schema, s@Select("__typename", _, Empty)) if tpe.isNamed =>
-          (tpe.dealias match {
-            case o: ObjectType => Some(o.name)
+          val fail = Result.failure(s"'__typename' cannot be applied to non-selectable type '$tpe'")
+          def mkTypeNameFields(name: String) =
+            List((s.resultName, ProtoJson.fromJson(Json.fromString(name)))).success
+          def mkTypeNameFieldsOrFail(name: Option[String]) =
+            name.map(mkTypeNameFields).getOrElse(fail)
+
+          tpe.dealias match {
+            case o: ObjectType => mkTypeNameFields(o.name)
             case i: InterfaceType =>
-              (schema.implementations(i).collectFirst {
-                case o if cursor.narrowsTo(schema.uncheckedRef(o)) => o.name
-              })
+              schema.implementations(i).collectFirstSomeM { o =>
+                cursor.narrowsTo(schema.uncheckedRef(o)).ifF(Some(o.name), None)
+              }.flatMap(mkTypeNameFieldsOrFail)
             case u: UnionType =>
-              (u.members.map(_.dealias).collectFirst {
-                case nt: NamedType if cursor.narrowsTo(schema.uncheckedRef(nt)) => nt.name
-              })
-            case _ => None
-          }) match {
-            case Some(name) =>
-              List((s.resultName, ProtoJson.fromJson(Json.fromString(name)))).success
-            case None =>
-              Result.failure(s"'__typename' cannot be applied to non-selectable type '$tpe'")
+              u.members.map(_.dealias).collectFirstSomeM { nt =>
+                cursor.narrowsTo(schema.uncheckedRef(nt)).ifF(Some(nt.name), None)
+              }.flatMap(mkTypeNameFieldsOrFail)
+            case _ => fail
           }
 
         case sel: Select if tpe.isNullable =>
@@ -250,13 +251,15 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             value    <- runValue(child, fieldTpe, c)
           } yield List((sel.resultName, value))
 
-        case Narrow(tp1, child) if cursor.narrowsTo(tp1) =>
-          for {
-            c      <- cursor.narrow(tp1)
-            fields <- runFields(child, tp1, c)
-          } yield fields
-
-        case _: Narrow => Nil.success
+        case Narrow(tp1, child) =>
+          cursor.narrowsTo(tp1).flatMap { n =>
+            if (!n) Nil.success
+            else
+              for {
+                c      <- cursor.narrow(tp1)
+                fields <- runFields(child, tp1, c)
+              } yield fields
+          }
 
         case c@Component(_, _, cont) =>
           for {

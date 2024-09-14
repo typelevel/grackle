@@ -134,12 +134,13 @@ abstract class Mapping[F[_]] {
     * the `fieldName` child of `parent`.
     */
   protected final def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
-    val context = parent.context
-    val fieldContext = context.forFieldOrAttribute(fieldName, resultName)
-
     typeMappings.fieldMapping(parent, fieldName).
-      toResultOrError(s"No mapping for field '$fieldName' for type ${parent.tpe}").
-        flatMap(mkCursorForMappedField(parent, fieldContext, _))
+      flatMap(_.toResultOrError(s"No mapping for field '$fieldName' for type ${parent.tpe}")).
+        flatMap {
+          case (np, fm) =>
+            val fieldContext = np.context.forFieldOrAttribute(fieldName, resultName)
+            mkCursorForMappedField(np, fieldContext, fm)
+        }
   }
 
   final class TypeMappings private (
@@ -200,17 +201,24 @@ abstract class Mapping[F[_]] {
      *  Yields the `FieldMapping` associated with `fieldName` in the runtime context
      *  determined by the given `Cursor`, if any.
      */
-    def fieldMapping(parent: Cursor, fieldName: String): Option[FieldMapping] = {
+    def fieldMapping(parent: Cursor, fieldName: String): Result[Option[(Cursor, FieldMapping)]] = {
       val context = parent.context
-      fieldIndex(context).flatMap(_.get(fieldName)).flatMap {
-        case ifm: InheritedFieldMapping =>
-          ifm.select(parent.context)
-        case pfm: PolymorphicFieldMapping =>
+      fieldIndex(context).flatMap(_.get(fieldName)) match {
+        case Some(ifm: InheritedFieldMapping) =>
+          ifm.select(parent.context).map((parent, _)).success
+        case Some(pfm: PolymorphicFieldMapping) =>
           pfm.select(parent)
-        case fm =>
-          Some(fm)
+        case Some(fm) =>
+          Option((parent, fm)).success
+        case None => None.success
       }
     }
+
+    def fieldIsPolymorphic(context: Context, fieldName: String): Boolean =
+      rawFieldMapping(context, fieldName).exists {
+        case _: PolymorphicFieldMapping => true
+        case _ => false
+      }
 
     /** Yields the `FieldMapping` directly or ancestrally associated with `fieldName` in `context`, if any. */
     def ancestralFieldMapping(context: Context, fieldName: String): Option[FieldMapping] =
@@ -532,16 +540,20 @@ abstract class Mapping[F[_]] {
       def hidden: Boolean = false
       def subtree: Boolean = false
 
-      def select(cursor: Cursor): Option[FieldMapping] = {
-        val context = cursor.context
+      def select(cursor: Cursor): Result[Option[(Cursor, FieldMapping)]] = {
         val applicable =
-          candidates.mapFilter {
-            case (pred, fm) if cursor.narrowsTo(schema.uncheckedRef(pred.tpe)) =>
-              pred(context.asType(pred.tpe)).map(prio => (prio, fm))
-            case _ =>
-              None
+          candidates.traverseFilter {
+            case (pred, fm) =>
+              cursor.narrowsTo(schema.uncheckedRef(pred.tpe)).flatMap { narrows =>
+                if (narrows)
+                  for {
+                    nc   <- cursor.narrow(schema.uncheckedRef(pred.tpe))
+                  } yield pred(nc.context).map(prio => (prio, (nc, fm)))
+                else
+                  None.success
+              }
           }
-        applicable.maxByOption(_._1).map(_._2)
+        applicable.map(_.maxByOption(_._1).map(_._2))
       }
 
       def select(context: Context): Option[FieldMapping] = {
@@ -1266,7 +1278,7 @@ abstract class Mapping[F[_]] {
         case _ => Result.internalError(s"Not nullable at ${context.path}")
       }
 
-    def narrowsTo(subtpe: TypeRef): Boolean = false
+    def narrowsTo(subtpe: TypeRef): Result[Boolean] = false.success
     def narrow(subtpe: TypeRef): Result[Cursor] =
       Result.failure(s"Cannot narrow $tpe to $subtpe")
 
