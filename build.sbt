@@ -41,7 +41,6 @@ ThisBuild / developers       := List(
 ThisBuild / tlFatalWarnings         := true
 ThisBuild / tlCiScalafmtCheck       := false
 ThisBuild / tlCiReleaseBranches     := Seq("main")
-ThisBuild / (tlSonatypeUseLegacyHost : @annotation.nowarn) := false
 ThisBuild / githubWorkflowBuild     ~= { steps =>
   WorkflowStep.Sbt(
     commands = List("headerCheckAll"),
