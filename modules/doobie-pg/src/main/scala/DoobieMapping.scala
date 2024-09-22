@@ -83,7 +83,8 @@ trait DoobieMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] {
       def parentheses(f: Fragment): Fragment = fragments.parentheses(f)
       def in[G[_]: Reducible, A](f: Fragment, fs: G[A], enc: Encoder): Fragment = {
         val (put, _) = enc
-        fragments.inOpt(f, fs)(implicitly, put.asInstanceOf[Put[A]]).getOrElse(empty)
+        implicit val putA: Put[A] = put.asInstanceOf[Put[A]]
+        fragments.inOpt(f, fs).getOrElse(empty)
       }
 
       def needsCollation(codec: Codec): Boolean =
@@ -139,12 +140,9 @@ trait DoobieMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] {
           case VarBinary             => Some("VARBINARY")
           case VarChar               => Some("VARCHAR")
           case Array | Other         =>
-            codec._1.put match {
-              case adv: Put[_] if adv.vendorTypeNames.head == "json" =>
-                Some("JSONB")
-              case adv: Put[_] =>
-                Some(adv.vendorTypeNames.head)
-              case _ => None
+            codec._1.put.vendorTypeNames.headOption match {
+              case Some("json") => Some("JSONB")
+              case other => other
             }
 
           case _                     => None
@@ -176,6 +174,7 @@ trait DoobieMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] {
       Read(codecs.map { case (_, (m, n)) => (m.get, if(n) Nullable else NoNulls) }, unsafeGet)
     }
 
-    fragment.query[Array[Any]](mkRead(codecs)).to[Vector].transact(transactor)
+    implicit val reads: Read[Array[Any]] = mkRead(codecs)
+    fragment.query[Array[Any]].to[Vector].transact(transactor)
   }
 }
