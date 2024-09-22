@@ -140,10 +140,10 @@ trait DoobieMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] {
           case VarChar               => Some("VARCHAR")
           case Array | Other         =>
             codec._1.put match {
-              case adv: Put.Advanced[_] if adv.schemaTypes.head == "json" =>
+              case adv: Put[_] if adv.vendorTypeNames.head == "json" =>
                 Some("JSONB")
-              case adv: Put.Advanced[_] =>
-                Some(adv.schemaTypes.head)
+              case adv: Put[_] =>
+                Some(adv.vendorTypeNames.head)
               case _ => None
             }
 
@@ -173,7 +173,7 @@ trait DoobieMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] {
         arr
       }
 
-      new Read(codecs.map { case (_, (m, n)) => (m.get, if(n) Nullable else NoNulls) }, unsafeGet)
+      Read(codecs.map { case (_, (m, n)) => (m.get, if(n) Nullable else NoNulls) }, unsafeGet)
     }
 
     fragment.query[Array[Any]](mkRead(codecs)).to[Vector].transact(transactor)
