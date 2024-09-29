@@ -450,9 +450,8 @@ object Query {
         case Filter(pred, child) => (Some(pred), child)
         case child => (None, child)
       }
-      limit.orElse(offset).orElse(order).orElse(filter).map { _ =>
-        (filter, order, offset, limit, q3)
-      }
+      if(limit.isEmpty && offset.isEmpty && order.isEmpty && filter.isEmpty) None
+      else Some((filter, order, offset, limit, q3))
     }
   }
 
