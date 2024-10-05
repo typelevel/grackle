@@ -24,13 +24,14 @@ import _root_.doobie.util.meta.Meta
 import _root_.doobie.util.transactor.Transactor
 
 import grackle._
-import doobie.postgres.{DoobieMapping, DoobieMappingCompanion, DoobieMonitor}
+import doobie.{DoobieMappingCompanion, DoobieMonitor}
+import doobie.postgres.DoobiePgMapping
 import sql.Like
 import syntax._
 import Query._, Predicate._, Value._
 import QueryCompiler._
 
-trait WorldPostgresSchema[F[_]] extends DoobieMapping[F] {
+trait WorldPostgresSchema[F[_]] extends DoobiePgMapping[F] {
 
   object country extends TableDef("country") {
     val code           = col("code", Meta[String])
@@ -230,7 +231,7 @@ trait WorldMapping[F[_]] extends WorldPostgresSchema[F] {
 
 object WorldMapping extends DoobieMappingCompanion {
   def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F] =
-    new DoobieMapping[F](transactor, monitor) with WorldMapping[F]
+    new DoobiePgMapping[F](transactor, monitor) with WorldMapping[F]
 }
 
 object Bench extends IOApp {

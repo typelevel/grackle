@@ -62,6 +62,9 @@ jobs:
       - name: Check Headers
         run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' headerCheckAll
 
+      - name: Start up Postgres, Oracle
+        run: docker compose up --force-recreate -d --wait --quiet-pull
+
       - name: Check headers
         if: matrix.java == 'temurin@11' && matrix.os == 'ubuntu-latest'
         run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' headerCheckAll
@@ -87,11 +90,11 @@ jobs:
 
       - name: Make target directories
         if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
-        run: mkdir -p modules/skunk/js/target modules/circe/.jvm/target modules/generic/.jvm/target modules/doobie-pg/target unidocs/target modules/core/.native/target modules/sql/js/target modules/skunk/jvm/target modules/core/.js/target modules/circe/.js/target modules/sql/native/target modules/skunk/native/target modules/generic/.js/target modules/core/.jvm/target modules/sql/jvm/target modules/circe/.native/target modules/generic/.native/target project/target
+        run: mkdir -p modules/skunk/js/target modules/sql-core/.js/target modules/circe/.jvm/target modules/generic/.jvm/target modules/doobie-pg/target unidocs/target modules/core/.native/target modules/skunk/jvm/target modules/core/.js/target modules/doobie-core/target modules/circe/.js/target modules/skunk/native/target modules/generic/.js/target modules/doobie-oracle/target modules/sql-core/.jvm/target modules/core/.jvm/target modules/sql-pg/native/target modules/sql-pg/js/target modules/circe/.native/target modules/generic/.native/target modules/sql-pg/jvm/target modules/sql-core/.native/target project/target
 
       - name: Compress target directories
         if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
-        run: tar cf targets.tar modules/skunk/js/target modules/circe/.jvm/target modules/generic/.jvm/target modules/doobie-pg/target unidocs/target modules/core/.native/target modules/sql/js/target modules/skunk/jvm/target modules/core/.js/target modules/circe/.js/target modules/sql/native/target modules/skunk/native/target modules/generic/.js/target modules/core/.jvm/target modules/sql/jvm/target modules/circe/.native/target modules/generic/.native/target project/target
+        run: tar cf targets.tar modules/skunk/js/target modules/sql-core/.js/target modules/circe/.jvm/target modules/generic/.jvm/target modules/doobie-pg/target unidocs/target modules/core/.native/target modules/skunk/jvm/target modules/core/.js/target modules/doobie-core/target modules/circe/.js/target modules/skunk/native/target modules/generic/.js/target modules/doobie-oracle/target modules/sql-core/.jvm/target modules/core/.jvm/target modules/sql-pg/native/target modules/sql-pg/js/target modules/circe/.native/target modules/generic/.native/target modules/sql-pg/jvm/target modules/sql-core/.native/target project/target
 
       - name: Upload target directories
         if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
@@ -282,6 +285,9 @@ jobs:
       - name: sbt update
         if: matrix.java == 'temurin@11' && steps.setup-java-temurin-11.outputs.cache-hit == 'false'
         run: sbt +update
+
+      - name: Start up Postgres, Oracle
+        run: docker compose up --force-recreate -d --wait --quiet-pull
 
       - run: sbt coverage rootJVM/test coverageReport
 

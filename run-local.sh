@@ -1,5 +1,3 @@
 #!/bin/sh
 
-docker-compose \
-  -f local-docker-compose.yml \
-  up -d
+docker compose up -d --wait

@@ -29,37 +29,38 @@ import skunk.circe.codec.{ all => ccodec }
 import grackle._, skunk._
 
 import grackle.sql.test._
+import grackle.sqlpg.test._
 
-trait SkunkDatabaseSuite extends SqlDatabaseSuite {
+trait SkunkDatabaseSuite extends SqlPgDatabaseSuite {
 
-  def poolResource: Resource[IO, Session[IO]] = {
-    postgresConnectionInfoResource.flatMap { connInfo =>
-      import connInfo._
+  def sessionResource: Resource[IO, Session[IO]] = {
+    val connInfo = postgresConnectionInfo
+    import connInfo._
 
-      Session.single[IO](
-        host     = if (host == "0.0.0.0") "127.0.0.1" else host,
-        port     = port,
-        user     = username,
-        password = Some(password),
-        database = databaseName,
-        //debug    = true,
-      )
-    }
+    Session.single[IO](
+      host     = host,
+      port     = port,
+      user     = username,
+      password = Some(password),
+      database = databaseName,
+      //debug    = true,
+    )
   }
 
-  val poolFixture = ResourceSuiteLocalFixture("skunk", poolResource)
-  override def munitFixtures: Seq[IOFixture[_]] = Seq(poolFixture)
+  val sessionFixture: IOFixture[Session[IO]] = ResourceSuiteLocalFixture("skunk", sessionResource)
+  override def munitFixtures: Seq[IOFixture[_]] = Seq(sessionFixture)
 
-  def pool = Resource.eval(IO(poolFixture()))
+  def session: Session[IO] = sessionFixture()
 
-  abstract class SkunkTestMapping[F[_]: Sync](pool: Resource[F,Session[F]], monitor: SkunkMonitor[F] = SkunkMonitor.noopMonitor[IO])
-    extends SkunkMapping[F](pool, monitor) with SqlTestMapping[F] {
+  abstract class SkunkTestMapping[F[_]: Sync](session: Session[F], monitor: SkunkMonitor[F] = SkunkMonitor.noopMonitor[IO])
+    extends SkunkMapping[F](session, monitor) with SqlTestMapping[F] {
 
     type TestCodec[T] = (SCodec[T], Boolean)
 
     def bool: TestCodec[Boolean] = (codec.bool, false)
     def text: TestCodec[String] = (codec.text, false)
     def varchar: TestCodec[String] = (codec.varchar, false)
+    def nvarchar: TestCodec[String] = (codec.text, false) // For compatbiltity with Oracle in these Suites.
     def bpchar(len: Int): TestCodec[String] = (codec.bpchar(len), false)
     def int2: TestCodec[Int] = (codec.int2.imap(_.toInt)(_.toShort), false)
     def int4: TestCodec[Int] = (codec.int4, false)
