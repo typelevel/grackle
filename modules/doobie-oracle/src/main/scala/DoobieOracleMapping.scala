@@ -60,7 +60,6 @@ trait DoobieOracleMappingLike[F[_]] extends DoobieMappingLike[F] with SqlMapping
             case "BIGINT" => "NUMBER"
             case other => other
           }
-        //println(s"name: $name $convName ${codec._1.put.jdbcTargets}")
         Fragments.const(s"TO_$convName(NULL)")
       case _ => Fragments.const("NULL")
     }
