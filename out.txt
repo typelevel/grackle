@@ -1,3 +1,0 @@
- Container grackle-postgres-1  Running
- Container grackle-postgres-1  Waiting
- Container grackle-postgres-1  Healthy
