@@ -1,5 +1,3 @@
 #!/bin/sh
 
-docker-compose \
-  -f local-docker-compose.yml \
-  stop
+docker compose stop
