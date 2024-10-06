@@ -16,14 +16,9 @@
 package grackle.doobie
 package test
 
-import java.time.{Duration, LocalDate, LocalTime, OffsetDateTime}
-import java.util.UUID
+import java.time.Duration
 
-// TODO: Postgres-specifics will have to move
-import doobie.postgres.implicits._
-import doobie.postgres.circe.jsonb.implicits._
-import doobie.{Get, Meta, Put}
-import io.circe.Json
+import doobie.Meta
 import munit.CatsEffectSuite
 
 import grackle.sql.test._
@@ -36,7 +31,6 @@ trait DoobieDatabaseSuite extends CatsEffectSuite {
     def bool: TestCodec[Boolean] = (Meta[Boolean], false)
     def text: TestCodec[String] = (Meta[String], false)
     def varchar: TestCodec[String] = (Meta[String], false)
-    def nvarchar: TestCodec[String] = (Meta[String], false)
     def bpchar(len: Int): TestCodec[String] = (Meta[String], false)
     def int2: TestCodec[Int] = (Meta[Int], false)
     def int4: TestCodec[Int] = (Meta[Int], false)
@@ -45,13 +39,7 @@ trait DoobieDatabaseSuite extends CatsEffectSuite {
     def float8: TestCodec[Double] = (Meta[Double], false)
     def numeric(precision: Int, scale: Int): TestCodec[BigDecimal] = (Meta[BigDecimal], false)
 
-    def uuid: TestCodec[UUID] = (Meta[UUID], false)
-    def localDate: TestCodec[LocalDate] = (Meta[LocalDate], false)
-    def localTime: TestCodec[LocalTime] = (Meta[LocalTime], false)
-    def offsetDateTime: TestCodec[OffsetDateTime] = (Meta[OffsetDateTime], false)
     def duration: TestCodec[Duration] = (Meta[Long].timap(Duration.ofMillis)(_.toMillis), false)
-
-    def jsonb: TestCodec[Json] = (new Meta(Get[Json], Put[Json]), false)
 
     def nullable[T](c: TestCodec[T]): TestCodec[T] = (c._1, true)
 

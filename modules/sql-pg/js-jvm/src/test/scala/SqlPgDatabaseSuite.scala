@@ -31,5 +31,6 @@ trait SqlPgDatabaseSuite extends CatsEffectSuite {
     val DefaultPort = 5432
   }
 
-  val postgresConnectionInfo: PostgresConnectionInfo = PostgresConnectionInfo("localhost", PostgresConnectionInfo.DefaultPort)
+  val postgresConnectionInfo: PostgresConnectionInfo =
+    PostgresConnectionInfo("localhost", PostgresConnectionInfo.DefaultPort)
 }

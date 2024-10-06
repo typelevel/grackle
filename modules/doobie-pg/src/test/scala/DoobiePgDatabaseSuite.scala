@@ -16,8 +16,14 @@
 package grackle.doobie.postgres
 package test
 
+import java.time.{LocalDate, LocalTime, OffsetDateTime}
+import java.util.UUID
+
 import cats.effect.{IO, Resource, Sync}
-import doobie.Transactor
+import doobie.{Get, Meta, Put, Transactor}
+import doobie.postgres.implicits._
+import doobie.postgres.circe.jsonb.implicits._
+import io.circe.Json
 import munit.catseffect.IOFixture
 
 import grackle.doobie.DoobieMonitor
@@ -27,7 +33,14 @@ import grackle.sqlpg.test._
 
 trait DoobiePgDatabaseSuite extends DoobieDatabaseSuite with SqlPgDatabaseSuite {
   abstract class DoobiePgTestMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F] = DoobieMonitor.noopMonitor[IO])
-    extends DoobiePgMapping[F](transactor, monitor) with DoobieTestMapping[F] with SqlTestMapping[F]
+    extends DoobiePgMapping[F](transactor, monitor) with DoobieTestMapping[F] with SqlTestMapping[F] {
+    def uuid: TestCodec[UUID] = (Meta[UUID], false)
+    def localDate: TestCodec[LocalDate] = (Meta[LocalDate], false)
+    def localTime: TestCodec[LocalTime] = (Meta[LocalTime], false)
+    def offsetDateTime: TestCodec[OffsetDateTime] = (Meta[OffsetDateTime], false)
+    def jsonb: TestCodec[Json] = (new Meta(Get[Json], Put[Json]), false)
+    def nvarchar: TestCodec[String] = (Meta[String], false)
+  }
 
   def transactorResource: Resource[IO, Transactor[IO]] = {
     val connInfo = postgresConnectionInfo

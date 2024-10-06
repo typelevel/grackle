@@ -102,6 +102,7 @@ lazy val commonSettings = Seq(
     "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion % "test",
     "io.circe"      %%% "circe-literal"     % circeVersion % "test",
     "io.circe"      %%% "circe-jawn"        % circeVersion % "test",
+    "io.circe"      %%% "circe-parser"      % circeVersion % "test",
   ) ++ Seq(
     compilerPlugin("org.typelevel" %% "kind-projector" % kindProjectorVersion cross CrossVersion.full),
   ).filterNot(_ => tlIsScala3.value),
@@ -234,9 +235,7 @@ lazy val doobiecore = project
     libraryDependencies ++= Seq(
       "org.tpolecat"   %% "doobie-core"     % doobieVersion,
       "org.typelevel"  %% "log4cats-core"   % log4catsVersion,
-      "ch.qos.logback" %  "logback-classic" % logbackVersion % "test",
-      // TODO: Needed temporarily for Metas in DoobieDatabaseSuite
-      "org.tpolecat" %% "doobie-postgres-circe" % doobieVersion % "test"
+      "ch.qos.logback" %  "logback-classic" % logbackVersion % "test"
     )
   )
 

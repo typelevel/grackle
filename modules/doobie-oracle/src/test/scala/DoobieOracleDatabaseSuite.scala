@@ -17,7 +17,7 @@ package grackle.doobie.oracle
 package test
 
 import java.sql.Timestamp
-import java.time.{LocalTime, OffsetDateTime, ZoneId}
+import java.time.{LocalDate, LocalTime, OffsetDateTime, ZoneId}
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 import scala.util.Try
@@ -28,6 +28,7 @@ import cats.syntax.all._
 import doobie.{Meta, Transactor}
 import doobie.enumerated.JdbcType
 import doobie.util.Put
+import doobie.util.meta.MetaConstructors.Basic
 import io.circe.Json
 import io.circe.parser.parse
 import munit.catseffect._
@@ -40,43 +41,40 @@ import grackle.sql.test._
 trait DoobieOracleDatabaseSuite extends DoobieDatabaseSuite {
   abstract class DoobieOracleTestMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F] = DoobieMonitor.noopMonitor[IO])
     extends DoobieOracleMapping[F](transactor, monitor) with DoobieTestMapping[F] with SqlTestMapping[F] {
-      override val uuid: TestCodec[UUID] = (
-        Meta[String].tiemap(s => Try(UUID.fromString(s)).toEither.leftMap(_.getMessage))(_.toString),
-        false
-      )
+      def mkTestCodec[T](meta: Meta[T]): TestCodec[T] = (meta, false)
 
-      val localTimeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("0 H:m:s.S")
-      override val localTime: TestCodec[LocalTime] = (
-        Meta[String].tiemap(s => Try(LocalTime.parse(s, localTimeFormat)).toEither.leftMap(_.getMessage))(_.format(localTimeFormat)),
-        false
-      )
+      val uuid: TestCodec[UUID] =
+        mkTestCodec(Meta[String].tiemap(s => Try(UUID.fromString(s)).toEither.leftMap(_.getMessage))(_.toString))
 
-      // Forget precise time zone for compatibility with Postgres. Nb. this is specific to this test suite.
-      override val offsetDateTime: TestCodec[OffsetDateTime] = (
-        Meta[Timestamp].timap(t => OffsetDateTime.ofInstant(t.toInstant, ZoneId.of("UTC")))(o => Timestamp.from(o.toInstant)),
-        false
-      )
-
-      val nvarcharMeta: Meta[String] = {
-        import JdbcType._
-        val oldGet = Meta[String].get
-        val oldPut = Meta[String].put
-        val newTargets = NonEmptyList.of(NChar, NVarChar, LongnVarChar)
-        val newPut =
-          Put.Basic(oldPut.typeStack, newTargets, oldPut.put, oldPut.update, oldPut.vendorTypeNames.headOption)
-
-        new Meta[String](oldGet, newPut)
+      val localTime: TestCodec[LocalTime] = {
+        val localTimeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("0 H:m:s.S")
+        mkTestCodec(Meta[String].tiemap(s => Try(LocalTime.parse(s, localTimeFormat)).toEither.leftMap(_.getMessage))(_.format(localTimeFormat)))
       }
 
-      override val nvarchar: TestCodec[String] = (
-        nvarcharMeta,
-        false
-      )
+      val localDate: TestCodec[LocalDate] =
+        (Basic.oneObject(JdbcType.Date, None, classOf[LocalDate]), false)
 
-      override val jsonb: TestCodec[Json] = (
-        Meta[String].tiemap(s => parse(s).leftMap(_.getMessage))(_.noSpaces),
-        false
-      )
+      // Forget precise time zone for compatibility with Postgres. Nb. this is specific to this test suite.
+      val offsetDateTime: TestCodec[OffsetDateTime] =
+        mkTestCodec(Meta[Timestamp].timap(t => OffsetDateTime.ofInstant(t.toInstant, ZoneId.of("UTC")))(o => Timestamp.from(o.toInstant)))
+
+      val nvarchar: TestCodec[String] = {
+        val nvarcharMeta: Meta[String] = {
+          import JdbcType._
+          val oldGet = Meta[String].get
+          val oldPut = Meta[String].put
+          val newTargets = NonEmptyList.of(NChar, NVarChar, LongnVarChar)
+          val newPut =
+            Put.Basic(oldPut.typeStack, newTargets, oldPut.put, oldPut.update, oldPut.vendorTypeNames.headOption)
+
+          new Meta[String](oldGet, newPut)
+        }
+
+        mkTestCodec(nvarcharMeta)
+      }
+
+      val jsonb: TestCodec[Json] =
+        mkTestCodec(Meta[String].tiemap(s => parse(s).leftMap(_.getMessage))(_.noSpaces))
     }
 
   case class OracleConnectionInfo(host: String, port: Int) {
@@ -86,11 +84,13 @@ trait DoobieOracleDatabaseSuite extends DoobieDatabaseSuite {
     val username = "test"
     val password = "test"
   }
+
   object OracleConnectionInfo {
     val DefaultPort = 1521
   }
 
-  val oracleConnectionInfo: OracleConnectionInfo = OracleConnectionInfo("localhost", OracleConnectionInfo.DefaultPort)
+  val oracleConnectionInfo: OracleConnectionInfo =
+    OracleConnectionInfo("localhost", OracleConnectionInfo.DefaultPort)
 
   def transactorResource: Resource[IO, Transactor[IO]] = {
     val connInfo = oracleConnectionInfo
