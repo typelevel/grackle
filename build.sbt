@@ -14,6 +14,7 @@ val kindProjectorVersion   = "0.13.3"
 val literallyVersion       = "1.1.0"
 val logbackVersion         = "1.5.12"
 val log4catsVersion        = "2.7.0"
+val mssqlDriverVersion     = "12.8.1.jre11"
 val munitVersion           = "1.0.0-M11"
 val munitCatsEffectVersion = "2.0.0"
 val munitScalaCheckVersion = "1.0.0-M11"
@@ -82,6 +83,8 @@ lazy val pgUp = taskKey[Unit]("Start Postgres")
 lazy val pgStop = taskKey[Unit]("Stop Postgres")
 lazy val oracleUp = taskKey[Unit]("Start Oracle")
 lazy val oracleStop = taskKey[Unit]("Stop Oracle")
+lazy val mssqlUp = taskKey[Unit]("Start SQL Server")
+lazy val mssqlStop = taskKey[Unit]("Stop SQL Server")
 
 ThisBuild / allUp := "docker compose up -d --wait --quiet-pull".!
 ThisBuild / allStop := "docker compose stop".!
@@ -89,6 +92,8 @@ ThisBuild / pgUp := "docker compose up -d --wait --quiet-pull postgres".!
 ThisBuild / pgStop := "docker compose stop postgres".!
 ThisBuild / oracleUp := "docker compose up -d --wait --quiet-pull oracle".!
 ThisBuild / oracleStop := "docker compose stop oracle".!
+ThisBuild / mssqlUp := "docker compose up -d --wait --quiet-pull mssql".!
+ThisBuild / mssqlStop := "docker compose stop mssql".!
 
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
@@ -133,6 +138,7 @@ lazy val modules: List[CompositeProject] = List(
   doobiecore,
   doobiepg,
   doobieoracle,
+  doobiemssql,
   skunk,
   generic,
   docs,
@@ -262,6 +268,22 @@ lazy val doobieoracle = project
     Test / testOptions += Tests.Setup(_ => "docker compose up -d --wait --quiet-pull oracle".!),
     libraryDependencies ++= Seq(
       "com.oracle.database.jdbc" % "ojdbc8" % oracleDriverVersion
+    )
+  )
+
+lazy val doobiemssql = project
+  .in(file("modules/doobie-mssql"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(doobiecore % "test->test;compile->compile")
+  .settings(commonSettings)
+  .settings(
+    name := "grackle-doobie-mssql",
+    Test / fork := true,
+    Test / parallelExecution := false,
+    Test / testOptions += Tests.Setup(_ => "docker compose up -d --wait --quiet-pull mssql".!),
+    libraryDependencies ++= Seq(
+      "com.microsoft.sqlserver" % "mssql-jdbc" % mssqlDriverVersion
     )
   )
 
@@ -409,6 +431,7 @@ lazy val unidocs = project
       doobiecore,
       doobiepg,
       doobieoracle,
+      doobiemssql,
       skunk.jvm,
       generic.jvm,
     )

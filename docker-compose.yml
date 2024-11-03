@@ -31,3 +31,24 @@ services:
       retries: 10
       start_period: 5s
       start_interval: 5s
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    ports:
+      - "1433:1433"
+    environment:
+      SA_PASSWORD: Test_123_Test
+      MSSQL_PID: Developer
+      ACCEPT_EULA: Y
+      MSSQL_TCP_PORT: 1433
+    volumes:
+      - ./testdata/mssql/:/grackle-initdb.d/
+      - ./modules/doobie-mssql/src/test/resources/scripts/:/container-entrypoint-initdb.d/
+    entrypoint: ["/bin/bash", "/container-entrypoint-initdb.d/entrypoint.sh"]
+    healthcheck:
+      test: bash -c "[ -f /tmp/healthy ]"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+      start_interval: 5s
