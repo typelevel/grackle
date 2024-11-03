@@ -14,3 +14,20 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  oracle:
+    image: gvenzl/oracle-free:23-slim-faststart
+    ports:
+      - "1521:1521"
+    environment:
+      ORACLE_PASSWORD: test
+    volumes:
+      - ./testdata/oracle/:/grackle-initdb.d/
+      - ./modules/doobie-oracle/src/test/resources/scripts/:/container-entrypoint-initdb.d/
+    healthcheck:
+      test: bash -c "[ -f /tmp/healthy ]"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+      start_interval: 5s
