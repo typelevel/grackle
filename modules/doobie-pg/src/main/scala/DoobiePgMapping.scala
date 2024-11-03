@@ -13,17 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package skunk
+package grackle.doobie.postgres
 
-import _root_.skunk.Session
 import cats.effect.Sync
+import _root_.doobie.Transactor
 
-trait SkunkMappingCompanion {
+import grackle.Mapping
+import grackle.doobie._
+import grackle.sqlpg._
 
-  def mkMapping[F[_]: Sync](pool: Session[F], monitor: SkunkMonitor[F]): Mapping[F]
+abstract class DoobiePgMapping[F[_]](
+  val transactor: Transactor[F],
+  val monitor:    DoobieMonitor[F],
+)(
+  implicit val M: Sync[F]
+) extends Mapping[F] with DoobiePgMappingLike[F]
 
-  final def mkMapping[F[_]: Sync](pool: Session[F]): Mapping[F] =
-    mkMapping(pool, SkunkMonitor.noopMonitor)
-
-}
+trait DoobiePgMappingLike[F[_]] extends DoobieMappingLike[F] with SqlPgMappingLike[F]

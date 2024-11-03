@@ -13,17 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package skunk
+package grackle.sqlpg
+package test
 
-import _root_.skunk.Session
-import cats.effect.Sync
+import munit.CatsEffectSuite
 
-trait SkunkMappingCompanion {
+trait SqlPgDatabaseSuite extends CatsEffectSuite {
+  case class PostgresConnectionInfo(host: String, port: Int) {
 
-  def mkMapping[F[_]: Sync](pool: Session[F], monitor: SkunkMonitor[F]): Mapping[F]
+    val driverClassName = "org.postgresql.Driver"
+    val databaseName = "test"
+    val jdbcUrl = s"jdbc:postgresql://$host:$port/$databaseName"
+    val username = "test"
+    val password = "test"
+  }
+  object PostgresConnectionInfo {
+    val DefaultPort = 5432
+  }
 
-  final def mkMapping[F[_]: Sync](pool: Session[F]): Mapping[F] =
-    mkMapping(pool, SkunkMonitor.noopMonitor)
-
+  val postgresConnectionInfo: PostgresConnectionInfo =
+    PostgresConnectionInfo("localhost", PostgresConnectionInfo.DefaultPort)
 }

@@ -19,7 +19,7 @@ package skunk
 import scala.util.control.NonFatal
 
 import cats.{Foldable, Reducible}
-import cats.effect.{ Resource, Sync }
+import cats.effect.Sync
 import cats.implicits._
 import _root_.skunk.{ AppliedFragment, Decoder, Session, Fragment => SFragment }
 import _root_.skunk.data.Arr
@@ -29,18 +29,19 @@ import org.tpolecat.sourcepos.SourcePos
 import org.tpolecat.typename.TypeName
 
 import grackle.sql._
+import grackle.sqlpg._
 
 abstract class SkunkMapping[F[_]](
-  val pool:    Resource[F, Session[F]],
+  val session: Session[F],
   val monitor: SkunkMonitor[F]
 )(
   implicit val M: Sync[F]
 ) extends Mapping[F] with SkunkMappingLike[F]
 
-trait SkunkMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] { outer =>
+trait SkunkMappingLike[F[_]] extends Mapping[F] with SqlPgMappingLike[F] { outer =>
   implicit val M: Sync[F]
 
-  val pool:    Resource[F, Session[F]]
+  val session: Session[F]
   val monitor: SkunkMonitor[F]
 
   // Grackle needs to know about codecs, encoders, and fragments.
@@ -161,11 +162,12 @@ trait SkunkMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] { outer =
         }
       }
 
-    pool.use { s =>
-      Resource.eval(s.prepare(fragment.fragment.query(rowDecoder))).use { ps =>
-        ps.stream(fragment.argument, 1024).compile.toVector
-      }
-    }.onError {
+    session.prepare(fragment.fragment.query(rowDecoder)).flatMap { pq =>
+      pq.stream(fragment.argument, 1024)
+      .compile
+      .toVector
+    }
+    .onError {
       case NonFatal(e) => Sync[F].delay(e.printStackTrace())
     }
   }

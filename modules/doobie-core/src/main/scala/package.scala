@@ -14,16 +14,10 @@
 // limitations under the License.
 
 package grackle
-package skunk
 
-import _root_.skunk.Session
-import cats.effect.Sync
+import grackle.sql.SqlMonitor
+import _root_.doobie.Fragment
 
-trait SkunkMappingCompanion {
-
-  def mkMapping[F[_]: Sync](pool: Session[F], monitor: SkunkMonitor[F]): Mapping[F]
-
-  final def mkMapping[F[_]: Sync](pool: Session[F]): Mapping[F] =
-    mkMapping(pool, SkunkMonitor.noopMonitor)
-
+package object doobie {
+  type DoobieMonitor[F[_]] = SqlMonitor[F, Fragment]
 }
