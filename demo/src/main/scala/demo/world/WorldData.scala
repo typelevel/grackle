@@ -18,45 +18,11 @@ package demo.world
 import java.util.concurrent.Executors
 
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
 
 import cats.effect.{Async, Resource}
-import cats.syntax.all._
 import doobie.hikari.HikariTransactor
-import io.chrisdavenport.whaletail.{Containers, Docker}
-import io.chrisdavenport.whaletail.manager._
 
 object WorldData {
-  def mkContainer[F[_]: Async]: Resource[F, PostgresConnectionInfo] =
-    Docker.default[F].flatMap(client =>
-      WhaleTailContainer.build(
-        client,
-        image = "postgres",
-        tag = "11.8".some,
-        ports = Map(PostgresConnectionInfo.DefaultPort -> None),
-        binds = List(Containers.Bind(bindPath("demo/src/main/resources/db/"), "/docker-entrypoint-initdb.d/", "ro")),
-        env = Map(
-          "POSTGRES_USER"     -> "test",
-          "POSTGRES_PASSWORD" -> "test",
-          "POSTGRES_DB"       -> "test"
-        ),
-        labels = Map.empty
-      ).evalTap(
-        ReadinessStrategy.checkReadiness(
-          client,
-          _,
-          ReadinessStrategy.LogRegex(".*database system is ready to accept connections.*".r, 2),
-          30.seconds
-        )
-      )
-    ).flatMap(container =>
-      Resource.eval(
-        container.ports.get(PostgresConnectionInfo.DefaultPort).liftTo[F](new Throwable("Missing Port"))
-      )
-    ).map {
-      case (host, port) => PostgresConnectionInfo(host, port)
-    }
-
   def mkTransactor[F[_]: Async](connInfo: PostgresConnectionInfo): Resource[F, HikariTransactor[F]] = {
     import connInfo._
     HikariTransactor.newHikariTransactor[F](

@@ -27,7 +27,7 @@ import grackle.skunk.test.SkunkDatabaseSuite
 
 class SubscriptionSuite extends SkunkDatabaseSuite {
 
-  lazy val mapping = SubscriptionMapping.mkMapping(pool)
+  lazy val mapping = SubscriptionMapping.mkMapping(session)
 
   test("subscription driven by a Postgres channel") {
 
@@ -79,8 +79,8 @@ class SubscriptionSuite extends SkunkDatabaseSuite {
         _  <- IO.sleep(1.second)
 
         // Send some notifications through Postgres, which will trigger queries on the subscription.
-        _  <- pool.use { s =>
-                val ch = s.channel(id"city_channel").contramap[Int](_.toString)
+        _  <- {
+                val ch = session.channel(id"city_channel").contramap[Int](_.toString)
                 List(101, 102, 103).traverse_(ch.notify)
               }
 

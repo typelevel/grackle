@@ -17,13 +17,13 @@ package grackle
 package skunk
 
 import _root_.skunk.Session
-import cats.effect.{ Resource, Sync }
+import cats.effect.Sync
 
 trait SkunkMappingCompanion {
 
-  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F]
+  def mkMapping[F[_]: Sync](pool: Session[F], monitor: SkunkMonitor[F]): Mapping[F]
 
-  final def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]]): Mapping[F] =
+  final def mkMapping[F[_]: Sync](pool: Session[F]): Mapping[F] =
     mkMapping(pool, SkunkMonitor.noopMonitor)
 
 }
