@@ -33,27 +33,28 @@ import grackle.sqlpg.test._
 
 trait SkunkDatabaseSuite extends SqlPgDatabaseSuite {
 
-  def sessionResource: Resource[IO, Session[IO]] = {
+  def poolResource: Resource[IO, Resource[IO, Session[IO]]] = {
     val connInfo = postgresConnectionInfo
     import connInfo._
 
-    Session.single[IO](
+    Session.pooled[IO](
       host     = host,
       port     = port,
       user     = username,
       password = Some(password),
       database = databaseName,
+      max      = 3,
       //debug    = true,
     )
   }
 
-  val sessionFixture: IOFixture[Session[IO]] = ResourceSuiteLocalFixture("skunk", sessionResource)
-  override def munitFixtures: Seq[IOFixture[_]] = Seq(sessionFixture)
+  val poolFixture: IOFixture[Resource[IO, Session[IO]]] = ResourceSuiteLocalFixture("skunk", poolResource)
+  override def munitFixtures: Seq[IOFixture[_]] = Seq(poolFixture)
 
-  def session: Session[IO] = sessionFixture()
+  def pool: Resource[IO, Session[IO]] = poolFixture()
 
-  abstract class SkunkTestMapping[F[_]: Sync](session: Session[F], monitor: SkunkMonitor[F] = SkunkMonitor.noopMonitor[IO])
-    extends SkunkMapping[F](session, monitor) with SqlTestMapping[F] {
+  abstract class SkunkTestMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F] = SkunkMonitor.noopMonitor[IO])
+    extends SkunkMapping[F](pool, monitor) with SqlTestMapping[F] {
 
     type TestCodec[T] = (SCodec[T], Boolean)
 

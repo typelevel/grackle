@@ -15,7 +15,7 @@
 
 package grackle.skunk.test.subscription
 
-import cats.effect.Sync
+import cats.effect.{Resource, Sync}
 import skunk.Session
 import skunk.codec.all._
 import skunk.implicits._
@@ -97,7 +97,8 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
         fieldMappings = List(
           RootStream.computeChild("channel")((child, _, _) =>
             for {
-              id <- session.channel(id"city_channel").listen(256).map(_.value.toInt)
+              s  <- fs2.Stream.resource(pool)
+              id <- s.channel(id"city_channel").listen(256).map(_.value.toInt)
             } yield Unique(Filter(Eql(CityType / "id", Const(id)), child)).success
           )
         )
@@ -111,6 +112,6 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
 }
 
 object SubscriptionMapping extends SkunkMappingCompanion {
-  def mkMapping[F[_]: Sync](session: Session[F], monitor: SkunkMonitor[F]): Mapping[F] =
-    new SkunkMapping[F](session, monitor) with SubscriptionMapping[F]
+  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
+    new SkunkMapping[F](pool, monitor) with SubscriptionMapping[F]
 }
