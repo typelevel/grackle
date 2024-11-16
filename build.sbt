@@ -86,14 +86,18 @@ lazy val oracleStop = taskKey[Unit]("Stop Oracle")
 lazy val mssqlUp = taskKey[Unit]("Start SQL Server")
 lazy val mssqlStop = taskKey[Unit]("Stop SQL Server")
 
-ThisBuild / allUp := "docker compose up -d --wait --quiet-pull".!
-ThisBuild / allStop := "docker compose stop".!
-ThisBuild / pgUp := "docker compose up -d --wait --quiet-pull postgres".!
-ThisBuild / pgStop := "docker compose stop postgres".!
-ThisBuild / oracleUp := "docker compose up -d --wait --quiet-pull oracle".!
-ThisBuild / oracleStop := "docker compose stop oracle".!
-ThisBuild / mssqlUp := "docker compose up -d --wait --quiet-pull mssql".!
-ThisBuild / mssqlStop := "docker compose stop mssql".!
+ThisBuild / allUp := runDocker("docker compose up -d --wait --quiet-pull")
+ThisBuild / allStop := runDocker("docker compose stop")
+ThisBuild / pgUp := runDocker("docker compose up -d --wait --quiet-pull postgres")
+ThisBuild / pgStop := runDocker("docker compose stop postgres")
+ThisBuild / oracleUp := runDocker("docker compose up -d --wait --quiet-pull oracle")
+ThisBuild / oracleStop := runDocker("docker compose stop oracle")
+ThisBuild / mssqlUp := runDocker("docker compose up -d --wait --quiet-pull mssql")
+ThisBuild / mssqlStop := runDocker("docker compose stop mssql")
+
+def runDocker(cmd: String): Unit = {
+  require(cmd.! == 0, s"docker indicated an error")
+}
 
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
@@ -249,7 +253,7 @@ lazy val doobiepg = project
     name := "grackle-doobie-pg",
     Test / fork := true,
     Test / parallelExecution := false,
-    Test / testOptions += Tests.Setup(_ => "docker compose up -d --wait --quiet-pull postgres".!),
+    Test / testOptions += Tests.Setup(_ => runDocker("docker compose up -d --wait --quiet-pull postgres")),
     libraryDependencies ++= Seq(
       "org.tpolecat" %% "doobie-postgres-circe" % doobieVersion
     )
@@ -265,7 +269,7 @@ lazy val doobieoracle = project
     name := "grackle-doobie-oracle",
     Test / fork := true,
     Test / parallelExecution := false,
-    Test / testOptions += Tests.Setup(_ => "docker compose up -d --wait --quiet-pull oracle".!),
+    Test / testOptions += Tests.Setup(_ => runDocker("docker compose up -d --wait --quiet-pull oracle")),
     libraryDependencies ++= Seq(
       "com.oracle.database.jdbc" % "ojdbc8" % oracleDriverVersion
     )
@@ -281,7 +285,7 @@ lazy val doobiemssql = project
     name := "grackle-doobie-mssql",
     Test / fork := true,
     Test / parallelExecution := false,
-    Test / testOptions += Tests.Setup(_ => "docker compose up -d --wait --quiet-pull mssql".!),
+    Test / testOptions += Tests.Setup(_ => runDocker("docker compose up -d --wait --quiet-pull mssql")),
     libraryDependencies ++= Seq(
       "com.microsoft.sqlserver" % "mssql-jdbc" % mssqlDriverVersion
     )
@@ -305,7 +309,7 @@ lazy val skunk = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   )
   .jvmSettings(
     Test / fork := true,
-    Test / testOptions += Tests.Setup(_ => "docker compose up -d --wait --quiet-pull postgres".!),
+    Test / testOptions += Tests.Setup(_ => runDocker("docker compose up -d --wait --quiet-pull postgres")),
     libraryDependencies ++= Seq(
       "ch.qos.logback" % "logback-classic" % logbackVersion % "test"
     )
