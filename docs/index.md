@@ -58,6 +58,16 @@ libraryDependencies += "org.typelevel" %% "grackle-doobie-oracle" % "@VERSION@"
 libraryDependencies += "org.typelevel" %% "grackle-doobie-mssql" % "@VERSION@"
 ```
 
+## Running tests for database backed mappings
+
+Database backed mappings are tested against dockerized instances of Postgres, Oracle and SQL Server. This requires
+Docker 2.20.2 or later to be installed and running on the test machine.
+
+Running tests (eg. `rootJVM/test`) will automatically spin up the relevant containers, which will stay up and can be
+reused across multiple tests runs, significantly speeding up the test cycle. I recommend running `allUp` initially, to
+pull images and initialise databases, before running tests the first time. Note that Oracle in particular takes quite
+a long time to initialise, so expect `allUp` to take several minutes to complete the first time around.
+
 ## Community
 
 Grackle is proud to be a [Typelevel](https://typelevel.org/) project. We are committed to providing a friendly, safe
