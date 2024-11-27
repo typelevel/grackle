@@ -3,7 +3,7 @@ import scala.concurrent.duration.DurationInt
 
 val catsVersion            = "2.11.0"
 val catsParseVersion       = "1.0.0"
-val catsEffectVersion      = "3.5.5"
+val catsEffectVersion      = "3.5.7"
 val circeVersion           = "0.14.8"
 val disciplineMunitVersion = "2.0.0-M3"
 val doobieVersion          = "1.0.0-RC6"
