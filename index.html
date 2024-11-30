@@ -118,6 +118,7 @@
   <ul class="nav-list">
     <li class="level1 nav-leaf"><a href="#overview">Overview</a></li>
     <li class="level1 nav-leaf"><a href="#getting-started">Getting Started</a></li>
+    <li class="level1 nav-leaf"><a href="#running-tests-for-database-backed-mappings">Running tests for database backed mappings</a></li>
     <li class="level1 nav-leaf"><a href="#community">Community</a></li>
     <li class="level1 nav-leaf"><a href="#talks">Talks</a></li>
     <li class="level1 nav-leaf"><a href="#contributing">Contributing</a></li>
@@ -142,12 +143,13 @@
         <p>Grackle is structured as a compiler/interpreter. Queries are type-checked against a GraphQL schema and compiled into
         an internal query algebra. The query algebra may be further compiled in a backend-specific way to materialize data. In
         particular it can be compiled to efficient SQL and in that regard currently supports Postgres via
-        <a href="https://tpolecat.github.io/doobie/">Doobie</a> or <a href="https://typelevel.org/skunk/">Skunk</a>.</p>
+        <a href="https://tpolecat.github.io/doobie/">Doobie</a> or <a href="https://typelevel.org/skunk/">Skunk</a> and Oracle and SQL Server via
+        Doobie.</p>
         <p>Grackle is an <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache 2.0 licensed</a> Typelevel project and is available
         for Scala 2/3 and for <a href="https://www.scala-js.org/">Scala.js</a> and <a href="https://scala-native.org/en/stable/">Scala Native</a>.</p>
         <p>Work has been generously sponsored by
-        <a href="https://www.aura-astronomy.org/centers/nsfs-oir-lab/gemini-observatory/">Aura/Gemini</a> and <a href="https://www.itv.com">ITV</a>
-        over the last four years.</p>
+        <a href="https://www.aura-astronomy.org/centers/nsfs-oir-lab/gemini-observatory/">Aura/Gemini</a>, <a href="https://www.itv.com">ITV</a>
+        and <a href="https://www.imbus.de/">imbus AG</a> over the last five years.</p>
         
         <h2 id="getting-started" class="section"><a class="anchor-link left" href="#getting-started"><i class="icofont-laika link">&#xef71;</i></a>Getting Started</h2>
         <ul>
@@ -169,7 +171,21 @@
 </span><span class="identifier">libraryDependencies</span><span> += </span><span class="string-literal">&quot;org.typelevel&quot;</span><span> %% </span><span class="string-literal">&quot;grackle-doobie-pg&quot;</span><span> % </span><span class="string-literal">&quot;0.22.0&quot;</span><span>
 
 </span><span class="comment">// Optional: support for Postgres backend via Skunk
-</span><span class="identifier">libraryDependencies</span><span> += </span><span class="string-literal">&quot;org.typelevel&quot;</span><span> %% </span><span class="string-literal">&quot;grackle-skunk&quot;</span><span> % </span><span class="string-literal">&quot;0.22.0&quot;</span></code></pre>
+</span><span class="identifier">libraryDependencies</span><span> += </span><span class="string-literal">&quot;org.typelevel&quot;</span><span> %% </span><span class="string-literal">&quot;grackle-skunk&quot;</span><span> % </span><span class="string-literal">&quot;0.22.0&quot;</span><span>
+
+</span><span class="comment">// Optional: support for Oracle backend via Doobie (JVM only)
+</span><span class="identifier">libraryDependencies</span><span> += </span><span class="string-literal">&quot;org.typelevel&quot;</span><span> %% </span><span class="string-literal">&quot;grackle-doobie-oracle&quot;</span><span> % </span><span class="string-literal">&quot;0.22.0&quot;</span><span>
+
+</span><span class="comment">// Optional: support for SQL Server backend via Doobie (JVM only)
+</span><span class="identifier">libraryDependencies</span><span> += </span><span class="string-literal">&quot;org.typelevel&quot;</span><span> %% </span><span class="string-literal">&quot;grackle-doobie-mssql&quot;</span><span> % </span><span class="string-literal">&quot;0.22.0&quot;</span></code></pre>
+        
+        <h2 id="running-tests-for-database-backed-mappings" class="section"><a class="anchor-link left" href="#running-tests-for-database-backed-mappings"><i class="icofont-laika link">&#xef71;</i></a>Running tests for database backed mappings</h2>
+        <p>Database backed mappings are tested against dockerized instances of Postgres, Oracle and SQL Server. This requires
+        Docker 2.20.2 or later to be installed and running on the test machine.</p>
+        <p>Running tests (eg. <code>rootJVM/test</code>) will automatically spin up the relevant containers, which will stay up and can be
+        reused across multiple tests runs, significantly speeding up the test cycle. I recommend running <code>allUp</code> initially, to
+        pull images and initialise databases, before running tests the first time. Note that Oracle in particular takes quite
+        a long time to initialise, so expect <code>allUp</code> to take several minutes to complete the first time around.</p>
         
         <h2 id="community" class="section"><a class="anchor-link left" href="#community"><i class="icofont-laika link">&#xef71;</i></a>Community</h2>
         <p>Grackle is proud to be a <a href="https://typelevel.org/">Typelevel</a> project. We are committed to providing a friendly, safe
