@@ -22,7 +22,8 @@ import grackle.Query._
 import grackle.QueryCompiler._
 import grackle.Value._
 import grackle._
-import grackle.doobie.postgres.{DoobieMapping, DoobieMonitor, LoggedDoobieMappingCompanion}
+import grackle.doobie.{DoobieMonitor, LoggedDoobieMappingCompanion}
+import grackle.doobie.postgres.{DoobiePgMapping}
 import grackle.sql.Like
 import grackle.syntax._
 import org.typelevel.log4cats.Logger
@@ -30,7 +31,7 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 import WorldData._
 
-trait WorldMapping[F[_]] extends DoobieMapping[F] {
+trait WorldMapping[F[_]] extends DoobiePgMapping[F] {
   // #db_tables
   object country extends TableDef("country") {
     val code           = col("code", Meta[String])
@@ -230,7 +231,7 @@ trait WorldMapping[F[_]] extends DoobieMapping[F] {
 
 object WorldMapping extends LoggedDoobieMappingCompanion {
   def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): WorldMapping[F] =
-    new DoobieMapping(transactor, monitor) with WorldMapping[F]
+    new DoobiePgMapping(transactor, monitor) with WorldMapping[F]
 
   def mkMappingFromTransactor[F[_]: Sync](transactor: Transactor[F]): WorldMapping[F] = {
     val logger: Logger[F] = Slf4jLogger.getLoggerFromName[F]("SqlQueryLogger")
@@ -238,9 +239,10 @@ object WorldMapping extends LoggedDoobieMappingCompanion {
     mkMapping(transactor, monitor)
   }
 
-  def apply[F[_]: Async]: Resource[F, WorldMapping[F]] =
+  def apply[F[_]: Async]: Resource[F, WorldMapping[F]] = {
+    val connInfo = PostgresConnectionInfo("localhost", PostgresConnectionInfo.DefaultPort)
     for {
-      connInfo   <- mkContainer[F]
       transactor <- mkTransactor[F](connInfo)
     } yield mkMappingFromTransactor[F](transactor)
+  }
 }

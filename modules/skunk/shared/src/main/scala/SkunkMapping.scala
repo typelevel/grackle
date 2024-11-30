@@ -29,6 +29,7 @@ import org.tpolecat.sourcepos.SourcePos
 import org.tpolecat.typename.TypeName
 
 import grackle.sql._
+import grackle.sqlpg._
 
 abstract class SkunkMapping[F[_]](
   val pool:    Resource[F, Session[F]],
@@ -37,7 +38,7 @@ abstract class SkunkMapping[F[_]](
   implicit val M: Sync[F]
 ) extends Mapping[F] with SkunkMappingLike[F]
 
-trait SkunkMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] { outer =>
+trait SkunkMappingLike[F[_]] extends Mapping[F] with SqlPgMappingLike[F] { outer =>
   implicit val M: Sync[F]
 
   val pool:    Resource[F, Session[F]]

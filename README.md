@@ -23,14 +23,15 @@ backing data, and cursors into that data. It supports in-memory, DB-backed, and 
 Grackle is structured as a compiler/interpreter. Queries are type-checked against a GraphQL schema and compiled into
 an internal query algebra. The query algebra may be further compiled in a backend-specific way to materialize data. In
 particular it can be compiled to efficient SQL and in that regard currently supports Postgres via
-[Doobie](https://tpolecat.github.io/doobie/) or [Skunk](https://typelevel.org/skunk/).
+[Doobie](https://tpolecat.github.io/doobie/) or [Skunk](https://typelevel.org/skunk/) and Oracle and SQL Server via
+Doobie.
 
 Grackle is an [Apache 2.0 licensed](https://www.apache.org/licenses/LICENSE-2.0) Typelevel project and is available
 for Scala 2/3 and for [Scala.js](https://www.scala-js.org/) and [Scala Native](https://scala-native.org/en/stable/).
 
 Work has been generously sponsored by
-[Aura/Gemini](https://www.aura-astronomy.org/centers/nsfs-oir-lab/gemini-observatory/) and [ITV](https://www.itv.com)
-over the last four years.
+[Aura/Gemini](https://www.aura-astronomy.org/centers/nsfs-oir-lab/gemini-observatory/), [ITV](https://www.itv.com)
+and [imbus AG](https://www.imbus.de/) over the last five years.
 
 ## Getting Started
 
@@ -55,7 +56,23 @@ libraryDependencies += "org.typelevel" %% "grackle-doobie-pg" % "0.22.0"
 
 // Optional: support for Postgres backend via Skunk
 libraryDependencies += "org.typelevel" %% "grackle-skunk" % "0.22.0"
+
+// Optional: support for Oracle backend via Doobie (JVM only)
+libraryDependencies += "org.typelevel" %% "grackle-doobie-oracle" % "0.22.0"
+
+// Optional: support for SQL Server backend via Doobie (JVM only)
+libraryDependencies += "org.typelevel" %% "grackle-doobie-mssql" % "0.22.0"
 ```
+
+## Running tests for database backed mappings
+
+Database backed mappings are tested against dockerized instances of Postgres, Oracle and SQL Server. This requires
+Docker 2.20.2 or later to be installed and running on the test machine.
+
+Running tests (eg. `rootJVM/test`) will automatically spin up the relevant containers, which will stay up and can be
+reused across multiple tests runs, significantly speeding up the test cycle. I recommend running `allUp` initially, to
+pull images and initialise databases, before running tests the first time. Note that Oracle in particular takes quite
+a long time to initialise, so expect `allUp` to take several minutes to complete the first time around.
 
 ## Community
 

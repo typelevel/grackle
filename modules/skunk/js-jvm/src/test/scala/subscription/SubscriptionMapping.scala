@@ -15,7 +15,7 @@
 
 package grackle.skunk.test.subscription
 
-import cats.effect.{ Resource, Sync }
+import cats.effect.{Resource, Sync}
 import skunk.Session
 import skunk.codec.all._
 import skunk.implicits._
@@ -112,6 +112,6 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
 }
 
 object SubscriptionMapping extends SkunkMappingCompanion {
-  def mkMapping[F[_]: Sync](pool: Resource[F,Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
+  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
     new SkunkMapping[F](pool, monitor) with SubscriptionMapping[F]
 }

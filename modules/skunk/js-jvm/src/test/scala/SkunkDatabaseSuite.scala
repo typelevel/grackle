@@ -19,7 +19,7 @@ import java.time.{Duration, LocalDate, LocalTime, OffsetDateTime}
 import java.util.UUID
 
 import cats.effect.{IO, Resource, Sync}
-import io.circe.Json
+import io.circe.{Decoder => CDecoder, Encoder => CEncoder, Json}
 import munit.catseffect.IOFixture
 import natchez.Trace.Implicits.noop
 import skunk.{ Codec => SCodec, Session }
@@ -29,30 +29,31 @@ import skunk.circe.codec.{ all => ccodec }
 import grackle._, skunk._
 
 import grackle.sql.test._
+import grackle.sqlpg.test._
 
-trait SkunkDatabaseSuite extends SqlDatabaseSuite {
+trait SkunkDatabaseSuite extends SqlPgDatabaseSuite {
 
-  def poolResource: Resource[IO, Session[IO]] = {
-    postgresConnectionInfoResource.flatMap { connInfo =>
-      import connInfo._
+  def poolResource: Resource[IO, Resource[IO, Session[IO]]] = {
+    val connInfo = postgresConnectionInfo
+    import connInfo._
 
-      Session.single[IO](
-        host     = if (host == "0.0.0.0") "127.0.0.1" else host,
-        port     = port,
-        user     = username,
-        password = Some(password),
-        database = databaseName,
-        //debug    = true,
-      )
-    }
+    Session.pooled[IO](
+      host     = host,
+      port     = port,
+      user     = username,
+      password = Some(password),
+      database = databaseName,
+      max      = 3,
+      //debug    = true,
+    )
   }
 
-  val poolFixture = ResourceSuiteLocalFixture("skunk", poolResource)
+  val poolFixture: IOFixture[Resource[IO, Session[IO]]] = ResourceSuiteLocalFixture("skunk", poolResource)
   override def munitFixtures: Seq[IOFixture[_]] = Seq(poolFixture)
 
-  def pool = Resource.eval(IO(poolFixture()))
+  def pool: Resource[IO, Session[IO]] = poolFixture()
 
-  abstract class SkunkTestMapping[F[_]: Sync](pool: Resource[F,Session[F]], monitor: SkunkMonitor[F] = SkunkMonitor.noopMonitor[IO])
+  abstract class SkunkTestMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F] = SkunkMonitor.noopMonitor[IO])
     extends SkunkMapping[F](pool, monitor) with SqlTestMapping[F] {
 
     type TestCodec[T] = (SCodec[T], Boolean)
@@ -60,6 +61,7 @@ trait SkunkDatabaseSuite extends SqlDatabaseSuite {
     def bool: TestCodec[Boolean] = (codec.bool, false)
     def text: TestCodec[String] = (codec.text, false)
     def varchar: TestCodec[String] = (codec.varchar, false)
+    def nvarchar: TestCodec[String] = (codec.text, false) // For compatbiltity with Oracle in these Suites.
     def bpchar(len: Int): TestCodec[String] = (codec.bpchar(len), false)
     def int2: TestCodec[Int] = (codec.int2.imap(_.toInt)(_.toShort), false)
     def int4: TestCodec[Int] = (codec.int4, false)
@@ -78,7 +80,7 @@ trait SkunkDatabaseSuite extends SqlDatabaseSuite {
 
     def nullable[T](c: TestCodec[T]): TestCodec[T] = (c._1.opt, true).asInstanceOf[TestCodec[T]]
 
-    def list[T](c: TestCodec[T]): TestCodec[List[T]] = {
+    def list[T: CDecoder : CEncoder](c: TestCodec[T]): TestCodec[List[T]] = {
       val cc = c._1.asInstanceOf[SCodec[Any]]
       val ty = _root_.skunk.data.Type(s"_${cc.types.head.name}", cc.types)
       val encode = (elem: Any) => cc.encode(elem).head.get

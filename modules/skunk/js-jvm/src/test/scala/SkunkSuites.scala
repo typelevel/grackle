@@ -15,8 +15,9 @@
 
 package grackle.skunk.test
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 import munit.catseffect.IOFixture
+import skunk.Session
 import skunk.codec.{all => codec}
 import skunk.implicits._
 
@@ -135,26 +136,33 @@ final class MovieSuite extends SkunkDatabaseSuite with SqlMovieSuite {
 }
 
 final class MutationSuite extends SkunkDatabaseSuite with SqlMutationSuite {
+  // A resource that copies and drops the table used in the tests.
+  def withDuplicatedTables(p: Resource[IO, Session[IO]]): Resource[IO, Resource[IO, Session[IO]]] = {
+    val alloc = p.use(_.execute(sql"CREATE TABLE city_copy AS SELECT * FROM city".command)).as(p)
+    val free  = p.use(_.execute(sql"DROP TABLE city_copy".command)).void
+    Resource.make(alloc)(_ => free)
+  }
+
+  override def poolResource: Resource[IO, Resource[IO, Session[IO]]] =
+    super.poolResource.flatMap(withDuplicatedTables)
+
   lazy val mapping =
     new SkunkTestMapping(pool) with SqlMutationMapping[IO] {
       def updatePopulation(id: Int, population: Int): IO[Unit] =
-        pool.use { s =>
-          s.prepareR(sql"update city set population=${codec.int4} where id=${codec.int4}".command).use { ps =>
-            ps.execute(population *: id *: EmptyTuple).void
-          }
-        }
+        pool.use(_.prepareR(sql"UPDATE city_copy SET population=${codec.int4} WHERE id=${codec.int4}".command).use { ps =>
+          ps.execute(population *: id *: EmptyTuple).void
+        })
 
-      def createCity(name: String, countryCode: String, population: Int): IO[Int] =
-        pool.use { s =>
-          val q = sql"""
-              INSERT INTO city (id, name, countrycode, district, population)
-              VALUES (nextval('city_id'), ${codec.varchar}, ${codec.bpchar(3)}, 'ignored', ${codec.int4})
-              RETURNING id
-            """.query(codec.int4)
-          s.prepareR(q).use { ps =>
-            ps.unique(name *: countryCode *: population *: EmptyTuple)
-          }
-        }
+      def createCity(name: String, countryCode: String, population: Int): IO[Int] = {
+        val q = sql"""
+            INSERT INTO city_copy (id, name, countrycode, district, population)
+            VALUES (nextval('city_id'), ${codec.varchar}, ${codec.bpchar(3)}, 'ignored', ${codec.int4})
+            RETURNING id
+          """.query(codec.int4)
+        pool.use(_.prepareR(q).use { ps =>
+          ps.unique(name *: countryCode *: population *: EmptyTuple)
+        })
+      }
     }
 }
 
@@ -222,6 +230,8 @@ final class WorldCompilerSuite extends SkunkDatabaseSuite with SqlWorldCompilerS
 
   def simpleFilteredQuerySql: String =
     "SELECT city.id, city.name FROM city WHERE (city.name ILIKE $1)"
+
+  def filterArg: String = "Linh%"
 }
 
 // Needed to avoid an unused import warning in Scala 3.3.0+
