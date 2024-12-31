@@ -1,5 +1,5 @@
-addSbtPlugin("org.typelevel"             % "sbt-typelevel"                 % "0.7.4")
-addSbtPlugin("org.typelevel"             % "sbt-typelevel-site"            % "0.7.4")
+addSbtPlugin("org.typelevel"             % "sbt-typelevel"                 % "0.7.5")
+addSbtPlugin("org.typelevel"             % "sbt-typelevel-site"            % "0.7.5")
 addSbtPlugin("io.spray"                  % "sbt-revolver"                  % "0.10.0")
 addSbtPlugin("com.timushev.sbt"          % "sbt-updates"                   % "0.6.4")
 addSbtPlugin("de.heikoseeberger"         % "sbt-header"                    % "5.10.0")
