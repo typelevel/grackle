@@ -25,7 +25,7 @@ val shapeless3Version      = "3.4.1"
 val sourcePosVersion       = "1.1.0"
 val typenameVersion        = "1.1.0"
 
-val Scala2 = "2.13.15"
+val Scala2 = "2.13.16"
 val Scala3 = "3.3.4"
 
 ThisBuild / scalaVersion        := Scala2
