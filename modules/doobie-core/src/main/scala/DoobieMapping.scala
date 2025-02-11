@@ -16,13 +16,10 @@
 package grackle
 package doobie
 
-import java.sql.ResultSet
-
 import cats.Reducible
 import cats.effect.Sync
 import _root_.doobie.{ Meta, Put, Read, Transactor, Fragment => DoobieFragment }
 import _root_.doobie.enumerated.JdbcType._
-import _root_.doobie.enumerated.Nullability.{ NoNulls, Nullable }
 import _root_.doobie.implicits._
 import _root_.doobie.util.fragments
 import org.tpolecat.sourcepos.SourcePos
@@ -151,31 +148,19 @@ trait DoobieMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] {
     }
 
   def fetch(fragment: Fragment, codecs: List[(Boolean, Codec)]): F[Vector[Array[Any]]] = {
-    val ncols = codecs.length
-
-    def mkRead(codecs: List[(Boolean, Codec)]): Read[Array[Any]] = {
-      def unsafeGet(rs: ResultSet, n: Int): Array[Any] = {
-        val arr = scala.Array.ofDim[Any](ncols)
-        var i = 0
-        var codecs0 = codecs
-        while(i < ncols) {
-          codecs0.head match {
-            case (isJoin, (m, false)) =>
-              if (isJoin) arr(i) = m.get.unsafeGetNullable(rs, n+i).getOrElse(FailedJoin)
-              else arr(i) = m.get.unsafeGetNonNullable(rs, n+i)
-            case (_, (m, true)) => arr(i) = m.get.unsafeGetNullable(rs, n+i)
-          }
-          i = i + 1
-          codecs0 = codecs0.tail
-        }
-
-        arr
-      }
-
-      Read(codecs.map { case (_, (m, n)) => (m.get, if(n) Nullable else NoNulls) }, unsafeGet)
+    import cats.syntax.all._
+    
+    val reads: Array[Read[Any]] = codecs.toArray.map {
+      case (isJoin, (m, false)) =>
+        if (isJoin) 
+          new Read.SingleOpt(m.get.widen[Any]).map(_.getOrElse(FailedJoin))
+        else 
+          new Read.Single(m.get.widen[Any])
+      case (_, (m, true))     =>
+        (new Read.SingleOpt(m.get.widen[Any]): Read[Option[Any]]).widen[Any]
     }
-
-    implicit val reads: Read[Array[Any]] = mkRead(codecs)
+    
+    implicit val read: Read[Array[Any]] = new Read.CompositeOfInstances[Any](reads)
     fragment.query[Array[Any]].to[Vector].transact(transactor)
   }
 }
