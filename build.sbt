@@ -7,7 +7,7 @@ val catsParseVersion       = "1.0.0"
 val catsEffectVersion      = "3.5.7"
 val circeVersion           = "0.14.8"
 val disciplineMunitVersion = "2.0.0-M3"
-val doobieVersion          = "1.0.0-RC6"
+val doobieVersion          = "1.0.0-RC8"
 val fs2Version             = "3.11.0"
 val http4sVersion          = "0.23.30"
 val kindProjectorVersion   = "0.13.3"
@@ -102,6 +102,7 @@ def runDocker(cmd: String): Unit = {
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
   scalacOptions ++= Seq("-Xlint:-pattern-shadow").filterNot(_ => tlIsScala3.value),
+  resolvers ++= Resolver.sonatypeOssRepos("snapshots"),
   libraryDependencies ++= Seq(
     "org.scalameta" %%% "munit"             % munitVersion % "test",
     "org.scalameta" %%% "munit-scalacheck"  % munitScalaCheckVersion % "test",
