@@ -3308,7 +3308,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       def fetch: F[Result[Table]] = {
         (for {
           frag <- ResultT(fragment.pure[F])
-          rows <- ResultT(self.fetch(frag, query.codecs).map(_.success))
+          rows <- ResultT(self.fetch(frag, query.codecs))
         } yield Table(rows)).value
       }
 
