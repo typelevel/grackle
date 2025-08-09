@@ -4,7 +4,7 @@ import scala.sys.process._
 
 val catsVersion            = "2.11.0"
 val catsParseVersion       = "1.0.0"
-val catsEffectVersion      = "3.6.2"
+val catsEffectVersion      = "3.6.3"
 val circeVersion           = "0.14.8"
 val disciplineMunitVersion = "2.0.0-M3"
 val doobieVersion          = "1.0.0-RC10"
