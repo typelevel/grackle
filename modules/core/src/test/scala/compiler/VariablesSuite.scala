@@ -23,6 +23,7 @@ import grackle._
 import grackle.syntax._
 import Query._
 import Value._
+import grackle.Result.Failure
 
 final class VariablesSuite extends CatsEffectSuite {
   test("simple variables query") {
@@ -540,6 +541,30 @@ final class VariablesSuite extends CatsEffectSuite {
 
     assertEquals(compiled, Result.success(expected))
   }
+
+  test("variable in input value should be seen as 'used'") {
+    val query = """
+      query getZuckProfile($x: String) {
+        search(
+          pattern: {
+            name: $x
+          }
+        ) {
+          id
+        }
+      }
+    """
+
+    val compiled = VariablesMapping.compiler.compile(query, reportUnused = false)
+
+    compiled match {
+      case Failure(problems) => fail(problems.toString()) // Variable 'name' is undefined
+      case _ => ()
+    }
+
+  }
+
+
 }
 
 object VariablesMapping extends TestMapping {
