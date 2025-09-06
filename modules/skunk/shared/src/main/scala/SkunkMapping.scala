@@ -117,55 +117,55 @@ trait SkunkMappingLike[F[_]] extends Mapping[F] with SqlPgMappingLike[F] { outer
         Some(codec._1.types.head.name)
     }
 
-  // And we need to be able to fetch `Rows` given a `Fragment` and a list of decoders.
-  def fetch(fragment: Fragment, codecs: List[(Boolean, Codec)]): F[Vector[Array[Any]]] = {
-    val rowDecoder: Decoder[Array[Any]] =
-      new Decoder[Array[Any]] {
-        val types = codecs.flatMap { case (_, (d, _)) => d.types }
+  protected def rowDecoder(codecs: List[(Boolean, Codec)]): Decoder[Array[Any]] =
+    new Decoder[Array[Any]] {
+      val types = codecs.flatMap { case (_, (d, _)) => d.types }
 
-        def arrToList(arr: Arr[_]): List[Any] =
-          (arr.foldLeft(List.empty[Any]) { case (acc, elem) => elem :: acc }).reverse
+      def arrToList(arr: Arr[_]): List[Any] =
+        (arr.foldLeft(List.empty[Any]) { case (acc, elem) => elem :: acc }).reverse
 
-        def decode(start: Int, ss: List[Option[String]]): Either[Decoder.Error, Array[Any]] = {
-          val ncols = ss.length-start
-          val arr = scala.Array.ofDim[Any](ncols)
+      def decode(start: Int, ss: List[Option[String]]): Either[Decoder.Error, Array[Any]] = {
+        val ncols = ss.length-start
+        val arr = scala.Array.ofDim[Any](ncols)
 
-          var i = 0
-          var ss0 = ss.drop(start)
-          var codecs0 = codecs
-          while(i < ncols) {
-            val (isJoin, (decoder, isNullable)) = codecs0.head
-            val len = decoder.length
-            val (seg, tl) = ss0.splitAt(len)
-            val elem: Either[Decoder.Error, Any] =
-              if(isJoin && !isNullable)
-                decoder.opt.decode(0, seg).map(_.getOrElse(FailedJoin))
-              else
-                decoder.decode(0, seg)
+        var i = 0
+        var ss0 = ss.drop(start)
+        var codecs0 = codecs
+        while(i < ncols) {
+          val (isJoin, (decoder, isNullable)) = codecs0.head
+          val len = decoder.length
+          val (seg, tl) = ss0.splitAt(len)
+          val elem: Either[Decoder.Error, Any] =
+            if(isJoin && !isNullable)
+              decoder.opt.decode(0, seg).map(_.getOrElse(FailedJoin))
+            else
+              decoder.decode(0, seg)
 
-            elem match {
-              case Left(err) => return Left(err)
-              case Right(v) =>
-                v match {
-                  case a: Arr[a] => arr(i) = arrToList(a)
-                  case Some(a: Arr[a]) => arr(i) = Some(arrToList(a))
-                  case other => arr(i) = other
-                }
-            }
-
-            i = i + 1
-            ss0 = tl
-            codecs0 = codecs0.tail
+          elem match {
+            case Left(err) => return Left(err)
+            case Right(v) =>
+              v match {
+                case a: Arr[a] => arr(i) = arrToList(a)
+                case Some(a: Arr[a]) => arr(i) = Some(arrToList(a))
+                case other => arr(i) = other
+              }
           }
 
-          Right(arr)
+          i = i + 1
+          ss0 = tl
+          codecs0 = codecs0.tail
         }
-      }
 
-    pool.use { s =>
-      Resource.eval(s.prepare(fragment.fragment.query(rowDecoder))).use { ps =>
-        ps.stream(fragment.argument, 1024).compile.toVector
+        Right(arr)
       }
+    }
+
+  // And we need to be able to fetch `Rows` given a `Fragment` and a list of decoders.
+  def fetch(fragment: Fragment, codecs: List[(Boolean, Codec)]): F[Result[Vector[Array[Any]]]] = {
+    pool.use { s =>
+      Resource.eval(s.prepare(fragment.fragment.query(rowDecoder(codecs)))).use { ps =>
+        ps.stream(fragment.argument, 1024).compile.toVector
+      }.map(Result.success)
     }.onError {
       case NonFatal(e) => Sync[F].delay(e.printStackTrace())
     }
