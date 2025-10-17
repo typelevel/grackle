@@ -26,7 +26,7 @@ val sourcePosVersion       = "1.1.0"
 val typenameVersion        = "1.1.0"
 
 val Scala2 = "2.13.16"
-val Scala3 = "3.3.6"
+val Scala3 = "3.3.7"
 
 ThisBuild / scalaVersion        := Scala2
 ThisBuild / crossScalaVersions  := Seq(Scala2, Scala3)
