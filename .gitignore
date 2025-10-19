@@ -51,6 +51,7 @@ out/
 .metals/
 metals.sbt
 .bsp
+.mcp.json
 
 # Vim
 *.swp
