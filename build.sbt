@@ -102,7 +102,7 @@ def runDocker(cmd: String): Unit = {
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
   scalacOptions ++= Seq("-Xlint:-pattern-shadow").filterNot(_ => tlIsScala3.value),
-  resolvers ++= Resolver.sonatypeOssRepos("snapshots"),
+  resolvers += Resolver.sonatypeCentralSnapshots,
   libraryDependencies ++= Seq(
     "org.scalameta" %%% "munit"             % munitVersion % "test",
     "org.scalameta" %%% "munit-scalacheck"  % munitScalaCheckVersion % "test",
