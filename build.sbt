@@ -25,8 +25,8 @@ val shapeless3Version      = "3.4.1"
 val sourcePosVersion       = "1.1.0"
 val typenameVersion        = "1.1.0"
 
-val Scala2 = "2.13.16"
-val Scala3 = "3.3.6"
+val Scala2 = "2.13.17"
+val Scala3 = "3.3.7"
 
 ThisBuild / scalaVersion        := Scala2
 ThisBuild / crossScalaVersions  := Seq(Scala2, Scala3)
@@ -58,6 +58,8 @@ ThisBuild / githubWorkflowBuild     ~= { steps =>
 ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 ThisBuild / tlBspCrossProjectPlatforms := Set(JVMPlatform)
 
+/* Temporarily disabled pending integration of latest compiler plugin into
+ * the sbt plugin.
 ThisBuild / githubWorkflowAddedJobs +=
   WorkflowJob(
     id = "coverage",
@@ -74,6 +76,7 @@ ThisBuild / githubWorkflowAddedJobs +=
         WorkflowStep.Use(UseRef.Public("codecov", "codecov-action", "v3"))
       )
   )
+*/
 
 ThisBuild / tlSitePublishBranch := Some("main")
 
@@ -101,6 +104,7 @@ def runDocker(cmd: String): Unit = {
 
 lazy val commonSettings = Seq(
   //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
+  scalacOptions -= "-Wunused:privates", // Temporarily disable unused privates warning due to spurious warnings in Scala 3.3.7
   scalacOptions ++= Seq("-Xlint:-pattern-shadow").filterNot(_ => tlIsScala3.value),
   resolvers += Resolver.sonatypeCentralSnapshots,
   libraryDependencies ++= Seq(
