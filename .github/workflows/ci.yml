@@ -253,6 +253,42 @@ jobs:
           modules-ignore: grackle-demo_2.13 grackle-demo_3 benchmarks_2.13 benchmarks_3 rootjs_2.13 rootjs_3 docs_2.13 docs_3 buildinfo_native0.4_2.13 buildinfo_native0.4_3 buildinfo_sjs1_2.13 buildinfo_sjs1_3 profile_2.13 profile_3 rootjvm_2.13 rootjvm_3 rootnative_2.13 rootnative_3 buildinfo_2.13 buildinfo_3 repodocs_2.13 repodocs_3
           configs-ignore: test scala-tool scala-doc-tool test-internal
 
+  coverage:
+    name: Generate coverage report (2.13 JVM only)
+    strategy:
+      matrix:
+        os: [ubuntu-22.04]
+        java: [temurin@11]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout current branch (full)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Setup Java (temurin@11)
+        id: setup-java-temurin-11
+        if: matrix.java == 'temurin@11'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 11
+          cache: sbt
+
+      - name: sbt update
+        if: matrix.java == 'temurin@11' && steps.setup-java-temurin-11.outputs.cache-hit == 'false'
+        run: sbt +update
+
+      - name: Start up test databases
+        run: docker compose up --force-recreate -d --wait --quiet-pull
+
+      - run: sbt coverage rootJVM/test coverageReport
+
+      - uses: codecov/codecov-action@v3
+
   site:
     name: Generate Site
     strategy:
