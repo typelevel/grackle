@@ -58,8 +58,6 @@ ThisBuild / githubWorkflowBuild     ~= { steps =>
 ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 ThisBuild / tlBspCrossProjectPlatforms := Set(JVMPlatform)
 
-/* Temporarily disabled pending integration of latest compiler plugin into
- * the sbt plugin.
 ThisBuild / githubWorkflowAddedJobs +=
   WorkflowJob(
     id = "coverage",
@@ -76,7 +74,6 @@ ThisBuild / githubWorkflowAddedJobs +=
         WorkflowStep.Use(UseRef.Public("codecov", "codecov-action", "v3"))
       )
   )
-*/
 
 ThisBuild / tlSitePublishBranch := Some("main")
 
