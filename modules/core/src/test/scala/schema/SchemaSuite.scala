@@ -614,6 +614,23 @@ final class SchemaSuite extends CatsEffectSuite {
     }
   }
 
+  test("schema validation: input with non-nullable fields") {
+    val schema = Schema(
+      """
+        input ExampleInput {
+          foo: String!
+          bar: Int
+          baz: Boolean!
+        }
+      """
+    )
+
+    schema match {
+      case Result.Success(s) => assertEquals(s.types.map(_.name), List("ExampleInput"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
   test("schema validation: oneOf with all nullable fields") {
     val schema = Schema(
       """

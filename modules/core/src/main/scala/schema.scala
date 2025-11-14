@@ -1264,7 +1264,7 @@ object DirectiveDef {
       List(DirectiveLocation.FIELD_DEFINITION, DirectiveLocation.ENUM_VALUE)
     )
 
-  // https://spec.graphql.org/September2025/#sec--oneOf
+  // https://spec.graphql.org/draft/#sec--oneOf
   val OneOf: DirectiveDef =
     DirectiveDef(
       "oneOf",
