@@ -1639,6 +1639,9 @@ object SchemaParser {
         else
           for {
             fields <- fields0.traverse(mkInputValue(schema))
+            oneOfFieldErrors = if (dirs0.exists(_.name.value == "oneOf")) fields.filterNot(_.tpe.isNullable) else Nil
+            _ <-  if (oneOfFieldErrors.nonEmpty) Result.failure(s"oneOf input object type $nme may not have non-nullable field(s): ${oneOfFieldErrors.map(f => s"'${f.name}'").mkString(", ")}")
+                  else Result.unit
             dirs   <- dirs0.traverse(Directive.fromAst)
           } yield InputObjectType(nme, desc, fields, dirs)
     }
