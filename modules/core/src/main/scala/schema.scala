@@ -921,6 +921,7 @@ case class InputObjectType(
   directives: List[Directive]
 ) extends Type with NamedType {
   def inputFieldInfo(name: String): Option[InputValue] = inputFields.find(_.name == name)
+  def isOneOf: Boolean = directives.exists(_.name == "oneOf")
 }
 
 /**
@@ -1254,8 +1255,18 @@ object DirectiveDef {
       List(DirectiveLocation.FIELD_DEFINITION, DirectiveLocation.ENUM_VALUE)
     )
 
+  // https://spec.graphql.org/September2025/#sec--oneOf
+  val OneOf: DirectiveDef =
+    DirectiveDef(
+      "oneOf",
+      Some("Indicates exactly one field must be supplied and this field must not be `null`."),
+      Nil,
+      false,
+      List(DirectiveLocation.INPUT_OBJECT)
+    )
+
   val builtIns: List[DirectiveDef] =
-    List(Skip, Include, Deprecated)
+    List(Skip, Include, Deprecated, OneOf)
 }
 
 case class Directive(
@@ -1989,7 +2000,7 @@ object SchemaRenderer {
     val dirDefns = {
       val nonBuiltInDefns =
         schema.directives.filter {
-          case DirectiveDef("skip"|"include"|"deprecated", _, _, _, _) => false
+          case DirectiveDef("skip"|"include"|"deprecated"|"oneOf", _, _, _, _) => false
           case _ => true
         }
 

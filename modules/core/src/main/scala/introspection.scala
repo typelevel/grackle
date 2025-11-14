@@ -42,6 +42,8 @@ object Introspection {
           name: String
           description: String
 
+          isOneOf: Boolean
+
           # OBJECT and INTERFACE only
           fields(includeDeprecated: Boolean = false): [__Field!]
 
@@ -217,6 +219,10 @@ object Introspection {
           }),
           ValueField("description", flipNullityDealias andThen {
             case nt: NamedType      => nt.description
+            case _ => None
+          }),
+          ValueField("isOneOf", flipNullityDealias andThen {
+            case i: InputObjectType => Some(i.isOneOf)
             case _ => None
           }),
           ValueField("fields", flipNullityDealias andThen {
