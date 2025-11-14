@@ -1125,13 +1125,22 @@ object Value {
         arr.traverse { elem =>
           checkValue(iv.copy(tpe = tpe, defaultValue = None), Some(elem), location)
         }.map(ListValue.apply)
-      case (InputObjectType(nme, _, ivs, _), Some(ObjectValue(fs))) =>
+      case (i @ InputObjectType(nme, _, ivs, _), Some(ObjectValue(fs))) =>
         val obj = fs.toMap
         val unknownFields = fs.map(_._1).filterNot(f => ivs.exists(_.name == f))
         if (unknownFields.nonEmpty)
           Result.failure(s"Unknown field(s) ${unknownFields.map(s => s"'$s'").mkString("", ", ", "")} for input object value of type ${nme} in $location")
         else
-          ivs.traverse(iv => checkValue(iv, obj.get(iv.name), location).map(v => (iv.name, v))).map(ObjectValue.apply)
+          if (i.isOneOf && obj.isEmpty)
+            Result.failure(s"Exactly one key must be specified for oneOf input object ${nme} in $location")
+          else if (i.isOneOf && obj.size != 1)
+            Result.failure(s"Exactly one key must be specified for oneOf input object ${nme} in $location, but found ${obj.keys.map(s => s"'$s'").mkString(", ")}")
+          else if (i.isOneOf && obj.exists { case (_, v) => v == NullValue })
+            Result.failure(s"Value for member field '${obj.head._1}' must be non-null for ${nme} in $location")
+          else if (i.isOneOf && obj.exists { case (_, v) => v == AbsentValue })
+            Result.failure(s"Value for member field '${obj.head._1}' must be specified for ${nme} in $location")
+          else
+            ivs.traverse(iv => checkValue(iv, obj.get(iv.name), location).map(v => (iv.name, v))).map(ObjectValue.apply)
       case (tpe, Some(value)) => Result.failure(s"Expected $tpe found '${SchemaRenderer.renderValue(value)}' for '${iv.name}' in $location")
       case (tpe, None) => Result.failure(s"Value of type $tpe required for '${iv.name}' in $location")
     }
