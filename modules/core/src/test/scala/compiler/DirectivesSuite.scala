@@ -149,6 +149,40 @@ final class DirectivesSuite extends CatsEffectSuite {
     assertEquals(schema.map(testDirectiveDefs), List(expected).success)
   }
 
+  test("Directive definition with deprecated argument") {
+    val expected =
+      DirectiveDef(
+        "foo",
+        None,
+        List(
+          InputValue(
+            "arg0",
+            None,
+            ScalarType.StringType,
+            None,
+            List(Directive("deprecated", List(Binding("reason", Value.StringValue("Use arg1 instead")))))
+          ),
+          InputValue("arg1", None, ScalarType.StringType, None, Nil)
+        ),
+        false,
+        List(FIELD)
+      )
+
+    val schema =
+      Schema("""
+        type Query {
+          foo: Int
+        }
+
+        directive @foo(
+          arg0: String! @deprecated(reason: "Use arg1 instead"),
+          arg1: String!
+        ) on FIELD
+      """)
+
+    assertEquals(schema.map(testDirectiveDefs), List(expected).success)
+  }
+
   test("Schema with directives") {
     val schema =
     """|schema @foo {

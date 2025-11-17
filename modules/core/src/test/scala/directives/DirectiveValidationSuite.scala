@@ -177,6 +177,7 @@ final class DirectiveValidationSuite extends CatsEffectSuite {
             f10: Int @deprecated
             f11: Int @deprecated(reason: 1)
             f12: Int @deprecated(x: "foo")
+            f13: Int @deprecated(reason: null)
           }
 
           directive @withArg(i: Int) on FIELD_DEFINITION
@@ -193,6 +194,7 @@ final class DirectiveValidationSuite extends CatsEffectSuite {
         Problem("""Unknown argument(s) 'x' in directive withRequiredArg"""),
         Problem("""Expected String found '1' for 'reason' in directive deprecated"""),
         Problem("""Unknown argument(s) 'x' in directive deprecated"""),
+        Problem("""Expected String found 'null' for 'reason' in directive deprecated"""),
       )
 
     assertEquals(schema.toProblems, problems)
