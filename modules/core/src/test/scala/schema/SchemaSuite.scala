@@ -18,7 +18,7 @@ package schema
 import cats.data.NonEmptyChain
 import munit.CatsEffectSuite
 
-import grackle.{Result, Schema}
+import grackle.{Result, Schema, ScalarType}
 import grackle.syntax._
 
 final class SchemaSuite extends CatsEffectSuite {
@@ -627,6 +627,43 @@ final class SchemaSuite extends CatsEffectSuite {
 
     schema match {
       case Result.Success(s) => assertEquals(s.types.map(_.name), List("ExampleInput"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
+  test("schema validation: scalar with specifiedBy directive") {
+    val schema = Schema(
+      """
+        scalar UUID @specifiedBy(url: "https://tools.ietf.org/html/rfc4122")
+
+        type Query {
+          user(id: UUID!): UUID
+        }
+      """
+    )
+
+    schema match {
+      case Result.Success(s) =>
+        val uuidType = s.baseTypes.find(_.name == "UUID").get.asInstanceOf[ScalarType]
+        assertEquals(uuidType.specifiedByURL, Some("https://tools.ietf.org/html/rfc4122"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
+  test("schema validation: scalar with specifiedBy directive missing url argument") {
+    val schema = Schema(
+      """
+        scalar UUID @specifiedBy
+
+        type Query {
+          user(id: UUID!): UUID
+        }
+      """
+    )
+
+    schema match {
+      case Result.Failure(ps)  =>
+        assertEquals(ps.map(_.message), NonEmptyChain("Value of type String required for 'url' in directive specifiedBy"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }

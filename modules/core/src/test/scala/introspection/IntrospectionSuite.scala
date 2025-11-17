@@ -32,7 +32,7 @@ final class IntrospectionSuite extends CatsEffectSuite {
   }
 
   def standardDirectiveName(name: String): Boolean = name match {
-    case "skip" | "include" | "deprecated" | "oneOf" => true
+    case "skip" | "include" | "deprecated" | "specifiedBy" | "oneOf" => true
     case _ => name.startsWith("__")
   }
 
@@ -1485,6 +1485,57 @@ final class IntrospectionSuite extends CatsEffectSuite {
     assertIO(res, Some(expected))
   }
 
+  test("Introspection query with specifiedByURL") {
+    val query = """
+      {
+        __schema {              
+          types { 
+            name
+            specifiedByURL
+          }
+          directives { name }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "__schema" : {
+            "types" : [
+              {
+                "name" : "Query",
+                "specifiedByURL": null
+              },
+              {
+                "name" : "User",
+                "specifiedByURL": null
+              },
+              {
+                "name" : "UserInput",
+                "specifiedByURL": null
+              },
+              {
+                "name" : "UserInputWithOneOf",
+                "specifiedByURL": null
+              },
+              {
+                "name" : "UUID",
+                "specifiedByURL": "https://tools.ietf.org/html/rfc4122"
+              }
+            ],
+            "directives" : [
+            ]
+          }
+        }
+      }
+    """
+
+    val res = InputMapping.compileAndRun(query).map(stripStandardElements)
+
+    assertIO(res, Some(expected))
+  }
+
   test("Introspection query with isOneOf") {
     val query = """
       {
@@ -1518,6 +1569,10 @@ final class IntrospectionSuite extends CatsEffectSuite {
               {
                 "name" : "UserInputWithOneOf",
                 "isOneOf": true
+              },
+              {
+                "name" : "UUID",
+                "isOneOf": null
               }
             ],
             "directives" : [
@@ -2016,6 +2071,7 @@ object InputMapping extends ValueMapping[IO] {
         name: String
         age: Int
       }
+      scalar UUID @specifiedBy(url: "https://tools.ietf.org/html/rfc4122")
     """
 
   val QueryType = schema.queryType
