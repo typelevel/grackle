@@ -653,7 +653,7 @@ case class TypeRef private[grackle] (schema: Schema, name: String) extends Named
 /**
  * Represents scalar types such as Int, String, and Boolean. Scalars cannot have fields.
  *
- * @see https://facebook.github.io/graphql/draft/#sec-Scalar
+ * @see https://spec.graphql.org/draft/#sec-Scalars
  */
 case class ScalarType(
   name: String,
@@ -779,7 +779,7 @@ case class ScalarExtension(
  * Interfaces are an abstract type where there are common fields declared. Any type that
  * implements an interface must define all the fields with names and types exactly matching.
  *
- * @see https://facebook.github.io/graphql/draft/#sec-Interface
+ * @see https://spec.graphql.org/draft/#sec-Interfaces
  */
 case class InterfaceType(
   name: String,
@@ -806,7 +806,7 @@ case class InterfaceExtension(
 /**
  * Object types represent concrete instantiations of sets of fields.
  *
- * @see https://facebook.github.io/graphql/draft/#sec-Object
+ * @see https://spec.graphql.org/draft/#sec-Object-Extensions
  */
 case class ObjectType(
   name: String,
@@ -835,7 +835,7 @@ case class ObjectExtension(
  * are explicitly listed out in elements. Types can be made parts of unions without
  * modification of that type.
  *
- * @see https://facebook.github.io/graphql/draft/#sec-Union
+ * @see https://spec.graphql.org/draft/#sec-Unions
  */
 case class UnionType(
   name: String,
@@ -861,7 +861,7 @@ case class UnionExtension(
 /**
  * Enums are special scalars that can only have a defined set of values.
  *
- * @see https://facebook.github.io/graphql/draft/#sec-Enum
+ * @see https://spec.graphql.org/draft/#sec-Enums
  */
 case class EnumType(
   name: String,
@@ -891,7 +891,7 @@ case class EnumExtension(
 /**
  * The `EnumValue` type represents one of possible values of an enum.
  *
- * @see https://facebook.github.io/graphql/draft/#sec-The-__EnumValue-Type
+ * @see https://spec.graphql.org/draft/#sec-The-__EnumValue-Type
  */
 case class EnumValueDefinition(
   name: String,
@@ -912,7 +912,7 @@ case class EnumValueDefinition(
  * Input objects are composite types used as inputs into queries defined as a list of named input
  * values.
  *
- * @see https://facebook.github.io/graphql/draft/#sec-Input-Object
+ * @see https://spec.graphql.org/draft/#sec-Input-Objects
  */
 case class InputObjectType(
   name: String,
@@ -938,7 +938,7 @@ case class InputObjectExtension(
  * Lists represent sequences of values in GraphQL. A List type is a type modifier: it wraps
  * another type instance in the ofType field, which defines the type of each item in the list.
  *
- * @see https://facebook.github.io/graphql/draft/#sec-Type-Kinds.List
+ * @see https://spec.graphql.org/draft/#sec-List
  */
 case class ListType(
   ofType: Type
@@ -952,7 +952,7 @@ case class ListType(
  * Non‐null types do not allow null as a response, and indicate required inputs for arguments
  * and input object fields.
  *
- * @see https://facebook.github.io/graphql/draft/#sec-Type-Kinds.Non-Null
+ * @see https://spec.graphql.org/draft/#sec-Non-Null
  */
 case class NullableType(
   ofType: Type
@@ -964,7 +964,7 @@ case class NullableType(
 /**
  * The `Field` type represents each field in an Object or Interface type.
  *
- * @see https://facebook.github.io/graphql/draft/#sec-The-__Field-Type
+ * @see https://spec.graphql.org/draft/#sec-The-__Field-Type
  */
 case class Field(
   name: String,
@@ -1201,7 +1201,7 @@ object Value {
 /**
  * The `Directive` type represents a Directive that a server supports.
  *
- * @see https://facebook.github.io/graphql/draft/#sec-The-__Directive-Type
+ * @see https://spec.graphql.org/draft/#sec-The-__Directive-Type
  */
 case class DirectiveDef(
   name: String,
