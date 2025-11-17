@@ -921,6 +921,7 @@ case class InputObjectType(
   directives: List[Directive]
 ) extends Type with NamedType {
   def inputFieldInfo(name: String): Option[InputValue] = inputFields.find(_.name == name)
+  def isOneOf: Boolean = directives.exists(_.name == "oneOf")
 }
 
 /**
@@ -1124,13 +1125,23 @@ object Value {
         arr.traverse { elem =>
           checkValue(iv.copy(tpe = tpe, defaultValue = None), Some(elem), location)
         }.map(ListValue.apply)
-      case (InputObjectType(nme, _, ivs, _), Some(ObjectValue(fs))) =>
+      case (i @ InputObjectType(nme, _, ivs, _), Some(ObjectValue(fs))) =>
         val obj = fs.toMap
         val unknownFields = fs.map(_._1).filterNot(f => ivs.exists(_.name == f))
         if (unknownFields.nonEmpty)
           Result.failure(s"Unknown field(s) ${unknownFields.map(s => s"'$s'").mkString("", ", ", "")} for input object value of type ${nme} in $location")
-        else
-          ivs.traverse(iv => checkValue(iv, obj.get(iv.name), location).map(v => (iv.name, v))).map(ObjectValue.apply)
+        else {
+          val isOneOf = i.isOneOf
+          val presentValues = obj.filterNot { case (_, v) => v == AbsentValue }
+          if (isOneOf && presentValues.isEmpty)
+            Result.failure(s"Exactly one key must be specified for oneOf input object ${nme} in $location")
+          else if (isOneOf && presentValues.size != 1) 
+            Result.failure(s"Exactly one key must be specified for oneOf input object ${nme} in $location, but found ${presentValues.keys.map(s => s"'$s'").mkString(", ")}")
+          else if (isOneOf && presentValues.exists { case (_, v) => v == NullValue })
+            Result.failure(s"Value for member field '${presentValues.head._1}' must be non-null for ${nme} in $location")
+          else
+            ivs.traverse(iv => checkValue(iv, obj.get(iv.name), location).map(v => (iv.name, v))).map(ObjectValue.apply)
+        }
       case (tpe, Some(value)) => Result.failure(s"Expected $tpe found '${SchemaRenderer.renderValue(value)}' for '${iv.name}' in $location")
       case (tpe, None) => Result.failure(s"Value of type $tpe required for '${iv.name}' in $location")
     }
@@ -1254,8 +1265,18 @@ object DirectiveDef {
       List(DirectiveLocation.FIELD_DEFINITION, DirectiveLocation.ENUM_VALUE)
     )
 
+  // https://spec.graphql.org/draft/#sec--oneOf
+  val OneOf: DirectiveDef =
+    DirectiveDef(
+      "oneOf",
+      Some("Indicates exactly one field must be supplied and this field must not be `null`."),
+      Nil,
+      false,
+      List(DirectiveLocation.INPUT_OBJECT)
+    )
+
   val builtIns: List[DirectiveDef] =
-    List(Skip, Include, Deprecated)
+    List(Skip, Include, Deprecated, OneOf)
 }
 
 case class Directive(
@@ -1628,6 +1649,9 @@ object SchemaParser {
         else
           for {
             fields <- fields0.traverse(mkInputValue(schema))
+            oneOfFieldErrors = if (dirs0.exists(_.name.value == "oneOf")) fields.filterNot(_.tpe.isNullable) else Nil
+            _ <-  if (oneOfFieldErrors.nonEmpty) Result.failure(s"oneOf input object type $nme may not have non-nullable field(s): ${oneOfFieldErrors.map(f => s"'${f.name}'").mkString(", ")}")
+                  else Result.unit
             dirs   <- dirs0.traverse(Directive.fromAst)
           } yield InputObjectType(nme, desc, fields, dirs)
     }
@@ -1989,7 +2013,7 @@ object SchemaRenderer {
     val dirDefns = {
       val nonBuiltInDefns =
         schema.directives.filter {
-          case DirectiveDef("skip"|"include"|"deprecated", _, _, _, _) => false
+          case DirectiveDef("skip"|"include"|"deprecated"|"oneOf", _, _, _, _) => false
           case _ => true
         }
 

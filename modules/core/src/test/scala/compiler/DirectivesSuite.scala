@@ -27,7 +27,7 @@ final class DirectivesSuite extends CatsEffectSuite {
 
   def testDirectiveDefs(s: Schema): List[DirectiveDef] =
     s.directives.filter {
-      case DirectiveDef("skip"|"include"|"deprecated", _, _, _, _) => false
+      case DirectiveDef("skip"|"include"|"deprecated"|"oneOf", _, _, _, _) => false
       case _ => true
     }
 

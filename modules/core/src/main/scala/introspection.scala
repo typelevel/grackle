@@ -59,6 +59,9 @@ object Introspection {
 
           # NON_NULL and LIST only
           ofType: __Type
+
+          # must be non-null for INPUT_OBJECT, otherwise null.
+          isOneOf: Boolean
         }
 
         type __Field {
@@ -244,7 +247,11 @@ object Introspection {
             case l: ListType        => Some(l.ofType)
             case NonNullType(t)     => Some(NullableType(t))
             case _ => None
-          })
+          }),
+          ValueField("isOneOf", flipNullityDealias andThen {
+            case i: InputObjectType => Some(i.isOneOf)
+            case _ => None
+          }),
         ),
         ValueObjectMapping(__FieldType).on[Field](
           ValueField("name", _.name),

@@ -32,7 +32,7 @@ final class IntrospectionSuite extends CatsEffectSuite {
   }
 
   def standardDirectiveName(name: String): Boolean = name match {
-    case "skip" | "include" | "deprecated" => true
+    case "skip" | "include" | "deprecated" | "oneOf" => true
     case _ => name.startsWith("__")
   }
 
@@ -1290,6 +1290,53 @@ final class IntrospectionSuite extends CatsEffectSuite {
     assertIO(res, Some(expected))
   }
 
+  test("Introspection query with isOneOf") {
+    val query = """
+      {
+        __schema {              
+          types { 
+            name
+            isOneOf
+          }
+          directives { name }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "__schema" : {
+            "types" : [
+              {
+                "name" : "Query",
+                "isOneOf": null
+              },
+              {
+                "name" : "User",
+                "isOneOf": null
+              },
+              {
+                "name" : "UserInput",
+                "isOneOf": false
+              },
+              {
+                "name" : "UserInputWithOneOf",
+                "isOneOf": true
+              }
+            ],
+            "directives" : [
+            ]
+          }
+        }
+      }
+    """
+
+    val res = InputMapping.compileAndRun(query).map(stripStandardElements)
+
+    assertIO(res, Some(expected))
+  }
+
   test("introspection types in inline fragments") {
     val query = """
       query IntrospectionQuery {
@@ -1740,6 +1787,59 @@ object SmallMapping extends ValueMapping[IO] {
         fieldMappings =
           List(
             ValueField("id", _.id)
+          )
+      )
+  )
+}
+
+object InputMapping extends ValueMapping[IO] {
+  import SmallData._
+
+  val schema =
+    schema"""
+      type Query {
+        user(input: UserInput!): User!
+        userWithOneOf(input: UserInputWithOneOf!): User!
+      }
+      type User {
+        id: String
+        name: String
+        age: Int
+      }
+      input UserInput {
+        id: String
+        name: String
+        age: Int
+      }
+      input UserInputWithOneOf @oneOf {
+        id: String
+        name: String
+        age: Int
+      }
+    """
+
+  val QueryType = schema.queryType
+  val UserType = schema.ref("User")
+  val UserInputType = schema.ref("UserInput")
+  val UserInputWithOneOfType = schema.ref("UserInputWithOneOf")
+
+  val typeMappings =
+    List(
+      ValueObjectMapping[Unit](
+        tpe = QueryType,
+        fieldMappings =
+          List(
+            ValueField("user", _ => users.head),
+            ValueField("userWithOneOf", _ => users.head)
+          )
+      ),
+      ValueObjectMapping[User](
+        tpe = UserType,
+        fieldMappings =
+          List(
+            ValueField("id", _.id),
+            ValueField("name", _.name),
+            ValueField("age", _.age)
           )
       )
   )
