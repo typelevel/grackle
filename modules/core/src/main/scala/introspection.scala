@@ -42,22 +42,22 @@ object Introspection {
           name: String
           description: String
 
-          # OBJECT and INTERFACE only
-          fields(includeDeprecated: Boolean = false): [__Field!]
+          # must be non-null for OBJECT and INTERFACE, otherwise null.
+          fields(includeDeprecated: Boolean! = false): [__Field!]
 
-          # OBJECT only
+          # must be non-null for OBJECT and INTERFACE, otherwise null.
           interfaces: [__Type!]
 
-          # INTERFACE and UNION only
+          # must be non-null for INTERFACE and UNION, otherwise null.
           possibleTypes: [__Type!]
 
-          # ENUM only
-          enumValues(includeDeprecated: Boolean = false): [__EnumValue!]
+          # must be non-null for ENUM, otherwise null.
+          enumValues(includeDeprecated: Boolean! = false): [__EnumValue!]
 
-          # INPUT_OBJECT only
-          inputFields: [__InputValue!]
+          # must be non-null for INPUT_OBJECT, otherwise null.
+          inputFields(includeDeprecated: Boolean! = false): [__InputValue!]
 
-          # NON_NULL and LIST only
+          # must be non-null for NON_NULL and LIST, otherwise null.
           ofType: __Type
 
           # must be non-null for INPUT_OBJECT, otherwise null.
@@ -67,7 +67,7 @@ object Introspection {
         type __Field {
           name: String!
           description: String
-          args: [__InputValue!]!
+          args(includeDeprecated: Boolean! = false): [__InputValue!]!
           type: __Type!
           isDeprecated: Boolean!
           deprecationReason: String
@@ -78,6 +78,8 @@ object Introspection {
           description: String
           type: __Type!
           defaultValue: String
+          isDeprecated: Boolean!
+          deprecationReason: String
         }
 
         type __EnumValue {
@@ -102,7 +104,7 @@ object Introspection {
           name: String!
           description: String
           locations: [__DirectiveLocation!]!
-          args: [__InputValue!]!
+          args(includeDeprecated: Boolean! = false): [__InputValue!]!
           isRepeatable: Boolean!
         }
 
@@ -114,6 +116,7 @@ object Introspection {
           FRAGMENT_DEFINITION
           FRAGMENT_SPREAD
           INLINE_FRAGMENT
+          VARIABLE_DEFINITION
           SCHEMA
           SCALAR
           OBJECT
@@ -265,7 +268,9 @@ object Introspection {
           ValueField("name", _.name),
           ValueField("description", _.description),
           ValueField("type", _.tpe.dealias),
-          ValueField("defaultValue", _.defaultValue.map(SchemaRenderer.renderValue))
+          ValueField("defaultValue", _.defaultValue.map(SchemaRenderer.renderValue)),
+          ValueField("isDeprecated", _.isDeprecated),
+          ValueField("deprecationReason", _.deprecationReason)
         ),
         ValueObjectMapping(__EnumValueType).on[EnumValueDefinition](
           ValueField("name", _.name),

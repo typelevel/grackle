@@ -1146,7 +1146,12 @@ object QueryCompiler {
           Elab.transformChild(child => if (include) child else Filter(Eql(FieldTypeRef / "isDeprecated", Const(false)), child))
         case (TypeTypeRef, "enumValues", List(Binding("includeDeprecated", BooleanValue(include)))) =>
           Elab.transformChild(child => if (include) child else Filter(Eql(EnumValueTypeRef / "isDeprecated", Const(false)), child))
-
+        case (TypeTypeRef, "inputFields", List(Binding("includeDeprecated", BooleanValue(include)))) =>
+          Elab.transformChild(child => if (include) child else Filter(Eql(Introspection.__InputValueType / "isDeprecated", Const(false)), child))
+        case (FieldTypeRef, "args", List(Binding("includeDeprecated", BooleanValue(include)))) =>
+          Elab.transformChild(child => if (include) child else Filter(Eql(Introspection.__InputValueType / "isDeprecated", Const(false)), child))
+        case (Introspection.__DirectiveType, "args", List(Binding("includeDeprecated", BooleanValue(include)))) =>
+          Elab.transformChild(child => if (include) child else Filter(Eql(Introspection.__InputValueType / "isDeprecated", Const(false)), child))
         case _ =>
           Elab.unit
       }

@@ -792,12 +792,22 @@ final class IntrospectionSuite extends CatsEffectSuite {
                 isDeprecated
                 deprecationReason
               }
+              inputFields(includeDeprecated: true) {
+                name
+                isDeprecated
+                deprecationReason
+              }
               enumValues(includeDeprecated: true) {
                 name
                 isDeprecated
                 deprecationReason
               }
             }
+          }
+          inputFields(includeDeprecated: true) {
+            name
+            isDeprecated
+            deprecationReason
           }
         }
       }
@@ -833,6 +843,7 @@ final class IntrospectionSuite extends CatsEffectSuite {
                       "deprecationReason" : null
                     }
                   ],
+                  "inputFields": null,
                   "enumValues" : null
                 }
               },
@@ -840,6 +851,7 @@ final class IntrospectionSuite extends CatsEffectSuite {
                 "name" : "flags",
                 "type" : {
                   "fields" : null,
+                  "inputFields": null,
                   "enumValues" : [
                     {
                       "name" : "A",
@@ -850,6 +862,172 @@ final class IntrospectionSuite extends CatsEffectSuite {
                       "name" : "B",
                       "isDeprecated" : true,
                       "deprecationReason" : "Deprecation test"
+                    },
+                    {
+                      "name" : "C",
+                      "isDeprecated" : false,
+                      "deprecationReason" : null
+                    }
+                  ]
+                }
+              }
+            ],
+            "inputFields": null
+          }
+        }
+      }
+    """
+
+    val res = TestMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("inputValues query deprecation included") {
+    val query = """
+      {
+        __type(name: "DeprecationTestInput") {
+          inputFields(includeDeprecated: true) {
+            name
+            isDeprecated
+            deprecationReason
+            type {
+              fields(includeDeprecated: true) {
+                name
+                isDeprecated
+                deprecationReason
+              }
+              inputFields(includeDeprecated: true) {
+                name
+                isDeprecated
+                deprecationReason
+              }
+              enumValues(includeDeprecated: true) {
+                name
+                isDeprecated
+                deprecationReason
+              }
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "__type" : {
+            "inputFields" : [
+              {
+                "name" : "flagz",
+                "isDeprecated" : true,
+                "deprecationReason" : "Use flags instead",
+                "type" : {
+                  "fields" : null,
+                  "inputFields" : null,
+                  "enumValues" : [
+                    {
+                      "name" : "A",
+                      "isDeprecated" : false,
+                      "deprecationReason" : null
+                    },
+                    {
+                      "name" : "B",
+                      "isDeprecated" : true,
+                      "deprecationReason" : "Deprecation test"
+                    },
+                    {
+                      "name" : "C",
+                      "isDeprecated" : false,
+                      "deprecationReason" : null
+                    }
+                  ]
+                }
+              },
+              {
+                "name" : "flags",
+                "isDeprecated" : false,
+                "deprecationReason" : null,
+                "type" : {
+                  "fields" : null,
+                  "inputFields" : null,
+                  "enumValues" : [
+                    {
+                      "name" : "A",
+                      "isDeprecated" : false,
+                      "deprecationReason" : null
+                    },
+                    {
+                      "name" : "B",
+                      "isDeprecated" : true,
+                      "deprecationReason" : "Deprecation test"
+                    },
+                    {
+                      "name" : "C",
+                      "isDeprecated" : false,
+                      "deprecationReason" : null
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = TestMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("inputValues query deprecation excluded") {
+    val query = """
+      {
+        __type(name: "DeprecationTestInput") {
+          inputFields(includeDeprecated: false) {
+            name
+            isDeprecated
+            deprecationReason
+            type {
+              fields(includeDeprecated: false) {
+                name
+                isDeprecated
+                deprecationReason
+              }
+              inputFields(includeDeprecated: false) {
+                name
+                isDeprecated
+                deprecationReason
+              }
+              enumValues(includeDeprecated: false) {
+                name
+                isDeprecated
+                deprecationReason
+              }
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "__type" : {
+            "inputFields" : [
+              {
+                "name" : "flags",
+                "isDeprecated" : false,
+                "deprecationReason" : null,
+                "type" : {
+                  "fields" : null,
+                  "inputFields" : null,
+                  "enumValues" : [
+                    {
+                      "name" : "A",
+                      "isDeprecated" : false,
+                      "deprecationReason" : null
                     },
                     {
                       "name" : "C",
@@ -915,6 +1093,9 @@ final class IntrospectionSuite extends CatsEffectSuite {
                 "name" : "KindTest"
               },
               {
+                "name" : "DeprecationTestInput"
+              },
+              {
                 "name" : "DeprecationTest"
               }
             ],
@@ -974,7 +1155,7 @@ final class IntrospectionSuite extends CatsEffectSuite {
       |      name
       |      description
       |      locations
-      |      args {
+      |      args(includeDeprecated: true) {
       |        ...InputValue
       |      }
       |      isRepeatable
@@ -989,7 +1170,7 @@ final class IntrospectionSuite extends CatsEffectSuite {
       |  fields(includeDeprecated: true) {
       |    name
       |    description
-      |    args {
+      |    args(includeDeprecated: true) {
       |      ...InputValue
       |    }
       |    type {
@@ -998,7 +1179,7 @@ final class IntrospectionSuite extends CatsEffectSuite {
       |    isDeprecated
       |    deprecationReason
       |  }
-      |  inputFields {
+      |  inputFields(includeDeprecated: true) {
       |    ...InputValue
       |  }
       |  interfaces {
@@ -1020,6 +1201,8 @@ final class IntrospectionSuite extends CatsEffectSuite {
       |  description
       |  type { ...TypeRef }
       |  defaultValue
+      |  isDeprecated
+      |  deprecationReason
       |}
       |
       |fragment TypeRef on __Type {
@@ -1079,6 +1262,18 @@ final class IntrospectionSuite extends CatsEffectSuite {
                     "name" : "users",
                     "description" : null,
                     "args" : [
+                      {
+                        "name": "dep",
+                        "description": null,
+                        "type": {
+                          "kind": "SCALAR",
+                          "name": "Int",
+                          "ofType": null
+                        },
+                        "defaultValue": null,
+                        "isDeprecated": true,
+                        "deprecationReason": "Deprecation test"
+                      }
                     ],
                     "type" : {
                       "kind" : "NON_NULL",
@@ -1578,7 +1773,7 @@ object TestMapping extends ValueMapping[IO] {
       type Query {
         users: [User!]!
         kind: KindTest
-        deprecation: DeprecationTest
+        deprecation(input: DeprecationTestInput!): DeprecationTest
       }
 
       "User object type"
@@ -1628,6 +1823,11 @@ object TestMapping extends ValueMapping[IO] {
         nonnull: Int!
         "Nonnull list of nonnull field"
         nonnulllistnonnull: [Int!]!
+      }
+
+      input DeprecationTestInput {
+        flagz: Flags @deprecated(reason: "Use flags instead")
+        flags: Flags
       }
 
       type DeprecationTest {
@@ -1723,7 +1923,7 @@ object SmallMapping extends ValueMapping[IO] {
   val schema =
     schema"""
       type Query {
-        users: [User!]!
+        users(dep: Int @deprecated(reason: "Deprecation test")): [User!]!
         profiles: [Profile!]!
       }
       type Subscription {

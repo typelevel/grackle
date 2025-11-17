@@ -23,13 +23,13 @@ final class MinimizerSuite extends CatsEffectSuite {
   val parser = GraphQLParser(GraphQLParser.defaultConfig)
   val minimizer = QueryMinimizer(parser)
 
-  def run(query: String, expected: String, echo: Boolean = false): Unit = {
+  def run(query: String, expected: String, echo: Boolean = false)(implicit loc: munit.Location): Unit = {
 
     val Result.Success(minimized) = minimizer.minimizeText(query) : @unchecked
     if (echo)
       println(minimized)
 
-    assert(minimized == expected)
+    assertNoDiff(minimized, expected)
 
     val Some(parsed0) = parser.parseText(query).toOption : @unchecked
     val Some(parsed1) = parser.parseText(minimized).toOption : @unchecked
@@ -581,7 +581,7 @@ final class MinimizerSuite extends CatsEffectSuite {
       |    isDeprecated
       |    deprecationReason
       |  }
-      |  inputFields {
+      |  inputFields(includeDeprecated: true) {
       |    ...InputValue
       |  }
       |  interfaces {
@@ -603,6 +603,8 @@ final class MinimizerSuite extends CatsEffectSuite {
       |  description
       |  type { ...TypeRef }
       |  defaultValue
+      |  isDeprecated
+      |  deprecationReason
       |}
       |
       |fragment TypeRef on __Type {
@@ -639,7 +641,7 @@ final class MinimizerSuite extends CatsEffectSuite {
       |}
     """.stripMargin.trim
 
-    val expected = """query IntrospectionQuery{__schema{queryType{name},mutationType{name},subscriptionType{name},types{...FullType},directives{name,description,locations,args{...InputValue}}}},fragment FullType on __Type{kind,name,description,fields(includeDeprecated:true){name,description,args{...InputValue},type{...TypeRef},isDeprecated,deprecationReason},inputFields{...InputValue},interfaces{...TypeRef},enumValues(includeDeprecated:true){name,description,isDeprecated,deprecationReason},possibleTypes{...TypeRef}},fragment InputValue on __InputValue{name,description,type{...TypeRef},defaultValue},fragment TypeRef on __Type{kind,name,ofType{kind,name,ofType{kind,name,ofType{kind,name,ofType{kind,name,ofType{kind,name,ofType{kind,name,ofType{kind,name}}}}}}}}"""
+    val expected = """query IntrospectionQuery{__schema{queryType{name},mutationType{name},subscriptionType{name},types{...FullType},directives{name,description,locations,args{...InputValue}}}},fragment FullType on __Type{kind,name,description,fields(includeDeprecated:true){name,description,args{...InputValue},type{...TypeRef},isDeprecated,deprecationReason},inputFields(includeDeprecated:true){...InputValue},interfaces{...TypeRef},enumValues(includeDeprecated:true){name,description,isDeprecated,deprecationReason},possibleTypes{...TypeRef}},fragment InputValue on __InputValue{name,description,type{...TypeRef},defaultValue,isDeprecated,deprecationReason},fragment TypeRef on __Type{kind,name,ofType{kind,name,ofType{kind,name,ofType{kind,name,ofType{kind,name,ofType{kind,name,ofType{kind,name,ofType{kind,name}}}}}}}}"""
 
     run(query, expected)
   }

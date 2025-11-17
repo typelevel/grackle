@@ -764,6 +764,21 @@ sealed trait TypeWithFields extends NamedType {
   @deprecated("Use interfaces instead", "0.20.0")
   def allInterfaces: List[NamedType] = interfaces
 }
+/**
+ * Mixin for types that can be deprecated.
+ */
+protected trait Deprecatable {
+  def directives: List[Directive]
+
+  def deprecatedDirective: Option[Directive] =
+    directives.find(_.name == "deprecated")
+  def isDeprecated: Boolean = deprecatedDirective.isDefined
+  def deprecationReason: Option[String] =
+    for {
+      dir    <- deprecatedDirective
+      reason <- dir.args.collectFirst { case Binding("reason", StringValue(reason)) => reason }
+    } yield reason
+}
 
 /**
   * Scalar extensions allow additional directives to be applied to a pre-existing Scalar type
@@ -897,16 +912,7 @@ case class EnumValueDefinition(
   name: String,
   description: Option[String],
   directives: List[Directive]
-) {
-  def deprecatedDirective: Option[Directive] =
-    directives.find(_.name == "deprecated")
-  def isDeprecated: Boolean = deprecatedDirective.isDefined
-  def deprecationReason: Option[String] =
-    for {
-      dir    <- deprecatedDirective
-      reason <- dir.args.collectFirst { case Binding("reason", StringValue(reason)) => reason }
-    } yield reason
-}
+) extends Deprecatable
 
 /**
  * Input objects are composite types used as inputs into queries defined as a list of named input
@@ -973,16 +979,7 @@ case class Field(
   args: List[InputValue],
   tpe: Type,
   directives: List[Directive]
-) {
-  def deprecatedDirective: Option[Directive] =
-    directives.find(_.name == "deprecated")
-  def isDeprecated: Boolean = deprecatedDirective.isDefined
-  def deprecationReason: Option[String] =
-    for {
-      dir    <- deprecatedDirective
-      reason <- dir.args.collectFirst { case Binding("reason", StringValue(reason)) => reason }
-    } yield reason
-}
+) extends Deprecatable
 
 /**
  * @param defaultValue a String encoding (using the GraphQL language) of the default value used by
@@ -994,7 +991,7 @@ case class InputValue(
   tpe: Type,
   defaultValue: Option[Value],
   directives: List[Directive]
-)
+) extends Deprecatable
 
 sealed trait Value
 
@@ -1260,9 +1257,9 @@ object DirectiveDef {
            |fields on a type or deprecated enum values.
         """.stripMargin.trim
       ),
-      List(InputValue("reason", Some("Explains why this element was deprecated, usually also including a suggestion for how to access supported similar data. Formatted using the Markdown syntax, as specified by [CommonMark](https://commonmark.org/)."), NullableType(StringType), Some(StringValue("No longer supported")), Nil)),
+      List(InputValue("reason", Some("Explains why this element was deprecated, usually also including a suggestion for how to access supported similar data. Formatted using the Markdown syntax, as specified by [CommonMark](https://commonmark.org/)."), StringType, Some(StringValue("No longer supported")), Nil)),
       false,
-      List(DirectiveLocation.FIELD_DEFINITION, DirectiveLocation.ENUM_VALUE)
+      List(DirectiveLocation.FIELD_DEFINITION, DirectiveLocation.ARGUMENT_DEFINITION, DirectiveLocation.INPUT_FIELD_DEFINITION, DirectiveLocation.ENUM_VALUE)
     )
 
   // https://spec.graphql.org/draft/#sec--oneOf
