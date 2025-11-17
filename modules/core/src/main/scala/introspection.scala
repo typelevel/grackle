@@ -42,6 +42,9 @@ object Introspection {
           name: String
           description: String
 
+          # may be non-null for custom SCALAR, otherwise null.
+          specifiedByURL: String
+
           # OBJECT and INTERFACE only
           fields(includeDeprecated: Boolean = false): [__Field!]
 
@@ -220,6 +223,10 @@ object Introspection {
           }),
           ValueField("description", flipNullityDealias andThen {
             case nt: NamedType      => nt.description
+            case _ => None
+          }),
+          ValueField("specifiedByURL", flipNullityDealias andThen {
+            case s: ScalarType      => s.specifiedByURL
             case _ => None
           }),
           ValueField("fields", flipNullityDealias andThen {
