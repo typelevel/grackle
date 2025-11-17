@@ -540,6 +540,129 @@ final class VariablesSuite extends CatsEffectSuite {
 
     assertEquals(compiled, Result.success(expected))
   }
+
+  test("oneOf variables") {
+    val query = """
+      query oneOfTest($input: OneOfInObj!) {
+        oneOfTest(input: $input)
+      }
+    """
+
+    val variables = json"""
+      {
+        "input": {
+          "b": true
+        }
+      }
+    """
+
+    val expected =
+      UntypedSelect("oneOfTest", None,
+        List(Binding("input",
+          ObjectValue(List(
+            ("a", AbsentValue),
+            ("b", BooleanValue(true)),
+            ("c", AbsentValue)
+          ))
+        )),
+        Nil,
+        Empty
+      )
+
+    val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
+
+    assertEquals(compiled.map(_.query), Result.Success(expected))
+  }
+
+  test("oneOf variables invalid (multiple fields)") {
+    val query = """
+      query oneOfTest($input: OneOfInObj!) {
+        oneOfTest(input: $input)
+      }
+    """
+    val variables = json"""
+      {
+        "input": {
+          "a": 23,
+          "b": true
+        }
+      }
+    """
+
+    val expected = Problem("Exactly one key must be specified for oneOf input object OneOfInObj in field 'oneOfTest' of type 'Query', but found 'a', 'b'")
+    val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
+    assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
+  }
+
+  test("oneOf variables invalid (null value)") {
+    val query = """
+      query oneOfTest($input: OneOfInObj!) {
+        oneOfTest(input: $input)
+      }
+    """
+    val variables = json"""
+      {
+        "input": {
+          "a": null
+        }
+      }
+    """
+
+    val expected = Problem("Value for member field 'a' must be non-null for OneOfInObj in field 'oneOfTest' of type 'Query'")
+    val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
+    assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
+  }
+
+  test("oneOf variables invalid (absent value)") {
+    val query = """
+      query oneOfTest($input: OneOfInObj!) {
+        oneOfTest(input: $input)
+      }
+    """
+    val variables = json"""
+      { "input": { } }
+    """
+
+    val expected = Problem("Exactly one key must be specified for oneOf input object OneOfInObj in field 'oneOfTest' of type 'Query'")
+    val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
+    assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
+  }
+
+  test("oneOf variables invalid (null and another field)") {
+    val query = """
+      query oneOfTest($input: OneOfInObj!) {
+        oneOfTest(input: $input)
+      }
+    """
+    val variables = json"""
+      {
+        "input": {
+          "a": null,
+          "b": true
+        }
+      }
+    """
+
+    val expected = Problem("Exactly one key must be specified for oneOf input object OneOfInObj in field 'oneOfTest' of type 'Query', but found 'a', 'b'")
+    val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
+    assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
+  }
+
+  test("oneOf variables invalid (mix of fields and variables)") {
+    val query = """
+      query oneOfTest($a: Int) {
+        oneOfTest(input: { a: $a, b: true })
+      }
+      """
+    val variables = json"""
+      { "a": 23 }
+    """
+
+    val expected = Problem("Exactly one key must be specified for oneOf input object OneOfInObj in field 'oneOfTest' of type 'Query', but found 'a', 'b'")
+    val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
+    assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
+  }
+
 }
 
 object VariablesMapping extends TestMapping {
@@ -552,6 +675,7 @@ object VariablesMapping extends TestMapping {
         usersByType(userType: UserType!): [User!]!
         usersLoggedInByDate(date: Date!): [User!]!
         queryWithBigDecimal(input: BigDecimal!): [User!]!
+        oneOfTest(input: OneOfInObj!): String!
       }
       type User {
         id: String!
@@ -564,6 +688,11 @@ object VariablesMapping extends TestMapping {
         id: ID
         userType: UserType
         date: Date
+      }
+      input OneOfInObj @oneOf {
+        a: Int
+        b: Boolean
+        c: String
       }
       enum UserType {
         ADMIN

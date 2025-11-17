@@ -42,8 +42,6 @@ object Introspection {
           name: String
           description: String
 
-          isOneOf: Boolean
-
           # OBJECT and INTERFACE only
           fields(includeDeprecated: Boolean = false): [__Field!]
 
@@ -61,6 +59,9 @@ object Introspection {
 
           # NON_NULL and LIST only
           ofType: __Type
+
+          # must be non-null for INPUT_OBJECT, otherwise null.
+          isOneOf: Boolean
         }
 
         type __Field {
@@ -221,10 +222,6 @@ object Introspection {
             case nt: NamedType      => nt.description
             case _ => None
           }),
-          ValueField("isOneOf", flipNullityDealias andThen {
-            case i: InputObjectType => Some(i.isOneOf)
-            case _ => None
-          }),
           ValueField("fields", flipNullityDealias andThen {
             case tf: TypeWithFields => Some(tf.fields)
             case _ => None
@@ -250,7 +247,11 @@ object Introspection {
             case l: ListType        => Some(l.ofType)
             case NonNullType(t)     => Some(NullableType(t))
             case _ => None
-          })
+          }),
+          ValueField("isOneOf", flipNullityDealias andThen {
+            case i: InputObjectType => Some(i.isOneOf)
+            case _ => None
+          }),
         ),
         ValueObjectMapping(__FieldType).on[Field](
           ValueField("name", _.name),

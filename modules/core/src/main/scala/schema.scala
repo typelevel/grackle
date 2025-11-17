@@ -1130,17 +1130,18 @@ object Value {
         val unknownFields = fs.map(_._1).filterNot(f => ivs.exists(_.name == f))
         if (unknownFields.nonEmpty)
           Result.failure(s"Unknown field(s) ${unknownFields.map(s => s"'$s'").mkString("", ", ", "")} for input object value of type ${nme} in $location")
-        else
-          if (i.isOneOf && obj.isEmpty)
+        else {
+          val isOneOf = i.isOneOf
+          val presentValues = obj.filterNot { case (_, v) => v == AbsentValue }
+          if (isOneOf && presentValues.isEmpty)
             Result.failure(s"Exactly one key must be specified for oneOf input object ${nme} in $location")
-          else if (i.isOneOf && obj.size != 1)
-            Result.failure(s"Exactly one key must be specified for oneOf input object ${nme} in $location, but found ${obj.keys.map(s => s"'$s'").mkString(", ")}")
-          else if (i.isOneOf && obj.exists { case (_, v) => v == NullValue })
-            Result.failure(s"Value for member field '${obj.head._1}' must be non-null for ${nme} in $location")
-          else if (i.isOneOf && obj.exists { case (_, v) => v == AbsentValue })
-            Result.failure(s"Value for member field '${obj.head._1}' must be specified for ${nme} in $location")
+          else if (isOneOf && presentValues.size != 1) 
+            Result.failure(s"Exactly one key must be specified for oneOf input object ${nme} in $location, but found ${presentValues.keys.map(s => s"'$s'").mkString(", ")}")
+          else if (isOneOf && presentValues.exists { case (_, v) => v == NullValue })
+            Result.failure(s"Value for member field '${presentValues.head._1}' must be non-null for ${nme} in $location")
           else
             ivs.traverse(iv => checkValue(iv, obj.get(iv.name), location).map(v => (iv.name, v))).map(ObjectValue.apply)
+        }
       case (tpe, Some(value)) => Result.failure(s"Expected $tpe found '${SchemaRenderer.renderValue(value)}' for '${iv.name}' in $location")
       case (tpe, None) => Result.failure(s"Value of type $tpe required for '${iv.name}' in $location")
     }
