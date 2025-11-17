@@ -673,7 +673,13 @@ case class ScalarType(
            BooleanType |
            IDType      => true
       case _           => false
-    }
+    }    
+
+  def specifiedByURL: Option[String] =
+    for {
+      dir <- directives.find(_.name == "specifiedBy")
+      url <- dir.args.collectFirst { case Binding("url", StringValue(url)) => url }
+    } yield url
 }
 
 object ScalarType {
@@ -1265,6 +1271,20 @@ object DirectiveDef {
       List(DirectiveLocation.FIELD_DEFINITION, DirectiveLocation.ENUM_VALUE)
     )
 
+  val SpecifiedBy: DirectiveDef =
+    DirectiveDef(
+      "specifiedBy",
+      Some(
+        """|The @specifiedBy built-in directive is used within the type system definition language 
+          |to provide a scalar specification URL for specifying the behavior of custom scalar types. 
+          |The URL should point to a human-readable specification of the data format, serialization, and coercion rules. It must not appear on built-in scalar types.
+        """.stripMargin.trim
+      ),
+      List(InputValue("url", Some("The URL that specifies the behavior of this scalar."), StringType, None, Nil)),
+      false,
+      List(DirectiveLocation.SCALAR)
+    )
+
   // https://spec.graphql.org/draft/#sec--oneOf
   val OneOf: DirectiveDef =
     DirectiveDef(
@@ -1276,7 +1296,7 @@ object DirectiveDef {
     )
 
   val builtIns: List[DirectiveDef] =
-    List(Skip, Include, Deprecated, OneOf)
+    List(Skip, Include, Deprecated, SpecifiedBy, OneOf)
 }
 
 case class Directive(
@@ -2013,7 +2033,7 @@ object SchemaRenderer {
     val dirDefns = {
       val nonBuiltInDefns =
         schema.directives.filter {
-          case DirectiveDef("skip"|"include"|"deprecated"|"oneOf", _, _, _, _) => false
+          case DirectiveDef("skip"|"include"|"deprecated"|"specifiedBy"|"oneOf", _, _, _, _) => false
           case _ => true
         }
 
