@@ -8,3 +8,4 @@ addSbtPlugin("com.eed3si9n"              % "sbt-buildinfo"                 % "0.
 addSbtPlugin("org.scala-js"              % "sbt-scalajs"                   % "1.20.2")
 addSbtPlugin("org.scala-native"          % "sbt-scala-native"              % "0.4.17")
 addSbtPlugin("org.scoverage"             % "sbt-scoverage"                 % "2.4.4")
+addSbtPlugin("com.github.sbt"            % "sbt-unidoc"                    % "0.6.1")
