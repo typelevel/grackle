@@ -77,5 +77,5 @@ trait SqlModule[F[_]] {
 
   def intCodec: Codec
 
-  def fetch(fragment: Fragment, codecs: List[(Boolean, Codec)]): F[Vector[Array[Any]]]
+  def fetch(fragment: Fragment, codecs: List[(Boolean, Codec)]): F[Result[Vector[Array[Any]]]]
 }

@@ -147,7 +147,7 @@ trait DoobieMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] {
       }
     }
 
-  def fetch(fragment: Fragment, codecs: List[(Boolean, Codec)]): F[Vector[Array[Any]]] = {
+  def fetch(fragment: Fragment, codecs: List[(Boolean, Codec)]): F[Result[Vector[Array[Any]]]] = {
     import cats.syntax.all._
     
     val reads: Array[Read[Any]] = codecs.toArray.map {
@@ -161,6 +161,6 @@ trait DoobieMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] {
     }
     
     implicit val read: Read[Array[Any]] = new Read.CompositeOfInstances[Any](reads)
-    fragment.query[Array[Any]].to[Vector].transact(transactor)
+    fragment.query[Array[Any]].to[Vector].transact(transactor).map(Result.success)
   }
 }
