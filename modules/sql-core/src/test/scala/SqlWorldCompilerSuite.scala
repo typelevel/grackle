@@ -40,6 +40,8 @@ trait SqlWorldCompilerSuite extends CatsEffectSuite {
 
   def filterArg: String
 
+  def encodeArg(arg: String): Any = arg
+
   test("simple restricted query") {
 
     val query =
@@ -78,7 +80,7 @@ trait SqlWorldCompilerSuite extends CatsEffectSuite {
           SqlStatsMonitor.SqlStats(
             Select("country", Unique(Filter(Eql(schema.ref("Country") / "code",Const("GBR")), Select("name")))),
             simpleRestrictedQuerySql,
-            List("GBR"),
+            List(encodeArg("GBR")),
             1,
             2
           )
@@ -133,7 +135,7 @@ trait SqlWorldCompilerSuite extends CatsEffectSuite {
           SqlStatsMonitor.SqlStats(
             Select("cities", Filter(Like(schema.ref("City") / "name","Linh%",true), Select("name"))),
             simpleFilteredQuerySql,
-            List(filterArg),
+            List(encodeArg(filterArg)),
             3,
             2
           )
