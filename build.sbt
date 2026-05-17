@@ -2,28 +2,28 @@ import nl.zolotko.sbt.jfr.{JfrRecording, JfrRecorderOptions}
 import scala.concurrent.duration.DurationInt
 import scala.sys.process._
 
-val catsVersion            = "2.11.0"
-val catsParseVersion       = "1.0.0"
+val catsVersion            = "2.13.0"
+val catsParseVersion       = "1.1.0"
 val catsEffectVersion      = "3.7.0"
-val circeVersion           = "0.14.8"
-val disciplineMunitVersion = "2.0.0-M3"
+val circeVersion           = "0.14.15"
+val disciplineMunitVersion = "2.0.0"
 val doobieVersion          = "1.0.0-RC12"
-val fs2Version             = "3.12.2"
-val http4sVersion          = "0.23.33"
+val fs2Version             = "3.13.0"
+val http4sVersion          = "0.23.34"
 val kindProjectorVersion   = "0.13.4"
-val literallyVersion       = "1.1.0"
+val literallyVersion       = "1.2.0"
 val logbackVersion         = "1.5.32"
 val log4catsVersion        = "2.8.0"
 val mssqlDriverVersion     = "13.4.0.jre11"
-val munitVersion           = "1.0.0-M11"
-val munitCatsEffectVersion = "2.1.0"
-val munitScalaCheckVersion = "1.0.0-M11"
+val munitVersion           = "1.3.0"
+val munitCatsEffectVersion = "2.2.0"
+val munitScalaCheckVersion = "1.3.0"
 val oracleDriverVersion    = "23.26.2.0.0"
-val skunkVersion           = "0.6.5"
-val shapeless2Version      = "2.3.11"
-val shapeless3Version      = "3.4.1"
-val sourcePosVersion       = "1.1.0"
-val typenameVersion        = "1.1.0"
+val skunkVersion           = "1.0.0"
+val shapeless2Version      = "2.3.13"
+val shapeless3Version      = "3.5.0"
+val sourcePosVersion       = "1.2.0"
+val typenameVersion        = "1.1.2"
 
 val Scala2 = "2.13.18"
 val Scala3 = "3.3.7"
@@ -40,7 +40,7 @@ ThisBuild / developers       := List(
   Developer("tpolecat",   "Rob Norris",  "rnorris@gemini.edu",   url("http://www.tpolecat.org")),
 )
 
-ThisBuild / tlFatalWarnings         := true
+ThisBuild / tlFatalWarnings         := sys.env.contains("CI")
 ThisBuild / tlCiScalafmtCheck       := false
 ThisBuild / tlCiReleaseBranches     := Seq("main")
 ThisBuild / githubWorkflowBuild     ~= { steps =>
@@ -136,6 +136,14 @@ lazy val commonSettings = Seq(
   ))
 )
 
+lazy val nativeSettings = Seq(
+  // Native was updated to 0.5 in 0.26.1
+  tlVersionIntroduced := Map(
+    "2.13" -> "0.26.1",
+    "3" -> "0.26.1"
+  )
+)
+
 lazy val modules: List[CompositeProject] = List(
   core,
   circe,
@@ -181,6 +189,7 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     libraryDependencies += "io.github.cquiroz" %%% "scala-java-time" % "2.6.0",
     scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.CommonJSModule))
   )
+  .nativeSettings(nativeSettings)
 
 lazy val circe = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
@@ -192,6 +201,7 @@ lazy val circe = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .settings(
     name := "grackle-circe",
   )
+  .nativeSettings(nativeSettings)
 
 lazy val buildInfo = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
@@ -201,6 +211,7 @@ lazy val buildInfo = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .settings(
     buildInfoKeys += "baseDirectory" -> (LocalRootProject / baseDirectory).value.toString
   )
+  .nativeSettings(nativeSettings)
 
 lazy val sqlcore = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
@@ -216,6 +227,7 @@ lazy val sqlcore = crossProject(JVMPlatform, JSPlatform, NativePlatform)
       "co.fs2"            %%% "fs2-io"             % fs2Version % "test",
     )
   )
+  .nativeSettings(nativeSettings)
 
 lazy val sqlpg = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Full)
@@ -227,6 +239,7 @@ lazy val sqlpg = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .settings(
     name := "grackle-sql-pg",
   )
+  .nativeSettings(nativeSettings)
 
 lazy val doobiecore = project
   .in(file("modules/doobie-core"))
@@ -319,6 +332,7 @@ lazy val skunk = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .jsSettings(
     scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.CommonJSModule))
   )
+  .nativeSettings(nativeSettings)
 
 lazy val generic = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
@@ -335,6 +349,7 @@ lazy val generic = crossProject(JVMPlatform, JSPlatform, NativePlatform)
         case Scala2 => "com.chuusai"   %%% "shapeless"           % shapeless2Version
       })
   )
+  .nativeSettings(nativeSettings)
 
 import spray.revolver.Actions._
 

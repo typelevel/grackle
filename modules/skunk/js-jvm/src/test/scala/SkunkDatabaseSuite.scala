@@ -21,7 +21,10 @@ import java.util.UUID
 import cats.effect.{IO, Resource, Sync}
 import io.circe.{Decoder => CDecoder, Encoder => CEncoder, Json}
 import munit.catseffect.IOFixture
-import natchez.Trace.Implicits.noop
+import org.typelevel.otel4s.metrics.Meter
+import org.typelevel.otel4s.metrics.Meter.Implicits.noop as metricsNoop
+import org.typelevel.otel4s.trace.Tracer
+import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 import skunk.{ Codec => SCodec, Session }
 import skunk.codec.{ all => codec }
 import skunk.circe.codec.{ all => ccodec }
@@ -33,19 +36,20 @@ import grackle.sqlpg.test._
 
 trait SkunkDatabaseSuite extends SqlPgDatabaseSuite {
 
+  implicit val meter: Meter[IO] = metricsNoop[IO]
+  implicit val tracer: Tracer[IO] = noop[IO]
+
   def poolResource: Resource[IO, Resource[IO, Session[IO]]] = {
     val connInfo = postgresConnectionInfo
     import connInfo._
 
-    Session.pooled[IO](
-      host     = host,
-      port     = port,
-      user     = username,
-      password = Some(password),
-      database = databaseName,
-      max      = 3,
-      //debug    = true,
-    )
+    Session.Builder[IO]
+      .withHost(host)
+      .withPort(port)
+      .withUserAndPassword(username, password)
+      .withDatabase(databaseName)
+      // .withDebug(true)
+      .pooled(max = 3)
   }
 
   val poolFixture: IOFixture[Resource[IO, Session[IO]]] = ResourceSuiteLocalFixture("skunk", poolResource)
@@ -81,9 +85,9 @@ trait SkunkDatabaseSuite extends SqlPgDatabaseSuite {
     def nullable[T](c: TestCodec[T]): TestCodec[T] = (c._1.opt, true).asInstanceOf[TestCodec[T]]
 
     def list[T: CDecoder : CEncoder](c: TestCodec[T]): TestCodec[List[T]] = {
-      val cc = c._1.asInstanceOf[SCodec[Any]]
+      val cc = c._1
       val ty = _root_.skunk.data.Type(s"_${cc.types.head.name}", cc.types)
-      val encode = (elem: Any) => cc.encode(elem).head.get
+      val encode = (elem: T) => cc.encode(elem).head.get.value
       val decode = (str: String) => cc.decode(0, List(Some(str))).left.map(_.message)
       (SCodec.array(encode, decode, ty), false).asInstanceOf[TestCodec[List[T]]]
     }
