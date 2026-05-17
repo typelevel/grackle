@@ -19,6 +19,7 @@ import cats.effect.{IO, Resource}
 import munit.catseffect.IOFixture
 import skunk.Session
 import skunk.codec.{all => codec}
+import skunk.data.Encoded
 import skunk.implicits._
 
 import grackle.skunk.SkunkMonitor
@@ -232,6 +233,8 @@ final class WorldCompilerSuite extends SkunkDatabaseSuite with SqlWorldCompilerS
     "SELECT city.id, city.name FROM city WHERE (city.name ILIKE $1)"
 
   def filterArg: String = "Linh%"
+
+  override def encodeArg(arg: String): Any = Encoded(arg)
 }
 
 // Needed to avoid an unused import warning in Scala 3.3.0+
