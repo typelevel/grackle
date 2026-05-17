@@ -21,7 +21,7 @@ val munitScalaCheckVersion = "1.3.0"
 val oracleDriverVersion    = "23.26.2.0.0"
 val skunkVersion           = "1.0.0"
 val shapeless2Version      = "2.3.13"
-val shapeless3Version      = "3.5.0"
+val shapeless3Version      = "3.6.0"
 val sourcePosVersion       = "1.2.0"
 val typenameVersion        = "1.1.2"
 
