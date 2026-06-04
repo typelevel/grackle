@@ -328,12 +328,16 @@ object GraphQLParser {
         Ast.Value.FloatValue(d.toDouble)
 
       token(
-        (intLiteral ~ (char('.') *> digit.rep.string).? ~ ((char('e') | char('E')) *> intLiteral.string).?)
+        // Keep the integer part as its raw matched text (via `.string`) so that a
+        // negative sign on a zero integer part (e.g. `-0.99`) is preserved. Parsing
+        // it to an `Int` first would collapse `-0` to `0`, dropping the sign for any
+        // value in (-1, 0).
+        (intLiteral.string ~ (char('.') *> digit.rep.string).? ~ ((char('e') | char('E')) *> intLiteral.string).?)
           .map {
             case ((a, Some(b)), None) => narrow(BigDecimal(s"$a.$b"))
             case ((a, None), Some(c)) => narrow(BigDecimal(s"${a}E$c"))
             case ((a, Some(b)), Some(c)) => narrow(BigDecimal(s"$a.${b}E$c"))
-            case ((a, None), None) => Ast.Value.IntValue(a)
+            case ((a, None), None) => Ast.Value.IntValue(a.toInt)
           }
       )
     }

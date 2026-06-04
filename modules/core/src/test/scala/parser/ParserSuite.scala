@@ -564,6 +564,12 @@ final class ParserSuite extends CatsEffectSuite {
     assertParse("123E2", FloatValue(123E2d))
     assertParse("123.2E2", FloatValue(123.2E2d))
 
+    // Negative values whose integer part is zero must retain their sign.
+    assertParse("-0.99", FloatValue(-0.99d))
+    assertParse("-0.5", FloatValue(-0.5d))
+    assertParse("-1.5", FloatValue(-1.5d))
+    assertParse("-0.5E2", FloatValue(-0.5E2d))
+
     assertParse("123", IntValue(123))
     assertParse("-123", IntValue(-123))
 
