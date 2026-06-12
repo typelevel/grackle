@@ -7,7 +7,7 @@ val catsParseVersion       = "1.1.0"
 val catsEffectVersion      = "3.7.0"
 val circeVersion           = "0.14.15"
 val disciplineMunitVersion = "2.0.0"
-val doobieVersion          = "1.0.0-RC12"
+val doobieVersion          = "1.0.0-RC13"
 val fs2Version             = "3.13.0"
 val http4sVersion          = "0.23.34"
 val kindProjectorVersion   = "0.13.4"
@@ -252,7 +252,7 @@ lazy val doobiecore = project
     Test / fork := true,
     Test / parallelExecution := false,
     libraryDependencies ++= Seq(
-      "org.tpolecat"   %% "doobie-core"     % doobieVersion,
+      "org.typelevel"   %% "doobie-core"     % doobieVersion,
       "org.typelevel"  %% "log4cats-core"   % log4catsVersion,
       "ch.qos.logback" %  "logback-classic" % logbackVersion % "test"
     )
@@ -270,7 +270,7 @@ lazy val doobiepg = project
     Test / parallelExecution := false,
     Test / testOptions += Tests.Setup(_ => runDocker("docker compose up -d --wait --quiet-pull postgres")),
     libraryDependencies ++= Seq(
-      "org.tpolecat" %% "doobie-postgres-circe" % doobieVersion
+      "org.typelevel" %% "doobie-postgres-circe" % doobieVersion
     )
   )
 
@@ -364,9 +364,9 @@ lazy val demo = project
     libraryDependencies ++= Seq(
       "org.typelevel"     %% "log4cats-slf4j"      % log4catsVersion,
       "ch.qos.logback"    %  "logback-classic"     % logbackVersion,
-      "org.tpolecat"      %% "doobie-core"         % doobieVersion,
-      "org.tpolecat"      %% "doobie-postgres"     % doobieVersion,
-      "org.tpolecat"      %% "doobie-hikari"       % doobieVersion,
+      "org.typelevel"      %% "doobie-core"         % doobieVersion,
+      "org.typelevel"      %% "doobie-postgres"     % doobieVersion,
+      "org.typelevel"      %% "doobie-hikari"       % doobieVersion,
       "org.http4s"        %% "http4s-ember-server" % http4sVersion,
       "org.http4s"        %% "http4s-ember-client" % http4sVersion,
       "org.http4s"        %% "http4s-circe"        % http4sVersion,
