@@ -52,7 +52,7 @@ object QueryParser {
     new Impl(parser)
 
   private final class Impl(parser: GraphQLParser) extends QueryParser {
-    import Ast.{ Directive => _, Type => _, Value => _, _ }, OperationDefinition._, Selection._
+    import Ast.{ Directive => _, Value => _, _ }, OperationDefinition._, Selection._
 
     /**
     *  Parse a String to query algebra operations and fragments.
