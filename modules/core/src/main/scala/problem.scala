@@ -19,12 +19,14 @@ import cats.Eq
 import io.circe._
 import io.circe.syntax._
 
-/** A problem, to be reported back to the user. */
+/**
+ * A problem, to be reported back to the user.
+ */
 final case class Problem(
-  message: String,
-  locations: List[(Int, Int)] = Nil,
-  path: List[String] = Nil,
-  extensions: Option[JsonObject] = None,
+    message: String,
+    locations: List[(Int, Int)] = Nil,
+    path: List[String] = Nil,
+    extensions: Option[JsonObject] = None
 ) {
   override def toString = {
 
@@ -32,14 +34,17 @@ final case class Problem(
       path.mkString("/")
 
     lazy val locationsText: String =
-      locations.map { case (a, b) =>
-        if (a == b) a.toString else s"$a..$b"
-      } .mkString(", ")
+      locations
+        .map {
+          case (a, b) =>
+            if (a == b) a.toString else s"$a..$b"
+        }
+        .mkString(", ")
 
     val s = (path.nonEmpty, locations.nonEmpty) match {
-      case (true, true)   => s"$message (at $pathText: $locationsText)"
-      case (true, false)  => s"$message (at $pathText)"
-      case (false, true)  => s"$message (at $locationsText)"
+      case (true, true) => s"$message (at $pathText: $locationsText)"
+      case (true, false) => s"$message (at $pathText)"
+      case (false, true) => s"$message (at $locationsText)"
       case (false, false) => message
     }
 
@@ -52,31 +57,34 @@ final case class Problem(
 object Problem {
 
   implicit val ProblemEncoder: Encoder[Problem] = { p =>
-
     val locationsField: List[(String, Json)] =
       if (p.locations.isEmpty) Nil
-      else List(
-        "locations" ->
-          p.locations.map { case (line, col) =>
-            Json.obj(
-              "line" -> line.asJson,
-              "col"  -> col.asJson
-            )
-          } .asJson
-      )
+      else
+        List(
+          "locations" ->
+            p.locations
+              .map {
+                case (line, col) =>
+                  Json.obj(
+                    "line" -> line.asJson,
+                    "col" -> col.asJson
+                  )
+              }
+              .asJson
+        )
 
     val pathField: List[(String, Json)] =
       if (p.path.isEmpty) Nil
-      else List(("path" -> p.path.asJson))
+      else List("path" -> p.path.asJson)
 
     val extensionsField: List[(String, Json)] =
       p.extensions.fold(List.empty[(String, Json)])(obj => List("extensions" -> obj.asJson))
 
     Json.fromFields(
       "message" -> p.message.asJson ::
-      locationsField                :::
-      pathField                     :::
-      extensionsField
+        locationsField :::
+        pathField :::
+        extensionsField
     )
 
   }

@@ -13,31 +13,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package doobie
+package grackle.doobie
 
-import _root_.doobie.Fragment
 import cats.Applicative
+import cats.effect.{Ref, Sync}
 import cats.implicits._
-import grackle.QueryInterpreter.ProtoJson
+import doobie.Fragment
 import org.typelevel.log4cats.Logger
+
+import grackle.{Query, Result}
+import grackle.QueryInterpreter.ProtoJson
 import grackle.sql.SqlStatsMonitor
-import cats.effect.Ref
-import cats.effect.Sync
 
 case class DoobieStats(
-  query: Query,
-  sql: String,
-  args: List[Any],
-  rows: Int,
-  cols: Int
+    query: Query,
+    sql: String,
+    args: List[Any],
+    rows: Int,
+    cols: Int
 )
 
 object DoobieMonitor {
 
   def noopMonitor[F[_]: Applicative]: DoobieMonitor[F] =
     new DoobieMonitor[F] {
-      def queryMapped(query: Query, fragment: Fragment, rows: Int, cols: Int): F[Unit] = ().pure[F]
+      def queryMapped(query: Query, fragment: Fragment, rows: Int, cols: Int): F[Unit] =
+        ().pure[F]
       def resultComputed(result: Result[ProtoJson]): F[Unit] = ().pure[F]
     }
 
@@ -45,11 +46,10 @@ object DoobieMonitor {
     new DoobieMonitor[F] {
 
       def queryMapped(query: Query, fragment: Fragment, rows: Int, cols: Int): F[Unit] =
-        logger.info(
-          s"""query: $query
-             |sql: ${fragment.internals.sql}
-             |args: ${fragment.internals.elements.mkString(", ")}
-             |fetched $rows row(s) of $cols column(s)
+        logger.info(s"""query: $query
+                       |sql: ${fragment.internals.sql}
+                       |args: ${fragment.internals.elements.mkString(", ")}
+                       |fetched $rows row(s) of $cols column(s)
            """.stripMargin)
 
       def resultComputed(result: Result[ProtoJson]): F[Unit] =

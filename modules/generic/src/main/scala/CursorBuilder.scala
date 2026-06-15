@@ -13,23 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package generic
+package grackle.generic
 
 import scala.collection.Factory
 
 import cats.implicits._
 import io.circe.{Encoder, Json}
 
-import syntax._
-import Cursor.AbstractCursor
+import grackle._
+import grackle.Cursor.AbstractCursor
+import grackle.syntax._
 
 trait CursorBuilder[T] {
   def tpe: Type
-  def build(context: Context, focus: T, parent: Option[Cursor] = None, env: Env = Env.empty): Result[Cursor]
+  def build(
+      context: Context,
+      focus: T,
+      parent: Option[Cursor] = None,
+      env: Env = Env.empty): Result[Cursor]
 
   /**
-   *  Apply a pre-processing function while fixing the `Type` of this `CursorBuilder`.
+   * Apply a pre-processing function while fixing the `Type` of this `CursorBuilder`.
    */
   final def contramap[A](f: A => T): CursorBuilder[A] = CursorBuilder.contramap(f, this)
 }
@@ -42,24 +46,33 @@ object CursorBuilder {
   implicit val stringCursorBuilder: CursorBuilder[String] = {
     case class StringCursor(context: Context, focus: String, parent: Option[Cursor], env: Env)
         extends PrimitiveCursor[String] {
-      def withEnv(env0: Env): Cursor    = copy(env = env.add(env0))
+      def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
       override def asLeaf: Result[Json] = Json.fromString(focus).success
     }
     new CursorBuilder[String] {
       val tpe = StringType
-      def build(context: Context, focus: String, parent: Option[Cursor], env: Env): Result[Cursor] =
+      def build(
+          context: Context,
+          focus: String,
+          parent: Option[Cursor],
+          env: Env): Result[Cursor] =
         StringCursor(context.asType(tpe), focus, parent, env).success
     }
   }
 
   implicit val intCursorBuilder: CursorBuilder[Int] = {
-    case class IntCursor(context: Context, focus: Int, parent: Option[Cursor], env: Env) extends PrimitiveCursor[Int] {
-      def withEnv(env0: Env): Cursor    = copy(env = env.add(env0))
+    case class IntCursor(context: Context, focus: Int, parent: Option[Cursor], env: Env)
+        extends PrimitiveCursor[Int] {
+      def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
       override def asLeaf: Result[Json] = Json.fromInt(focus).success
     }
     new CursorBuilder[Int] {
       val tpe = IntType
-      def build(context: Context, focus: Int, parent: Option[Cursor], env: Env): Result[Cursor] =
+      def build(
+          context: Context,
+          focus: Int,
+          parent: Option[Cursor],
+          env: Env): Result[Cursor] =
         IntCursor(context.asType(tpe), focus, parent, env).success
     }
   }
@@ -67,12 +80,16 @@ object CursorBuilder {
   implicit val longCursorBuilder: CursorBuilder[Long] = {
     case class LongCursor(context: Context, focus: Long, parent: Option[Cursor], env: Env)
         extends PrimitiveCursor[Long] {
-      def withEnv(env0: Env): Cursor    = copy(env = env.add(env0))
+      def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
       override def asLeaf: Result[Json] = Json.fromLong(focus).success
     }
     new CursorBuilder[Long] {
       val tpe = IntType
-      def build(context: Context, focus: Long, parent: Option[Cursor], env: Env): Result[Cursor] =
+      def build(
+          context: Context,
+          focus: Long,
+          parent: Option[Cursor],
+          env: Env): Result[Cursor] =
         LongCursor(context.asType(tpe), focus, parent, env).success
     }
   }
@@ -86,7 +103,11 @@ object CursorBuilder {
     }
     new CursorBuilder[Float] {
       val tpe = FloatType
-      def build(context: Context, focus: Float, parent: Option[Cursor], env: Env): Result[Cursor] =
+      def build(
+          context: Context,
+          focus: Float,
+          parent: Option[Cursor],
+          env: Env): Result[Cursor] =
         FloatCursor(context.asType(tpe), focus, parent, env).success
     }
   }
@@ -100,7 +121,11 @@ object CursorBuilder {
     }
     new CursorBuilder[Double] {
       val tpe = FloatType
-      def build(context: Context, focus: Double, parent: Option[Cursor], env: Env): Result[Cursor] =
+      def build(
+          context: Context,
+          focus: Double,
+          parent: Option[Cursor],
+          env: Env): Result[Cursor] =
         DoubleCursor(context.asType(tpe), focus, parent, env).success
     }
   }
@@ -108,12 +133,16 @@ object CursorBuilder {
   implicit val booleanCursorBuilder: CursorBuilder[Boolean] = {
     case class BooleanCursor(context: Context, focus: Boolean, parent: Option[Cursor], env: Env)
         extends PrimitiveCursor[Boolean] {
-      def withEnv(env0: Env): Cursor    = copy(env = env.add(env0))
+      def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
       override def asLeaf: Result[Json] = Json.fromBoolean(focus).success
     }
     new CursorBuilder[Boolean] {
       val tpe = BooleanType
-      def build(context: Context, focus: Boolean, parent: Option[Cursor], env: Env): Result[Cursor] =
+      def build(
+          context: Context,
+          focus: Boolean,
+          parent: Option[Cursor],
+          env: Env): Result[Cursor] =
         BooleanCursor(context.asType(tpe), focus, parent, env).success
     }
   }
@@ -121,7 +150,7 @@ object CursorBuilder {
   def deriveEnumerationCursorBuilder[T <: Enumeration#Value](tpe0: Type): CursorBuilder[T] = {
     case class EnumerationCursor(context: Context, focus: T, parent: Option[Cursor], env: Env)
         extends PrimitiveCursor[T] {
-      def withEnv(env0: Env): Cursor    = copy(env = env.add(env0))
+      def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
       override def asLeaf: Result[Json] = Json.fromString(focus.toString).success
     }
     new CursorBuilder[T] {
@@ -134,8 +163,13 @@ object CursorBuilder {
   implicit def enumerationCursorBuilder[T <: Enumeration#Value]: CursorBuilder[T] =
     deriveEnumerationCursorBuilder(StringType)
 
-  implicit def optionCursorBuiler[T](implicit elemBuilder: CursorBuilder[T]): CursorBuilder[Option[T]] = {
-    case class OptionCursor(context: Context, focus: Option[T], parent: Option[Cursor], env: Env)
+  implicit def optionCursorBuiler[T](
+      implicit elemBuilder: CursorBuilder[T]): CursorBuilder[Option[T]] = {
+    case class OptionCursor(
+        context: Context,
+        focus: Option[T],
+        parent: Option[Cursor],
+        env: Env)
         extends AbstractCursor {
       def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
@@ -146,13 +180,19 @@ object CursorBuilder {
 
     new CursorBuilder[Option[T]] { outer =>
       val tpe = NullableType(elemBuilder.tpe)
-      def build(context: Context, focus: Option[T], parent: Option[Cursor], env: Env): Result[Cursor] =
+      def build(
+          context: Context,
+          focus: Option[T],
+          parent: Option[Cursor],
+          env: Env): Result[Cursor] =
         OptionCursor(context.asType(tpe), focus, parent, env).success
     }
   }
 
-  implicit def listCursorBuiler[T](implicit elemBuilder: CursorBuilder[T]): CursorBuilder[List[T]] = {
-    case class ListCursor(context: Context, focus: List[T], parent: Option[Cursor], env: Env) extends AbstractCursor {
+  implicit def listCursorBuiler[T](
+      implicit elemBuilder: CursorBuilder[T]): CursorBuilder[List[T]] = {
+    case class ListCursor(context: Context, focus: List[T], parent: Option[Cursor], env: Env)
+        extends AbstractCursor {
       def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
       override def preunique: Result[Cursor] = {
@@ -162,21 +202,32 @@ object CursorBuilder {
 
       override def isList: Boolean = true
       override def asList[C](factory: Factory[Cursor, C]): Result[C] =
-        focus.traverse(elem => elemBuilder.build(context, elem, Some(this), env)).map(_.to(factory))
+        focus
+          .traverse(elem => elemBuilder.build(context, elem, Some(this), env))
+          .map(_.to(factory))
     }
 
     new CursorBuilder[List[T]] { outer =>
       val tpe = ListType(elemBuilder.tpe)
-      def build(context: Context, focus: List[T], parent: Option[Cursor], env: Env): Result[Cursor] =
+      def build(
+          context: Context,
+          focus: List[T],
+          parent: Option[Cursor],
+          env: Env): Result[Cursor] =
         ListCursor(context.asType(tpe), focus, parent, env).success
     }
   }
 
-  case class LeafCursor[T](context: Context, focus: T, encoder: Encoder[T], parent: Option[Cursor], env: Env)
+  case class LeafCursor[T](
+      context: Context,
+      focus: T,
+      encoder: Encoder[T],
+      parent: Option[Cursor],
+      env: Env)
       extends AbstractCursor {
     def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
-    override def isLeaf: Boolean      = true
+    override def isLeaf: Boolean = true
     override def asLeaf: Result[Json] = encoder(focus).success
   }
 
@@ -193,7 +244,11 @@ object CursorBuilder {
   def contramap[A, B](f: A => B, cb: CursorBuilder[B]): CursorBuilder[A] =
     new CursorBuilder[A] {
       def tpe: Type = cb.tpe
-      def build(context: Context, focus: A, parent: Option[Cursor] = None, env: Env = Env.empty): Result[Cursor] =
+      def build(
+          context: Context,
+          focus: A,
+          parent: Option[Cursor] = None,
+          env: Env = Env.empty): Result[Cursor] =
         cb.build(context, f(focus), parent, env)
     }
 }

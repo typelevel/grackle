@@ -15,8 +15,9 @@
 
 package grackle.sql.test
 
-import grackle.syntax._
 import java.time.OffsetDateTime
+
+import grackle.syntax._
 
 trait SqlCoalesceMapping[F[_]] extends SqlTestMapping[F] {
 
@@ -79,47 +80,42 @@ trait SqlCoalesceMapping[F[_]] extends SqlTestMapping[F] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            SqlObject("r")
-          )
+        fieldMappings = List(
+          SqlObject("r")
+        )
       ),
       ObjectMapping(
         tpe = RType,
-        fieldMappings =
-          List(
-            SqlField("id", r.id, key = true),
-            SqlObject("ca", Join(r.id, ca.rid)),
-            SqlObject("cb", Join(r.id, cb.rid)),
-            SqlObject("cc", Join(r.id, cc.rid)),
-          )
+        fieldMappings = List(
+          SqlField("id", r.id, key = true),
+          SqlObject("ca", Join(r.id, ca.rid)),
+          SqlObject("cb", Join(r.id, cb.rid)),
+          SqlObject("cc", Join(r.id, cc.rid))
+        )
       ),
       ObjectMapping(
         tpe = CAType,
-        fieldMappings =
-          List(
-            SqlField("id", ca.id, key = true),
-            SqlField("rid", ca.rid, hidden = true),
-            SqlField("a", ca.a)
-          )
+        fieldMappings = List(
+          SqlField("id", ca.id, key = true),
+          SqlField("rid", ca.rid, hidden = true),
+          SqlField("a", ca.a)
+        )
       ),
       ObjectMapping(
         tpe = CBType,
-        fieldMappings =
-          List(
-            SqlField("id", cb.id, key = true),
-            SqlField("rid", cb.rid, hidden = true),
-            SqlField("b", cb.b)
-          )
+        fieldMappings = List(
+          SqlField("id", cb.id, key = true),
+          SqlField("rid", cb.rid, hidden = true),
+          SqlField("b", cb.b)
+        )
       ),
       ObjectMapping(
         tpe = CCType,
-        fieldMappings =
-          List(
-            SqlField("id", cc.id, key = true),
-            SqlField("rid", cc.rid, hidden = true),
-            SqlField("c", cc.c)
-          )
+        fieldMappings = List(
+          SqlField("id", cc.id, key = true),
+          SqlField("rid", cc.rid, hidden = true),
+          SqlField("c", cc.c)
+        )
       ),
       LeafMapping[OffsetDateTime](DateTimeType)
     )

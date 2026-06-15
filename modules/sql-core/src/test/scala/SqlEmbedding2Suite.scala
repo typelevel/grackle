@@ -20,7 +20,6 @@ import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
-
 import grackle.test.GraphQLResponseTests.assertWeaklyEqualIO
 
 trait SqlEmbedding2Suite extends CatsEffectSuite {

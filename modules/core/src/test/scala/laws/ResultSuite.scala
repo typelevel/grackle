@@ -35,27 +35,36 @@ class ResultSuite extends DisciplineSuite {
   implicit val grackleLawsCogenForProblem: Cogen[Problem] =
     Cogen[String].contramap(_.message)
 
-  implicit def grackleArbitraryFnForResult[T](implicit arbF: Arbitrary[T => T]): Arbitrary[Result[T] => Result[T]] =
+  implicit def grackleArbitraryFnForResult[T](
+      implicit arbF: Arbitrary[T => T]): Arbitrary[Result[T] => Result[T]] =
     Arbitrary(arbF.arbitrary.map(f => (r: Result[T]) => r.map(f)))
 
-  implicit def grackleLawsArbitraryForResult[T](implicit T: Arbitrary[T]): Arbitrary[Result[T]] =
+  implicit def grackleLawsArbitraryForResult[T](
+      implicit T: Arbitrary[T]): Arbitrary[Result[T]] =
     Arbitrary(
       Gen.oneOf(
         T.arbitrary.map(Result.Success(_)),
         for {
           ps <- getArbitrary[NonEmptyChain[Problem]]
-          t  <- T.arbitrary
+          t <- T.arbitrary
         } yield Result.Warning(ps, t),
         getArbitrary[NonEmptyChain[Problem]].map(Result.Failure(_)),
         getArbitrary[Throwable].map(Result.InternalError(_))
       )
     )
 
-  checkAll("MonadError[Result] @ Int", MonadErrorTests[Result, Either[Throwable, NonEmptyChain[Problem]]].monadError[Int, Int, Int])
+  checkAll(
+    "MonadError[Result] @ Int",
+    MonadErrorTests[Result, Either[Throwable, NonEmptyChain[Problem]]]
+      .monadError[Int, Int, Int])
 
-  checkAll("Traverse[Result] @ Int with Option", TraverseTests[Result].traverse[Int, Int, Int, Int, Option, Option])
+  checkAll(
+    "Traverse[Result] @ Int with Option",
+    TraverseTests[Result].traverse[Int, Int, Int, Int, Option, Option])
 
-  checkAll("Parallel[Result] @ Int", ParallelTests[Result].parallel[Either[Throwable, NonEmptyChain[Problem]], Int])
+  checkAll(
+    "Parallel[Result] @ Int",
+    ParallelTests[Result].parallel[Either[Throwable, NonEmptyChain[Problem]], Int])
 
   checkAll("Semigroup[Result[List[T: Semigroup]]]", SemigroupTests[Result[List[Int]]].semigroup)
 

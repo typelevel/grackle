@@ -20,16 +20,21 @@ import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
 import grackle.syntax._
-import Query._
-import Predicate._, Value._
-import QueryCompiler._
 
 object ItemData {
   case class Item(label: String, tags: List[String])
 
   val items =
-    List(Item("A", List("A")), Item("AB", List("A", "B")), Item("BC", List("B", "C")), Item("C", List("C")))
+    List(
+      Item("A", List("A")),
+      Item("AB", List("A", "B")),
+      Item("BC", List("B", "C")),
+      Item("C", List("C")))
 }
 
 object ItemMapping extends ValueMapping[IO] {
@@ -57,24 +62,22 @@ object ItemMapping extends ValueMapping[IO] {
     List(
       ValueObjectMapping[Unit](
         tpe = QueryType,
-        fieldMappings =
-          List(
-            ValueField("itemByTag", _ => items),
-            ValueField("itemByTagCount", _ => items),
-            ValueField("itemByTagCountVA", _ => items),
-            ValueField("itemByTagCountCA", _ => items)
-          )
+        fieldMappings = List(
+          ValueField("itemByTag", _ => items),
+          ValueField("itemByTagCount", _ => items),
+          ValueField("itemByTagCountVA", _ => items),
+          ValueField("itemByTagCountCA", _ => items)
+        )
       ),
       ValueObjectMapping[Item](
         tpe = ItemType,
-        fieldMappings =
-          List(
-            ValueField("label", _.label),
-            ValueField("tags", _.tags),
-            CursorField("tagCount", tagCount),
-            ValueField("tagCountVA", _.tags.size, hidden = true),
-            CursorField("tagCountCA", tagCount, hidden = true)
-          )
+        fieldMappings = List(
+          ValueField("label", _.label),
+          ValueField("tags", _.tags),
+          CursorField("tagCount", tagCount),
+          ValueField("tagCountVA", _.tags.size, hidden = true),
+          CursorField("tagCountCA", tagCount, hidden = true)
+        )
       )
     )
 

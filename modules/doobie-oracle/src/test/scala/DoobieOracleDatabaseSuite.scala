@@ -13,17 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle.doobie.oracle
-package test
+package grackle.doobie.oracle.test
 
 import java.sql.Timestamp
 import java.time.{LocalDate, LocalTime, OffsetDateTime, ZoneId}
 import java.time.format.DateTimeFormatter
 import java.util.UUID
+
 import scala.util.Try
 
 import cats.data.NonEmptyList
-import cats.effect.{Resource, Sync, IO}
+import cats.effect.{IO, Resource, Sync}
 import cats.syntax.all._
 import doobie.{Meta, Transactor}
 import doobie.enumerated.JdbcType
@@ -34,48 +34,63 @@ import io.circe.parser.parse
 import munit.catseffect._
 
 import grackle.doobie.DoobieMonitor
+import grackle.doobie.oracle.DoobieOracleMapping
 import grackle.doobie.test.DoobieDatabaseSuite
-
 import grackle.sql.test._
 
 trait DoobieOracleDatabaseSuite extends DoobieDatabaseSuite {
-  abstract class DoobieOracleTestMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F] = DoobieMonitor.noopMonitor[IO])
-    extends DoobieOracleMapping[F](transactor, monitor) with DoobieTestMapping[F] with SqlTestMapping[F] {
-      def mkTestCodec[T](meta: Meta[T]): TestCodec[T] = (meta, false)
+  abstract class DoobieOracleTestMapping[F[_]: Sync](
+      transactor: Transactor[F],
+      monitor: DoobieMonitor[F] = DoobieMonitor.noopMonitor[IO])
+      extends DoobieOracleMapping[F](transactor, monitor)
+      with DoobieTestMapping[F]
+      with SqlTestMapping[F] {
+    def mkTestCodec[T](meta: Meta[T]): TestCodec[T] = (meta, false)
 
-      val uuid: TestCodec[UUID] =
-        mkTestCodec(Meta[String].tiemap(s => Try(UUID.fromString(s)).toEither.leftMap(_.getMessage))(_.toString))
+    val uuid: TestCodec[UUID] =
+      mkTestCodec(Meta[String].tiemap(s =>
+        Try(UUID.fromString(s)).toEither.leftMap(_.getMessage))(_.toString))
 
-      val localTime: TestCodec[LocalTime] = { // TODO: Try Meta[java.sql.Time]
-        val localTimeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("0 H:m:s.S")
-        mkTestCodec(Meta[String].tiemap(s => Try(LocalTime.parse(s, localTimeFormat)).toEither.leftMap(_.getMessage))(_.format(localTimeFormat)))
-      }
-
-      val localDate: TestCodec[LocalDate] =
-        (Basic.oneObject(JdbcType.Date, None, classOf[LocalDate]), false)
-
-      // Forget precise time zone for compatibility with Postgres. Nb. this is specific to this test suite.
-      val offsetDateTime: TestCodec[OffsetDateTime] =
-        mkTestCodec(Meta[Timestamp].timap(t => OffsetDateTime.ofInstant(t.toInstant, ZoneId.of("UTC")))(o => Timestamp.from(o.toInstant)))
-
-      val nvarchar: TestCodec[String] = {
-        val nvarcharMeta: Meta[String] = {
-          import JdbcType._
-          val oldGet = Meta[String].get
-          val oldPut = Meta[String].put
-          val newTargets = NonEmptyList.of(NChar, NVarChar, LongnVarChar)
-          val newPut =
-            Put.Basic(oldPut.typeStack, newTargets, oldPut.put, oldPut.update, oldPut.vendorTypeNames.headOption)
-
-          new Meta[String](oldGet, newPut)
-        }
-
-        mkTestCodec(nvarcharMeta)
-      }
-
-      val jsonb: TestCodec[Json] =
-        mkTestCodec(Meta[String].tiemap(s => parse(s).leftMap(_.getMessage))(_.noSpaces))
+    val localTime: TestCodec[LocalTime] = { // TODO: Try Meta[java.sql.Time]
+      val localTimeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("0 H:m:s.S")
+      mkTestCodec(
+        Meta[String].tiemap(s =>
+          Try(LocalTime.parse(s, localTimeFormat)).toEither.leftMap(_.getMessage))(
+          _.format(localTimeFormat)))
     }
+
+    val localDate: TestCodec[LocalDate] =
+      (Basic.oneObject(JdbcType.Date, None, classOf[LocalDate]), false)
+
+    // Forget precise time zone for compatibility with Postgres. Nb. this is specific to this test suite.
+    val offsetDateTime: TestCodec[OffsetDateTime] =
+      mkTestCodec(
+        Meta[Timestamp].timap(t => OffsetDateTime.ofInstant(t.toInstant, ZoneId.of("UTC")))(o =>
+          Timestamp.from(o.toInstant)))
+
+    val nvarchar: TestCodec[String] = {
+      val nvarcharMeta: Meta[String] = {
+        import JdbcType._
+        val oldGet = Meta[String].get
+        val oldPut = Meta[String].put
+        val newTargets = NonEmptyList.of(NChar, NVarChar, LongnVarChar)
+        val newPut =
+          Put.Basic(
+            oldPut.typeStack,
+            newTargets,
+            oldPut.put,
+            oldPut.update,
+            oldPut.vendorTypeNames.headOption)
+
+        new Meta[String](oldGet, newPut)
+      }
+
+      mkTestCodec(nvarcharMeta)
+    }
+
+    val jsonb: TestCodec[Json] =
+      mkTestCodec(Meta[String].tiemap(s => parse(s).leftMap(_.getMessage))(_.noSpaces))
+  }
 
   case class OracleConnectionInfo(host: String, port: Int) {
     val driverClassName = "oracle.jdbc.driver.OracleDriver"
@@ -110,7 +125,8 @@ trait DoobieOracleDatabaseSuite extends DoobieDatabaseSuite {
     )
   }
 
-  val transactorFixture: IOFixture[Transactor[IO]] = ResourceSuiteLocalFixture("oraclepg", transactorResource)
+  val transactorFixture: IOFixture[Transactor[IO]] =
+    ResourceSuiteLocalFixture("oraclepg", transactorResource)
   override def munitFixtures: Seq[IOFixture[_]] = Seq(transactorFixture)
 
   def transactor: Transactor[IO] = transactorFixture()

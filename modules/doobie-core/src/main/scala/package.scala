@@ -15,8 +15,9 @@
 
 package grackle
 
-import grackle.sql.SqlMonitor
 import _root_.doobie.Fragment
+
+import grackle.sql.SqlMonitor
 
 package object doobie {
   type DoobieMonitor[F[_]] = SqlMonitor[F, Fragment]

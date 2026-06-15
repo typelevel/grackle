@@ -17,34 +17,38 @@ package grackle.sql.test
 
 import cats.effect.{Ref, Sync}
 import cats.implicits._
-import grackle._
-import grackle.sql.Like
-import grackle.syntax._
 import io.circe.Json
 
-import Query._
-import Predicate._
-import Value._
-import QueryCompiler._
-import QueryInterpreter.ProtoJson
+import grackle._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.QueryInterpreter.ProtoJson
+import grackle.Value._
+import grackle.sql.Like
+import grackle.syntax._
 
 /* Currency component */
 
 case class Currency(
-  code: String,
-  exchangeRate: Double,
-  countryCode: String
+    code: String,
+    exchangeRate: Double,
+    countryCode: String
 )
 
 case class CurrencyData(currencies: Map[String, Currency]) {
   def exchangeRate(code: String): Option[Double] = currencies.get(code).map(_.exchangeRate)
   def update(code: String, exchangeRate: Double): Option[CurrencyData] =
-    currencies.get(code).map(currency => CurrencyData(currencies.updated(code, currency.copy(exchangeRate = exchangeRate))))
+    currencies
+      .get(code)
+      .map(currency =>
+        CurrencyData(currencies.updated(code, currency.copy(exchangeRate = exchangeRate))))
   def currencies(countryCodes: List[String]): List[Currency] =
     countryCodes.flatMap(cc => currencies.values.find(_.countryCode == cc).toList)
 }
 
-class CurrencyMapping[F[_] : Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[F, Int]) extends ValueMapping[F] {
+class CurrencyMapping[F[_]: Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[F, Int])
+    extends ValueMapping[F] {
   def update(code: String, exchangeRate: Double): F[Unit] =
     dataRef.update(data => data.update(code, exchangeRate).getOrElse(data))
 
@@ -69,7 +73,10 @@ class CurrencyMapping[F[_] : Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[
   override val selectElaborator = SelectElaborator {
     case (QueryType, "exchangeRate", List(Binding("code", StringValue(code)))) =>
       Elab.env("code", code)
-    case (QueryType, "currencies", List(Binding("countryCodes", StringListValue(countryCodes)))) =>
+    case (
+          QueryType,
+          "currencies",
+          List(Binding("countryCodes", StringListValue(countryCodes)))) =>
       Elab.env("countryCodes", countryCodes)
   }
 
@@ -77,44 +84,44 @@ class CurrencyMapping[F[_] : Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[
     List(
       ValueObjectMapping[Unit](
         tpe = QueryType,
-        fieldMappings =
-          List(
-            RootEffect.computeCursor("exchangeRate")((path, env) =>
-              env.getR[String]("code").traverse(code =>
-                countRef.update(_+1) *>
-                dataRef.get.map(data => valueCursor(path, env, data.exchangeRate(code)))
-              )
-            ),
-            RootEffect.computeCursor("currencies")((path, env) =>
-              env.getR[List[String]]("countryCodes").traverse(countryCodes =>
-                countRef.update(_+1) *>
-                dataRef.get.map(data => valueCursor(path, env, data.currencies(countryCodes)))
-              )
-            )
-          )
+        fieldMappings = List(
+          RootEffect.computeCursor("exchangeRate")((path, env) =>
+            env
+              .getR[String]("code")
+              .traverse(code =>
+                countRef.update(_ + 1) *>
+                  dataRef.get.map(data => valueCursor(path, env, data.exchangeRate(code))))),
+          RootEffect.computeCursor("currencies")((path, env) =>
+            env
+              .getR[List[String]]("countryCodes")
+              .traverse(countryCodes =>
+                countRef.update(_ + 1) *>
+                  dataRef
+                    .get
+                    .map(data => valueCursor(path, env, data.currencies(countryCodes)))))
+        )
       ),
       ValueObjectMapping[Currency](
         tpe = CurrencyType,
-        fieldMappings =
-          List(
-            ValueField("code", _.code),
-            ValueField("exchangeRate", _.exchangeRate),
-            ValueField("countryCode", _.countryCode)
-          )
+        fieldMappings = List(
+          ValueField("code", _.code),
+          ValueField("exchangeRate", _.exchangeRate),
+          ValueField("countryCode", _.countryCode)
+        )
       )
-  )
+    )
 
   override def combineAndRun(queries: List[(Query, Cursor)]): F[Result[List[ProtoJson]]] = {
     import SimpleCurrencyQuery.unpackResults
 
     val expandedQueries =
       queries.map {
-        case (Select("currencies", _, child), c@Code(code)) =>
+        case (Select("currencies", _, child), c @ Code(code)) =>
           (SimpleCurrencyQuery(List(code), child), c)
         case other => other
       }
 
-    if(expandedQueries.sizeCompare(1) <= 0) super.combineAndRun(expandedQueries)
+    if (expandedQueries.sizeCompare(1) <= 0) super.combineAndRun(expandedQueries)
     else {
       val indexedQueries = expandedQueries.zipWithIndex
       val (groupable, ungroupable) = indexedQueries.partition {
@@ -126,28 +133,35 @@ class CurrencyMapping[F[_] : Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[
         (q._1._1, q._1._2.fullEnv, q._1._2.context)
 
       val grouped: List[((Query, Cursor), List[Int])] =
-        (groupable.collect {
-          case ((SimpleCurrencyQuery(code, child), cursor), i) =>
-            ((child, cursor), code, i)
-        }).groupBy(mkKey).toList.map {
-          case ((child, _, _), xs) =>
-            val (codes, is) = xs.foldLeft((List.empty[String], List.empty[Int])) {
-              case ((codes, is), (_, code, i)) => (code :: codes, i :: is)
-            }
-            val cursor = xs.head._1._2
-            ((SimpleCurrencyQuery(codes, child), cursor), is)
-        }
+        groupable
+          .collect {
+            case ((SimpleCurrencyQuery(code, child), cursor), i) =>
+              ((child, cursor), code, i)
+          }
+          .groupBy(mkKey)
+          .toList
+          .map {
+            case ((child, _, _), xs) =>
+              val (codes, is) = xs.foldLeft((List.empty[String], List.empty[Int])) {
+                case ((codes, is), (_, code, i)) => (code :: codes, i :: is)
+              }
+              val cursor = xs.head._1._2
+              ((SimpleCurrencyQuery(codes, child), cursor), is)
+          }
 
       val (grouped0, groupedIndices) = grouped.unzip
       val (ungroupable0, ungroupedIndices) = ungroupable.unzip
 
       (for {
-        groupedResults   <- ResultT(super.combineAndRun(grouped0))
+        groupedResults <- ResultT(super.combineAndRun(grouped0))
         ungroupedResults <- ResultT(super.combineAndRun(ungroupable0))
       } yield {
-        val allResults: List[(ProtoJson, Int)] = groupedResults.zip(groupedIndices).flatMap((unpackResults _).tupled) ++ ungroupedResults.zip(ungroupedIndices)
+        val allResults: List[(ProtoJson, Int)] = groupedResults
+          .zip(groupedIndices)
+          .flatMap((unpackResults _).tupled) ++ ungroupedResults.zip(ungroupedIndices)
         val repackedResults = indexedQueries.map {
-          case (_, i) => allResults.find(_._2 == i).map(_._1).getOrElse(ProtoJson.fromJson(Json.Null))
+          case (_, i) =>
+            allResults.find(_._2 == i).map(_._1).getOrElse(ProtoJson.fromJson(Json.Null))
         }
 
         repackedResults
@@ -165,7 +179,8 @@ class CurrencyMapping[F[_] : Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[
 
     def unapply(sel: Query): Option[(String, Query)] =
       sel match {
-        case Environment(env, Select("currencies", None, child)) => env.get[List[String]]("countryCodes").flatMap(_.headOption).map((_, child))
+        case Environment(env, Select("currencies", None, child)) =>
+          env.get[List[String]]("countryCodes").flatMap(_.headOption).map((_, child))
         case _ => None
       }
 
@@ -177,7 +192,9 @@ class CurrencyMapping[F[_] : Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[
             fld <- obj("currencies")
             arr <- fld.asArray
           } yield {
-            val ress = arr.toList.map { elem => ProtoJson.fromJson(Json.obj("currencies" -> Json.arr(elem))) }
+            val ress = arr.toList.map { elem =>
+              ProtoJson.fromJson(Json.obj("currencies" -> Json.arr(elem)))
+            }
             ress.zip(indices)
           }).getOrElse(Nil)
         case _ => Nil
@@ -186,7 +203,7 @@ class CurrencyMapping[F[_] : Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[
 }
 
 object CurrencyMapping {
-  def apply[F[_] : Sync]: F[CurrencyMapping[F]] = {
+  def apply[F[_]: Sync]: F[CurrencyMapping[F]] = {
     val BRL = Currency("BRL", 0.25, "BRA")
     val EUR = Currency("EUR", 1.12, "NLD")
     val GBP = Currency("GBP", 1.25, "GBR")
@@ -194,7 +211,7 @@ object CurrencyMapping {
     val data = CurrencyData(List(BRL, EUR, GBP).map(c => (c.code, c)).toMap)
 
     for {
-      dataRef  <- Ref[F].of(data)
+      dataRef <- Ref[F].of(data)
       countRef <- Ref[F].of(0)
     } yield new CurrencyMapping[F](dataRef, countRef)
   }
@@ -202,8 +219,8 @@ object CurrencyMapping {
 
 /* Composition */
 
-class SqlComposedMapping[F[_] : Sync]
-  (world: Mapping[F], currency: Mapping[F]) extends ComposedMapping[F] {
+class SqlComposedMapping[F[_]: Sync](world: Mapping[F], currency: Mapping[F])
+    extends ComposedMapping[F] {
   val schema =
     schema"""
       type Query {
@@ -258,25 +275,24 @@ class SqlComposedMapping[F[_] : Sync]
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            Delegate("country", world),
-            Delegate("countries", world),
-            Delegate("cities", world)
-          )
+        fieldMappings = List(
+          Delegate("country", world),
+          Delegate("countries", world),
+          Delegate("cities", world)
+        )
       ),
       ObjectMapping(
         tpe = CountryType,
-        fieldMappings =
-          List(
-            Delegate("currencies", currency)
-          )
+        fieldMappings = List(
+          Delegate("currencies", currency)
+        )
       )
     )
 
-  override val selectElaborator =  SelectElaborator {
+  override val selectElaborator = SelectElaborator {
     case (QueryType, "country", List(Binding("code", StringValue(code)))) =>
-      Elab.transformChild(child => Unique(Filter(Eql(CountryType / "code", Const(code)), child)))
+      Elab.transformChild(child =>
+        Unique(Filter(Eql(CountryType / "code", Const(code)), child)))
     case (QueryType, "cities", List(Binding("namePattern", StringValue(namePattern)))) =>
       Elab.transformChild(child => Filter(Like(CityType / "name", namePattern, true), child))
   }

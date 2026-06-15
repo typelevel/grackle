@@ -73,73 +73,65 @@ trait SqlEmbeddingMapping[F[_]] extends SqlTestMapping[F] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            SqlObject("films"),
-            SqlObject("series")
-          )
+        fieldMappings = List(
+          SqlObject("films"),
+          SqlObject("series")
+        )
       ),
       ObjectMapping(
         tpe = FilmType,
-        fieldMappings =
-          List(
-            SqlField("title", films.title, key = true),
-            SqlObject("synopses")
-          )
+        fieldMappings = List(
+          SqlField("title", films.title, key = true),
+          SqlObject("synopses")
+        )
       ),
       ObjectMapping(
         tpe = SeriesType,
-        fieldMappings =
-          List(
-            SqlField("title", series.title, key = true),
-            SqlObject("synopses"),
-            SqlObject("episodes", Join(series.title, episodes.seriesTitle)),
-          )
+        fieldMappings = List(
+          SqlField("title", series.title, key = true),
+          SqlObject("synopses"),
+          SqlObject("episodes", Join(series.title, episodes.seriesTitle))
+        )
       ),
       ObjectMapping(
         tpe = EpisodeType,
-        fieldMappings =
-          List(
-            SqlField("title", episodes.title, key = true),
-            SqlObject("synopses"),
-            SqlField("series_title", episodes.seriesTitle, hidden = true)
-          )
+        fieldMappings = List(
+          SqlField("title", episodes.title, key = true),
+          SqlObject("synopses"),
+          SqlField("series_title", episodes.seriesTitle, hidden = true)
+        )
       ),
       PrefixedMapping(
         tpe = SynopsesType,
-        mappings =
-          List(
-            List("films", "synopses") ->
-              ObjectMapping(
-                tpe = SynopsesType,
-                fieldMappings =
-                  List(
-                    SqlField("title", films.title, key = true, hidden = true),
-                    SqlField("short", films.synopsisShort),
-                    SqlField("long", films.synopsisLong)
-                  )
-              ),
-            List("series", "synopses") ->
-              ObjectMapping(
-                tpe = SynopsesType,
-                fieldMappings =
-                  List(
-                    SqlField("title", series.title, key = true, hidden = true),
-                    SqlField("short", series.synopsisShort),
-                    SqlField("long", series.synopsisLong)
-                  )
-              ),
-            List("episodes", "synopses") ->
-              ObjectMapping(
-                tpe = SynopsesType,
-                fieldMappings =
-                  List(
-                    SqlField("title", episodes.title, key = true, hidden = true),
-                    SqlField("short", episodes.synopsisShort),
-                    SqlField("long", episodes.synopsisLong)
-                  )
+        mappings = List(
+          List("films", "synopses") ->
+            ObjectMapping(
+              tpe = SynopsesType,
+              fieldMappings = List(
+                SqlField("title", films.title, key = true, hidden = true),
+                SqlField("short", films.synopsisShort),
+                SqlField("long", films.synopsisLong)
               )
-          )
+            ),
+          List("series", "synopses") ->
+            ObjectMapping(
+              tpe = SynopsesType,
+              fieldMappings = List(
+                SqlField("title", series.title, key = true, hidden = true),
+                SqlField("short", series.synopsisShort),
+                SqlField("long", series.synopsisLong)
+              )
+            ),
+          List("episodes", "synopses") ->
+            ObjectMapping(
+              tpe = SynopsesType,
+              fieldMappings = List(
+                SqlField("title", episodes.title, key = true, hidden = true),
+                SqlField("short", episodes.synopsisShort),
+                SqlField("long", episodes.synopsisLong)
+              )
+            )
+        )
       )
     )
 }

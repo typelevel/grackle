@@ -13,18 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle.doobie.mssql
-package test
+package grackle.doobie.mssql.test
 
 import cats.effect.{IO, Resource}
 import doobie.{Meta, Transactor}
 import doobie.implicits._
 import munit.catseffect.IOFixture
 
+import grackle.Mapping
 import grackle.doobie.DoobieMonitor
 import grackle.sql.SqlStatsMonitor
-
-import grackle.Mapping
 import grackle.sql.test._
 
 final class ArrayJoinSuite extends DoobieMSSqlDatabaseSuite with SqlArrayJoinSuite {
@@ -33,15 +31,22 @@ final class ArrayJoinSuite extends DoobieMSSqlDatabaseSuite with SqlArrayJoinSui
 
 final class CoalesceSuite extends DoobieMSSqlDatabaseSuite with SqlCoalesceSuite {
   type Fragment = doobie.Fragment
-  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO,Fragment])] =
-    DoobieMonitor.statsMonitor[IO].map(mon => (new DoobieMSSqlTestMapping(transactor, mon) with SqlCoalesceMapping[IO], mon))
+  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO, Fragment])] =
+    DoobieMonitor
+      .statsMonitor[IO]
+      .map(mon =>
+        (new DoobieMSSqlTestMapping(transactor, mon) with SqlCoalesceMapping[IO], mon))
 }
 
 final class ComposedWorldSuite extends DoobieMSSqlDatabaseSuite with SqlComposedWorldSuite {
   def mapping: IO[(CurrencyMapping[IO], Mapping[IO])] =
     for {
       currencyMapping <- CurrencyMapping[IO]
-    } yield (currencyMapping, new SqlComposedMapping(new DoobieMSSqlTestMapping(transactor) with SqlWorldMapping[IO], currencyMapping))
+    } yield (
+      currencyMapping,
+      new SqlComposedMapping(
+        new DoobieMSSqlTestMapping(transactor) with SqlWorldMapping[IO],
+        currencyMapping))
 }
 
 final class CompositeKeySuite extends DoobieMSSqlDatabaseSuite with SqlCompositeKeySuite {
@@ -68,12 +73,18 @@ final class FilterJoinAliasSuite extends DoobieMSSqlDatabaseSuite with SqlFilter
   lazy val mapping = new DoobieMSSqlTestMapping(transactor) with SqlFilterJoinAliasMapping[IO]
 }
 
-final class FilterOrderOffsetLimitSuite extends DoobieMSSqlDatabaseSuite with SqlFilterOrderOffsetLimitSuite {
-  lazy val mapping = new DoobieMSSqlTestMapping(transactor) with SqlFilterOrderOffsetLimitMapping[IO]
+final class FilterOrderOffsetLimitSuite
+    extends DoobieMSSqlDatabaseSuite
+    with SqlFilterOrderOffsetLimitSuite {
+  lazy val mapping = new DoobieMSSqlTestMapping(transactor)
+    with SqlFilterOrderOffsetLimitMapping[IO]
 }
 
-final class FilterOrderOffsetLimit2Suite extends DoobieMSSqlDatabaseSuite with SqlFilterOrderOffsetLimit2Suite {
-  lazy val mapping = new DoobieMSSqlTestMapping(transactor) with SqlFilterOrderOffsetLimit2Mapping[IO]
+final class FilterOrderOffsetLimit2Suite
+    extends DoobieMSSqlDatabaseSuite
+    with SqlFilterOrderOffsetLimit2Suite {
+  lazy val mapping = new DoobieMSSqlTestMapping(transactor)
+    with SqlFilterOrderOffsetLimit2Mapping[IO]
 }
 
 final class GraphSuite extends DoobieMSSqlDatabaseSuite with SqlGraphSuite {
@@ -104,7 +115,9 @@ final class LikeSuite extends DoobieMSSqlDatabaseSuite with SqlLikeSuite {
   lazy val mapping = new DoobieMSSqlTestMapping(transactor) with SqlLikeMapping[IO]
 }
 
-final class MappingValidatorValidSuite extends DoobieMSSqlDatabaseSuite with SqlMappingValidatorValidSuite {
+final class MappingValidatorValidSuite
+    extends DoobieMSSqlDatabaseSuite
+    with SqlMappingValidatorValidSuite {
   // no DB instance needed for this suite
   lazy val mapping = new DoobieMSSqlTestMapping(null) with SqlMappingValidatorValidMapping[IO] {
     def genre: TestCodec[Genre] = (Meta[Int].imap(Genre.fromInt)(Genre.toInt), false)
@@ -113,7 +126,9 @@ final class MappingValidatorValidSuite extends DoobieMSSqlDatabaseSuite with Sql
   override def munitFixtures: Seq[IOFixture[_]] = Nil
 }
 
-final class MappingValidatorInvalidSuite extends DoobieMSSqlDatabaseSuite with SqlMappingValidatorInvalidSuite {
+final class MappingValidatorInvalidSuite
+    extends DoobieMSSqlDatabaseSuite
+    with SqlMappingValidatorInvalidSuite {
   // no DB instance needed for this suite
   lazy val mapping = new DoobieMSSqlTestMapping(null) with SqlMappingValidatorInvalidMapping[IO]
   override def munitFixtures: Seq[IOFixture[_]] = Nil
@@ -127,7 +142,8 @@ final class MovieSuite extends DoobieMSSqlDatabaseSuite with SqlMovieSuite {
   lazy val mapping =
     new DoobieMSSqlTestMapping(transactor) with SqlMovieMapping[IO] {
       def genre: TestCodec[Genre] = (Meta[Int].imap(Genre.fromInt)(Genre.toInt), false)
-      def feature: TestCodec[Feature] = (Meta[String].imap(Feature.fromString)(_.toString), false)
+      def feature: TestCodec[Feature] =
+        (Meta[String].imap(Feature.fromString)(_.toString), false)
       def tagList: TestCodec[List[String]] = (Meta[Int].imap(Tags.fromInt)(Tags.toInt), false)
     }
 }
@@ -135,8 +151,9 @@ final class MovieSuite extends DoobieMSSqlDatabaseSuite with SqlMovieSuite {
 final class MutationSuite extends DoobieMSSqlDatabaseSuite with SqlMutationSuite {
   // A resource that copies and drops the table used in the tests.
   def withDuplicatedTables(transactor: Transactor[IO]): Resource[IO, Transactor[IO]] = {
-    val alloc = sql"SELECT * INTO city_copy FROM city".update.run.transact(transactor).as(transactor)
-    val free  = sql"DROP TABLE city_copy".update.run.transact(transactor).void
+    val alloc =
+      sql"SELECT * INTO city_copy FROM city".update.run.transact(transactor).as(transactor)
+    val free = sql"DROP TABLE city_copy".update.run.transact(transactor).void
     Resource.make(alloc)(_ => free)
   }
 
@@ -157,10 +174,7 @@ final class MutationSuite extends DoobieMSSqlDatabaseSuite with SqlMutationSuite
           INSERT INTO city_copy (id, name, countrycode, district, population)
           OUTPUT INSERTED.ID
           VALUES (NEXT VALUE FOR city_id, $name, $countryCode, 'ignored', $population)
-        """
-          .query[Int]
-          .unique
-          .transact(transactor)
+        """.query[Int].unique.transact(transactor)
     }
 }
 
@@ -193,7 +207,9 @@ final class ProjectionSuite extends DoobieMSSqlDatabaseSuite with SqlProjectionS
   lazy val mapping = new DoobieMSSqlTestMapping(transactor) with SqlProjectionMapping[IO]
 }
 
-final class RecursiveInterfacesSuite extends DoobieMSSqlDatabaseSuite with SqlRecursiveInterfacesSuite {
+final class RecursiveInterfacesSuite
+    extends DoobieMSSqlDatabaseSuite
+    with SqlRecursiveInterfacesSuite {
   lazy val mapping =
     new DoobieMSSqlTestMapping(transactor) with SqlRecursiveInterfacesMapping[IO] {
       def itemType: TestCodec[ItemType] =
@@ -220,8 +236,10 @@ final class WorldSuite extends DoobieMSSqlDatabaseSuite with SqlWorldSuite {
 final class WorldCompilerSuite extends DoobieMSSqlDatabaseSuite with SqlWorldCompilerSuite {
   type Fragment = doobie.Fragment
 
-  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO,Fragment])] =
-    DoobieMonitor.statsMonitor[IO].map(mon => (new DoobieMSSqlTestMapping(transactor, mon) with SqlWorldMapping[IO], mon))
+  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO, Fragment])] =
+    DoobieMonitor
+      .statsMonitor[IO]
+      .map(mon => (new DoobieMSSqlTestMapping(transactor, mon) with SqlWorldMapping[IO], mon))
 
   def simpleRestrictedQuerySql: String =
     "SELECT country.code , country.name FROM country WHERE (( country.code = ?) )"

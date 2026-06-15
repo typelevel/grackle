@@ -22,8 +22,7 @@ import io.circe.{Decoder => CDecoder, Encoder => CEncoder, Json}
 import org.tpolecat.sourcepos.SourcePos
 import org.tpolecat.typename.TypeName
 
-import grackle._
-import sql.SqlMappingLike
+import grackle.sql.SqlMappingLike
 
 trait SqlTestMapping[F[_]] extends SqlMappingLike[F] { outer =>
   type TestCodec[T] <: Codec
@@ -49,8 +48,11 @@ trait SqlTestMapping[F[_]] extends SqlMappingLike[F] { outer =>
   def jsonb: TestCodec[Json]
 
   def nullable[T](c: TestCodec[T]): TestCodec[T]
-  def list[T: CDecoder : CEncoder](c: TestCodec[T]): TestCodec[List[T]]
+  def list[T: CDecoder: CEncoder](c: TestCodec[T]): TestCodec[List[T]]
 
-  def col[T](colName: String, codec: TestCodec[T])(implicit tableName: TableName, typeName: TypeName[T], pos: SourcePos): ColumnRef =
+  def col[T](colName: String, codec: TestCodec[T])(
+      implicit tableName: TableName,
+      typeName: TypeName[T],
+      pos: SourcePos): ColumnRef =
     ColumnRef(tableName.name, colName, codec, typeName.value, pos)
 }

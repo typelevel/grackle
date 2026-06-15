@@ -17,9 +17,14 @@ package parser
 
 import munit.CatsEffectSuite
 
-import grackle.{Ast, GraphQLParser, Result}
+import grackle.{GraphQLParser, Result}
+import grackle.Ast._
+import grackle.Ast.OperationDefinition._
+import grackle.Ast.OperationType._
+import grackle.Ast.Selection._
+import grackle.Ast.Type.Named
+import grackle.Ast.Value._
 import grackle.syntax._
-import Ast._, OperationType._, OperationDefinition._, Selection._, Value._, Type.Named
 
 final class ParserSuite extends CatsEffectSuite {
   val parser = mkParser()
@@ -34,9 +39,17 @@ final class ParserSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Operation(Query, None, Nil, Nil,
+      Operation(
+        Query,
+        None,
+        Nil,
+        Nil,
         List(
-          Field(None, Name("character"), List((Name("id"), IntValue(1000))), Nil,
+          Field(
+            None,
+            Name("character"),
+            List((Name("id"), IntValue(1000))),
+            Nil,
             List(
               Field(None, Name("name"), Nil, Nil, Nil)
             )
@@ -58,16 +71,22 @@ final class ParserSuite extends CatsEffectSuite {
 
     val expected =
       Operation(
-        Query,None,Nil,Nil,
+        Query,
+        None,
+        Nil,
+        Nil,
         List(
-          Field(None,Name("wibble"),
+          Field(
+            None,
+            Name("wibble"),
             List(
-              (Name("foo"),StringValue("a")),
-              (Name("bar"),StringValue("b")),
-              (Name("baz"),IntValue(3))
-            ), Nil,
+              (Name("foo"), StringValue("a")),
+              (Name("bar"), StringValue("b")),
+              (Name("baz"), IntValue(3))
+            ),
+            Nil,
             List(
-              Field(None,Name("quux"),Nil,Nil,Nil)
+              Field(None, Name("quux"), Nil, Nil, Nil)
             )
           )
         )
@@ -90,16 +109,22 @@ final class ParserSuite extends CatsEffectSuite {
 
     val expected =
       Operation(
-        Query,None,Nil,Nil,
+        Query,
+        None,
+        Nil,
+        Nil,
         List(
-          Field(None,Name("wibble"),
+          Field(
+            None,
+            Name("wibble"),
             List(
-              (Name("foo"),StringValue("a")),
-              (Name("bar"),StringValue("b")),
-              (Name("baz"),IntValue(3))
-            ), Nil,
+              (Name("foo"), StringValue("a")),
+              (Name("bar"), StringValue("b")),
+              (Name("baz"), IntValue(3))
+            ),
+            Nil,
             List(
-              Field(None,Name("quux"),Nil,Nil,Nil)
+              Field(None, Name("quux"), Nil, Nil, Nil)
             )
           )
         )
@@ -129,23 +154,43 @@ final class ParserSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Operation(Query,Some(Name("IntrospectionQuery")),Nil,Nil,
+      Operation(
+        Query,
+        Some(Name("IntrospectionQuery")),
+        Nil,
+        Nil,
         List(
-          Field(None,Name("__schema"),Nil,Nil,
+          Field(
+            None,
+            Name("__schema"),
+            Nil,
+            Nil,
             List(
-              Field(None,Name("queryType"),Nil,Nil,
+              Field(
+                None,
+                Name("queryType"),
+                Nil,
+                Nil,
                 List(
-                  Field(None,Name("name"),Nil,Nil,Nil)
+                  Field(None, Name("name"), Nil, Nil, Nil)
                 )
               ),
-              Field(None,Name("mutationType"),Nil,Nil,
+              Field(
+                None,
+                Name("mutationType"),
+                Nil,
+                Nil,
                 List(
-                  Field(None,Name("name"),Nil,Nil,Nil)
+                  Field(None, Name("name"), Nil, Nil, Nil)
                 )
               ),
-              Field(None,Name("subscriptionType"),Nil,Nil,
+              Field(
+                None,
+                Name("subscriptionType"),
+                Nil,
+                Nil,
                 List(
-                  Field(None,Name("name"),Nil,Nil,Nil)
+                  Field(None, Name("name"), Nil, Nil, Nil)
                 )
               )
             )
@@ -177,15 +222,27 @@ final class ParserSuite extends CatsEffectSuite {
     val expected =
       QueryShorthand(
         List(
-          Field(None,Name("hero"),List((Name("episode"),EnumValue(Name("NEWHOPE")))),Nil,
+          Field(
+            None,
+            Name("hero"),
+            List((Name("episode"), EnumValue(Name("NEWHOPE")))),
+            Nil,
             List(
-              Field(None,Name("name"),Nil,Nil,Nil),
-              Field(None,Name("friends"),Nil,Nil,
+              Field(None, Name("name"), Nil, Nil, Nil),
+              Field(
+                None,
+                Name("friends"),
+                Nil,
+                Nil,
                 List(
-                  Field(None,Name("name"),Nil,Nil,Nil),
-                  Field(None,Name("friends"),Nil,Nil,
+                  Field(None, Name("name"), Nil, Nil, Nil),
+                  Field(
+                    None,
+                    Name("friends"),
+                    Nil,
+                    Nil,
                     List(
-                      Field(None,Name("name"),Nil,Nil,Nil)
+                      Field(None, Name("name"), Nil, Nil, Nil)
                     )
                   )
                 )
@@ -216,12 +273,26 @@ final class ParserSuite extends CatsEffectSuite {
     val expected =
       QueryShorthand(
         List(
-          Field(None, Name("user"), List((Name("id"), IntValue(4))), Nil,
+          Field(
+            None,
+            Name("user"),
+            List((Name("id"), IntValue(4))),
+            Nil,
             List(
               Field(None, Name("id"), Nil, Nil, Nil),
               Field(None, Name("name"), Nil, Nil, Nil),
-              Field(Some(Name("smallPic")), Name("profilePic"), List((Name("size"), IntValue(64))), Nil, Nil),
-              Field(Some(Name("bigPic")), Name("profilePic"), List((Name("size"), IntValue(1024))), Nil, Nil)
+              Field(
+                Some(Name("smallPic")),
+                Name("profilePic"),
+                List((Name("size"), IntValue(64))),
+                Nil,
+                Nil),
+              Field(
+                Some(Name("bigPic")),
+                Name("profilePic"),
+                List((Name("size"), IntValue(1024))),
+                Nil,
+                Nil)
             )
           )
         )
@@ -248,10 +319,17 @@ final class ParserSuite extends CatsEffectSuite {
     val expected =
       QueryShorthand(
         List(
-          Field(Some(Name("luke")), Name("character"), List((Name("id"), StringValue("1000"))), Nil,
-            List(
-              Field(None, Name("name"), Nil, Nil, Nil))),
-          Field(Some(Name("darth")), Name("character"), List((Name("id"), StringValue("1001"))), Nil,
+          Field(
+            Some(Name("luke")),
+            Name("character"),
+            List((Name("id"), StringValue("1000"))),
+            Nil,
+            List(Field(None, Name("name"), Nil, Nil, Nil))),
+          Field(
+            Some(Name("darth")),
+            Name("character"),
+            List((Name("id"), StringValue("1001"))),
+            Nil,
             List(
               Field(None, Name("name"), Nil, Nil, Nil)
             )
@@ -277,15 +355,26 @@ final class ParserSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Operation(Query, Some(Name("getZuckProfile")),
+      Operation(
+        Query,
+        Some(Name("getZuckProfile")),
         List(VariableDefinition(Name("devicePicSize"), Named(Name("Int")), None, Nil)),
         Nil,
         List(
-          Field(None, Name("user"), List((Name("id"), IntValue(4))), Nil,
+          Field(
+            None,
+            Name("user"),
+            List((Name("id"), IntValue(4))),
+            Nil,
             List(
               Field(None, Name("id"), Nil, Nil, Nil),
               Field(None, Name("name"), Nil, Nil, Nil),
-              Field(None, Name("profilePic"), List((Name("size"), Variable(Name("devicePicSize")))), Nil, Nil)
+              Field(
+                None,
+                Name("profilePic"),
+                List((Name("size"), Variable(Name("devicePicSize")))),
+                Nil,
+                Nil)
             )
           )
         )
@@ -309,15 +398,31 @@ final class ParserSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Operation(Query, Some(Name("getZuckProfile")),
-        List(VariableDefinition(Name("devicePicSize"), Named(Name("Int")), Some(IntValue(10)), Nil)),
+      Operation(
+        Query,
+        Some(Name("getZuckProfile")),
+        List(
+          VariableDefinition(
+            Name("devicePicSize"),
+            Named(Name("Int")),
+            Some(IntValue(10)),
+            Nil)),
         Nil,
         List(
-          Field(None, Name("user"), List((Name("id"), IntValue(4))), Nil,
+          Field(
+            None,
+            Name("user"),
+            List((Name("id"), IntValue(4))),
+            Nil,
             List(
               Field(None, Name("id"), Nil, Nil, Nil),
               Field(None, Name("name"), Nil, Nil, Nil),
-              Field(None, Name("profilePic"), List((Name("size"), Variable(Name("devicePicSize")))), Nil, Nil)
+              Field(
+                None,
+                Name("profilePic"),
+                List((Name("size"), Variable(Name("devicePicSize")))),
+                Nil,
+                Nil)
             )
           )
         )
@@ -341,15 +446,31 @@ final class ParserSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Operation(Query, Some(Name("getZuckProfile")),
-        List(VariableDefinition(Name("devicePicSize"), Named(Name("Int")), None, List(Directive(Name("dir"), Nil)))),
+      Operation(
+        Query,
+        Some(Name("getZuckProfile")),
+        List(
+          VariableDefinition(
+            Name("devicePicSize"),
+            Named(Name("Int")),
+            None,
+            List(Directive(Name("dir"), Nil)))),
         Nil,
         List(
-          Field(None, Name("user"), List((Name("id"), IntValue(4))), Nil,
+          Field(
+            None,
+            Name("user"),
+            List((Name("id"), IntValue(4))),
+            Nil,
             List(
               Field(None, Name("id"), Nil, Nil, Nil),
               Field(None, Name("name"), Nil, Nil, Nil),
-              Field(None, Name("profilePic"), List((Name("size"), Variable(Name("devicePicSize")))), Nil, Nil)
+              Field(
+                None,
+                Name("profilePic"),
+                List((Name("size"), Variable(Name("devicePicSize")))),
+                Nil,
+                Nil)
             )
           )
         )
@@ -383,23 +504,43 @@ final class ParserSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Operation(Query,Some(Name("IntrospectionQuery")),Nil,Nil,
+      Operation(
+        Query,
+        Some(Name("IntrospectionQuery")),
+        Nil,
+        Nil,
         List(
-          Field(None,Name("__schema"),Nil,Nil,
+          Field(
+            None,
+            Name("__schema"),
+            Nil,
+            Nil,
             List(
-              Field(None,Name("queryType"),Nil,Nil,
+              Field(
+                None,
+                Name("queryType"),
+                Nil,
+                Nil,
                 List(
-                  Field(None,Name("name"),Nil,Nil,Nil)
+                  Field(None, Name("name"), Nil, Nil, Nil)
                 )
               ),
-              Field(None,Name("mutationType"),Nil,Nil,
+              Field(
+                None,
+                Name("mutationType"),
+                Nil,
+                Nil,
                 List(
-                  Field(None,Name("name"),Nil,Nil,Nil)
+                  Field(None, Name("name"), Nil, Nil, Nil)
                 )
               ),
-              Field(None,Name("subscriptionType"),Nil,Nil,
+              Field(
+                None,
+                Name("subscriptionType"),
+                Nil,
+                Nil,
                 List(
-                  Field(None,Name("name"),Nil,Nil,Nil)
+                  Field(None, Name("name"), Nil, Nil, Nil)
                 )
               )
             )
@@ -416,7 +557,7 @@ final class ParserSuite extends CatsEffectSuite {
   test("invalid document") {
     parser.parseText("scalar Foo woozle").toOption match {
       case Some(_) => fail("should have failed")
-      case None    => ()
+      case None => ()
     }
   }
 
@@ -438,16 +579,24 @@ final class ParserSuite extends CatsEffectSuite {
 
     val expected =
       List(
-        Operation(Query, None, Nil, Nil,
+        Operation(
+          Query,
+          None,
+          Nil,
+          Nil,
           List(
-            Field(None, Name("character"), List((Name("id"), IntValue(1000))), Nil,
+            Field(
+              None,
+              Name("character"),
+              List((Name("id"), IntValue(1000))),
+              Nil,
               List(
-                FragmentSpread(Name("frag"),Nil),
+                FragmentSpread(Name("frag"), Nil),
                 InlineFragment(
                   Some(Named(Name("Character"))),
                   Nil,
                   List(
-                    Field(None,Name("age"),Nil ,Nil ,Nil)
+                    Field(None, Name("age"), Nil, Nil, Nil)
                   )
                 )
               )
@@ -459,7 +608,7 @@ final class ParserSuite extends CatsEffectSuite {
           Named(Name("Character")),
           Nil,
           List(
-            Field(None,Name("name"),Nil ,Nil ,Nil)
+            Field(None, Name("name"), Nil, Nil, Nil)
           )
         )
       )
@@ -487,16 +636,21 @@ final class ParserSuite extends CatsEffectSuite {
       Operation(
         Query,
         Some(Name("frag")),
-        List(VariableDefinition(Name("expanded"),Named(Name("Boolean")),None, Nil)),
+        List(VariableDefinition(Name("expanded"), Named(Name("Boolean")), None, Nil)),
         Nil,
         List(
-          Field(None, Name("character"), List((Name("id"), IntValue(1000))), Nil,
+          Field(
+            None,
+            Name("character"),
+            List((Name("id"), IntValue(1000))),
+            Nil,
             List(
               Field(None, Name("name"), Nil, Nil, Nil),
               InlineFragment(
                 None,
-                List(Directive(Name("include"),List((Name("if"),Variable(Name("expanded")))))),
-                List(Field(None,Name("age"),List(),List(),List()))
+                List(
+                  Directive(Name("include"), List((Name("if"), Variable(Name("expanded")))))),
+                List(Field(None, Name("age"), List(), List(), List()))
               )
             )
           )
@@ -528,13 +682,17 @@ final class ParserSuite extends CatsEffectSuite {
         Nil,
         Nil,
         List(
-          Field(None, Name("character"), List((Name("id"), IntValue(1000))), Nil,
+          Field(
+            None,
+            Name("character"),
+            List((Name("id"), IntValue(1000))),
+            Nil,
             List(
               Field(None, Name("name"), Nil, Nil, Nil),
               InlineFragment(
                 None,
                 List(Directive(Name("dir"), Nil)),
-                List(Field(None,Name("age"),List(),List(),List()))
+                List(Field(None, Name("age"), List(), List(), List()))
               )
             )
           )
@@ -551,7 +709,7 @@ final class ParserSuite extends CatsEffectSuite {
 
     def assertParse(input: String, expected: Value) =
       parser.parseText(s"query { foo(bar: $input) }").toOption match {
-        case Some(List(Operation(_, _, _, _,List(Field(_, _, List((_, v)), _, _))))) =>
+        case Some(List(Operation(_, _, _, _, List(Field(_, _, List((_, v)), _, _))))) =>
           assertEquals(v, expected)
         case _ => assert(false)
       }
@@ -561,14 +719,14 @@ final class ParserSuite extends CatsEffectSuite {
     assertParse("\"\\\" \\\\ \\/ \\b \\f \\n \\r \\t\"", StringValue("\" \\ / \b \f \n \r \t"))
 
     assertParse("123.2", FloatValue(123.2d))
-    assertParse("123E2", FloatValue(123E2d))
-    assertParse("123.2E2", FloatValue(123.2E2d))
+    assertParse("123E2", FloatValue(123e2d))
+    assertParse("123.2E2", FloatValue(123.2e2d))
 
     // Negative values whose integer part is zero must retain their sign.
     assertParse("-0.99", FloatValue(-0.99d))
     assertParse("-0.5", FloatValue(-0.5d))
     assertParse("-1.5", FloatValue(-1.5d))
-    assertParse("-0.5E2", FloatValue(-0.5E2d))
+    assertParse("-0.5E2", FloatValue(-0.5e2d))
 
     assertParse("123", IntValue(123))
     assertParse("-123", IntValue(-123))
@@ -582,10 +740,14 @@ final class ParserSuite extends CatsEffectSuite {
 
     assertParse("[1, \"foo\"]", ListValue(List(IntValue(1), StringValue("foo"))))
 
-    assertParse("{foo: 1, bar: \"baz\"}", ObjectValue(List(Name("foo") -> IntValue(1), Name("bar") -> StringValue("baz"))))
+    assertParse(
+      "{foo: 1, bar: \"baz\"}",
+      ObjectValue(List(Name("foo") -> IntValue(1), Name("bar") -> StringValue("baz"))))
 
     assertParse("\"\"\"one\"\"\"", StringValue("one"))
-    assertParse("\"\"\"    \n\n   first\n   \tλ\n  123\n\n\n   \t\n\n\"\"\"", StringValue(" first\n \tλ\n123"))
+    assertParse(
+      "\"\"\"    \n\n   first\n   \tλ\n  123\n\n\n   \t\n\n\"\"\"",
+      StringValue(" first\n \tλ\n123"))
   }
 
   test("outsized int") {
@@ -623,7 +785,11 @@ final class ParserSuite extends CatsEffectSuite {
 
     val expected =
       List(
-        ObjectTypeExtension(Named(Name("Foo")), List(FieldDefinition(Name("bar"),None,Nil,Named(Name("Int")),Nil)), Nil, Nil)
+        ObjectTypeExtension(
+          Named(Name("Foo")),
+          List(FieldDefinition(Name("bar"), None, Nil, Named(Name("Int")), Nil)),
+          Nil,
+          Nil)
       )
 
     val res = parser.parseText(schema).toOption
@@ -639,7 +805,9 @@ final class ParserSuite extends CatsEffectSuite {
 
     val expected =
       List(
-        SchemaExtension(List(RootOperationTypeDefinition(OperationType.Query, Named(Name("Query")), Nil)), Nil)
+        SchemaExtension(
+          List(RootOperationTypeDefinition(OperationType.Query, Named(Name("Query")), Nil)),
+          Nil)
       )
 
     val res = parser.parseText(schema).toOption
@@ -689,7 +857,7 @@ final class ParserSuite extends CatsEffectSuite {
   test("deep query") {
     def mkQuery(depth: Int): String = {
       val depth0 = depth - 1
-      "query{" + ("f{" *depth0) + "f" + ("}" * depth0) + "}"
+      "query{" + ("f{" * depth0) + "f" + ("}" * depth0) + "}"
     }
 
     val limit = 5
@@ -736,7 +904,7 @@ final class ParserSuite extends CatsEffectSuite {
 
   test("deep list value") {
     def mkQuery(depth: Int): String =
-      "query{f(l: " + ("[" *depth) + "0" + ("]" * depth) + "){f}}"
+      "query{f(l: " + ("[" * depth) + "0" + ("]" * depth) + "){f}}"
 
     val limit = 5
     val limitedParser = mkParser(maxInputValueDepth = limit)
@@ -759,7 +927,7 @@ final class ParserSuite extends CatsEffectSuite {
 
   test("deep input object value") {
     def mkQuery(depth: Int): String =
-      "query{f(l: " + ("{m:" *depth) + "0" + ("}" * depth) + "){f}}"
+      "query{f(l: " + ("{m:" * depth) + "0" + ("}" * depth) + "){f}}"
 
     val limit = 5
     val limitedParser = mkParser(maxInputValueDepth = limit)
@@ -782,7 +950,7 @@ final class ParserSuite extends CatsEffectSuite {
 
   test("deep variable type") {
     def mkQuery(depth: Int): String =
-      "query($l: " + ("[" *depth) + "Int" + ("]" * depth) + "){f(a:$l)}"
+      "query($l: " + ("[" * depth) + "Int" + ("]" * depth) + "){f(a:$l)}"
 
     val limit = 5
     val limitedParser = mkParser(maxListTypeDepth = limit)
@@ -804,10 +972,10 @@ final class ParserSuite extends CatsEffectSuite {
   }
 
   def mkParser(
-    maxSelectionDepth: Int = GraphQLParser.defaultConfig.maxSelectionDepth,
-    maxSelectionWidth: Int = GraphQLParser.defaultConfig.maxSelectionWidth,
-    maxInputValueDepth: Int = GraphQLParser.defaultConfig.maxInputValueDepth,
-    maxListTypeDepth: Int = GraphQLParser.defaultConfig.maxListTypeDepth,
+      maxSelectionDepth: Int = GraphQLParser.defaultConfig.maxSelectionDepth,
+      maxSelectionWidth: Int = GraphQLParser.defaultConfig.maxSelectionWidth,
+      maxInputValueDepth: Int = GraphQLParser.defaultConfig.maxInputValueDepth,
+      maxListTypeDepth: Int = GraphQLParser.defaultConfig.maxListTypeDepth
   ): GraphQLParser =
     GraphQLParser(
       GraphQLParser.Config(

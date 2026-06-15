@@ -15,7 +15,6 @@
 
 package grackle.sql.test
 
-
 import java.time.{Duration, LocalDate, LocalTime, OffsetDateTime}
 import java.util.UUID
 
@@ -26,11 +25,11 @@ import cats.implicits._
 import io.circe.{Decoder, Encoder}
 
 import grackle._
-import syntax._
-import Query._
-import Predicate._
-import Value._
-import QueryCompiler._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
+import grackle.syntax._
 
 trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
 
@@ -107,36 +106,34 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            SqlObject("movieById"),
-            SqlObject("moviesByGenre"),
-            SqlObject("moviesByGenres"),
-            SqlObject("moviesReleasedBetween"),
-            SqlObject("moviesLongerThan"),
-            SqlObject("moviesShownLaterThan"),
-            SqlObject("moviesShownBetween"),
-            SqlObject("longMovies"),
-            SqlObject("allMovies")
-          )
+        fieldMappings = List(
+          SqlObject("movieById"),
+          SqlObject("moviesByGenre"),
+          SqlObject("moviesByGenres"),
+          SqlObject("moviesReleasedBetween"),
+          SqlObject("moviesLongerThan"),
+          SqlObject("moviesShownLaterThan"),
+          SqlObject("moviesShownBetween"),
+          SqlObject("longMovies"),
+          SqlObject("allMovies")
+        )
       ),
       ObjectMapping(
         tpe = MovieType,
-        fieldMappings =
-          List(
-            SqlField("id", movies.id, key = true),
-            SqlField("title", movies.title),
-            SqlField("genre", movies.genre),
-            SqlField("releaseDate", movies.releaseDate),
-            SqlField("showTime", movies.showTime),
-            SqlField("nextShowing", movies.nextShowing),
-            CursorField("nextEnding", nextEnding, List("nextShowing", "duration")),
-            SqlField("duration", movies.duration),
-            SqlField("categories", movies.categories),
-            SqlField("features", movies.features),
-            CursorField("isLong", isLong, List("duration"), hidden = true),
-            SqlField("tags", movies.tags)
-          )
+        fieldMappings = List(
+          SqlField("id", movies.id, key = true),
+          SqlField("title", movies.title),
+          SqlField("genre", movies.genre),
+          SqlField("releaseDate", movies.releaseDate),
+          SqlField("showTime", movies.showTime),
+          SqlField("nextShowing", movies.nextShowing),
+          CursorField("nextEnding", nextEnding, List("nextShowing", "duration")),
+          SqlField("duration", movies.duration),
+          SqlField("categories", movies.categories),
+          SqlField("features", movies.features),
+          CursorField("isLong", isLong, List("duration"), hidden = true),
+          SqlField("tags", movies.tags)
+        )
       ),
       LeafMapping[UUID](UUIDType),
       LeafMapping[LocalTime](TimeType),
@@ -150,12 +147,12 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
   def nextEnding(c: Cursor): Result[OffsetDateTime] =
     for {
       nextShowing <- c.fieldAs[OffsetDateTime]("nextShowing")
-      duration    <- c.fieldAs[Duration]("duration")
+      duration <- c.fieldAs[Duration]("duration")
     } yield nextShowing.plus(duration)
 
   def isLong(c: Cursor): Result[Boolean] =
     for {
-      duration    <- c.fieldAs[Duration]("duration")
+      duration <- c.fieldAs[Duration]("duration")
     } yield duration.toHours >= 3
 
   object UUIDValue {
@@ -203,7 +200,10 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
       Elab.transformChild(child => Filter(Eql(MovieType / "genre", Const(genre)), child))
     case (QueryType, "moviesByGenres", List(Binding("genres", GenreListValue(genres)))) =>
       Elab.transformChild(child => Filter(In(MovieType / "genre", genres), child))
-    case (QueryType, "moviesReleasedBetween", List(Binding("from", DateValue(from)), Binding("to", DateValue(to)))) =>
+    case (
+          QueryType,
+          "moviesReleasedBetween",
+          List(Binding("from", DateValue(from)), Binding("to", DateValue(to)))) =>
       Elab.transformChild(child =>
         Filter(
           And(
@@ -211,23 +211,23 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
             Lt(MovieType / "releaseDate", Const(to))
           ),
           child
-        )
-      )
+        ))
     case (QueryType, "moviesLongerThan", List(Binding("duration", IntervalValue(duration)))) =>
       Elab.transformChild(child =>
         Filter(
           Not(Lt(MovieType / "duration", Const(duration))),
           child
-        )
-      )
+        ))
     case (QueryType, "moviesShownLaterThan", List(Binding("time", TimeValue(time)))) =>
       Elab.transformChild(child =>
         Filter(
           Not(Lt(MovieType / "showTime", Const(time))),
           child
-        )
-      )
-    case (QueryType, "moviesShownBetween", List(Binding("from", DateTimeValue(from)), Binding("to", DateTimeValue(to)))) =>
+        ))
+    case (
+          QueryType,
+          "moviesShownBetween",
+          List(Binding("from", DateTimeValue(from)), Binding("to", DateTimeValue(to)))) =>
       Elab.transformChild(child =>
         Filter(
           And(
@@ -235,8 +235,7 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
             Lt(MovieType / "nextShowing", Const(to))
           ),
           child
-        )
-      )
+        ))
     case (QueryType, "longMovies", Nil) =>
       Elab.transformChild(child => Filter(Eql(MovieType / "isLong", Const(true)), child))
   }
@@ -251,7 +250,7 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
 
     def fromString(s: String): Option[Genre] =
       s.trim.toUpperCase match {
-        case "DRAMA"  => Some(Drama)
+        case "DRAMA" => Some(Drama)
         case "ACTION" => Some(Action)
         case "COMEDY" => Some(Comedy)
         case _ => None
@@ -273,7 +272,7 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
 
     def toInt(f: Genre): Int =
       f match {
-        case Drama  => 1
+        case Drama => 1
         case Action => 2
         case Comedy => 3
       }
@@ -299,16 +298,15 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
   object Tags {
     val tags = List("tag1", "tag2", "tag3")
 
-
     def fromInt(i: Int): List[String] = {
       def getTag(m: Int): List[String] =
-        if((i&(1 << m)) != 0) List(tags(m)) else Nil
+        if ((i & (1 << m)) != 0) List(tags(m)) else Nil
       (0 to 2).flatMap(getTag).toList
     }
 
     def toInt(tags: List[String]): Int = {
       def getBit(m: Int): Int =
-        if(tags.contains(tags(m))) 1 << m else 0
+        if (tags.contains(tags(m))) 1 << m else 0
       (0 to 2).foldLeft(0)((acc, m) => acc | getBit(m))
     }
   }

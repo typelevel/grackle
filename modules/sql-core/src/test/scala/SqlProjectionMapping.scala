@@ -17,11 +17,12 @@ package grackle.sql.test
 
 import cats.implicits._
 
-import grackle._, syntax._
-import Predicate.{Const, Eql}
-import Query.{Binding, Filter}
-import QueryCompiler._
-import Value.{BooleanValue, ObjectValue}
+import grackle._
+import grackle.Predicate.{Const, Eql}
+import grackle.Query.{Binding, Filter}
+import grackle.QueryCompiler._
+import grackle.Value.{BooleanValue, ObjectValue}
+import grackle.syntax._
 
 trait SqlProjectionMapping[F[_]] extends SqlTestMapping[F] {
 
@@ -73,38 +74,34 @@ trait SqlProjectionMapping[F[_]] extends SqlTestMapping[F] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            SqlObject("level0"),
-            SqlObject("level1"),
-            SqlObject("level2")
-          )
+        fieldMappings = List(
+          SqlObject("level0"),
+          SqlObject("level1"),
+          SqlObject("level2")
+        )
       ),
       ObjectMapping(
         tpe = Level0Type,
-        fieldMappings =
-          List(
-            SqlField("id", level0.id, key = true),
-            SqlObject("level1", Join(level0.id, level1.level0Id))
-          )
+        fieldMappings = List(
+          SqlField("id", level0.id, key = true),
+          SqlObject("level1", Join(level0.id, level1.level0Id))
+        )
       ),
       ObjectMapping(
         tpe = Level1Type,
-        fieldMappings =
-          List(
-            SqlField("id", level1.id, key = true),
-            SqlField("level0_id", level1.level0Id, hidden = true),
-            SqlObject("level2", Join(level1.id, level2.level1Id))
-          )
+        fieldMappings = List(
+          SqlField("id", level1.id, key = true),
+          SqlField("level0_id", level1.level0Id, hidden = true),
+          SqlObject("level2", Join(level1.id, level2.level1Id))
+        )
       ),
       ObjectMapping(
         tpe = Level2Type,
-        fieldMappings =
-          List(
-            SqlField("id", level2.id, key = true),
-            SqlField("attr", level2.attr),
-            SqlField("level1_id", level2.level1Id, hidden = true)
-          )
+        fieldMappings = List(
+          SqlField("id", level2.id, key = true),
+          SqlField("attr", level2.attr),
+          SqlField("level1_id", level2.level1Id, hidden = true)
+        )
       )
     )
 

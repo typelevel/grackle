@@ -17,10 +17,11 @@ package grackle.sql.test
 
 import cats.implicits._
 
-import grackle._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
 import grackle.syntax._
-import Query._, Predicate._, Value._
-import QueryCompiler._
 
 trait SqlGraphMapping[F[_]] extends SqlTestMapping[F] {
 
@@ -59,28 +60,28 @@ trait SqlGraphMapping[F[_]] extends SqlTestMapping[F] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            SqlObject("node"),
-            SqlObject("edge")
-          )
+        fieldMappings = List(
+          SqlObject("node"),
+          SqlObject("edge")
+        )
       ),
       ObjectMapping(
         tpe = NodeType,
-        fieldMappings =
-          List(
-            SqlField("id", graphNode.id, key = true),
-            SqlObject("neighbours", Join(graphNode.id, graphEdge.a), Join(graphEdge.b, graphNode.id))
-          )
+        fieldMappings = List(
+          SqlField("id", graphNode.id, key = true),
+          SqlObject(
+            "neighbours",
+            Join(graphNode.id, graphEdge.a),
+            Join(graphEdge.b, graphNode.id))
+        )
       ),
       ObjectMapping(
         tpe = EdgeType,
-        fieldMappings =
-          List(
-            SqlField("id", graphEdge.id, key = true),
-            SqlObject("a", Join(graphEdge.a, graphNode.id)),
-            SqlObject("b", Join(graphEdge.b, graphNode.id))
-          )
+        fieldMappings = List(
+          SqlField("id", graphEdge.id, key = true),
+          SqlObject("a", Join(graphEdge.a, graphNode.id)),
+          SqlObject("b", Join(graphEdge.b, graphNode.id))
+        )
       )
     )
 

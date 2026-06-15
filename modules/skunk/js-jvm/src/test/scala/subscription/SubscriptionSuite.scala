@@ -66,7 +66,7 @@ class SubscriptionSuite extends SkunkDatabaseSuite {
             }
           }
         }
-      """,
+      """
     )
 
     val prog: IO[List[Json]] =
@@ -76,17 +76,17 @@ class SubscriptionSuite extends SkunkDatabaseSuite {
         fi <- mapping.compileAndRunSubscription(query).take(2).compile.toList.start
 
         // We're racing now, so wait a sec before starting notifications
-        _  <- IO.sleep(1.second)
+        _ <- IO.sleep(1.second)
 
         // Send some notifications through Postgres, which will trigger queries on the subscription.
-        _  <- pool.use { s =>
-                val ch = s.channel(id"city_channel").contramap[Int](_.toString)
-                List(101, 102, 103).traverse_(ch.notify)
-              }
+        _ <- pool.use { s =>
+          val ch = s.channel(id"city_channel").contramap[Int](_.toString)
+          List(101, 102, 103).traverse_(ch.notify)
+        }
 
         // Now rejoin the fiber
         out <- fi.join
-        js  <- out.embedNever
+        js <- out.embedNever
 
       } yield js
 

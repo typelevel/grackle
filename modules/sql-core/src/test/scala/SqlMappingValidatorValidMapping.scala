@@ -211,112 +211,109 @@ trait SqlMappingValidatorValidMapping[F[_]] extends SqlTestMapping[F] {
       List(
         ObjectMapping(
           tpe = QueryType,
-          fieldMappings =
-            List(
-              SqlObject("scalars"),
-              SqlObject("objs"),
-              SqlObject("union")
-            )
+          fieldMappings = List(
+            SqlObject("scalars"),
+            SqlObject("objs"),
+            SqlObject("union")
+          )
         ),
         ObjectMapping(
           tpe = ScalarsType,
-          fieldMappings =
-            List(
-              SqlField("id", scalars.idCol, key = true, hidden = true),
+          fieldMappings = List(
+            SqlField("id", scalars.idCol, key = true, hidden = true),
 
-              SqlField("boolField", scalars.boolCol),
-              SqlField("nullableBoolField", scalars.nullableBoolCol),
+            SqlField("boolField", scalars.boolCol),
+            SqlField("nullableBoolField", scalars.nullableBoolCol),
 
-              SqlField("textField", scalars.textCol),
-              SqlField("nullableTextField", scalars.nullableTextCol),
-              SqlField("varcharField", scalars.varcharCol),
-              SqlField("nullableVarcharField", scalars.nullableVarcharCol),
-              SqlField("bpcharField", scalars.bpcharCol),
-              SqlField("nullableBpcharField", scalars.nullableBpcharCol),
+            SqlField("textField", scalars.textCol),
+            SqlField("nullableTextField", scalars.nullableTextCol),
+            SqlField("varcharField", scalars.varcharCol),
+            SqlField("nullableVarcharField", scalars.nullableVarcharCol),
+            SqlField("bpcharField", scalars.bpcharCol),
+            SqlField("nullableBpcharField", scalars.nullableBpcharCol),
 
-              SqlField("idField", scalars.textCol),
-              SqlField("nullableIdField", scalars.nullableTextCol),
+            SqlField("idField", scalars.textCol),
+            SqlField("nullableIdField", scalars.nullableTextCol),
 
-              SqlField("int2Field", scalars.int2Col),
-              SqlField("nullableInt2Field", scalars.nullableInt2Col),
-              SqlField("int4Field", scalars.int4Col),
-              SqlField("nullableInt4Field", scalars.nullableInt4Col),
-              SqlField("int8Field", scalars.int8Col),
-              SqlField("nullableInt8Field", scalars.nullableInt8Col),
+            SqlField("int2Field", scalars.int2Col),
+            SqlField("nullableInt2Field", scalars.nullableInt2Col),
+            SqlField("int4Field", scalars.int4Col),
+            SqlField("nullableInt4Field", scalars.nullableInt4Col),
+            SqlField("int8Field", scalars.int8Col),
+            SqlField("nullableInt8Field", scalars.nullableInt8Col),
 
-              SqlField("float4Field", scalars.float4Col),
-              SqlField("nullableFloat4Field", scalars.nullableFloat4Col),
-              SqlField("float8Field", scalars.float8Col),
-              SqlField("nullableFloat8Field", scalars.nullableFloat8Col),
+            SqlField("float4Field", scalars.float4Col),
+            SqlField("nullableFloat4Field", scalars.nullableFloat4Col),
+            SqlField("float8Field", scalars.float8Col),
+            SqlField("nullableFloat8Field", scalars.nullableFloat8Col),
 
-              SqlField("numericField", scalars.numericCol),
-              SqlField("nullablenumericField", scalars.nullableNumericCol),
+            SqlField("numericField", scalars.numericCol),
+            SqlField("nullablenumericField", scalars.nullableNumericCol),
 
-              SqlField("uuidField", scalars.uuidcol),
-              SqlField("nullableUuidField", scalars.nullableUuidCol),
+            SqlField("uuidField", scalars.uuidcol),
+            SqlField("nullableUuidField", scalars.nullableUuidCol),
 
-              SqlField("genreField", scalars.genreCol),
-              SqlField("nullableGenreField", scalars.nullableGenreCol),
+            SqlField("genreField", scalars.genreCol),
+            SqlField("nullableGenreField", scalars.nullableGenreCol),
 
-              SqlField("featureField", scalars.featureCol),
-              SqlField("nullableFeatureField", scalars.nullableFeatureCol),
+            SqlField("featureField", scalars.featureCol),
+            SqlField("nullableFeatureField", scalars.nullableFeatureCol),
 
-              SqlField("featuresField", scalars.featuresCol),
-              SqlField("nullableFeatures1Field", scalars.nullableFeatures1Col),
-              SqlField("nullableFeatures2Field", scalars.nullableFeatures2Col),
-              SqlField("nullableFeatures3Field", scalars.nullableFeatures3Col),
+            SqlField("featuresField", scalars.featuresCol),
+            SqlField("nullableFeatures1Field", scalars.nullableFeatures1Col),
+            SqlField("nullableFeatures2Field", scalars.nullableFeatures2Col),
+            SqlField("nullableFeatures3Field", scalars.nullableFeatures3Col),
 
-              SqlJson("jsonbField", scalars.jsonbCol),
-              SqlJson("nullableJsonbField", scalars.nullableJsonbCol)
-            )
+            SqlJson("jsonbField", scalars.jsonbCol),
+            SqlJson("nullableJsonbField", scalars.nullableJsonbCol)
+          )
         ),
         SqlInterfaceMapping(
           tpe = IntrfType,
           discriminator = objectTypeDiscriminator,
-          fieldMappings =
-            List(
-              SqlField("id", objs.idCol, key = true),
-              SqlField("typeField", objs.typeCol, discriminator = true, hidden = true)
-            )
+          fieldMappings = List(
+            SqlField("id", objs.idCol, key = true),
+            SqlField("typeField", objs.typeCol, discriminator = true, hidden = true)
+          )
         ),
         ObjectMapping(
           tpe = Obj1Type,
-          fieldMappings =
-            List(
-              SqlField("intField", objs.intCol),
-              SqlObject("sub1", Join(objs.idCol, join.parentIdCol), Join(join.childIdCol, subObj1.idCol))
-            )
+          fieldMappings = List(
+            SqlField("intField", objs.intCol),
+            SqlObject(
+              "sub1",
+              Join(objs.idCol, join.parentIdCol),
+              Join(join.childIdCol, subObj1.idCol))
+          )
         ),
         ObjectMapping(
           tpe = Obj2Type,
-          fieldMappings =
-            List(
-              SqlField("boolField", objs.boolCol),
-              SqlObject("sub2", Join(List((objs.idCol, subObj2.idCol), (objs.boolCol, subObj2.parentBolCol))))
-            )
+          fieldMappings = List(
+            SqlField("boolField", objs.boolCol),
+            SqlObject(
+              "sub2",
+              Join(List((objs.idCol, subObj2.idCol), (objs.boolCol, subObj2.parentBolCol))))
+          )
         ),
         SqlUnionMapping(
           tpe = UnionType,
           discriminator = objectTypeDiscriminator,
-          fieldMappings =
-            List(
-              SqlField("id", objs.idCol, key = true, hidden = true),
-              SqlField("typeField", objs.typeCol, discriminator = true, hidden = true)
-            )
+          fieldMappings = List(
+            SqlField("id", objs.idCol, key = true, hidden = true),
+            SqlField("typeField", objs.typeCol, discriminator = true, hidden = true)
+          )
         ),
         ObjectMapping(
           tpe = SubObj1Type,
-          fieldMappings =
-            List(
-              SqlField("id", subObj1.idCol, key = true)
-            )
+          fieldMappings = List(
+            SqlField("id", subObj1.idCol, key = true)
+          )
         ),
         ObjectMapping(
           tpe = SubObj2Type,
-          fieldMappings =
-            List(
-              SqlField("id", subObj2.idCol, key = true)
-            )
+          fieldMappings = List(
+            SqlField("id", subObj2.idCol, key = true)
+          )
         ),
         LeafMapping[UUID](UUIDType),
         LeafMapping[Genre](GenreType),
@@ -342,7 +339,7 @@ trait SqlMappingValidatorValidMapping[F[_]] extends SqlTestMapping[F] {
 
     def fromString(s: String): Option[Genre] =
       s.trim.toUpperCase match {
-        case "DRAMA"  => Some(Drama)
+        case "DRAMA" => Some(Drama)
         case "ACTION" => Some(Action)
         case "COMEDY" => Some(Comedy)
         case _ => None
@@ -364,7 +361,7 @@ trait SqlMappingValidatorValidMapping[F[_]] extends SqlTestMapping[F] {
 
     def toInt(f: Genre): Int =
       f match {
-        case Drama  => 1
+        case Drama => 1
         case Action => 2
         case Comedy => 3
       }

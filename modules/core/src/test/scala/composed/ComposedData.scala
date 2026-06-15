@@ -19,17 +19,18 @@ import cats.effect.IO
 import cats.implicits._
 
 import grackle._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
 import grackle.syntax._
-import Query._
-import Predicate._, Value._
-import QueryCompiler._
 
 /* Currency component */
 
 object CurrencyData {
   case class Currency(
-    code: String,
-    exchangeRate: Double
+      code: String,
+      exchangeRate: Double
   )
 
   val EUR = Currency("EUR", 1.12)
@@ -59,24 +60,23 @@ object CurrencyMapping extends ValueMapping[IO] {
     List(
       ValueObjectMapping[Unit](
         tpe = QueryType,
-        fieldMappings =
-          List(
-            ValueField("fx", _ => currencies)
-          )
+        fieldMappings = List(
+          ValueField("fx", _ => currencies)
+        )
       ),
       ValueObjectMapping[Currency](
         tpe = CurrencyType,
-        fieldMappings =
-          List(
-            ValueField("code", _.code),
-            ValueField("exchangeRate", _.exchangeRate)
-          )
+        fieldMappings = List(
+          ValueField("code", _.code),
+          ValueField("exchangeRate", _.exchangeRate)
+        )
       )
     )
 
   override val selectElaborator = SelectElaborator {
     case (QueryType, "fx", List(Binding("code", StringValue(code)))) =>
-      Elab.transformChild(child => Unique(Filter(Eql(CurrencyType / "code", Const(code)), child)))
+      Elab.transformChild(child =>
+        Unique(Filter(Eql(CurrencyType / "code", Const(code)), child)))
   }
 }
 
@@ -84,9 +84,9 @@ object CurrencyMapping extends ValueMapping[IO] {
 
 object CountryData {
   case class Country(
-    code: String,
-    name: String,
-    currencyCode: String
+      code: String,
+      name: String,
+      currencyCode: String
   )
 
   val DEU = Country("DEU", "Germany", "EUR")
@@ -118,25 +118,24 @@ object CountryMapping extends ValueMapping[IO] {
     List(
       ValueObjectMapping[Unit](
         tpe = QueryType,
-        fieldMappings =
-          List(
-            ValueField("country", _ => countries),
-            ValueField("countries", _ => countries)
-          )
+        fieldMappings = List(
+          ValueField("country", _ => countries),
+          ValueField("countries", _ => countries)
+        )
       ),
       ValueObjectMapping[Country](
         tpe = CountryType,
-        fieldMappings =
-          List(
-            ValueField("code", _.code),
-            ValueField("name", _.name)
-          )
+        fieldMappings = List(
+          ValueField("code", _.code),
+          ValueField("name", _.name)
+        )
       )
     )
 
   override val selectElaborator = SelectElaborator {
     case (QueryType, "country", List(Binding("code", StringValue(code)))) =>
-      Elab.transformChild(child => Unique(Filter(Eql(CurrencyMapping.CurrencyType / "code", Const(code)), child)))
+      Elab.transformChild(child =>
+        Unique(Filter(Eql(CurrencyMapping.CurrencyType / "code", Const(code)), child)))
   }
 }
 
@@ -167,35 +166,37 @@ object ComposedMapping extends ComposedMapping[IO] {
 
   override val selectElaborator = SelectElaborator {
     case (QueryType, "fx", List(Binding("code", StringValue(code)))) =>
-      Elab.transformChild(child => Unique(Filter(Eql(CurrencyType / "code", Const(code)), child)))
+      Elab.transformChild(child =>
+        Unique(Filter(Eql(CurrencyType / "code", Const(code)), child)))
     case (QueryType, "country", List(Binding("code", StringValue(code)))) =>
-      Elab.transformChild(child => Unique(Filter(Eql(CountryType / "code", Const(code)), child)))
+      Elab.transformChild(child =>
+        Unique(Filter(Eql(CountryType / "code", Const(code)), child)))
   }
 
   val typeMappings =
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            Delegate("country", CountryMapping),
-            Delegate("countries", CountryMapping),
-            Delegate("fx", CurrencyMapping)
-          )
-        ),
+        fieldMappings = List(
+          Delegate("country", CountryMapping),
+          Delegate("countries", CountryMapping),
+          Delegate("fx", CurrencyMapping)
+        )
+      ),
       ObjectMapping(
         tpe = CountryType,
-        fieldMappings =
-          List(
-            Delegate("currency", CurrencyMapping, countryCurrencyJoin)
-          )
+        fieldMappings = List(
+          Delegate("currency", CurrencyMapping, countryCurrencyJoin)
+        )
       )
     )
 
   def countryCurrencyJoin(q: Query, c: Cursor): Result[Query] =
     (c.focus, q) match {
       case (c: CountryData.Country, Select("currency", _, child)) =>
-        Select("fx", Unique(Filter(Eql(CurrencyType / "code", Const(c.currencyCode)), child))).success
+        Select(
+          "fx",
+          Unique(Filter(Eql(CurrencyType / "code", Const(c.currencyCode)), child))).success
       case _ =>
         Result.internalError(s"Unexpected cursor focus type in countryCurrencyJoin")
     }

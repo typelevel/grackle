@@ -13,12 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package sql
+package grackle.sql
 
-import QueryInterpreter.ProtoJson
+import grackle._
+import grackle.QueryInterpreter.ProtoJson
 
-/** Monitor for a `SqlMapping` in `F` with fragments of type `A`. */
+/**
+ * Monitor for a `SqlMapping` in `F` with fragments of type `A`.
+ */
 trait SqlMonitor[F[_], A] {
   def queryMapped(query: Query, fragment: A, rows: Int, cols: Int): F[Unit]
   def resultComputed(result: Result[ProtoJson]): F[Unit]

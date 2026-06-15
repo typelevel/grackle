@@ -13,31 +13,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package skunk
+package grackle.skunk
 
 import cats.Applicative
+import cats.effect.{Ref, Sync}
 import cats.implicits._
-import cats.effect.Sync
-import cats.effect.Ref
-import _root_.skunk.AppliedFragment
+import skunk.AppliedFragment
 
-import QueryInterpreter.ProtoJson
-import sql._
+import grackle.{Query, Result}
+import grackle.QueryInterpreter.ProtoJson
+import grackle.sql._
 
 case class SkunkStats(
-  query: Query,
-  sql: String,
-  args: Any,
-  rows: Int,
-  cols: Int
+    query: Query,
+    sql: String,
+    args: Any,
+    rows: Int,
+    cols: Int
 )
 
 object SkunkMonitor {
 
   def noopMonitor[F[_]: Applicative]: SkunkMonitor[F] =
     new SkunkMonitor[F] {
-      def queryMapped(query: Query, fragment: AppliedFragment, rows: Int, cols: Int): F[Unit] = ().pure[F]
+      def queryMapped(query: Query, fragment: AppliedFragment, rows: Int, cols: Int): F[Unit] =
+        ().pure[F]
       def resultComputed(result: Result[ProtoJson]): F[Unit] = ().pure[F]
     }
 

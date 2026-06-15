@@ -20,11 +20,11 @@ import io.circe.Json
 import io.circe.syntax.EncoderOps
 
 import grackle._
-import syntax._
-import Query._
-import Predicate._
-import Value._
-import QueryCompiler._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
+import grackle.syntax._
 
 trait SqlCursorJsonMapping[F[_]] extends SqlTestMapping[F] {
 
@@ -85,19 +85,17 @@ trait SqlCursorJsonMapping[F[_]] extends SqlTestMapping[F] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            SqlObject("brands")
-          )
+        fieldMappings = List(
+          SqlObject("brands")
+        )
       ),
       ObjectMapping(
         tpe = BrandType,
-        fieldMappings =
-          List(
-            SqlField("id", brands.id, key = true),
-            SqlField("encodedCategories", brands.category, hidden = true),
-            CursorFieldJson("categories", decodeCategories, List("encodedCategories"))
-          )
+        fieldMappings = List(
+          SqlField("id", brands.id, key = true),
+          SqlField("encodedCategories", brands.category, hidden = true),
+          CursorFieldJson("categories", decodeCategories, List("encodedCategories"))
+        )
       )
     )
 

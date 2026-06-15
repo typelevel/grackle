@@ -17,9 +17,9 @@ package compiler
 
 import cats.data.NonEmptyChain
 import munit.CatsEffectSuite
+import starwars.StarWarsMapping
 
 import grackle.{Problem, Result}
-import starwars.StarWarsMapping
 
 class QuerySizeSuite extends CatsEffectSuite {
 
@@ -35,7 +35,7 @@ class QuerySizeSuite extends CatsEffectSuite {
     val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
     val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery, Map.empty)
 
-    assertEquals(res, ((2,1)))
+    assertEquals(res, (2, 1))
   }
 
   test("also depth 2 query") {
@@ -51,7 +51,7 @@ class QuerySizeSuite extends CatsEffectSuite {
     val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
     val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery, Map.empty)
 
-    assertEquals(res, ((2,2)))
+    assertEquals(res, (2, 2))
   }
 
   test("depth 3 query") {
@@ -68,7 +68,7 @@ class QuerySizeSuite extends CatsEffectSuite {
     val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
     val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery, Map.empty)
 
-    assertEquals(res, ((3,1)))
+    assertEquals(res, (3, 1))
   }
 
   test("depth 4 query") {
@@ -89,7 +89,7 @@ class QuerySizeSuite extends CatsEffectSuite {
     val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
     val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery, Map.empty)
 
-    assertEquals(res, ((4,3)))
+    assertEquals(res, (4, 3))
   }
   test("aliased depth 2 query") {
 
@@ -105,7 +105,7 @@ class QuerySizeSuite extends CatsEffectSuite {
     val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
     val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery, Map.empty)
 
-    assertEquals(res, ((2,1)))
+    assertEquals(res, (2, 1))
   }
 
   test("grouplist depth 2 query") {
@@ -122,7 +122,7 @@ class QuerySizeSuite extends CatsEffectSuite {
     val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
     val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery, Map.empty)
 
-    assertEquals(res, ((2,1)))
+    assertEquals(res, (2, 1))
   }
 
   test("fragments depth 3 query") {
@@ -147,7 +147,7 @@ class QuerySizeSuite extends CatsEffectSuite {
     val compiledQuery = StarWarsMapping.compiler.compile(query).toOption.get.query
     val res = StarWarsMapping.querySizeValidator.querySize(compiledQuery, Map.empty)
 
-    assertEquals(res, ((3,5)))
+    assertEquals(res, (3, 5))
   }
 
   test("width 2 query") {
@@ -239,7 +239,6 @@ class QuerySizeSuite extends CatsEffectSuite {
         }
       }
     """
-
 
     val expected = Problem("Query is too wide: width is 6 leaves, maximum is 5")
 

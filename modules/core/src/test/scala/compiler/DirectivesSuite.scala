@@ -18,16 +18,22 @@ package compiler
 import munit.CatsEffectSuite
 
 import grackle._
+import grackle.Ast.DirectiveLocation._
+import grackle.Query._
 import grackle.syntax._
-import Ast.DirectiveLocation._
-import Query._
 
 final class DirectivesSuite extends CatsEffectSuite {
   val schemaParser = SchemaParser(GraphQLParser(GraphQLParser.defaultConfig))
 
   def testDirectiveDefs(s: Schema): List[DirectiveDef] =
     s.directives.filter {
-      case DirectiveDef("skip"|"include"|"deprecated"|"specifiedBy"|"oneOf", _, _, _, _) => false
+      case DirectiveDef(
+            "skip" | "include" | "deprecated" | "specifiedBy" | "oneOf",
+            _,
+            _,
+            _,
+            _) =>
+        false
       case _ => true
     }
 
@@ -61,7 +67,8 @@ final class DirectivesSuite extends CatsEffectSuite {
   }
 
   test("Directive definition with multiple locations (1)") {
-    val expected = DirectiveDef("foo", None, Nil, false, List(FIELD, FRAGMENT_SPREAD, INLINE_FRAGMENT))
+    val expected =
+      DirectiveDef("foo", None, Nil, false, List(FIELD, FRAGMENT_SPREAD, INLINE_FRAGMENT))
     val schema =
       Schema("""
         type Query {
@@ -75,7 +82,8 @@ final class DirectivesSuite extends CatsEffectSuite {
   }
 
   test("Directive definition with multiple locations (2)") {
-    val expected = DirectiveDef("foo", None, Nil, false, List(FIELD, FRAGMENT_SPREAD, INLINE_FRAGMENT))
+    val expected =
+      DirectiveDef("foo", None, Nil, false, List(FIELD, FRAGMENT_SPREAD, INLINE_FRAGMENT))
     val schema =
       Schema("""
         type Query {
@@ -160,7 +168,10 @@ final class DirectivesSuite extends CatsEffectSuite {
             None,
             ScalarType.StringType,
             None,
-            List(Directive("deprecated", List(Binding("reason", Value.StringValue("Use arg1 instead")))))
+            List(
+              Directive(
+                "deprecated",
+                List(Binding("reason", Value.StringValue("Use arg1 instead")))))
           ),
           InputValue("arg1", None, ScalarType.StringType, None, Nil)
         ),
@@ -185,25 +196,25 @@ final class DirectivesSuite extends CatsEffectSuite {
 
   test("Schema with directives") {
     val schema =
-    """|schema @foo {
-       |  query: Query
-       |}
-       |scalar Scalar @foo
-       |interface Interface @foo {
-       |  field(e: Enum, i: Input): Int @foo
-       |}
-       |type Object implements Interface @foo {
-       |  field(e: Enum, i: Input): Int @foo
-       |}
-       |union Union @foo = Object
-       |enum Enum @foo {
-       |  VALUE @foo
-       |}
-       |input Input @foo {
-       |  field: Int @foo
-       |}
-       |directive @foo on SCHEMA|SCALAR|OBJECT|FIELD_DEFINITION|ARGUMENT_DEFINITION|INTERFACE|UNION|ENUM|ENUM_VALUE|INPUT_OBJECT|INPUT_FIELD_DEFINITION
-       |""".stripMargin
+      """|schema @foo {
+         |  query: Query
+         |}
+         |scalar Scalar @foo
+         |interface Interface @foo {
+         |  field(e: Enum, i: Input): Int @foo
+         |}
+         |type Object implements Interface @foo {
+         |  field(e: Enum, i: Input): Int @foo
+         |}
+         |union Union @foo = Object
+         |enum Enum @foo {
+         |  VALUE @foo
+         |}
+         |input Input @foo {
+         |  field: Int @foo
+         |}
+         |directive @foo on SCHEMA|SCALAR|OBJECT|FIELD_DEFINITION|ARGUMENT_DEFINITION|INTERFACE|UNION|ENUM|ENUM_VALUE|INPUT_OBJECT|INPUT_FIELD_DEFINITION
+         |""".stripMargin
 
     val res = schemaParser.parseText(schema)
     val ser = res.map(_.toString)
@@ -214,7 +225,11 @@ final class DirectivesSuite extends CatsEffectSuite {
   test("Query with directive") {
     val expected =
       Operation(
-        UntypedSelect("foo", None, Nil, List(Directive("dir", Nil)),
+        UntypedSelect(
+          "foo",
+          None,
+          Nil,
+          List(Directive("dir", Nil)),
           UntypedSelect("id", None, Nil, List(Directive("dir", Nil)), Empty)
         ),
         DirectiveMapping.QueryType,
@@ -237,7 +252,11 @@ final class DirectivesSuite extends CatsEffectSuite {
   test("Mutation with directive") {
     val expected =
       Operation(
-        UntypedSelect("foo", None, Nil, List(Directive("dir", Nil)),
+        UntypedSelect(
+          "foo",
+          None,
+          Nil,
+          List(Directive("dir", Nil)),
           UntypedSelect("id", None, Nil, List(Directive("dir", Nil)), Empty)
         ),
         DirectiveMapping.MutationType,
@@ -260,7 +279,11 @@ final class DirectivesSuite extends CatsEffectSuite {
   test("Subscription with directive") {
     val expected =
       Operation(
-        UntypedSelect("foo", None, Nil, List(Directive("dir", Nil)),
+        UntypedSelect(
+          "foo",
+          None,
+          Nil,
+          List(Directive("dir", Nil)),
           UntypedSelect("id", None, Nil, List(Directive("dir", Nil)), Empty)
         ),
         DirectiveMapping.SubscriptionType,
@@ -280,11 +303,18 @@ final class DirectivesSuite extends CatsEffectSuite {
     assertEquals(res, expected.success)
   }
 
-  test("Fragment with directive") { // TOD: will need new elaborator to expose fragment directives
+  test(
+    "Fragment with directive"
+  ) { // TOD: will need new elaborator to expose fragment directives
     val expected =
       Operation(
-        UntypedSelect("foo", None, Nil, Nil,
-          Narrow(DirectiveMapping.BazType,
+        UntypedSelect(
+          "foo",
+          None,
+          Nil,
+          Nil,
+          Narrow(
+            DirectiveMapping.BazType,
             UntypedSelect("baz", None, Nil, List(Directive("dir", Nil)), Empty)
           )
         ),
@@ -308,11 +338,18 @@ final class DirectivesSuite extends CatsEffectSuite {
     assertEquals(res, expected.success)
   }
 
-  test("Inline fragment with directive") { // TOD: will need new elaborator to expose fragment directives
+  test(
+    "Inline fragment with directive"
+  ) { // TOD: will need new elaborator to expose fragment directives
     val expected =
       Operation(
-        UntypedSelect("foo", None, Nil, Nil,
-          Narrow(DirectiveMapping.BazType,
+        UntypedSelect(
+          "foo",
+          None,
+          Nil,
+          Nil,
+          Narrow(
+            DirectiveMapping.BazType,
             UntypedSelect("baz", None, Nil, List(Directive("dir", Nil)), Empty)
           )
         ),

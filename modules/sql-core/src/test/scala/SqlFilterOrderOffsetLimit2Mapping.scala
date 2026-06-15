@@ -15,10 +15,11 @@
 
 package grackle.sql.test
 
-import grackle._, syntax._
-import Query.{Binding, Limit}
-import QueryCompiler.{Elab, SelectElaborator}
-import Value.{AbsentValue, IntValue, NullValue}
+import grackle._
+import grackle.Query.{Binding, Limit}
+import grackle.QueryCompiler.{Elab, SelectElaborator}
+import grackle.Value.{AbsentValue, IntValue, NullValue}
+import grackle.syntax._
 
 trait SqlFilterOrderOffsetLimit2Mapping[F[_]] extends SqlTestMapping[F] {
 
@@ -76,65 +77,66 @@ trait SqlFilterOrderOffsetLimit2Mapping[F[_]] extends SqlTestMapping[F] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            SqlObject("root"),
-            SqlObject("containers")
-          )
+        fieldMappings = List(
+          SqlObject("root"),
+          SqlObject("containers")
+        )
       ),
       ObjectMapping(
         tpe = RootType,
-        fieldMappings =
-          List(
-            SqlField("id", root.id, key = true),
-            SqlObject("containers", Join(root.id, containers.rootId)),
-            SqlObject("listA", Join(root.id, containers.rootId), Join(containers.id, listA.containerId)),
-            SqlObject("listB", Join(root.id, containers.rootId), Join(containers.id, listB.containerId))
-          )
+        fieldMappings = List(
+          SqlField("id", root.id, key = true),
+          SqlObject("containers", Join(root.id, containers.rootId)),
+          SqlObject(
+            "listA",
+            Join(root.id, containers.rootId),
+            Join(containers.id, listA.containerId)),
+          SqlObject(
+            "listB",
+            Join(root.id, containers.rootId),
+            Join(containers.id, listB.containerId))
+        )
       ),
       ObjectMapping(
         tpe = ContainerType,
-        fieldMappings =
-          List(
-            SqlField("id", containers.id, key = true),
-            SqlObject("listA", Join(containers.id, listA.containerId)),
-            SqlObject("listB", Join(containers.id, listB.containerId))
-          )
+        fieldMappings = List(
+          SqlField("id", containers.id, key = true),
+          SqlObject("listA", Join(containers.id, listA.containerId)),
+          SqlObject("listB", Join(containers.id, listB.containerId))
+        )
       ),
       ObjectMapping(
         tpe = ElemAType,
-        fieldMappings =
-          List(
-            SqlField("id", listA.id, key = true),
-            SqlField("rootId", listA.containerId, hidden = true),
-          )
+        fieldMappings = List(
+          SqlField("id", listA.id, key = true),
+          SqlField("rootId", listA.containerId, hidden = true)
+        )
       ),
       ObjectMapping(
         tpe = ElemBType,
-        fieldMappings =
-          List(
-            SqlField("id", listB.id, key = true),
-            SqlField("rootId", listB.containerId, hidden = true),
-          )
+        fieldMappings = List(
+          SqlField("id", listB.id, key = true),
+          SqlField("rootId", listB.containerId, hidden = true)
+        )
       )
     )
 
   def mkLimit(query: Query, limit: Value): Result[Query] =
     limit match {
-      case AbsentValue|NullValue => query.success
+      case AbsentValue | NullValue => query.success
       case IntValue(num) if num > 0 => Limit(num, query).success
       case IntValue(num) => Result.failure(s"Expected limit > 0, found $num")
-      case other =>  Result.failure(s"Expected limit > 0, found $other")
+      case other => Result.failure(s"Expected limit > 0, found $other")
     }
 
   override val selectElaborator = SelectElaborator {
-    case (QueryType, "root"|"containers", List(Binding("limit", limit))) =>
+    case (QueryType, "root" | "containers", List(Binding("limit", limit))) =>
       Elab.transformChild(child => mkLimit(child, limit))
 
-    case (RootType, "containers"|"listA"|"listB", List(Binding("limit", limit))) =>
+    case (RootType, "containers" | "listA" | "listB", List(Binding("limit", limit))) =>
       Elab.transformChild(child => mkLimit(child, limit))
 
-    case (ContainerType, "listA"|"listB", List(Binding("limit", limit))) =>
+    case (ContainerType, "listA" | "listB", List(Binding("limit", limit))) =>
       Elab.transformChild(child => mkLimit(child, limit))
   }
 }

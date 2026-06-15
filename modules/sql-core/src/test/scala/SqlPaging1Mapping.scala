@@ -17,10 +17,11 @@ package grackle.sql.test
 
 import cats.implicits._
 
-import grackle._, syntax._
-import Query.{Binding, Count, FilterOrderByOffsetLimit, OrderSelection, Select}
-import QueryCompiler.{Elab, SelectElaborator}
-import Value.IntValue
+import grackle._
+import grackle.Query.{Binding, Count, FilterOrderByOffsetLimit, OrderSelection, Select}
+import grackle.QueryCompiler.{Elab, SelectElaborator}
+import grackle.Value.IntValue
+import grackle.syntax._
 
 // Mapping illustrating paging in "counted" style: paged results can
 // report the current offet, limit and total number of items in the
@@ -34,15 +35,15 @@ trait SqlPaging1Mapping[F[_]] extends SqlTestMapping[F] {
   }
 
   object country extends TableDef("country") {
-    val code         = col("code", bpchar(3))
-    val name         = col("name", nvarchar)
-    val numCities    = col("num_cities", int8)
+    val code = col("code", bpchar(3))
+    val name = col("name", nvarchar)
+    val numCities = col("num_cities", int8)
   }
 
   object city extends TableDef("city") {
-    val id          = col("id", int4)
+    val id = col("id", int4)
     val countrycode = col("countrycode", bpchar(3))
-    val name        = col("name", nvarchar)
+    val name = col("name", nvarchar)
   }
 
   val schema =
@@ -82,49 +83,44 @@ trait SqlPaging1Mapping[F[_]] extends SqlTestMapping[F] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            SqlObject("countries"),
-          )
+        fieldMappings = List(
+          SqlObject("countries")
+        )
       ),
       ObjectMapping(
         tpe = PagedCountryType,
-        fieldMappings =
-          List(
-            CursorField("offset", CountryPaging.genOffset, Nil),
-            CursorField("limit", CountryPaging.genLimit, Nil),
-            SqlField("total", root.numCountries),
-            SqlObject("items")
-          )
+        fieldMappings = List(
+          CursorField("offset", CountryPaging.genOffset, Nil),
+          CursorField("limit", CountryPaging.genLimit, Nil),
+          SqlField("total", root.numCountries),
+          SqlObject("items")
+        )
       ),
       ObjectMapping(
         tpe = CountryType,
-        fieldMappings =
-          List(
-            SqlField("code", country.code, key = true),
-            SqlField("name", country.name),
-            SqlObject("cities")
-          )
+        fieldMappings = List(
+          SqlField("code", country.code, key = true),
+          SqlField("name", country.name),
+          SqlObject("cities")
+        )
       ),
       ObjectMapping(
         tpe = PagedCityType,
-        fieldMappings =
-          List(
-            SqlField("code", country.code, key = true, hidden = true),
-            SqlObject("items", Join(country.code, city.countrycode)),
-            CursorField("offset", CityPaging.genOffset, Nil),
-            CursorField("limit", CityPaging.genLimit, Nil),
-            SqlField("total", country.numCities),
-          )
+        fieldMappings = List(
+          SqlField("code", country.code, key = true, hidden = true),
+          SqlObject("items", Join(country.code, city.countrycode)),
+          CursorField("offset", CityPaging.genOffset, Nil),
+          CursorField("limit", CityPaging.genLimit, Nil),
+          SqlField("total", country.numCities)
+        )
       ),
       ObjectMapping(
         tpe = CityType,
-        fieldMappings =
-          List(
-            SqlField("id", city.id, key = true, hidden = true),
-            SqlField("countrycode", city.countrycode, hidden = true),
-            SqlField("name", city.name)
-          )
+        fieldMappings = List(
+          SqlField("id", city.id, key = true, hidden = true),
+          SqlField("countrycode", city.countrycode, hidden = true),
+          SqlField("name", city.name)
+        )
       )
     )
 
@@ -147,7 +143,12 @@ trait SqlPaging1Mapping[F[_]] extends SqlTestMapping[F] {
     case class PagingInfo(offset: Int, limit: Int) {
       def elabItems: Elab[Unit] =
         Elab.transformChild { child =>
-          FilterOrderByOffsetLimit(None, Some(List(OrderSelection(orderTerm, nullsLast = nullsHigh))), Some(offset), Some(limit), child)
+          FilterOrderByOffsetLimit(
+            None,
+            Some(List(OrderSelection(orderTerm, nullsLast = nullsHigh))),
+            Some(offset),
+            Some(limit),
+            child)
         }
 
       def elabTotal: Elab[Unit] =
@@ -159,7 +160,10 @@ trait SqlPaging1Mapping[F[_]] extends SqlTestMapping[F] {
   object CityPaging extends PagingConfig("cityPaging", "id", CityType / "name")
 
   override val selectElaborator = SelectElaborator {
-    case (QueryType, "countries", List(Binding("offset", IntValue(off)), Binding("limit", IntValue(lim)))) =>
+    case (
+          QueryType,
+          "countries",
+          List(Binding("offset", IntValue(off)), Binding("limit", IntValue(lim)))) =>
       CountryPaging.setup(off, lim)
 
     case (PagedCountryType, "items", Nil) =>
@@ -168,7 +172,10 @@ trait SqlPaging1Mapping[F[_]] extends SqlTestMapping[F] {
     case (PagedCountryType, "total", Nil) =>
       CountryPaging.elabTotal
 
-    case (CountryType, "cities", List(Binding("offset", IntValue(off)), Binding("limit", IntValue(lim)))) =>
+    case (
+          CountryType,
+          "cities",
+          List(Binding("offset", IntValue(off)), Binding("limit", IntValue(lim)))) =>
       CityPaging.setup(off, lim)
 
     case (PagedCityType, "items", Nil) =>

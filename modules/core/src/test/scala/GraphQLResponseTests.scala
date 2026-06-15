@@ -23,7 +23,10 @@ object GraphQLResponseTests {
   def assertWeaklyEqual(x: Json, y: Json, strictPaths: List[List[String]] = Nil): Unit =
     assert(weaklyEqual(clue(x), clue(y), strictPaths))
 
-  def assertWeaklyEqualIO(x: IO[Json], y: Json, strictPaths: List[List[String]] = Nil): IO[Unit] =
+  def assertWeaklyEqualIO(
+      x: IO[Json],
+      y: Json,
+      strictPaths: List[List[String]] = Nil): IO[Unit] =
     x.map(x0 => assertWeaklyEqual(x0, y, strictPaths))
 
   def assertNoErrors(x: Json): Unit =
@@ -35,21 +38,25 @@ object GraphQLResponseTests {
   def hasField(x: Json, fieldName: String): Boolean =
     (for {
       x0 <- x.asObject
-      _  <- x0(fieldName)
+      _ <- x0(fieldName)
     } yield true).getOrElse(false)
 
   def errorsOf(x: Json): Seq[Json] =
     (for {
-      x0          <- x.asObject
+      x0 <- x.asObject
       errorsField <- x0("errors")
-      errors      <- errorsField.asArray
+      errors <- errorsField.asArray
     } yield errors).getOrElse(Nil)
 
   def noErrors(x: Json): Boolean =
     hasField(x, "data") && !hasField(x, "errors") || errorsOf(x).isEmpty
 
   def weaklyEqual(x: Json, y: Json, strictPaths: List[List[String]] = Nil): Boolean = {
-    def cmpObject(x: JsonObject, y: JsonObject, strictPaths: List[List[String]], path: List[String]): Boolean = {
+    def cmpObject(
+        x: JsonObject,
+        y: JsonObject,
+        strictPaths: List[List[String]],
+        path: List[String]): Boolean = {
       val xkeys = x.keys
       val ykeys = y.keys
       xkeys.sizeCompare(ykeys) == 0 && {
@@ -66,7 +73,11 @@ object GraphQLResponseTests {
       }
     }
 
-    def cmpArray(xs: Vector[Json], ys: Vector[Json], strictPaths: List[List[String]], path: List[String]): Boolean = {
+    def cmpArray(
+        xs: Vector[Json],
+        ys: Vector[Json],
+        strictPaths: List[List[String]],
+        path: List[String]): Boolean = {
       xs.sizeCompare(ys) == 0 && {
         if (strictPaths.contains(path))
           xs.zip(ys).forall { case (x, y) => cmpJson(x, y, strictPaths, path) }
@@ -88,13 +99,17 @@ object GraphQLResponseTests {
       }
     }
 
-    def cmpJson(x: Json, y: Json, strictPaths: List[List[String]], path: List[String]): Boolean = {
+    def cmpJson(
+        x: Json,
+        y: Json,
+        strictPaths: List[List[String]],
+        path: List[String]): Boolean = {
       if (x.isObject && y.isObject)
         (for {
           x0 <- x.asObject
           y0 <- y.asObject
         } yield cmpObject(x0, y0, strictPaths, path)).getOrElse(false)
-      else if(x.isArray && y.isArray)
+      else if (x.isArray && y.isArray)
         (for {
           x0 <- x.asArray
           y0 <- y.asArray
@@ -105,4 +120,3 @@ object GraphQLResponseTests {
     cmpJson(x, y, strictPaths, Nil)
   }
 }
-

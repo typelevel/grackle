@@ -19,12 +19,12 @@ import cats.MonadThrow
 import cats.data.Chain
 import cats.effect.IO
 import cats.implicits._
+import compiler.PreserveArgsElaborator
 import munit.CatsEffectSuite
 
-import compiler.PreserveArgsElaborator
 import grackle._
+import grackle.Query._
 import grackle.syntax._
-import Query._
 
 final class DirectiveValidationSuite extends CatsEffectSuite {
   test("Schema with validly located directives") {
@@ -194,7 +194,7 @@ final class DirectiveValidationSuite extends CatsEffectSuite {
         Problem("""Unknown argument(s) 'x' in directive withRequiredArg"""),
         Problem("""Expected String found '1' for 'reason' in directive deprecated"""),
         Problem("""Unknown argument(s) 'x' in directive deprecated"""),
-        Problem("""Expected String found 'null' for 'reason' in directive deprecated"""),
+        Problem("""Expected String found 'null' for 'reason' in directive deprecated""")
       )
 
     assertEquals(schema.toProblems, problems)
@@ -204,7 +204,11 @@ final class DirectiveValidationSuite extends CatsEffectSuite {
     val expected =
       List(
         Operation(
-          UntypedSelect("foo", None, Nil, List(Directive("onField", Nil)),
+          UntypedSelect(
+            "foo",
+            None,
+            Nil,
+            List(Directive("onField", Nil)),
             Group(
               List(
                 UntypedSelect("bar", Some("baz"), Nil, List(Directive("onField", Nil)), Empty),
@@ -213,17 +217,17 @@ final class DirectiveValidationSuite extends CatsEffectSuite {
             )
           ),
           ExecutableDirectiveMapping.QueryType,
-          List(Directive("onQuery",List()))
+          List(Directive("onQuery", List()))
         ),
         Operation(
-          UntypedSelect("foo",None, Nil, List(Directive("onField", Nil)), Empty),
+          UntypedSelect("foo", None, Nil, List(Directive("onField", Nil)), Empty),
           ExecutableDirectiveMapping.MutationType,
-          List(Directive("onMutation",List()))
+          List(Directive("onMutation", List()))
         ),
         Operation(
-          UntypedSelect("foo",None, Nil, List(Directive("onField", Nil)), Empty),
+          UntypedSelect("foo", None, Nil, List(Directive("onField", Nil)), Empty),
           ExecutableDirectiveMapping.SubscriptionType,
-          List(Directive("onSubscription",List()))
+          List(Directive("onSubscription", List()))
         )
       )
 
@@ -251,7 +255,7 @@ final class DirectiveValidationSuite extends CatsEffectSuite {
          |""".stripMargin
 
     val res = ExecutableDirectiveMapping.compileAllOperations(query)
-    //println(res)
+    // println(res)
 
     assertEquals(res, expected.success)
   }
@@ -301,7 +305,7 @@ final class DirectiveValidationSuite extends CatsEffectSuite {
          |""".stripMargin
 
     val res = ExecutableDirectiveMapping.compileAllOperations(query)
-    //println(res)
+    // println(res)
 
     assertEquals(res.toProblems, problems)
   }
@@ -332,7 +336,7 @@ final class DirectiveValidationSuite extends CatsEffectSuite {
          |""".stripMargin
 
     val res = ExecutableDirectiveMapping.compileAllOperations(query)
-    //println(res)
+    // println(res)
 
     assertEquals(res.toProblems, problems)
   }

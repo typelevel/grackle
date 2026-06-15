@@ -16,8 +16,8 @@
 package grackle.sql.test
 
 import grackle._
+import grackle.Predicate._
 import grackle.syntax._
-import Predicate._
 
 trait SqlInterfacesMapping2[F[_]] extends SqlInterfacesMapping[F] { self =>
 

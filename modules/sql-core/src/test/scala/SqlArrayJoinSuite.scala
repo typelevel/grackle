@@ -16,10 +16,10 @@
 package grackle.sql.test
 
 import cats.effect.IO
-import grackle._
 import io.circe.literal._
 import munit.CatsEffectSuite
 
+import grackle._
 import grackle.test.GraphQLResponseTests.assertWeaklyEqualIO
 
 trait SqlArrayJoinSuite extends CatsEffectSuite {

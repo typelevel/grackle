@@ -13,12 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package sql
+package grackle.sql
 
 import scala.util.matching.Regex
 
-case class Like(x: Term[String]|Term[Option[String]], pattern: String, caseInsensitive: Boolean) extends Predicate {
+import grackle._
+
+case class Like(
+    x: Term[String] | Term[Option[String]],
+    pattern: String,
+    caseInsensitive: Boolean)
+    extends Predicate {
   lazy val r = Like.likeToRegex(pattern, caseInsensitive)
   def apply(c: Cursor): Result[Boolean] =
     x(c).map(_ match {
@@ -31,7 +36,7 @@ case class Like(x: Term[String]|Term[Option[String]], pattern: String, caseInsen
 
 object Like {
   private def likeToRegex(pattern: String, caseInsensitive: Boolean): Regex = {
-    val csr = ("^"+pattern.replace("%", ".*").replace("_", ".")+"$")
+    val csr = "^" + pattern.replace("%", ".*").replace("_", ".") + "$"
     (if (caseInsensitive) s"(?i:$csr)" else csr).r
   }
 }

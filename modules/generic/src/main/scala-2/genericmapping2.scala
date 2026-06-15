@@ -13,22 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package generic
+package grackle.generic
 
 import scala.annotation.{nowarn, tailrec}
 
 import cats.implicits._
-import shapeless.{Coproduct, Generic, ::, HList, HNil, Inl, Inr, LabelledGeneric}
-import shapeless.ops.hlist.{LiftAll => PLiftAll}
+import shapeless.{::, Coproduct, Generic, HList, HNil, Inl, Inr, LabelledGeneric}
 import shapeless.ops.coproduct.{LiftAll => CLiftAll}
+import shapeless.ops.hlist.{LiftAll => PLiftAll}
 import shapeless.ops.record.Keys
 
-import syntax._
-import Cursor.AbstractCursor
-import ShapelessUtils._
+import grackle._
+import grackle.Cursor.AbstractCursor
+import grackle.generic.ShapelessUtils._
+import grackle.syntax._
 
-trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: GenericMappingLike[F] =>
+trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] {
+  self: GenericMappingLike[F] =>
   trait MkObjectCursorBuilder[T] {
     def apply(tpe: Type): ObjectCursorBuilder[T]
   }
@@ -36,24 +37,26 @@ trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: Ge
   object MkObjectCursorBuilder {
     type FieldMap[T] = Map[String, (Context, T, Option[Cursor], Env) => Result[Cursor]]
 
-    implicit def productCursorBuilder[T <: Product, R <: HList, L <: HList]
-      (implicit
-        @nowarn gen: Generic.Aux[T, R],
+    implicit def productCursorBuilder[T <: Product, R <: HList, L <: HList](
+        implicit @nowarn gen: Generic.Aux[T, R],
         elems0: => PLiftAll[CursorBuilder, R],
         @nowarn lgen: LabelledGeneric.Aux[T, L],
         keys0: Keys[L]
-      ): MkObjectCursorBuilder[T] =
+    ): MkObjectCursorBuilder[T] =
       new MkObjectCursorBuilder[T] {
         def apply(tpe: Type): ObjectCursorBuilder[T] = {
           def fieldMap: Map[String, (Context, T, Option[Cursor], Env) => Result[Cursor]] = {
             val keys: List[String] = unsafeToList[Symbol](keys0()).map(_.name)
             val elems = unsafeToList[CursorBuilder[Any]](elems0.instances)
-            keys.zip(elems.zipWithIndex).map {
-              case (fieldName, (elem, idx)) =>
-                def build(context: Context, focus: T, parent: Option[Cursor], env: Env) =
-                  elem.build(context, focus.productElement(idx), parent, env)
-                (fieldName, build _)
-            }.toMap
+            keys
+              .zip(elems.zipWithIndex)
+              .map {
+                case (fieldName, (elem, idx)) =>
+                  def build(context: Context, focus: T, parent: Option[Cursor], env: Env) =
+                    elem.build(context, focus.productElement(idx), parent, env)
+                  (fieldName, build _)
+              }
+              .toMap
           }
           new Impl[T](tpe, fieldMap)
         }
@@ -68,10 +71,11 @@ trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: Ge
         CursorImpl(context.asType(tpe), focus, fieldMap, parent, env).success
 
       def renameField(from: String, to: String): ObjectCursorBuilder[T] =
-        transformFieldNames { case `from` => to ; case other => other }
+        transformFieldNames { case `from` => to; case other => other }
       def transformFieldNames(f: String => String): ObjectCursorBuilder[T] =
         new Impl(tpe, fieldMap0.map { case (k, v) => (f(k), v) })
-      def transformField[U](fieldName: String)(f: T => Result[U])(implicit cb: => CursorBuilder[U]): ObjectCursorBuilder[T] = {
+      def transformField[U](fieldName: String)(f: T => Result[U])(
+          implicit cb: => CursorBuilder[U]): ObjectCursorBuilder[T] = {
         def build(context: Context, focus: T, parent: Option[Cursor], env: Env) =
           f(focus).flatMap(f => cb.build(context, f, parent, env))
 
@@ -79,14 +83,24 @@ trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: Ge
       }
     }
 
-    case class CursorImpl[T](context: Context, focus: T, fieldMap: FieldMap[T], parent: Option[Cursor], env: Env)
-      extends AbstractCursor {
+    case class CursorImpl[T](
+        context: Context,
+        focus: T,
+        fieldMap: FieldMap[T],
+        parent: Option[Cursor],
+        env: Env)
+        extends AbstractCursor {
       def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
       override def field(fieldName: String, resultName: Option[String]): Result[Cursor] = {
         val localField =
-          fieldMap.get(fieldName).toResult(s"No field '$fieldName' for type $tpe").flatMap { f =>
-            f(context.forFieldOrAttribute(fieldName, resultName), focus, Some(this), Env.empty)
+          fieldMap.get(fieldName).toResult(s"No field '$fieldName' for type $tpe").flatMap {
+            f =>
+              f(
+                context.forFieldOrAttribute(fieldName, resultName),
+                focus,
+                Some(this),
+                Env.empty)
           }
 
         localField orElse mkCursorForField(this, fieldName, resultName)
@@ -99,11 +113,10 @@ trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: Ge
   }
 
   object MkInterfaceCursorBuilder {
-    implicit def coproductCursorBuilder[T, R <: Coproduct]
-      (implicit
-        gen: Generic.Aux[T, R],
+    implicit def coproductCursorBuilder[T, R <: Coproduct](
+        implicit gen: Generic.Aux[T, R],
         elems0: => CLiftAll[CursorBuilder, R]
-      ): MkInterfaceCursorBuilder[T] =
+    ): MkInterfaceCursorBuilder[T] =
       new MkInterfaceCursorBuilder[T] {
         def apply(tpe: Type): CursorBuilder[T] = {
           def elems = unsafeToList[CursorBuilder[T]](elems0.instances).toArray
@@ -111,7 +124,7 @@ trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: Ge
             @tailrec
             def loop(c: Coproduct, acc: Int): Int = c match {
               case Inl(_) => acc
-              case Inr(tl) => loop(tl, acc+1)
+              case Inr(tl) => loop(tl, acc + 1)
             }
             loop(gen.to(t), 0)
           }
@@ -119,16 +132,28 @@ trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: Ge
         }
       }
 
-    class Impl[T](tpe0: Type, sel: T => Int, elems: => Array[CursorBuilder[T]]) extends CursorBuilder[T] {
+    class Impl[T](tpe0: Type, sel: T => Int, elems: => Array[CursorBuilder[T]])
+        extends CursorBuilder[T] {
       val tpe = tpe0
-      def build(context: Context, focus: T, parent: Option[Cursor], env: Env): Result[Cursor] = {
+      def build(
+          context: Context,
+          focus: T,
+          parent: Option[Cursor],
+          env: Env): Result[Cursor] = {
         val builder = elems(sel(focus))
-        builder.build(context.asType(tpe), focus, parent, env).map(cursor => CursorImpl(tpe, builder.tpe, cursor, parent, env))
+        builder
+          .build(context.asType(tpe), focus, parent, env)
+          .map(cursor => CursorImpl(tpe, builder.tpe, cursor, parent, env))
       }
     }
 
-    case class CursorImpl[T](tpe0: Type, rtpe: Type, cursor: Cursor, parent: Option[Cursor], env: Env)
-      extends AbstractCursor {
+    case class CursorImpl[T](
+        tpe0: Type,
+        rtpe: Type,
+        cursor: Cursor,
+        parent: Option[Cursor],
+        env: Env)
+        extends AbstractCursor {
       def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
       def focus: Any = cursor.focus
@@ -143,7 +168,9 @@ trait ScalaVersionSpecificGenericMappingLike[F[_]] extends Mapping[F] { self: Ge
       override def narrow(subtpe: TypeRef): Result[Cursor] =
         narrowsTo(subtpe).flatMap { n =>
           if (n) copy(tpe0 = subtpe).success
-          else Result.internalError(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
+          else
+            Result.internalError(
+              s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
         }
     }
   }

@@ -13,21 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package sql
+package grackle.sql
 
 import scala.util.matching.Regex
 
-import syntax._
+import grackle._
+import grackle.syntax._
 
-case class Like private[sql] (x: Term[_], pattern: String, caseInsensitive: Boolean) extends Predicate {
+case class Like private[sql] (x: Term[_], pattern: String, caseInsensitive: Boolean)
+    extends Predicate {
   lazy val r = Like.likeToRegex(pattern, caseInsensitive)
   def apply(c: Cursor): Result[Boolean] =
     x(c).flatMap(_ match {
       case s: String => r.matches(s).success
       case Some(s: String) => r.matches(s).success
       case None => false.success
-      case other => Result.internalError(s"Expected value of type String or Option[String], found $other")
+      case other =>
+        Result.internalError(s"Expected value of type String or Option[String], found $other")
     })
   def children = List(x)
 }
@@ -37,7 +39,7 @@ object Like extends Like0 {
     new Like(x, pattern, caseInsensitive)
 
   private def likeToRegex(pattern: String, caseInsensitive: Boolean): Regex = {
-    val csr = ("^"+pattern.replace("%", ".*").replace("_", ".")+"$")
+    val csr = "^" + pattern.replace("%", ".*").replace("_", ".") + "$"
     (if (caseInsensitive) s"(?i:$csr)" else csr).r
   }
 }
@@ -48,9 +50,11 @@ trait Like0 {
     implicit val sInst: PossiblyOptionString[String] = new PossiblyOptionString[String] {}
   }
   trait PossiblyOptionString0 {
-    implicit val osInst: PossiblyOptionString[Option[String]] = new PossiblyOptionString[Option[String]] {}
+    implicit val osInst: PossiblyOptionString[Option[String]] =
+      new PossiblyOptionString[Option[String]] {}
   }
 
-  def apply[T](x: Term[T], pattern: String, caseInsensitive: Boolean)(implicit ev: PossiblyOptionString[T]): Predicate =
+  def apply[T](x: Term[T], pattern: String, caseInsensitive: Boolean)(
+      implicit ev: PossiblyOptionString[T]): Predicate =
     new Like(x, pattern, caseInsensitive)
 }

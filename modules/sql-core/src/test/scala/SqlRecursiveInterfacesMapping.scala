@@ -19,19 +19,19 @@ import cats.kernel.Eq
 import io.circe.Encoder
 
 import grackle._
-import syntax._
-import Predicate._
+import grackle.Predicate._
+import grackle.syntax._
 
 trait SqlRecursiveInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
   def itemType: TestCodec[ItemType]
 
   object items extends TableDef("recursive_interface_items") {
-    val id       = col("id", text)
+    val id = col("id", text)
     val itemType = col("item_type", self.itemType)
   }
 
   object nextItems extends TableDef("recursive_interface_next_items") {
-    val id       = col("id", text)
+    val id = col("id", text)
     val nextItem = col("next_item", nullable(text))
   }
 
@@ -70,33 +70,35 @@ trait SqlRecursiveInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            SqlObject("items")
-          )
+        fieldMappings = List(
+          SqlObject("items")
+        )
       ),
       SqlInterfaceMapping(
         tpe = IType,
         discriminator = itemTypeDiscriminator,
-        fieldMappings =
-          List(
-            SqlField("id", items.id, key = true),
-            SqlField("itemType", items.itemType, discriminator = true),
-          )
+        fieldMappings = List(
+          SqlField("id", items.id, key = true),
+          SqlField("itemType", items.itemType, discriminator = true)
+        )
       ),
       ObjectMapping(
         tpe = ItemAType,
-        fieldMappings =
-          List(
-            SqlObject("nextItem", Join(items.id, nextItems.id), Join(nextItems.nextItem, items.id))
-          )
+        fieldMappings = List(
+          SqlObject(
+            "nextItem",
+            Join(items.id, nextItems.id),
+            Join(nextItems.nextItem, items.id))
+        )
       ),
       ObjectMapping(
         tpe = ItemBType,
-        fieldMappings =
-          List(
-            SqlObject("nextItem", Join(items.id, nextItems.id), Join(nextItems.nextItem, items.id))
-          )
+        fieldMappings = List(
+          SqlObject(
+            "nextItem",
+            Join(items.id, nextItems.id),
+            Join(nextItems.nextItem, items.id))
+        )
       ),
       LeafMapping[ItemType](ItemTypeType)
     )
@@ -132,7 +134,7 @@ trait SqlRecursiveInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
 
     def fromString(s: String): Option[ItemType] =
       s.trim.toUpperCase match {
-        case "ITEM_A"  => Some(ItemA)
+        case "ITEM_A" => Some(ItemA)
         case "ITEM_B" => Some(ItemB)
         case _ => None
       }
@@ -151,7 +153,7 @@ trait SqlRecursiveInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
 
     def toInt(i: ItemType): Int =
       i match {
-        case ItemA  => 1
+        case ItemA => 1
         case ItemB => 2
       }
   }

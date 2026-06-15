@@ -17,19 +17,19 @@ package demo
 
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.syntax.all._
+
+import demo.DemoServer.mkServer
+import demo.GraphQLService.mkRoutes
 import demo.starwars.StarWarsMapping
 import demo.world.WorldMapping
-
-import GraphQLService.mkRoutes
-import DemoServer.mkServer
 
 // #main
 object Main extends IOApp {
   def run(args: List[String]): IO[ExitCode] = {
     (for {
       starWarsRoutes <- StarWarsMapping[IO].map(mkRoutes("starwars"))
-      worldRoutes    <- WorldMapping[IO].map(mkRoutes("world"))
-      _              <- mkServer(starWarsRoutes <+> worldRoutes)
+      worldRoutes <- WorldMapping[IO].map(mkRoutes("world"))
+      _ <- mkServer(starWarsRoutes <+> worldRoutes)
     } yield ()).useForever
   }
 }

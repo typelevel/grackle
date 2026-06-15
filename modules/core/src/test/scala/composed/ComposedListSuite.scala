@@ -21,10 +21,11 @@ import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
 import grackle.syntax._
-import Query._
-import Predicate._, Value._
-import QueryCompiler._
 
 object CollectionData {
   case class Collection(name: String, itemIds: List[String])
@@ -58,26 +59,25 @@ object CollectionMapping extends ValueMapping[IO] {
     List(
       ValueObjectMapping[Unit](
         tpe = QueryType,
-        fieldMappings =
-          List(
-            ValueField("collection", _ => collections.head),
-            ValueField("collections", _ => collections),
-            ValueField("collectionByName", _ => collections)
-          )
+        fieldMappings = List(
+          ValueField("collection", _ => collections.head),
+          ValueField("collections", _ => collections),
+          ValueField("collectionByName", _ => collections)
+        )
       ),
       ValueObjectMapping[Collection](
         tpe = CollectionType,
-        fieldMappings =
-          List(
-            ValueField("name", _.name),
-            ValueField("itemIds", _.itemIds)
-          )
+        fieldMappings = List(
+          ValueField("name", _.name),
+          ValueField("itemIds", _.itemIds)
+        )
       )
     )
 
   override val selectElaborator = SelectElaborator {
     case (QueryType, "collectionByName", List(Binding("name", StringValue(name)))) =>
-      Elab.transformChild(child => Unique(Filter(Eql(CollectionType / "name", Const(name)), child)))
+      Elab.transformChild(child =>
+        Unique(Filter(Eql(CollectionType / "name", Const(name)), child)))
   }
 }
 
@@ -107,18 +107,16 @@ object ItemMapping extends ValueMapping[IO] {
     List(
       ValueObjectMapping[Unit](
         tpe = QueryType,
-        fieldMappings =
-          List(
-            ValueField("itemById", _ => items)
-          )
+        fieldMappings = List(
+          ValueField("itemById", _ => items)
+        )
       ),
       ValueObjectMapping[Item](
         tpe = ItemType,
-        fieldMappings =
-          List(
-            ValueField("id", _.id),
-            ValueField("name", _.name)
-          )
+        fieldMappings = List(
+          ValueField("id", _.id),
+          ValueField("name", _.name)
+        )
       )
     )
 
@@ -156,34 +154,36 @@ object ComposedListMapping extends ComposedMapping[IO] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            Delegate("collection", CollectionMapping),
-            Delegate("collections", CollectionMapping),
-            Delegate("collectionByName", CollectionMapping),
-            Delegate("itemById", ItemMapping)
-          )
+        fieldMappings = List(
+          Delegate("collection", CollectionMapping),
+          Delegate("collections", CollectionMapping),
+          Delegate("collectionByName", CollectionMapping),
+          Delegate("itemById", ItemMapping)
+        )
       ),
       ObjectMapping(
         tpe = CollectionType,
-        fieldMappings =
-          List(
-            Delegate("items", ItemMapping, collectionItemJoin)
-          )
+        fieldMappings = List(
+          Delegate("items", ItemMapping, collectionItemJoin)
+        )
       )
-  )
+    )
 
   override val selectElaborator = SelectElaborator {
     case (QueryType, "itemById", List(Binding("id", IDValue(id)))) =>
       Elab.transformChild(child => Unique(Filter(Eql(ItemType / "id", Const(id)), child)))
     case (QueryType, "collectionByName", List(Binding("name", StringValue(name)))) =>
-      Elab.transformChild(child => Unique(Filter(Eql(CollectionType / "name", Const(name)), child)))
+      Elab.transformChild(child =>
+        Unique(Filter(Eql(CollectionType / "name", Const(name)), child)))
   }
 
   def collectionItemJoin(q: Query, c: Cursor): Result[Query] =
     (c.focus, q) match {
       case (c: CollectionData.Collection, Select("items", _, child)) =>
-        Group(c.itemIds.map(id => Select("itemById", Unique(Filter(Eql(ItemType / "id", Const(id)), child))))).success
+        Group(c
+          .itemIds
+          .map(id =>
+            Select("itemById", Unique(Filter(Eql(ItemType / "id", Const(id)), child))))).success
       case _ =>
         Result.internalError(s"Unexpected cursor focus type in collectionItemJoin")
     }

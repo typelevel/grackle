@@ -16,12 +16,12 @@
 package grackle.sql.test
 
 import cats.implicits._
-import grackle._
-import Predicate.{Const, Eql}
-import Query.{Binding, Filter, Unique}
-import QueryCompiler._
-import Value.StringValue
-import syntax._
+
+import grackle.Predicate.{Const, Eql}
+import grackle.Query.{Binding, Filter, Unique}
+import grackle.QueryCompiler._
+import grackle.Value.StringValue
+import grackle.syntax._
 
 trait SqlSiblingListsData[F[_]] extends SqlTestMapping[F] {
 
@@ -77,43 +77,38 @@ trait SqlSiblingListsData[F[_]] extends SqlTestMapping[F] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            SqlObject("a")
-          )
+        fieldMappings = List(
+          SqlObject("a")
+        )
       ),
       ObjectMapping(
         tpe = AType,
-        fieldMappings =
-          List(
-            SqlField("id", aTable.id, key = true),
-            SqlObject("bs", Join(aTable.id, bTable.aId))
-          )
+        fieldMappings = List(
+          SqlField("id", aTable.id, key = true),
+          SqlObject("bs", Join(aTable.id, bTable.aId))
+        )
       ),
       ObjectMapping(
         tpe = BType,
-        fieldMappings =
-          List(
-            SqlField("id", bTable.id, key = true),
-            SqlObject("cs", Join(bTable.id, cTable.bId)),
-            SqlObject("ds", Join(bTable.id, dTable.bId))
-          )
+        fieldMappings = List(
+          SqlField("id", bTable.id, key = true),
+          SqlObject("cs", Join(bTable.id, cTable.bId)),
+          SqlObject("ds", Join(bTable.id, dTable.bId))
+        )
       ),
       ObjectMapping(
         tpe = CType,
-        fieldMappings =
-          List(
-            SqlField("id", cTable.id, key = true),
-            SqlField("nameC", cTable.nameC)
-          )
+        fieldMappings = List(
+          SqlField("id", cTable.id, key = true),
+          SqlField("nameC", cTable.nameC)
+        )
       ),
       ObjectMapping(
         tpe = DType,
-        fieldMappings =
-          List(
-            SqlField("id", dTable.id, key = true),
-            SqlField("nameD", dTable.nameD)
-          )
+        fieldMappings = List(
+          SqlField("id", dTable.id, key = true),
+          SqlField("nameD", dTable.nameD)
+        )
       )
     )
 

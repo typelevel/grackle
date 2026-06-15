@@ -13,24 +13,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package sql
+package grackle.sql
 
 import cats.Applicative
 import cats.effect.Ref
 import cats.syntax.all._
 
-import SqlStatsMonitor.SqlStats
+import grackle._
+import grackle.sql.SqlStatsMonitor.SqlStats
 
 /**
  * A SqlMonitor that accumulates `SqlStats` in a `Ref`. Stage boundaries and results are not
  * tracked.
  */
 abstract class SqlStatsMonitor[F[_]: Applicative, A](
-  ref: Ref[F, List[SqlStats]]
+    ref: Ref[F, List[SqlStats]]
 ) extends SqlMonitor[F, A] {
 
-  /** Get the current state and reset it to `Nil`. */
+  /**
+   * Get the current state and reset it to `Nil`.
+   */
   final def take: F[List[SqlStats]] =
     ref.getAndSet(Nil).map(_.reverse)
 
@@ -43,7 +45,9 @@ abstract class SqlStatsMonitor[F[_]: Applicative, A](
   final def resultComputed(result: Result[QueryInterpreter.ProtoJson]): F[Unit] =
     Applicative[F].unit
 
-  /** Extract the SQL string and query arguments from a fragment. */
+  /**
+   * Extract the SQL string and query arguments from a fragment.
+   */
   def inspect(fragment: A): (String, List[Any])
 
 }
@@ -51,14 +55,16 @@ abstract class SqlStatsMonitor[F[_]: Applicative, A](
 object SqlStatsMonitor {
 
   final case class SqlStats(
-    val query: Query,
-    val sql:   String,
-    val args:  List[Any],
-    val rows:  Int,
-    val cols:  Int
+      val query: Query,
+      val sql: String,
+      val args: List[Any],
+      val rows: Int,
+      val cols: Int
   ) {
 
-    /** Normalize whitespace in `query` for easier testing. */
+    /**
+     * Normalize whitespace in `query` for easier testing.
+     */
     def normalize: SqlStats =
       copy(sql = sql.replaceAll("\\s+", " ").trim)
 

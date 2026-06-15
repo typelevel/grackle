@@ -17,45 +17,72 @@ package grackle.sql.test
 
 import cats.effect.IO
 import cats.implicits._
-import grackle._
-import grackle.sql._
 import munit.CatsEffectSuite
 import org.tpolecat.typename.typeName
+
+import grackle._
+import grackle.sql._
 
 trait SqlMappingValidatorInvalidSuite extends CatsEffectSuite {
   def mapping: SqlMappingLike[IO]
 
   lazy val M = mapping
 
-  def check(es: List[ValidationFailure])(expected: PartialFunction[List[ValidationFailure], Unit]): Unit =
+  def check(es: List[ValidationFailure])(
+      expected: PartialFunction[List[ValidationFailure], Unit]): Unit =
     es match {
       case `expected`(_) => ()
       case _ => fail(es.foldMap(_.toErrorMessage))
     }
 
   object INFM {
-    def unapply(vf: ValidationFailure): Option[(String, String, String, Boolean, String, String, Boolean)] =
+    def unapply(vf: ValidationFailure)
+        : Option[(String, String, String, Boolean, String, String, Boolean)] =
       vf match {
         case M.InconsistentlyNullableFieldMapping(om, fm, field, columnRef, colIsNullable) =>
-          Some((om.tpe.name, fm.fieldName, SchemaRenderer.renderType(field.tpe), field.tpe.isNullable, columnRef.table, columnRef.column, colIsNullable))
+          Some(
+            (
+              om.tpe.name,
+              fm.fieldName,
+              SchemaRenderer.renderType(field.tpe),
+              field.tpe.isNullable,
+              columnRef.table,
+              columnRef.column,
+              colIsNullable))
         case _ => None
       }
   }
 
   object IFLM {
-    def unapply(vf: ValidationFailure): Option[(String, String, String, String, String, String)] =
+    def unapply(
+        vf: ValidationFailure): Option[(String, String, String, String, String, String)] =
       vf match {
         case M.InconsistentFieldLeafMapping(om, fm, field, columnRef, _) =>
-          Some((om.tpe.name, fm.fieldName, SchemaRenderer.renderType(field.tpe), columnRef.table, columnRef.column, columnRef.scalaTypeName))
+          Some(
+            (
+              om.tpe.name,
+              fm.fieldName,
+              SchemaRenderer.renderType(field.tpe),
+              columnRef.table,
+              columnRef.column,
+              columnRef.scalaTypeName))
         case _ => None
       }
   }
 
   object IFTM {
-    def unapply(vf: ValidationFailure): Option[(String, String, String, String, String, String)] =
+    def unapply(
+        vf: ValidationFailure): Option[(String, String, String, String, String, String)] =
       vf match {
         case M.InconsistentFieldTypeMapping(om, fm, field, columnRef, _) =>
-          Some((om.tpe.name, fm.fieldName, SchemaRenderer.renderType(field.tpe), columnRef.table, columnRef.column, columnRef.scalaTypeName))
+          Some(
+            (
+              om.tpe.name,
+              fm.fieldName,
+              SchemaRenderer.renderType(field.tpe),
+              columnRef.table,
+              columnRef.column,
+              columnRef.scalaTypeName))
         case _ => None
       }
   }
@@ -79,7 +106,8 @@ trait SqlMappingValidatorInvalidSuite extends CatsEffectSuite {
   }
 
   object SEM {
-    def unapply(vf: ValidationFailure): Option[(String, String, String, List[String], List[String])] =
+    def unapply(
+        vf: ValidationFailure): Option[(String, String, String, List[String], List[String])] =
       vf match {
         case M.SplitEmbeddedObjectTypeMapping(om, fm, com, parentTables, childTables) =>
           Some((om.tpe.name, fm.fieldName, com.tpe.name, parentTables, childTables))
@@ -160,7 +188,8 @@ trait SqlMappingValidatorInvalidSuite extends CatsEffectSuite {
   }
 
   object MJ {
-    def unapply(vf: ValidationFailure): Option[(String, String, String, String, List[(String, String)])] =
+    def unapply(vf: ValidationFailure)
+        : Option[(String, String, String, String, List[(String, String)])] =
       vf match {
         case M.MisalignedJoins(om, fm, parent, child, path) =>
           Some((om.tpe.name, fm.fieldName, parent, child, path))
@@ -189,41 +218,72 @@ trait SqlMappingValidatorInvalidSuite extends CatsEffectSuite {
     val es = M.validate()
 
     check(es.take(8)) {
-      case
-        List(
-          INFM("Scalars", "boolField1", "Boolean!", false, "scalars", "nullableBoolCol", true),
-          IFLM("Scalars", "boolField2", "Boolean!", "scalars", "intCol", IntTypeName),
-          INFM("Scalars", "nullableBoolField1", "Boolean", true, "scalars", "boolCol", false),
-          IFLM("Scalars", "nullableBoolField2", "Boolean", "scalars", "nullableIntCol", IntTypeName),
-          INFM("Scalars", "stringsField", "[String]!", false, "scalars", "nullableStringsCol", true),
-          INFM("Scalars", "nullableStringsField", "[String]", true, "scalars", "stringsCol", false),
-          IFTM("Scalars", "jsonbField", "Record", "scalars", "boolCol", BooleanTypeName),
-          IFTM("Scalars", "nullableJsonbField", "Record!", "scalars", "nullableBoolCol", BooleanTypeName),
-        ) =>
+      case List(
+            INFM(
+              "Scalars",
+              "boolField1",
+              "Boolean!",
+              false,
+              "scalars",
+              "nullableBoolCol",
+              true),
+            IFLM("Scalars", "boolField2", "Boolean!", "scalars", "intCol", IntTypeName),
+            INFM("Scalars", "nullableBoolField1", "Boolean", true, "scalars", "boolCol", false),
+            IFLM(
+              "Scalars",
+              "nullableBoolField2",
+              "Boolean",
+              "scalars",
+              "nullableIntCol",
+              IntTypeName),
+            INFM(
+              "Scalars",
+              "stringsField",
+              "[String]!",
+              false,
+              "scalars",
+              "nullableStringsCol",
+              true),
+            INFM(
+              "Scalars",
+              "nullableStringsField",
+              "[String]",
+              true,
+              "scalars",
+              "stringsCol",
+              false),
+            IFTM("Scalars", "jsonbField", "Record", "scalars", "boolCol", BooleanTypeName),
+            IFTM(
+              "Scalars",
+              "nullableJsonbField",
+              "Record!",
+              "scalars",
+              "nullableBoolCol",
+              BooleanTypeName)
+          ) =>
     }
 
     check(es.drop(8)) {
-      case
-        List(
-          NK("Scalars"),
-          ND("Intrf"),
-          NK("Intrf"),
-          SEM("Obj1", "embedded", "Obj3", List("obj1"), List("obj2")),
-          MJ("Obj1", "sub1", "obj1", "subObj1", List(("obj1", "join"), ("join", "obj1"))),
-          NK("Obj1"),
-          NJC("Obj3", "sub3"),
-          IJC("Obj2", "sub2", List("obj2"), List("subObj2", "subObj3")),
-          SIM("Obj2", List("Obj2", "Intrf"), List("obj2", "obj1")),
-          STM("Obj2", List("obj2", "obj1")),
-          ASNK("Obj2", "assoc"),
-          NK("Obj2"),
-          ISMU("Union", "bogus"),
-          NHUFM("Union", "id"),
-          SUM("Union", List("Obj1", "Obj2"), List("obj1", "obj2")),
-          ND("Union"),
-          NK("Union"),
-          UFM("Intrf", "id")
-        ) =>
+      case List(
+            NK("Scalars"),
+            ND("Intrf"),
+            NK("Intrf"),
+            SEM("Obj1", "embedded", "Obj3", List("obj1"), List("obj2")),
+            MJ("Obj1", "sub1", "obj1", "subObj1", List(("obj1", "join"), ("join", "obj1"))),
+            NK("Obj1"),
+            NJC("Obj3", "sub3"),
+            IJC("Obj2", "sub2", List("obj2"), List("subObj2", "subObj3")),
+            SIM("Obj2", List("Obj2", "Intrf"), List("obj2", "obj1")),
+            STM("Obj2", List("obj2", "obj1")),
+            ASNK("Obj2", "assoc"),
+            NK("Obj2"),
+            ISMU("Union", "bogus"),
+            NHUFM("Union", "id"),
+            SUM("Union", List("Obj1", "Obj2"), List("obj1", "obj2")),
+            ND("Union"),
+            NK("Union"),
+            UFM("Intrf", "id")
+          ) =>
     }
   }
 }

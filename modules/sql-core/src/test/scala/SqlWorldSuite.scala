@@ -21,7 +21,6 @@ import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
-
 import grackle.test.GraphQLResponseTests.{assertNoErrorsIO, assertWeaklyEqualIO}
 
 trait SqlWorldSuite extends CatsEffectSuite {
@@ -42,10 +41,7 @@ trait SqlWorldSuite extends CatsEffectSuite {
     val res = mapping.compileAndRun(query)
 
     val resSize =
-      res.map (_.hcursor
-        .downField("data")
-        .downField("countries")
-        .values.map(_.size))
+      res.map(_.hcursor.downField("data").downField("countries").values.map(_.size))
 
     assertIO(resSize, Some(expected))
   }
@@ -864,17 +860,18 @@ trait SqlWorldSuite extends CatsEffectSuite {
 
     mapping.compileAndRun(query).map { json =>
       val countries =
-        json
-          .hcursor
-          .downField("data")
-          .downField("countries")
-          .values
-          .map(_.toVector)
-          .get
+        json.hcursor.downField("data").downField("countries").values.map(_.toVector).get
 
-      val map = countries.map(j => j.hcursor.downField("name").as[String].toOption.get -> j.hcursor.downField("cities").values.map(_.size).get).toMap
+      val map = countries
+        .map(j =>
+          j.hcursor
+            .downField("name")
+            .as[String]
+            .toOption
+            .get -> j.hcursor.downField("cities").values.map(_.size).get)
+        .toMap
 
-      assert(map("Kazakstan")  == 21)
+      assert(map("Kazakstan") == 21)
       assert(map("Antarctica") == 0)
     }
   }
@@ -1512,10 +1509,13 @@ trait SqlWorldSuite extends CatsEffectSuite {
     val expected = 4079
 
     val resTotal =
-      res.map(_.hcursor
-        .downField("data")
-        .downField("countries")
-        .values.flatMap(_.toSeq.traverse(_.hcursor.downField("numCities").as[Int]).map(_.sum).toOption)
+      res.map(
+        _.hcursor
+          .downField("data")
+          .downField("countries")
+          .values
+          .flatMap(
+            _.toSeq.traverse(_.hcursor.downField("numCities").as[Int]).map(_.sum).toOption)
       )
 
     assertNoErrorsIO(res) *>
@@ -1536,10 +1536,13 @@ trait SqlWorldSuite extends CatsEffectSuite {
     val expected = 4079
 
     val resTotal =
-      res.map(_.hcursor
-        .downField("data")
-        .downField("countries")
-        .values.flatMap(_.toSeq.traverse(_.hcursor.downField("numCities").as[Int]).map(_.sum).toOption)
+      res.map(
+        _.hcursor
+          .downField("data")
+          .downField("countries")
+          .values
+          .flatMap(
+            _.toSeq.traverse(_.hcursor.downField("numCities").as[Int]).map(_.sum).toOption)
       )
 
     assertNoErrorsIO(res) *>
@@ -1560,10 +1563,13 @@ trait SqlWorldSuite extends CatsEffectSuite {
     val expected = 255
 
     val resTotal =
-      res.map(_.hcursor
-        .downField("data")
-        .downField("countries")
-        .values.flatMap(_.toSeq.traverse(_.hcursor.downField("numCities").as[Int]).map(_.sum).toOption)
+      res.map(
+        _.hcursor
+          .downField("data")
+          .downField("countries")
+          .values
+          .flatMap(
+            _.toSeq.traverse(_.hcursor.downField("numCities").as[Int]).map(_.sum).toOption)
       )
 
     assertNoErrorsIO(res) *>
@@ -1596,8 +1602,9 @@ trait SqlWorldSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = if (isJS)
-      json"""
+    val expected =
+      if (isJS)
+        json"""
           {
             "data" : {
               "country" : {
@@ -1620,8 +1627,8 @@ trait SqlWorldSuite extends CatsEffectSuite {
             }
           }
         """
-    else
-      json"""
+      else
+        json"""
           {
             "data" : {
               "country" : {
@@ -1689,8 +1696,9 @@ trait SqlWorldSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = if (isJS)
-      json"""
+    val expected =
+      if (isJS)
+        json"""
         {
           "data" : {
             "language" : {
@@ -1701,8 +1709,8 @@ trait SqlWorldSuite extends CatsEffectSuite {
           }
         }
       """
-    else
-      json"""
+      else
+        json"""
         {
           "data" : {
             "language" : {

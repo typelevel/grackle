@@ -17,18 +17,16 @@ package grackle.skunk.test
 
 import cats.effect.{IO, Resource}
 import munit.catseffect.IOFixture
+import org.typelevel.twiddles._
 import skunk.Session
 import skunk.codec.{all => codec}
 import skunk.data.Encoded
 import skunk.implicits._
 
+import grackle.Mapping
 import grackle.skunk.SkunkMonitor
 import grackle.sql.SqlStatsMonitor
-
 import grackle.sql.test._
-import grackle.Mapping
-
-import org.typelevel.twiddles._
 
 final class ArrayJoinSuite extends SkunkDatabaseSuite with SqlArrayJoinSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlArrayJoinMapping[IO]
@@ -36,15 +34,21 @@ final class ArrayJoinSuite extends SkunkDatabaseSuite with SqlArrayJoinSuite {
 
 final class CoalesceSuite extends SkunkDatabaseSuite with SqlCoalesceSuite {
   type Fragment = skunk.AppliedFragment
-  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO,Fragment])] =
-    SkunkMonitor.statsMonitor[IO].map(mon => (new SkunkTestMapping(pool, mon) with SqlCoalesceMapping[IO], mon))
+  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO, Fragment])] =
+    SkunkMonitor
+      .statsMonitor[IO]
+      .map(mon => (new SkunkTestMapping(pool, mon) with SqlCoalesceMapping[IO], mon))
 }
 
 final class ComposedWorldSuite extends SkunkDatabaseSuite with SqlComposedWorldSuite {
   def mapping: IO[(CurrencyMapping[IO], Mapping[IO])] =
     for {
       currencyMapping <- CurrencyMapping[IO]
-    } yield (currencyMapping, new SqlComposedMapping(new SkunkTestMapping(pool) with SqlWorldMapping[IO], currencyMapping))
+    } yield (
+      currencyMapping,
+      new SqlComposedMapping(
+        new SkunkTestMapping(pool) with SqlWorldMapping[IO],
+        currencyMapping))
 }
 
 final class CompositeKeySuite extends SkunkDatabaseSuite with SqlCompositeKeySuite {
@@ -71,11 +75,15 @@ final class FilterJoinAliasSuite extends SkunkDatabaseSuite with SqlFilterJoinAl
   lazy val mapping = new SkunkTestMapping(pool) with SqlFilterJoinAliasMapping[IO]
 }
 
-final class FilterOrderOffsetLimitSuite extends SkunkDatabaseSuite with SqlFilterOrderOffsetLimitSuite {
+final class FilterOrderOffsetLimitSuite
+    extends SkunkDatabaseSuite
+    with SqlFilterOrderOffsetLimitSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlFilterOrderOffsetLimitMapping[IO]
 }
 
-final class FilterOrderOffsetLimit2Suite extends SkunkDatabaseSuite with SqlFilterOrderOffsetLimit2Suite {
+final class FilterOrderOffsetLimit2Suite
+    extends SkunkDatabaseSuite
+    with SqlFilterOrderOffsetLimit2Suite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlFilterOrderOffsetLimit2Mapping[IO]
 }
 
@@ -107,17 +115,22 @@ final class LikeSuite extends SkunkDatabaseSuite with SqlLikeSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlLikeMapping[IO]
 }
 
-final class MappingValidatorValidSuite extends SkunkDatabaseSuite with SqlMappingValidatorValidSuite {
+final class MappingValidatorValidSuite
+    extends SkunkDatabaseSuite
+    with SqlMappingValidatorValidSuite {
   // no DB instance needed for this suite
   lazy val mapping =
     new SkunkTestMapping(null) with SqlMappingValidatorValidMapping[IO] {
       def genre: TestCodec[Genre] = (codec.int4.imap(Genre.fromInt)(Genre.toInt), false)
-      def feature: TestCodec[Feature] = (codec.varchar.imap(Feature.fromString)(_.toString), false)
+      def feature: TestCodec[Feature] =
+        (codec.varchar.imap(Feature.fromString)(_.toString), false)
     }
   override def munitFixtures: Seq[IOFixture[_]] = Nil
 }
 
-final class MappingValidatorInvalidSuite extends SkunkDatabaseSuite with SqlMappingValidatorInvalidSuite {
+final class MappingValidatorInvalidSuite
+    extends SkunkDatabaseSuite
+    with SqlMappingValidatorInvalidSuite {
   // no DB instance needed for this suite
   lazy val mapping = new SkunkTestMapping(null) with SqlMappingValidatorInvalidMapping[IO]
   override def munitFixtures: Seq[IOFixture[_]] = Nil
@@ -131,16 +144,19 @@ final class MovieSuite extends SkunkDatabaseSuite with SqlMovieSuite {
   lazy val mapping =
     new SkunkTestMapping(pool) with SqlMovieMapping[IO] {
       def genre: TestCodec[Genre] = (codec.int4.imap(Genre.fromInt)(Genre.toInt), false)
-      def feature: TestCodec[Feature] = (codec.varchar.imap(Feature.fromString)(_.toString), false)
+      def feature: TestCodec[Feature] =
+        (codec.varchar.imap(Feature.fromString)(_.toString), false)
       def tagList: TestCodec[List[String]] = (codec.int4.imap(Tags.fromInt)(Tags.toInt), false)
     }
 }
 
 final class MutationSuite extends SkunkDatabaseSuite with SqlMutationSuite {
   // A resource that copies and drops the table used in the tests.
-  def withDuplicatedTables(p: Resource[IO, Session[IO]]): Resource[IO, Resource[IO, Session[IO]]] = {
-    val alloc = p.use(_.execute(sql"CREATE TABLE city_copy AS SELECT * FROM city".command)).as(p)
-    val free  = p.use(_.execute(sql"DROP TABLE city_copy".command)).void
+  def withDuplicatedTables(
+      p: Resource[IO, Session[IO]]): Resource[IO, Resource[IO, Session[IO]]] = {
+    val alloc =
+      p.use(_.execute(sql"CREATE TABLE city_copy AS SELECT * FROM city".command)).as(p)
+    val free = p.use(_.execute(sql"DROP TABLE city_copy".command)).void
     Resource.make(alloc)(_ => free)
   }
 
@@ -150,14 +166,16 @@ final class MutationSuite extends SkunkDatabaseSuite with SqlMutationSuite {
   lazy val mapping =
     new SkunkTestMapping(pool) with SqlMutationMapping[IO] {
       def updatePopulation(id: Int, population: Int): IO[Unit] =
-        pool.use(_.prepareR(sql"UPDATE city_copy SET population=${codec.int4} WHERE id=${codec.int4}".command).use { ps =>
-          ps.execute(population *: id *: EmptyTuple).void
-        })
+        pool.use(
+          _.prepareR(
+            sql"UPDATE city_copy SET population=${codec.int4} WHERE id=${codec.int4}".command)
+            .use { ps => ps.execute(population *: id *: EmptyTuple).void })
 
       def createCity(name: String, countryCode: String, population: Int): IO[Int] = {
         val q = sql"""
             INSERT INTO city_copy (id, name, countrycode, district, population)
-            VALUES (nextval('city_id'), ${codec.varchar}, ${codec.bpchar(3)}, 'ignored', ${codec.int4})
+            VALUES (nextval('city_id'), ${codec.varchar}, ${codec.bpchar(
+            3)}, 'ignored', ${codec.int4})
             RETURNING id
           """.query(codec.int4)
         pool.use(_.prepareR(q).use { ps =>
@@ -196,7 +214,9 @@ final class ProjectionSuite extends SkunkDatabaseSuite with SqlProjectionSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlProjectionMapping[IO]
 }
 
-final class RecursiveInterfacesSuite extends SkunkDatabaseSuite with SqlRecursiveInterfacesSuite {
+final class RecursiveInterfacesSuite
+    extends SkunkDatabaseSuite
+    with SqlRecursiveInterfacesSuite {
   lazy val mapping =
     new SkunkTestMapping(pool) with SqlRecursiveInterfacesMapping[IO] {
       def itemType: TestCodec[ItemType] =
@@ -223,8 +243,10 @@ final class WorldSuite extends SkunkDatabaseSuite with SqlWorldSuite {
 final class WorldCompilerSuite extends SkunkDatabaseSuite with SqlWorldCompilerSuite {
   type Fragment = skunk.AppliedFragment
 
-  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO,Fragment])] =
-    SkunkMonitor.statsMonitor[IO].map(mon => (new SkunkTestMapping(pool, mon) with SqlWorldMapping[IO], mon))
+  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO, Fragment])] =
+    SkunkMonitor
+      .statsMonitor[IO]
+      .map(mon => (new SkunkTestMapping(pool, mon) with SqlWorldMapping[IO], mon))
 
   def simpleRestrictedQuerySql: String =
     "SELECT country.code, country.name FROM country WHERE ((country.code = $1))"

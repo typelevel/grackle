@@ -13,27 +13,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle.doobie.postgres
-package test
+package grackle.doobie.postgres.test
 
 import java.time.{LocalDate, LocalTime, OffsetDateTime}
 import java.util.UUID
 
 import cats.effect.{IO, Resource, Sync}
 import doobie.{Get, Meta, Put, Transactor}
-import doobie.postgres.implicits._
 import doobie.postgres.circe.jsonb.implicits._
+import doobie.postgres.implicits._
 import io.circe.Json
 import munit.catseffect.IOFixture
 
 import grackle.doobie.DoobieMonitor
+import grackle.doobie.postgres.DoobiePgMapping
 import grackle.doobie.test.DoobieDatabaseSuite
 import grackle.sql.test._
 import grackle.sqlpg.test._
 
 trait DoobiePgDatabaseSuite extends DoobieDatabaseSuite with SqlPgDatabaseSuite {
-  abstract class DoobiePgTestMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F] = DoobieMonitor.noopMonitor[IO])
-    extends DoobiePgMapping[F](transactor, monitor) with DoobieTestMapping[F] with SqlTestMapping[F] {
+  abstract class DoobiePgTestMapping[F[_]: Sync](
+      transactor: Transactor[F],
+      monitor: DoobieMonitor[F] = DoobieMonitor.noopMonitor[IO])
+      extends DoobiePgMapping[F](transactor, monitor)
+      with DoobieTestMapping[F]
+      with SqlTestMapping[F] {
     def uuid: TestCodec[UUID] = (Meta[UUID], false)
     def localDate: TestCodec[LocalDate] = (Meta[LocalDate], false)
     def localTime: TestCodec[LocalTime] = (Meta[LocalTime], false)
@@ -57,7 +61,8 @@ trait DoobiePgDatabaseSuite extends DoobieDatabaseSuite with SqlPgDatabaseSuite 
     )
   }
 
-  val transactorFixture: IOFixture[Transactor[IO]] = ResourceSuiteLocalFixture("doobiepg", transactorResource)
+  val transactorFixture: IOFixture[Transactor[IO]] =
+    ResourceSuiteLocalFixture("doobiepg", transactorResource)
   override def munitFixtures: Seq[IOFixture[_]] = Seq(transactorFixture)
 
   def transactor: Transactor[IO] = transactorFixture()

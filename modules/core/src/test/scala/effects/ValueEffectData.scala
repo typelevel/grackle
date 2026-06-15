@@ -42,23 +42,22 @@ class ValueEffectMapping[F[_]: Sync](ref: SignallingRef[F, Int]) extends ValueMa
   val typeMappings = List(
     ObjectMapping(
       tpe = QueryType,
-      fieldMappings =
-        List(
-          // Compute a ValueCursor
-          RootEffect.computeCursor("foo")((p, e) =>
-            ref.update(_+1).as(
+      fieldMappings = List(
+        // Compute a ValueCursor
+        RootEffect.computeCursor("foo")((p, e) =>
+          ref
+            .update(_ + 1)
+            .as(
               Result(valueCursor(p, e, Struct(42, "hi")))
-            )
-          )
-        )
+            ))
+      )
     ),
     ValueObjectMapping[Struct](
       tpe = StructType,
-      fieldMappings =
-        List(
-          ValueField("n", _.n),
-          ValueField("s", _.s),
-        )
+      fieldMappings = List(
+        ValueField("n", _.n),
+        ValueField("s", _.s)
+      )
     )
   )
 }

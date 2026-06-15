@@ -18,40 +18,42 @@ package grackle.sql.test
 import cats.implicits._
 
 import grackle._
-import sql.Like
-import syntax._
-import Query._, Predicate._, Value._
-import QueryCompiler._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
+import grackle.sql.Like
+import grackle.syntax._
 
 trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
   object root extends RootDef {
     val numCountries = col("num_countries", int8)
   }
   object country extends TableDef("country") {
-    val code           = col("code", bpchar(3))
-    val name           = col("name", nvarchar)
-    val continent      = col("continent", nvarchar)
-    val region         = col("region", nvarchar)
-    val surfacearea    = col("surfacearea", float4)
-    val indepyear      = col("indepyear", nullable(int2))
-    val population     = col("population", int4)
+    val code = col("code", bpchar(3))
+    val name = col("name", nvarchar)
+    val continent = col("continent", nvarchar)
+    val region = col("region", nvarchar)
+    val surfacearea = col("surfacearea", float4)
+    val indepyear = col("indepyear", nullable(int2))
+    val population = col("population", int4)
     val lifeexpectancy = col("lifeexpectancy", nullable(float4))
-    val gnp            = col("gnp", nullable(numeric(10, 2)))
-    val gnpold         = col("gnpold", nullable(numeric(10, 2)))
-    val localname      = col("localname", nvarchar)
+    val gnp = col("gnp", nullable(numeric(10, 2)))
+    val gnpold = col("gnpold", nullable(numeric(10, 2)))
+    val localname = col("localname", nvarchar)
     val governmentform = col("governmentform", nvarchar)
-    val headofstate    = col("headofstate", nullable(nvarchar))
-    val capitalId      = col("capital", nullable(int4))
-    val numCities      = col("num_cities", int8)
-    val code2          = col("code2", bpchar(2))
+    val headofstate = col("headofstate", nullable(nvarchar))
+    val capitalId = col("capital", nullable(int4))
+    val numCities = col("num_cities", int8)
+    val code2 = col("code2", bpchar(2))
   }
 
   object city extends TableDef("city") {
-    val id          = col("id", int4)
+    val id = col("id", int4)
     val countrycode = col("countrycode", bpchar(3))
-    val name        = col("name", nvarchar)
-    val district    = col("district", nvarchar)
-    val population  = col("population", int4)
+    val name = col("name", nvarchar)
+    val district = col("district", nvarchar)
+    val population = col("population", int4)
   }
 
   object countrylanguage extends TableDef("countrylanguage") {
@@ -108,9 +110,9 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
       }
     """
 
-  val QueryType    = schema.ref("Query")
-  val CountryType  = schema.ref("Country")
-  val CityType     = schema.ref("City")
+  val QueryType = schema.ref("Query")
+  val CountryType = schema.ref("Country")
+  val CityType = schema.ref("City")
   val LanguageType = schema.ref("Language")
 
   val typeMappings =
@@ -132,26 +134,26 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
       ObjectMapping(
         tpe = CountryType,
         fieldMappings = List(
-          SqlField("code",           country.code, key = true, hidden = true),
-          SqlField("name",           country.name),
-          SqlField("continent",      country.continent),
-          SqlField("region",         country.region),
-          SqlField("surfacearea",    country.surfacearea),
-          SqlField("indepyear",      country.indepyear),
-          SqlField("population",     country.population),
+          SqlField("code", country.code, key = true, hidden = true),
+          SqlField("name", country.name),
+          SqlField("continent", country.continent),
+          SqlField("region", country.region),
+          SqlField("surfacearea", country.surfacearea),
+          SqlField("indepyear", country.indepyear),
+          SqlField("population", country.population),
           SqlField("lifeexpectancy", country.lifeexpectancy),
-          SqlField("gnp",            country.gnp),
-          SqlField("gnpold",         country.gnpold),
-          SqlField("localname",      country.localname),
+          SqlField("gnp", country.gnp),
+          SqlField("gnpold", country.gnpold),
+          SqlField("localname", country.localname),
           SqlField("governmentform", country.governmentform),
-          SqlField("headofstate",    country.headofstate),
-          SqlField("capitalId",      country.capitalId),
-          SqlField("code2",          country.code2),
-          SqlField("numCities",      country.numCities),
-          SqlObject("cities",        Join(country.code, city.countrycode)),
-          SqlObject("city",          Join(country.code, city.countrycode)),
-          SqlObject("languages",     Join(country.code, countrylanguage.countrycode))
-        ),
+          SqlField("headofstate", country.headofstate),
+          SqlField("capitalId", country.capitalId),
+          SqlField("code2", country.code2),
+          SqlField("numCities", country.numCities),
+          SqlObject("cities", Join(country.code, city.countrycode)),
+          SqlObject("city", Join(country.code, city.countrycode)),
+          SqlObject("languages", Join(country.code, countrylanguage.countrycode))
+        )
       ),
       ObjectMapping(
         tpe = CityType,
@@ -161,7 +163,7 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
           SqlField("name", city.name),
           SqlField("district", city.district),
           SqlField("population", city.population),
-          SqlObject("country", Join(city.countrycode, country.code)),
+          SqlObject("country", Join(city.countrycode, country.code))
         )
       ),
       ObjectMapping(
@@ -179,22 +181,31 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
   object StringListValue {
     def unapply(value: Value): Option[List[String]] =
       value match {
-        case ListValue(l) => l.traverse {
-          case StringValue(s) => Some(s)
-          case _ => None
-        }
+        case ListValue(l) =>
+          l.traverse {
+            case StringValue(s) => Some(s)
+            case _ => None
+          }
         case _ => None
       }
   }
 
   override val selectElaborator = SelectElaborator {
     case (QueryType, "country", List(Binding("code", StringValue(code)))) =>
-      Elab.transformChild(child => Unique(Filter(Eql(CountryType / "code", Const(code)), child)))
+      Elab.transformChild(child =>
+        Unique(Filter(Eql(CountryType / "code", Const(code)), child)))
 
     case (QueryType, "city", List(Binding("id", IntValue(id)))) =>
       Elab.transformChild(child => Unique(Filter(Eql(CityType / "id", Const(id)), child)))
 
-    case (QueryType, "countries", List(Binding("limit", IntValue(num)), Binding("offset", IntValue(off)), Binding("minPopulation", IntValue(min)), Binding("byPopulation", BooleanValue(byPop)))) =>
+    case (
+          QueryType,
+          "countries",
+          List(
+            Binding("limit", IntValue(num)),
+            Binding("offset", IntValue(off)),
+            Binding("minPopulation", IntValue(min)),
+            Binding("byPopulation", BooleanValue(byPop)))) =>
       def limit(query: Query): Query =
         if (num < 1) query
         else Limit(num, query)
@@ -224,12 +235,18 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
         Elab.transformChild(child => Filter(Like(CityType / "name", namePattern, true), child))
 
     case (QueryType, "language", List(Binding("language", StringValue(language)))) =>
-      Elab.transformChild(child => Unique(Filter(Eql(LanguageType / "language", Const(language)), child)))
+      Elab.transformChild(child =>
+        Unique(Filter(Eql(LanguageType / "language", Const(language)), child)))
 
     case (QueryType, "languages", List(Binding("languages", StringListValue(languages)))) =>
       Elab.transformChild(child => Filter(In(CityType / "language", languages), child))
 
-    case (QueryType, "search", List(Binding("minPopulation", IntValue(min)), Binding("indepSince", IntValue(year)))) =>
+    case (
+          QueryType,
+          "search",
+          List(
+            Binding("minPopulation", IntValue(min)),
+            Binding("indepSince", IntValue(year)))) =>
       Elab.transformChild(child =>
         Filter(
           And(
@@ -237,11 +254,14 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
             Not(Lt(CountryType / "indepyear", Const(Option(year))))
           ),
           child
-        )
-      )
+        ))
 
-    case (QueryType, "search2", List(Binding("indep", BooleanValue(indep)), Binding("limit", IntValue(num)))) =>
-      Elab.transformChild(child => Limit(num, Filter(IsNull[Int](CountryType / "indepyear", isNull = !indep), child)))
+    case (
+          QueryType,
+          "search2",
+          List(Binding("indep", BooleanValue(indep)), Binding("limit", IntValue(num)))) =>
+      Elab.transformChild(child =>
+        Limit(num, Filter(IsNull[Int](CountryType / "indepyear", isNull = !indep), child)))
 
     case (QueryType, "numCountries", Nil) =>
       Elab.transformChild(_ => Count(Select("countries", Select("code2"))))
@@ -250,7 +270,9 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
       Elab.transformChild(_ => Count(Select("cities", Select("name"))))
 
     case (CountryType, "numCities", List(Binding("namePattern", StringValue(namePattern)))) =>
-      Elab.transformChild(_ => Count(Select("cities", Filter(Like(CityType / "name", namePattern, true), Select("name")))))
+      Elab.transformChild(_ =>
+        Count(
+          Select("cities", Filter(Like(CityType / "name", namePattern, true), Select("name")))))
 
     case (CountryType, "city", List(Binding("id", IntValue(id)))) =>
       Elab.transformChild(child => Unique(Filter(Eql(CityType / "id", Const(id)), child)))

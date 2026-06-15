@@ -19,8 +19,8 @@ import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
+import grackle.Query._
 import grackle.syntax._
-import Query._
 
 final class SkipIncludeSuite extends CatsEffectSuite {
   test("skip/include field") {
@@ -49,10 +49,11 @@ final class SkipIncludeSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Group(List(
-        Select("field", Some("b"), Select("subfieldB")),
-        Select("field", Some("c"), Select("subfieldA"))
-      ))
+      Group(
+        List(
+          Select("field", Some("b"), Select("subfieldB")),
+          Select("field", Some("c"), Select("subfieldA"))
+        ))
 
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
 
@@ -90,22 +91,29 @@ final class SkipIncludeSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Group(List(
-        Select("field", Some("a")),
-        Select("field", Some("b"),
-          Group(List(
-            Select("subfieldA"),
-            Select("subfieldB")
-          ))
-        ),
-        Select("field", Some("c"),
-          Group(List(
-            Select("subfieldA"),
-            Select("subfieldB")
-          ))
-        ),
-        Select("field", Some("d"))
-      ))
+      Group(
+        List(
+          Select("field", Some("a")),
+          Select(
+            "field",
+            Some("b"),
+            Group(
+              List(
+                Select("subfieldA"),
+                Select("subfieldB")
+              ))
+          ),
+          Select(
+            "field",
+            Some("c"),
+            Group(
+              List(
+                Select("subfieldA"),
+                Select("subfieldB")
+              ))
+          ),
+          Select("field", Some("d"))
+        ))
 
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
 
@@ -136,11 +144,13 @@ final class SkipIncludeSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Select("field",
-        Group(List(
-          Select("subfieldB", Some("b")),
-          Select("subfieldA", Some("c"))
-        ))
+      Select(
+        "field",
+        Group(
+          List(
+            Select("subfieldB", Some("b")),
+            Select("subfieldA", Some("c"))
+          ))
       )
 
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
@@ -186,22 +196,29 @@ final class SkipIncludeSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Group(List(
-        Select("field", Some("a")),
-        Select("field", Some("b"),
-          Group(List(
-            Select("subfieldA"),
-            Select("subfieldB")
-          ))
-        ),
-        Select("field", Some("c"),
-          Group(List(
-            Select("subfieldA"),
-            Select("subfieldB")
-          ))
-        ),
-        Select("field", Some("d"))
-      ))
+      Group(
+        List(
+          Select("field", Some("a")),
+          Select(
+            "field",
+            Some("b"),
+            Group(
+              List(
+                Select("subfieldA"),
+                Select("subfieldB")
+              ))
+          ),
+          Select(
+            "field",
+            Some("c"),
+            Group(
+              List(
+                Select("subfieldA"),
+                Select("subfieldB")
+              ))
+          ),
+          Select("field", Some("d"))
+        ))
 
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
 
@@ -230,11 +247,13 @@ final class SkipIncludeSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Select("field",
-        Group(List(
-          Select("subfieldB", Some("b")),
-          Select("subfieldA", Some("c"))
-        ))
+      Select(
+        "field",
+        Group(
+          List(
+            Select("subfieldB", Some("b")),
+            Select("subfieldA", Some("c"))
+          ))
       )
 
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))

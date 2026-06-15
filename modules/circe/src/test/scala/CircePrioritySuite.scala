@@ -13,15 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package circetests
+package grackle.circetests
 
 import cats.effect.IO
 import io.circe.Json
 import io.circe.literal._
+import munit.CatsEffectSuite
+
 import grackle.circe.CirceMapping
 import grackle.syntax._
-import munit.CatsEffectSuite
 
 object CircePriorityMapping extends CirceMapping[IO] {
 
@@ -39,30 +39,28 @@ object CircePriorityMapping extends CirceMapping[IO] {
   }
   """
 
-  val QueryType  = schema.ref("Query")
+  val QueryType = schema.ref("Query")
   val MonkeyType = schema.ref("Monkey")
   val BarrelType = schema.ref("Barrel")
-  val FooType    = schema.ref("Foo") 
+  val FooType = schema.ref("Foo")
 
   val typeMappings =
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            CirceField("present", json"""{ "monkey": { "name": "Bob" }}"""),
-            CirceField("fallback", json"""{ "monkey": {}}"""),
-          )
+        fieldMappings = List(
+          CirceField("present", json"""{ "monkey": { "name": "Bob" }}"""),
+          CirceField("fallback", json"""{ "monkey": {}}""")
+        )
       ),
       ObjectMapping(
         tpe = MonkeyType,
-        fieldMappings = 
-          List(
-            CirceField("name", Json.fromString("Steve"))
-          )
+        fieldMappings = List(
+          CirceField("name", Json.fromString("Steve"))
+        )
       ),
       LeafMapping[String](FooType)
-    )    
+    )
 
 }
 

@@ -25,12 +25,11 @@ import org.typelevel.otel4s.metrics.Meter
 import org.typelevel.otel4s.metrics.Meter.Implicits.noop as metricsNoop
 import org.typelevel.otel4s.trace.Tracer
 import org.typelevel.otel4s.trace.Tracer.Implicits.noop
-import skunk.{ Codec => SCodec, Session }
-import skunk.codec.{ all => codec }
-import skunk.circe.codec.{ all => ccodec }
+import skunk.{Codec => SCodec, Session}
+import skunk.circe.codec.{all => ccodec}
+import skunk.codec.{all => codec}
 
-import grackle._, skunk._
-
+import grackle.skunk._
 import grackle.sql.test._
 import grackle.sqlpg.test._
 
@@ -43,7 +42,8 @@ trait SkunkDatabaseSuite extends SqlPgDatabaseSuite {
     val connInfo = postgresConnectionInfo
     import connInfo._
 
-    Session.Builder[IO]
+    Session
+      .Builder[IO]
       .withHost(host)
       .withPort(port)
       .withUserAndPassword(username, password)
@@ -52,27 +52,33 @@ trait SkunkDatabaseSuite extends SqlPgDatabaseSuite {
       .pooled(max = 3)
   }
 
-  val poolFixture: IOFixture[Resource[IO, Session[IO]]] = ResourceSuiteLocalFixture("skunk", poolResource)
+  val poolFixture: IOFixture[Resource[IO, Session[IO]]] =
+    ResourceSuiteLocalFixture("skunk", poolResource)
   override def munitFixtures: Seq[IOFixture[_]] = Seq(poolFixture)
 
   def pool: Resource[IO, Session[IO]] = poolFixture()
 
-  abstract class SkunkTestMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F] = SkunkMonitor.noopMonitor[IO])
-    extends SkunkMapping[F](pool, monitor) with SqlTestMapping[F] {
+  abstract class SkunkTestMapping[F[_]: Sync](
+      pool: Resource[F, Session[F]],
+      monitor: SkunkMonitor[F] = SkunkMonitor.noopMonitor[IO])
+      extends SkunkMapping[F](pool, monitor)
+      with SqlTestMapping[F] {
 
     type TestCodec[T] = (SCodec[T], Boolean)
 
     def bool: TestCodec[Boolean] = (codec.bool, false)
     def text: TestCodec[String] = (codec.text, false)
     def varchar: TestCodec[String] = (codec.varchar, false)
-    def nvarchar: TestCodec[String] = (codec.text, false) // For compatbiltity with Oracle in these Suites.
+    def nvarchar: TestCodec[String] =
+      (codec.text, false) // For compatbiltity with Oracle in these Suites.
     def bpchar(len: Int): TestCodec[String] = (codec.bpchar(len), false)
     def int2: TestCodec[Int] = (codec.int2.imap(_.toInt)(_.toShort), false)
     def int4: TestCodec[Int] = (codec.int4, false)
     def int8: TestCodec[Long] = (codec.int8, false)
     def float4: TestCodec[Float] = (codec.float4, false)
     def float8: TestCodec[Double] = (codec.float8, false)
-    def numeric(precision: Int, scale: Int): TestCodec[BigDecimal] = (codec.numeric(precision, scale), false)
+    def numeric(precision: Int, scale: Int): TestCodec[BigDecimal] =
+      (codec.numeric(precision, scale), false)
 
     def uuid: TestCodec[UUID] = (codec.uuid, false)
     def localDate: TestCodec[LocalDate] = (codec.date, false)
@@ -84,9 +90,9 @@ trait SkunkDatabaseSuite extends SqlPgDatabaseSuite {
 
     def nullable[T](c: TestCodec[T]): TestCodec[T] = (c._1.opt, true).asInstanceOf[TestCodec[T]]
 
-    def list[T: CDecoder : CEncoder](c: TestCodec[T]): TestCodec[List[T]] = {
+    def list[T: CDecoder: CEncoder](c: TestCodec[T]): TestCodec[List[T]] = {
       val cc = c._1
-      val ty = _root_.skunk.data.Type(s"_${cc.types.head.name}", cc.types)
+      val ty = skunk.data.Type(s"_${cc.types.head.name}", cc.types)
       val encode = (elem: T) => cc.encode(elem).head.get.value
       val decode = (str: String) => cc.decode(0, List(Some(str))).left.map(_.message)
       (SCodec.array(encode, decode, ty), false).asInstanceOf[TestCodec[List[T]]]

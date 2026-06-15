@@ -19,19 +19,21 @@ import scala.annotation.tailrec
 import scala.util.matching.Regex
 
 import cats.Apply
-import cats.kernel.{ Eq, Order }
 import cats.implicits._
+import cats.kernel.{Eq, Order}
 
-import syntax._
+import grackle.syntax._
 
 /**
  * A reified function over a `Cursor`.
  *
- * Query interpreters will typically need to introspect predicates (eg. in the doobie module
- * we need to be able to construct where clauses from predicates over fields/attributes), so
- * these cannot be arbitrary functions `Cursor => Boolean`.
+ * Query interpreters will typically need to introspect predicates (eg. in the doobie module we
+ * need to be able to construct where clauses from predicates over fields/attributes), so these
+ * cannot be arbitrary functions `Cursor => Boolean`.
  */
-trait Term[T] extends Product with Serializable { // fun fact: making this covariant crashes Scala 3
+trait Term[T]
+    extends Product
+    with Serializable { // fun fact: making this covariant crashes Scala 3
   def apply(c: Cursor): Result[T]
 
   def children: List[Term[_]]
@@ -48,7 +50,10 @@ trait Term[T] extends Product with Serializable { // fun fact: making this covar
   def forallR(f: Term[_] => Result[Boolean]): Result[Boolean] =
     f(this).flatMap { p =>
       if (!p) false.success
-      else children.foldLeftM(true) { case (acc, elem) => if(!acc) false.success else elem.forallR(f) }
+      else
+        children.foldLeftM(true) {
+          case (acc, elem) => if (!acc) false.success else elem.forallR(f)
+        }
     }
 }
 
@@ -74,9 +79,14 @@ trait Path {
   def isRoot = path.isEmpty
 }
 
-/** A path starting from some root type. */
+/**
+ * A path starting from some root type.
+ */
 object Path {
-  /** Construct an empty `Path` rooted at the given type. */
+
+  /**
+   * Construct an empty `Path` rooted at the given type.
+   */
   def from(tpe: Type): Path =
     PathImpl(tpe, Nil, tpe)
 
@@ -88,35 +98,40 @@ object Path {
     lazy val isList: Boolean = rootTpe.pathIsList(path)
 
     def /(elem: String): Path = {
-      val ftpe = tpe.underlyingField(elem).getOrElse(ScalarType.AttributeType) // Matches Context#forFieldOrAttribute
+      val ftpe = tpe
+        .underlyingField(elem)
+        .getOrElse(ScalarType.AttributeType) // Matches Context#forFieldOrAttribute
       copy(path = path :+ elem, tpe = ftpe)
     }
 
     def %(ntpe: NamedType): Path =
-      if(ntpe <:< tpe) copy(tpe = ntpe)
+      if (ntpe <:< tpe) copy(tpe = ntpe)
       else throw new IllegalArgumentException(s"Type $ntpe is not a subtype of $tpe")
   }
 }
 
 sealed trait PathTerm {
-  def children: List[Term[_]] =  Nil
+  def children: List[Term[_]] = Nil
   def path: List[String]
 }
 object PathTerm {
 
   case class ListPath[A](path: List[String]) extends Term[List[A]] with PathTerm {
     def apply(c: Cursor): Result[List[A]] =
-      c.flatListPath(path).flatMap(_.traverse {
-        case Predicate.ScalarFocus(f) => f.success
-        case _ => Result.internalError("impossible")
-      }).asInstanceOf[Result[List[A]]]
+      c.flatListPath(path)
+        .flatMap(_.traverse {
+          case Predicate.ScalarFocus(f) => f.success
+          case _ => Result.internalError("impossible")
+        })
+        .asInstanceOf[Result[List[A]]]
   }
 
   case class UniquePath[A](path: List[String]) extends Term[A] with PathTerm {
     def apply(c: Cursor): Result[A] =
       c.listPath(path).flatMap {
         case List(Predicate.ScalarFocus(a: A @unchecked)) => a.success
-        case other => Result.internalError(s"Expected exactly one element for path $path found $other")
+        case other =>
+          Result.internalError(s"Expected exactly one element for path $path found $other")
       }
   }
 
@@ -196,7 +211,7 @@ object Predicate {
   }
 
   case class Not(x: Predicate) extends Predicate {
-    def apply(c: Cursor): Result[Boolean] = x(c).map(! _)
+    def apply(c: Cursor): Result[Boolean] = x(c).map(!_)
     def children = List(x)
   }
 
@@ -214,7 +229,8 @@ object Predicate {
   }
 
   case class Contains[T: Eq](x: Term[List[T]], y: Term[T]) extends Predicate {
-    def apply(c: Cursor): Result[Boolean] = Apply[Result].map2(x(c), y(c))((xs, y0) => xs.exists(_ === y0))
+    def apply(c: Cursor): Result[Boolean] =
+      Apply[Result].map2(x(c), y(c))((xs, y0) => xs.exists(_ === y0))
     def children = List(x, y)
     def subst(x: Term[List[T]], y: Term[T]): Contains[T] = copy(x = x, y = y)
   }
@@ -281,7 +297,7 @@ object Predicate {
   }
 
   case class NotB(x: Term[Int]) extends Term[Int] {
-    def apply(c: Cursor): Result[Int] = x(c).map(~ _)
+    def apply(c: Cursor): Result[Int] = x(c).map(~_)
     def children = List(x)
   }
 

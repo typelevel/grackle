@@ -13,16 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package sqlpg
+package grackle.sqlpg
 
 import cats.MonadThrow
 import cats.syntax.all._
 
+import grackle._
+import grackle.Query.OrderSelection
 import grackle.sql.SqlMappingLike
-import Query.OrderSelection
 
-abstract class SqlPgMapping[F[_]](implicit val M: MonadThrow[F]) extends Mapping[F] with SqlPgMappingLike[F]
+abstract class SqlPgMapping[F[_]](implicit val M: MonadThrow[F])
+    extends Mapping[F]
+    with SqlPgMappingLike[F]
 
 trait SqlPgMappingLike[F[_]] extends SqlMappingLike[F] {
   import SqlQuery.SqlSelect
@@ -41,7 +43,7 @@ trait SqlPgMappingLike[F[_]] extends SqlMappingLike[F] {
     Fragments.const(" LIMIT ") |+| limit
 
   def likeToFragment(expr: Fragment, pattern: String, caseInsensitive: Boolean): Fragment = {
-    val op = if(caseInsensitive) "ILIKE" else "LIKE"
+    val op = if (caseInsensitive) "ILIKE" else "LIKE"
     expr |+| Fragments.const(s" $op ") |+| Fragments.bind(stringEncoder, pattern)
   }
 
@@ -54,9 +56,14 @@ trait SqlPgMappingLike[F[_]] extends SqlMappingLike[F] {
   def collateSelected: Boolean = true
 
   def distinctOnToFragment(dcols: List[Fragment]): Fragment =
-    Fragments.const("DISTINCT ON ") |+| Fragments.parentheses(dcols.intercalate(Fragments.const(", ")))
+    Fragments.const("DISTINCT ON ") |+| Fragments.parentheses(
+      dcols.intercalate(Fragments.const(", ")))
 
-  def distinctOrderColumn(owner: ColumnOwner, col: SqlColumn, predCols: List[SqlColumn], orders: List[OrderSelection[_]]): SqlColumn = col
+  def distinctOrderColumn(
+      owner: ColumnOwner,
+      col: SqlColumn,
+      predCols: List[SqlColumn],
+      orders: List[OrderSelection[_]]): SqlColumn = col
 
   def encapsulateUnionBranch(s: SqlSelect): SqlSelect = s
   def mkLateral(inner: Boolean): Laterality = Laterality.Lateral
@@ -64,11 +71,11 @@ trait SqlPgMappingLike[F[_]] extends SqlMappingLike[F] {
   def defaultOffsetForLimit(limit: Option[Int]): Option[Int] = None
 
   def orderToFragment(col: Fragment, ascending: Boolean, nullsLast: Boolean): Fragment = {
-    val dir = if(ascending) Fragments.empty else Fragments.const(" DESC")
+    val dir = if (ascending) Fragments.empty else Fragments.const(" DESC")
     val nulls =
-      if(!nullsLast && ascending)
+      if (!nullsLast && ascending)
         Fragments.const(" NULLS FIRST ")
-      else if(nullsLast && !ascending)
+      else if (nullsLast && !ascending)
         Fragments.const(" NULLS LAST ")
       else
         Fragments.empty

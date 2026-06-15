@@ -22,28 +22,33 @@ import cats.MonadThrow
 import io.circe.Json
 import org.tpolecat.sourcepos.SourcePos
 
-import syntax._
-import Cursor.{DeferredCursor}
+import grackle.Cursor.DeferredCursor
+import grackle.syntax._
 
-abstract class ValueMapping[F[_]](implicit val M: MonadThrow[F]) extends Mapping[F] with ValueMappingLike[F]
+abstract class ValueMapping[F[_]](implicit val M: MonadThrow[F])
+    extends Mapping[F]
+    with ValueMappingLike[F]
 
 trait ValueMappingLike[F[_]] extends Mapping[F] {
   import typeMappings._
 
   def mkCursor(context: Context, focus: Any, parent: Option[Cursor], env: Env): Cursor =
-    if(context.tpe.isUnderlyingLeaf)
+    if (context.tpe.isUnderlyingLeaf)
       LeafCursor(context, focus, parent, env)
     else
       ValueCursor(context, focus, parent, env)
 
   def valueCursor[T](path: Path, env: Env, t: T): Cursor =
-    if(path.path.isEmpty)
+    if (path.path.isEmpty)
       mkCursor(Context(path.rootTpe), t, None, env)
     else {
       DeferredCursor(path, (context, parent) => mkCursor(context, t, Some(parent), env).success)
     }
 
-  override def mkCursorForMappedField(parent: Cursor, fieldContext: Context, fm: FieldMapping): Result[Cursor] =
+  override def mkCursorForMappedField(
+      parent: Cursor,
+      fieldContext: Context,
+      fm: FieldMapping): Result[Cursor] =
     fm match {
       case ValueField(_, f, _) =>
         val parentFocus: Any = parent match {
@@ -63,33 +68,39 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
 
   object ValueFieldMapping {
     implicit def wrap[T](fm: FieldMapping): ValueFieldMapping[T] = Wrap(fm)
-    case class Wrap[T](fm: FieldMapping)(implicit val pos: SourcePos) extends ValueFieldMapping[T] {
+    case class Wrap[T](fm: FieldMapping)(implicit val pos: SourcePos)
+        extends ValueFieldMapping[T] {
       def fieldName = fm.fieldName
       def hidden = fm.hidden
       def subtree = fm.subtree
       def unwrap = fm
     }
   }
-  case class ValueField[T](fieldName: String, f: T => Any, hidden: Boolean = false)(implicit val pos: SourcePos) extends ValueFieldMapping[T] {
+  case class ValueField[T](fieldName: String, f: T => Any, hidden: Boolean = false)(
+      implicit val pos: SourcePos)
+      extends ValueFieldMapping[T] {
     def subtree: Boolean = false
     def unwrap: FieldMapping = this
   }
   object ValueField {
-    def fromValue[T](fieldName: String, t: T, hidden: Boolean = false)(implicit pos: SourcePos): ValueField[Unit] =
+    def fromValue[T](fieldName: String, t: T, hidden: Boolean = false)(
+        implicit pos: SourcePos): ValueField[Unit] =
       new ValueField[Unit](fieldName, _ => t, hidden)
   }
 
   object ValueObjectMapping {
     case class DefaultValueObjectMapping(
-      predicate: MappingPredicate,
-      fieldMappings: Seq[FieldMapping],
-      classTag: ClassTag[_]
-    )(implicit val pos: SourcePos) extends ObjectMapping {
+        predicate: MappingPredicate,
+        fieldMappings: Seq[FieldMapping],
+        classTag: ClassTag[_]
+    )(implicit val pos: SourcePos)
+        extends ObjectMapping {
       override def showMappingType: String = "ValueObjectMapping"
     }
 
     class Builder(predicate: MappingPredicate, pos: SourcePos) {
-      def on[T](fieldMappings: ValueFieldMapping[T]*)(implicit classTag: ClassTag[T]): ObjectMapping =
+      def on[T](fieldMappings: ValueFieldMapping[T]*)(
+          implicit classTag: ClassTag[T]): ObjectMapping =
         DefaultValueObjectMapping(predicate, fieldMappings.map(_.unwrap), classTag)(pos)
     }
 
@@ -103,17 +114,23 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
       new Builder(MappingPredicate.PathMatch(path), pos)
 
     def apply[T](
-      tpe: NamedType,
-      fieldMappings: List[ValueFieldMapping[T]]
+        tpe: NamedType,
+        fieldMappings: List[ValueFieldMapping[T]]
     )(implicit classTag: ClassTag[T], pos: SourcePos): ObjectMapping =
-      DefaultValueObjectMapping(MappingPredicate.TypeMatch(tpe), fieldMappings.map(_.unwrap), classTag)
+      DefaultValueObjectMapping(
+        MappingPredicate.TypeMatch(tpe),
+        fieldMappings.map(_.unwrap),
+        classTag)
 
-    def unapply(om: DefaultValueObjectMapping): Option[(MappingPredicate, Seq[FieldMapping], ClassTag[_])] = {
+    def unapply(om: DefaultValueObjectMapping)
+        : Option[(MappingPredicate, Seq[FieldMapping], ClassTag[_])] = {
       Some((om.predicate, om.fieldMappings, om.classTag))
     }
   }
 
-  override protected def unpackPrefixedMapping(prefix: List[String], om: ObjectMapping): ObjectMapping =
+  override protected def unpackPrefixedMapping(
+      prefix: List[String],
+      om: ObjectMapping): ObjectMapping =
     om match {
       case vom: ValueObjectMapping.DefaultValueObjectMapping =>
         vom.copy(predicate = MappingPredicate.PrefixedTypeMatch(prefix, om.predicate.tpe))
@@ -121,10 +138,10 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
     }
 
   case class ValueCursor(
-    context: Context,
-    focus:  Any,
-    parent: Option[Cursor],
-    env:    Env
+      context: Context,
+      focus: Any,
+      parent: Option[Cursor],
+      env: Env
   ) extends Cursor {
     def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
@@ -150,7 +167,8 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
     }
 
     def asList[C](factory: Factory[Cursor, C]): Result[C] = (tpe, focus) match {
-      case (ListType(tpe), it: List[_]) => it.view.map(f => mkChild(context.asType(tpe), f)).to(factory).success
+      case (ListType(tpe), it: List[_]) =>
+        it.view.map(f => mkChild(context.asType(tpe), f)).to(factory).success
       case _ => Result.internalError(s"Expected List type, found $tpe")
     }
 
@@ -165,7 +183,8 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
     }
 
     def asNullable: Result[Option[Cursor]] = (tpe, focus) match {
-      case (NullableType(tpe), o: Option[_]) => o.map(f => mkChild(context.asType(tpe), f)).success
+      case (NullableType(tpe), o: Option[_]) =>
+        o.map(f => mkChild(context.asType(tpe), f)).success
       case (_: NullableType, _) => Result.internalError(s"Found non-nullable $focus for $tpe")
       case _ => Result.internalError(s"Expected Nullable type, found $focus for $tpe")
     }
@@ -183,13 +202,13 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
           case _ => false
         }).success
 
-
     def narrow(subtpe: TypeRef): Result[Cursor] =
       narrowsTo(subtpe).flatMap { n =>
-        if(n)
+        if (n)
           mkChild(context.asType(subtpe)).success
         else
-          Result.internalError(s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
+          Result.internalError(
+            s"Focus ${focus} of static type $tpe cannot be narrowed to $subtpe")
       }
 
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] =

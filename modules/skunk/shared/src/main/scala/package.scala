@@ -15,8 +15,9 @@
 
 package grackle
 
-import grackle.sql.SqlMonitor
 import _root_.skunk.AppliedFragment
+
+import grackle.sql.SqlMonitor
 
 package object skunk {
   type SkunkMonitor[F[_]] = SqlMonitor[F, AppliedFragment]

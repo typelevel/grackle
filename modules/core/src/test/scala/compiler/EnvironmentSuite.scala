@@ -20,10 +20,10 @@ import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
 import grackle.syntax._
-import Query._
-import Value._
-import QueryCompiler._
 
 object EnvironmentMapping extends ValueMapping[IO] {
   val schema =
@@ -51,28 +51,25 @@ object EnvironmentMapping extends ValueMapping[IO] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            ValueField[Unit]("nested", _ => ()),
-            ValueField[Unit]("nestedSum", _ => ())
-          )
+        fieldMappings = List(
+          ValueField[Unit]("nested", _ => ()),
+          ValueField[Unit]("nestedSum", _ => ())
+        )
       ),
       ObjectMapping(
         tpe = NestedType,
-        fieldMappings =
-          List(
-            CursorField("sum", sum),
-            CursorField("url", url),
-            ValueField[Unit]("nested", _ => ())
-          )
+        fieldMappings = List(
+          CursorField("sum", sum),
+          CursorField("url", url),
+          ValueField[Unit]("nested", _ => ())
+        )
       ),
       ObjectMapping(
         tpe = NestedSumType,
-        fieldMappings =
-          List(
-            CursorField("sum", sum),
-            ValueField[Unit]("nestedSum", _ => ())
-          )
+        fieldMappings = List(
+          CursorField("sum", sum),
+          ValueField[Unit]("nestedSum", _ => ())
+        )
       )
     )
 
@@ -80,12 +77,12 @@ object EnvironmentMapping extends ValueMapping[IO] {
     (for {
       x <- c.env[Int]("x")
       y <- c.env[Int]("y")
-    } yield x+y).toResult(s"Missing argument")
+    } yield x + y).toResult(s"Missing argument")
 
   def url(c: Cursor): Result[String] = {
-    c.env[Boolean]("secure").map(secure =>
-      if(secure) "https://localhost/" else "http://localhost/"
-    ).toResult(s"Missing argument")
+    c.env[Boolean]("secure")
+      .map(secure => if (secure) "https://localhost/" else "http://localhost/")
+      .toResult(s"Missing argument")
   }
 
   override val selectElaborator = SelectElaborator {
@@ -93,7 +90,10 @@ object EnvironmentMapping extends ValueMapping[IO] {
       Elab.env("x" -> x, "y" -> y)
     case (NestedType, "sum", List(Binding("x", IntValue(x)), Binding("y", IntValue(y)))) =>
       Elab.env("x" -> x, "y" -> y)
-    case (NestedSumType, "nestedSum", List(Binding("x", IntValue(x)), Binding("y", IntValue(y)))) =>
+    case (
+          NestedSumType,
+          "nestedSum",
+          List(Binding("x", IntValue(x)), Binding("y", IntValue(y)))) =>
       Elab.env("x" -> x, "y" -> y)
   }
 }

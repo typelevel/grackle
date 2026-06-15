@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package generic
+package grackle.generic
 
 import java.time._
 
@@ -24,14 +23,19 @@ import io.circe.Json
 import io.circe.literal._
 import munit.CatsEffectSuite
 
+import grackle.{Context, Result}
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.ScalarType._
+import grackle.Value._
+import grackle.generic.StarWarsData._
 import grackle.syntax._
-import Query._, Predicate._, Value._
-import QueryCompiler._
-import ScalarType._
 
 object StarWarsData {
-  import StarWarsMapping._
-  import semiauto._
+  import StarWarsMapping.semiauto._
+
+  import grackle.generic.StarWarsMapping._
 
   object Episode extends Enumeration {
     val NEWHOPE, EMPIRE, JEDI = Value
@@ -53,39 +57,39 @@ object StarWarsData {
     c.friends match {
       case None => None.success
       case Some(ids) =>
-        ids.traverse(id => characters.find(_.id == id).toResultOrError(s"Bad id '$id'")).map(_.some)
+        ids
+          .traverse(id => characters.find(_.id == id).toResultOrError(s"Bad id '$id'"))
+          .map(_.some)
     }
 
   case class Planet(value: String)
 
   case class Human(
-    id: String,
-    name: Option[String],
-    appearsIn: Option[List[Episode.Value]],
-    friends: Option[List[String]],
-    homePlanet: Option[Planet]
+      id: String,
+      name: Option[String],
+      appearsIn: Option[List[Episode.Value]],
+      friends: Option[List[String]],
+      homePlanet: Option[Planet]
   ) extends Character
 
   object Human {
     implicit val planetCursorBuilder: CursorBuilder[Planet] =
       CursorBuilder[String].contramap(_.value)
     implicit val cursorBuilder: CursorBuilder[Human] =
-      deriveObjectCursorBuilder[Human](HumanType)
-        .transformField("friends")(resolveFriends)
+      deriveObjectCursorBuilder[Human](HumanType).transformField("friends")(resolveFriends)
   }
 
   case class Droid(
-    id: String,
-    name: Option[String],
-    appearsIn: Option[List[Episode.Value]],
-    friends: Option[List[String]],
-    primaryFunction: Option[String]
+      id: String,
+      name: Option[String],
+      appearsIn: Option[List[Episode.Value]],
+      friends: Option[List[String]],
+      primaryFunction: Option[String]
   ) extends Character
 
   object Droid {
     implicit val cursorBuilder: CursorBuilder[Droid] =
-      deriveObjectCursorBuilder[Droid](DroidType)
-        .transformField("friends")(resolveFriends)
+      deriveObjectCursorBuilder[Droid](DroidType).transformField("friends")(resolveFriends)
   }
 
   val characters: List[Character] = List(
@@ -140,21 +144,19 @@ object StarWarsData {
     )
   )
 
-  import Episode._
-
-  val Some(lukeSkywalker: Human) = characters.find(_.id == "1000") : @unchecked
-  val Some(r2d2: Droid) = characters.find(_.id == "2001") : @unchecked
+  val Some(lukeSkywalker: Human) = characters.find(_.id == "1000"): @unchecked
+  val Some(r2d2: Droid) = characters.find(_.id == "2001"): @unchecked
 
   // Mapping from Episode to its hero Character
-  lazy val hero: Map[Value, Character] = Map(
-    NEWHOPE -> r2d2,
-    EMPIRE -> lukeSkywalker,
-    JEDI -> r2d2
+  lazy val hero: Map[Episode.Value, Character] = Map(
+    Episode.NEWHOPE -> r2d2,
+    Episode.EMPIRE -> lukeSkywalker,
+    Episode.JEDI -> r2d2
   )
 }
 
 object StarWarsMapping extends GenericMapping[IO] {
-  import StarWarsData.{characters, hero, Droid, Human, Episode}
+  import grackle.generic.StarWarsData.{characters, hero, Droid, Episode, Human}
 
   val schema =
     schema"""
@@ -204,21 +206,22 @@ object StarWarsMapping extends GenericMapping[IO] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            GenericField("hero", characters),
-            GenericField("character", characters),
-            GenericField("human", characters.collect { case h: Human => h }),
-            GenericField("droid", characters.collect { case d: Droid => d })
-          )
+        fieldMappings = List(
+          GenericField("hero", characters),
+          GenericField("character", characters),
+          GenericField("human", characters.collect { case h: Human => h }),
+          GenericField("droid", characters.collect { case d: Droid => d })
+        )
       )
     )
 
   override val selectElaborator = SelectElaborator {
     case (QueryType, "hero", List(Binding("episode", EnumValue(e)))) =>
       for {
-        episode <- Elab.liftR(Episode.values.find(_.toString == e).toResult(s"Unknown episode '$e'"))
-        _       <- Elab.transformChild(child => Unique(Filter(Eql(CharacterType / "id", Const(hero(episode).id)), child)))
+        episode <- Elab.liftR(
+          Episode.values.find(_.toString == e).toResult(s"Unknown episode '$e'"))
+        _ <- Elab.transformChild(child =>
+          Unique(Filter(Eql(CharacterType / "id", Const(hero(episode).id)), child)))
       } yield ()
 
     case (QueryType, "character" | "human" | "droid", List(Binding("id", IDValue(id)))) =>
@@ -229,39 +232,37 @@ object StarWarsMapping extends GenericMapping[IO] {
   }
 }
 
-import StarWarsData._, StarWarsMapping._
-
 final class DerivationSuite extends CatsEffectSuite {
   test("primitive types have leaf cursor builders") {
     val i =
       for {
         c <- CursorBuilder[Int].build(Context(IntType), 23)
-        _  = assert(c.isLeaf)
-        l  <- c.asLeaf
+        _ = assert(c.isLeaf)
+        l <- c.asLeaf
       } yield l
     assertEquals(i, Result.Success(Json.fromInt(23)))
 
     val s =
       for {
         c <- CursorBuilder[String].build(Context(StringType), "foo")
-        _  = assert(c.isLeaf)
-        l  <- c.asLeaf
+        _ = assert(c.isLeaf)
+        l <- c.asLeaf
       } yield l
     assertEquals(s, Result.Success(Json.fromString("foo")))
 
     val b =
       for {
         c <- CursorBuilder[Boolean].build(Context(BooleanType), true)
-        _  = assert(c.isLeaf)
-        l  <- c.asLeaf
+        _ = assert(c.isLeaf)
+        l <- c.asLeaf
       } yield l
     assertEquals(b, Result.Success(Json.fromBoolean(true)))
 
     val f =
       for {
         c <- CursorBuilder[Double].build(Context(FloatType), 13.0)
-        _  = assert(c.isLeaf)
-        l  <- c.asLeaf
+        _ = assert(c.isLeaf)
+        l <- c.asLeaf
       } yield l
     assertEquals(f, Result.Success(Json.fromDouble(13.0).get))
   }
@@ -269,9 +270,11 @@ final class DerivationSuite extends CatsEffectSuite {
   test("types with a Circe Encoder instance have leaf cursor builders") {
     val z =
       for {
-        c <- CursorBuilder.leafCursorBuilder[ZonedDateTime].build(Context(AttributeType), ZonedDateTime.parse("2020-03-25T16:24:06.081Z"))
-        _  = assert(c.isLeaf)
-        l  <- c.asLeaf
+        c <- CursorBuilder
+          .leafCursorBuilder[ZonedDateTime]
+          .build(Context(AttributeType), ZonedDateTime.parse("2020-03-25T16:24:06.081Z"))
+        _ = assert(c.isLeaf)
+        l <- c.asLeaf
       } yield l
     assertEquals(z, Result.Success(Json.fromString("2020-03-25T16:24:06.081Z")))
   }
@@ -279,9 +282,11 @@ final class DerivationSuite extends CatsEffectSuite {
   test("Scala Enumeration types have leaf cursor builders") {
     val e =
       for {
-        c <- CursorBuilder.enumerationCursorBuilder[Episode.Value].build(Context(EpisodeType), Episode.JEDI)
-        _  = assert(c.isLeaf)
-        l  <- c.asLeaf
+        c <- CursorBuilder
+          .enumerationCursorBuilder[Episode.Value]
+          .build(Context(StarWarsMapping.EpisodeType), Episode.JEDI)
+        _ = assert(c.isLeaf)
+        l <- c.asLeaf
       } yield l
     assertEquals(e, Result.Success(Json.fromString("JEDI")))
   }
@@ -289,7 +294,7 @@ final class DerivationSuite extends CatsEffectSuite {
   test("product types have cursor builders") {
     val name =
       for {
-        c <- CursorBuilder[Human].build(Context(HumanType), lukeSkywalker)
+        c <- CursorBuilder[Human].build(Context(StarWarsMapping.HumanType), lukeSkywalker)
         f <- c.field("name", None)
         n <- f.asNullable.flatMap(_.toResultOrError("missing"))
         l <- n.asLeaf
@@ -300,19 +305,23 @@ final class DerivationSuite extends CatsEffectSuite {
   test("cursor builders can be resolved for nested types") {
     val appearsIn =
       for {
-        c <- CursorBuilder[Character].build(Context(CharacterType), lukeSkywalker)
+        c <- CursorBuilder[Character]
+          .build(Context(StarWarsMapping.CharacterType), lukeSkywalker)
         f <- c.field("appearsIn", None)
         n <- f.asNullable.flatMap(_.toResultOrError("missing"))
         l <- n.asList(List)
         s <- l.traverse(_.asLeaf)
       } yield s
-    assertEquals(appearsIn, Result.Success(List(Json.fromString("NEWHOPE"), Json.fromString("EMPIRE"), Json.fromString("JEDI"))))
+    assertEquals(
+      appearsIn,
+      Result.Success(
+        List(Json.fromString("NEWHOPE"), Json.fromString("EMPIRE"), Json.fromString("JEDI"))))
   }
 
   test("default cursor builders can be customised by mapping fields") {
     val friends =
       for {
-        c <- CursorBuilder[Human].build(Context(HumanType), lukeSkywalker)
+        c <- CursorBuilder[Human].build(Context(StarWarsMapping.HumanType), lukeSkywalker)
         f <- c.field("friends", None)
         n <- f.asNullable.flatMap(_.toResultOrError("missing"))
         l <- n.asList(List)
@@ -320,14 +329,22 @@ final class DerivationSuite extends CatsEffectSuite {
         p <- m.traverse(_.asNullable.flatMap(_.toResultOrError("missing")))
         q <- p.traverse(_.asLeaf)
       } yield q
-    assertEquals(friends, Result.Success(List(Json.fromString("Han Solo"), Json.fromString("Leia Organa"), Json.fromString("C-3PO"), Json.fromString("R2-D2"))))
+    assertEquals(
+      friends,
+      Result.Success(
+        List(
+          Json.fromString("Han Solo"),
+          Json.fromString("Leia Organa"),
+          Json.fromString("C-3PO"),
+          Json.fromString("R2-D2"))))
   }
 
   test("sealed ADTs have narrowable cursor builders") {
     val homePlanets =
       for {
-        c <- CursorBuilder[Character].build(Context(CharacterType), lukeSkywalker)
-        h <- c.narrow(HumanType)
+        c <- CursorBuilder[Character]
+          .build(Context(StarWarsMapping.CharacterType), lukeSkywalker)
+        h <- c.narrow(StarWarsMapping.HumanType)
         m <- h.field("homePlanet", None)
         n <- m.asNullable.flatMap(_.toResultOrError("missing"))
         l <- n.asLeaf

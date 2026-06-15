@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package generic
+package grackle.generic
 
 import cats.effect.{IO, Sync}
 import cats.implicits._
@@ -51,15 +50,15 @@ class GenericEffectMapping[F[_]: Sync](ref: SignallingRef[F, Int]) extends Gener
   val typeMappings = List(
     ObjectMapping(
       tpe = QueryType,
-      fieldMappings =
-        List(
-          // Compute a ValueCursor
-          RootEffect.computeCursor("foo")((p, e) =>
-            ref.update(_+1).as(
+      fieldMappings = List(
+        // Compute a ValueCursor
+        RootEffect.computeCursor("foo")((p, e) =>
+          ref
+            .update(_ + 1)
+            .as(
               genericCursor(p, e, Struct(42, "hi"))
-            )
-          )
-        )
+            ))
+      )
     )
   )
 }
@@ -88,10 +87,10 @@ final class EffectSuite extends CatsEffectSuite {
 
     val prg: IO[(Json, Int)] =
       for {
-        ref  <- SignallingRef[IO, Int](0)
-        map  =  new GenericEffectMapping(ref)
-        res  <- map.compileAndRun(query)
-        eff  <- ref.get
+        ref <- SignallingRef[IO, Int](0)
+        map = new GenericEffectMapping(ref)
+        res <- map.compileAndRun(query)
+        eff <- ref.get
       } yield (res, eff)
 
     assertIO(prg, (expected, 1))
@@ -120,10 +119,10 @@ final class EffectSuite extends CatsEffectSuite {
 
     val prg: IO[(Json, Int)] =
       for {
-        ref  <- SignallingRef[IO, Int](0)
-        map  =  new GenericEffectMapping(ref)
-        res  <- map.compileAndRun(query)
-        eff  <- ref.get
+        ref <- SignallingRef[IO, Int](0)
+        map = new GenericEffectMapping(ref)
+        res <- map.compileAndRun(query)
+        eff <- ref.get
       } yield (res, eff)
 
     assertIO(prg, (expected, 1))

@@ -16,14 +16,13 @@
 package introspection
 
 import cats.effect.IO
-import io.circe.{ ACursor, Json }
+import io.circe.{ACursor, Json}
 import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
+import grackle.QueryCompiler.IntrospectionLevel._
 import grackle.syntax._
-import QueryCompiler.IntrospectionLevel
-import IntrospectionLevel._
 
 final class IntrospectionSuite extends CatsEffectSuite {
   def standardTypeName(name: String): Boolean = name match {
@@ -41,7 +40,7 @@ final class IntrospectionSuite extends CatsEffectSuite {
       def go(ac: ACursor, i: Int = 0): ACursor = {
         val acʹ = ac.downN(i)
         acʹ.focus match {
-          case None    => ac
+          case None => ac
           case Some(j) => if (f(j)) go(ac, i + 1) else go(acʹ.delete, i)
         }
       }
@@ -1143,100 +1142,100 @@ final class IntrospectionSuite extends CatsEffectSuite {
 
   test("standard introspection query") {
     val query = """
-      |query IntrospectionQuery {
-      |  __schema {
-      |    queryType { name }
-      |    mutationType { name }
-      |    subscriptionType { name }
-      |    types {
-      |      ...FullType
-      |    }
-      |    directives {
-      |      name
-      |      description
-      |      locations
-      |      args(includeDeprecated: true) {
-      |        ...InputValue
-      |      }
-      |      isRepeatable
-      |    }
-      |  }
-      |}
-      |
-      |fragment FullType on __Type {
-      |  kind
-      |  name
-      |  description
-      |  fields(includeDeprecated: true) {
-      |    name
-      |    description
-      |    args(includeDeprecated: true) {
-      |      ...InputValue
-      |    }
-      |    type {
-      |      ...TypeRef
-      |    }
-      |    isDeprecated
-      |    deprecationReason
-      |  }
-      |  inputFields(includeDeprecated: true) {
-      |    ...InputValue
-      |  }
-      |  interfaces {
-      |    ...TypeRef
-      |  }
-      |  enumValues(includeDeprecated: true) {
-      |    name
-      |    description
-      |    isDeprecated
-      |    deprecationReason
-      |  }
-      |  possibleTypes {
-      |    ...TypeRef
-      |  }
-      |}
-      |
-      |fragment InputValue on __InputValue {
-      |  name
-      |  description
-      |  type { ...TypeRef }
-      |  defaultValue
-      |  isDeprecated
-      |  deprecationReason
-      |}
-      |
-      |fragment TypeRef on __Type {
-      |  kind
-      |  name
-      |  ofType {
-      |    kind
-      |    name
-      |    ofType {
-      |      kind
-      |      name
-      |      ofType {
-      |        kind
-      |        name
-      |        ofType {
-      |          kind
-      |          name
-      |          ofType {
-      |            kind
-      |            name
-      |            ofType {
-      |              kind
-      |              name
-      |              ofType {
-      |                kind
-      |                name
-      |              }
-      |            }
-      |          }
-      |        }
-      |      }
-      |    }
-      |  }
-      |}
+                  |query IntrospectionQuery {
+                  |  __schema {
+                  |    queryType { name }
+                  |    mutationType { name }
+                  |    subscriptionType { name }
+                  |    types {
+                  |      ...FullType
+                  |    }
+                  |    directives {
+                  |      name
+                  |      description
+                  |      locations
+                  |      args(includeDeprecated: true) {
+                  |        ...InputValue
+                  |      }
+                  |      isRepeatable
+                  |    }
+                  |  }
+                  |}
+                  |
+                  |fragment FullType on __Type {
+                  |  kind
+                  |  name
+                  |  description
+                  |  fields(includeDeprecated: true) {
+                  |    name
+                  |    description
+                  |    args(includeDeprecated: true) {
+                  |      ...InputValue
+                  |    }
+                  |    type {
+                  |      ...TypeRef
+                  |    }
+                  |    isDeprecated
+                  |    deprecationReason
+                  |  }
+                  |  inputFields(includeDeprecated: true) {
+                  |    ...InputValue
+                  |  }
+                  |  interfaces {
+                  |    ...TypeRef
+                  |  }
+                  |  enumValues(includeDeprecated: true) {
+                  |    name
+                  |    description
+                  |    isDeprecated
+                  |    deprecationReason
+                  |  }
+                  |  possibleTypes {
+                  |    ...TypeRef
+                  |  }
+                  |}
+                  |
+                  |fragment InputValue on __InputValue {
+                  |  name
+                  |  description
+                  |  type { ...TypeRef }
+                  |  defaultValue
+                  |  isDeprecated
+                  |  deprecationReason
+                  |}
+                  |
+                  |fragment TypeRef on __Type {
+                  |  kind
+                  |  name
+                  |  ofType {
+                  |    kind
+                  |    name
+                  |    ofType {
+                  |      kind
+                  |      name
+                  |      ofType {
+                  |        kind
+                  |        name
+                  |        ofType {
+                  |          kind
+                  |          name
+                  |          ofType {
+                  |            kind
+                  |            name
+                  |            ofType {
+                  |              kind
+                  |              name
+                  |              ofType {
+                  |                kind
+                  |                name
+                  |              }
+                  |            }
+                  |          }
+                  |        }
+                  |      }
+                  |    }
+                  |  }
+                  |}
     """.stripMargin.trim
 
     val expected = json"""
@@ -1903,63 +1902,57 @@ object TestMapping extends ValueMapping[IO] {
     List(
       ValueObjectMapping[Unit](
         tpe = QueryType,
-        fieldMappings =
-          List(
-            ValueField("users", identity),
-            ValueField("kind", identity),
-            ValueField("deprecation", identity),
-          )
+        fieldMappings = List(
+          ValueField("users", identity),
+          ValueField("kind", identity),
+          ValueField("deprecation", identity)
+        )
       ),
       ValueObjectMapping[Unit](
         tpe = UserType,
-        fieldMappings =
-          List(
-            //ValueField("id", identity),
-            ValueField("name", identity),
-            ValueField("age", identity),
-            ValueField("birthday", identity)
-          )
+        fieldMappings = List(
+          // ValueField("id", identity),
+          ValueField("name", identity),
+          ValueField("age", identity),
+          ValueField("birthday", identity)
+        )
       ),
       ValueObjectMapping[Unit](
         tpe = ProfileType,
-        fieldMappings =
-          List(
-            ValueField("id", identity)
-          )
+        fieldMappings = List(
+          ValueField("id", identity)
+        )
       ),
       ValueObjectMapping[Unit](
         tpe = DateType,
-        fieldMappings =
-          List(
-            ValueField("day", identity),
-            ValueField("month", identity),
-            ValueField("year", identity)
-          )
+        fieldMappings = List(
+          ValueField("day", identity),
+          ValueField("month", identity),
+          ValueField("year", identity)
+        )
       ),
       ValueObjectMapping[Unit](
         tpe = KindTestType,
-        fieldMappings =
-          List(
-            ValueField("scalar", identity),
-            ValueField("object", identity),
-            ValueField("interface", identity),
-            ValueField("union", identity),
-            ValueField("enum", identity),
-            ValueField("list", identity),
-            ValueField("nonnull", identity),
-            ValueField("nonnulllistnonnull", identity)
-          )
+        fieldMappings = List(
+          ValueField("scalar", identity),
+          ValueField("object", identity),
+          ValueField("interface", identity),
+          ValueField("union", identity),
+          ValueField("enum", identity),
+          ValueField("list", identity),
+          ValueField("nonnull", identity),
+          ValueField("nonnulllistnonnull", identity)
+        )
       ),
       ValueObjectMapping[Unit](
         tpe = DeprecationTestType,
-        fieldMappings =
-          List(
-            ValueField("user", identity),
-            ValueField("flags", identity)
-          )
+        fieldMappings = List(
+          ValueField("user", identity),
+          ValueField("flags", identity)
+        )
       ),
       LeafMapping[String](FlagsType)
-  )
+    )
 }
 
 object SmallData {
@@ -2009,42 +2002,37 @@ object SmallMapping extends ValueMapping[IO] {
     List(
       ValueObjectMapping[Unit](
         tpe = QueryType,
-        fieldMappings =
-          List(
-            ValueField("users", _ => users),
-            ValueField("profiles", _ => users)
-          )
+        fieldMappings = List(
+          ValueField("users", _ => users),
+          ValueField("profiles", _ => users)
+        )
       ),
       ObjectMapping(
         tpe = SubscriptionType,
-        fieldMappings =
-          List(
-            ValueField.fromValue("dummy", 0)
-          )
+        fieldMappings = List(
+          ValueField.fromValue("dummy", 0)
+        )
       ),
       ObjectMapping(
         tpe = MutationType,
-        fieldMappings =
-          List(
-            ValueField.fromValue("dummy", 1)
-          )
+        fieldMappings = List(
+          ValueField.fromValue("dummy", 1)
+        )
       ),
       ValueObjectMapping[User](
         tpe = UserType,
-        fieldMappings =
-          List(
-            ValueField("name", _.name),
-            ValueField("age", _.age)
-          )
+        fieldMappings = List(
+          ValueField("name", _.name),
+          ValueField("age", _.age)
+        )
       ),
       ValueObjectMapping[Profile](
         tpe = ProfileType,
-        fieldMappings =
-          List(
-            ValueField("id", _.id)
-          )
+        fieldMappings = List(
+          ValueField("id", _.id)
+        )
       )
-  )
+    )
 }
 
 object InputMapping extends ValueMapping[IO] {
@@ -2083,20 +2071,18 @@ object InputMapping extends ValueMapping[IO] {
     List(
       ValueObjectMapping[Unit](
         tpe = QueryType,
-        fieldMappings =
-          List(
-            ValueField("user", _ => users.head),
-            ValueField("userWithOneOf", _ => users.head)
-          )
+        fieldMappings = List(
+          ValueField("user", _ => users.head),
+          ValueField("userWithOneOf", _ => users.head)
+        )
       ),
       ValueObjectMapping[User](
         tpe = UserType,
-        fieldMappings =
-          List(
-            ValueField("id", _.id),
-            ValueField("name", _.name),
-            ValueField("age", _.age)
-          )
+        fieldMappings = List(
+          ValueField("id", _.id),
+          ValueField("name", _.name),
+          ValueField("age", _.age)
+        )
       )
-  )
+    )
 }

@@ -17,10 +17,11 @@ package grackle.sql.test
 
 import cats.implicits._
 
-import grackle._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
 import grackle.syntax._
-import Query._, Predicate._, Value._
-import QueryCompiler._
 
 trait SqlTreeMapping[F[_]] extends SqlTestMapping[F] {
 
@@ -49,19 +50,17 @@ trait SqlTreeMapping[F[_]] extends SqlTestMapping[F] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            SqlObject("bintree")
-          )
+        fieldMappings = List(
+          SqlObject("bintree")
+        )
       ),
       ObjectMapping(
         tpe = BinTreeType,
-        fieldMappings =
-          List(
-            SqlField("id", bintree.id, key = true),
-            SqlObject("left", Join(bintree.leftChild, bintree.id)),
-            SqlObject("right", Join(bintree.rightChild, bintree.id)),
-          )
+        fieldMappings = List(
+          SqlField("id", bintree.id, key = true),
+          SqlObject("left", Join(bintree.leftChild, bintree.id)),
+          SqlObject("right", Join(bintree.rightChild, bintree.id))
+        )
       )
     )
 

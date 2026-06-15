@@ -17,7 +17,7 @@ package grackle.doobie.oracle
 
 import cats.effect.Sync
 import cats.syntax.all._
-import _root_.doobie.Transactor
+import doobie.Transactor
 
 import grackle.Mapping
 import grackle.Query.OrderSelection
@@ -25,11 +25,12 @@ import grackle.doobie._
 import grackle.sql._
 
 abstract class DoobieOracleMapping[F[_]](
-  val transactor: Transactor[F],
-  val monitor:    DoobieMonitor[F],
+    val transactor: Transactor[F],
+    val monitor: DoobieMonitor[F]
 )(
-  implicit val M: Sync[F]
-) extends Mapping[F] with DoobieOracleMappingLike[F]
+    implicit val M: Sync[F]
+) extends Mapping[F]
+    with DoobieOracleMappingLike[F]
 
 trait DoobieOracleMappingLike[F[_]] extends DoobieMappingLike[F] with SqlMappingLike[F] {
   import SqlQuery.SqlSelect
@@ -48,8 +49,10 @@ trait DoobieOracleMappingLike[F[_]] extends DoobieMappingLike[F] with SqlMapping
     Fragments.const(" FETCH FIRST ") |+| limit |+| Fragments.const(" ROWS ONLY")
 
   def likeToFragment(expr: Fragment, pattern: String, caseInsensitive: Boolean): Fragment = {
-    val casedExpr = if(caseInsensitive) Fragments.const("UPPER(") |+| expr |+| Fragments.const(s")") else expr
-    val casedPattern = if(caseInsensitive) pattern.toUpperCase else pattern
+    val casedExpr =
+      if (caseInsensitive) Fragments.const("UPPER(") |+| expr |+| Fragments.const(s")")
+      else expr
+    val casedPattern = if (caseInsensitive) pattern.toUpperCase else pattern
     casedExpr |+| Fragments.const(s" LIKE ") |+| Fragments.bind(stringEncoder, casedPattern)
   }
 
@@ -73,8 +76,17 @@ trait DoobieOracleMappingLike[F[_]] extends DoobieMappingLike[F] with SqlMapping
   def distinctOnToFragment(dcols: List[Fragment]): Fragment =
     Fragments.const("DISTINCT ")
 
-  def distinctOrderColumn(owner: ColumnOwner, col: SqlColumn, predCols: List[SqlColumn], orders: List[OrderSelection[_]]): SqlColumn =
-    SqlColumn.FirstValueColumn(owner, col, predCols, orders) // TODO: check that passing orders works with Oracle
+  def distinctOrderColumn(
+      owner: ColumnOwner,
+      col: SqlColumn,
+      predCols: List[SqlColumn],
+      orders: List[OrderSelection[_]]): SqlColumn =
+    SqlColumn.FirstValueColumn(
+      owner,
+      col,
+      predCols,
+      orders
+    ) // TODO: check that passing orders works with Oracle
 
   def encapsulateUnionBranch(s: SqlSelect): SqlSelect = s
   def mkLateral(inner: Boolean): Laterality = Laterality.Lateral
@@ -82,11 +94,11 @@ trait DoobieOracleMappingLike[F[_]] extends DoobieMappingLike[F] with SqlMapping
   def defaultOffsetForLimit(limit: Option[Int]): Option[Int] = None
 
   def orderToFragment(col: Fragment, ascending: Boolean, nullsLast: Boolean): Fragment = {
-    val dir = if(ascending) Fragments.empty else Fragments.const(" DESC")
+    val dir = if (ascending) Fragments.empty else Fragments.const(" DESC")
     val nulls =
-      if(!nullsLast && ascending)
+      if (!nullsLast && ascending)
         Fragments.const(" NULLS FIRST ")
-      else if(nullsLast && !ascending)
+      else if (nullsLast && !ascending)
         Fragments.const(" NULLS LAST ")
       else
         Fragments.empty

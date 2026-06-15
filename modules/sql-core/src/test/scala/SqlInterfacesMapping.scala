@@ -19,35 +19,35 @@ import cats.kernel.Eq
 import io.circe.Encoder
 
 import grackle._
-import syntax._
-import Predicate._
-import Query._
-import QueryCompiler._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.syntax._
 
 trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
 
   def entityType: TestCodec[EntityType]
 
   object entities extends TableDef("entities") {
-    val id                     = col("id", text)
-    val entityType             = col("entity_type", self.entityType)
-    val title                  = col("title", nullable(text))
-    val filmRating             = col("film_rating", nullable(text))
-    val filmLabel              = col("film_label", nullable(int4))
+    val id = col("id", text)
+    val entityType = col("entity_type", self.entityType)
+    val title = col("title", nullable(text))
+    val filmRating = col("film_rating", nullable(text))
+    val filmLabel = col("film_label", nullable(int4))
     val seriesNumberOfEpisodes = col("series_number_of_episodes", nullable(int4))
-    val seriesLabel            = col("series_label", nullable(text))
-    val synopsisShort          = col("synopsis_short", nullable(text))
-    val synopsisLong           = col("synopsis_long", nullable(text))
-    val imageUrl               = col("image_url", nullable(text))
-    val hiddenImageUrl         = col("hidden_image_url", nullable(text))
+    val seriesLabel = col("series_label", nullable(text))
+    val synopsisShort = col("synopsis_short", nullable(text))
+    val synopsisLong = col("synopsis_long", nullable(text))
+    val imageUrl = col("image_url", nullable(text))
+    val hiddenImageUrl = col("hidden_image_url", nullable(text))
   }
 
   object episodes extends TableDef("episodes") {
-    val id                     = col("id", text)
-    val title                  = col("title", nullable(text))
-    val seriesId               = col("series_id", text)
-    val synopsisShort          = col("synopsis_short", nullable(text))
-    val synopsisLong           = col("synopsis_long", nullable(text))
+    val id = col("id", text)
+    val title = col("title", nullable(text))
+    val seriesId = col("series_id", text)
+    val synopsisShort = col("synopsis_short", nullable(text))
+    val synopsisLong = col("synopsis_long", nullable(text))
   }
 
   val schema =
@@ -109,89 +109,80 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            SqlObject("entities"),
-            SqlObject("films"),
-          )
+        fieldMappings = List(
+          SqlObject("entities"),
+          SqlObject("films")
+        )
       ),
       SqlInterfaceMapping(
         tpe = EType,
         discriminator = entityTypeDiscriminator,
-        fieldMappings =
-          List(
-            SqlField("id", entities.id, key = true),
-            SqlField("entityType", entities.entityType, discriminator = true),
-            SqlField("title", entities.title),
-            SqlObject("synopses")
-          )
+        fieldMappings = List(
+          SqlField("id", entities.id, key = true),
+          SqlField("entityType", entities.entityType, discriminator = true),
+          SqlField("title", entities.title),
+          SqlObject("synopses")
+        )
       ),
       ObjectMapping(
         tpe = FilmType,
-        fieldMappings =
-          List(
-            SqlField("rating", entities.filmRating),
-            SqlField("label", entities.filmLabel),
-            SqlField("imageUrl", entities.imageUrl)
-          )
+        fieldMappings = List(
+          SqlField("rating", entities.filmRating),
+          SqlField("label", entities.filmLabel),
+          SqlField("imageUrl", entities.imageUrl)
+        )
       ),
       ObjectMapping(
         tpe = SeriesType,
-        fieldMappings =
-          List(
-            SqlField("title", entities.title),
-            SqlField("numberOfEpisodes", entities.seriesNumberOfEpisodes),
-            SqlObject("episodes", Join(entities.id, episodes.seriesId)),
-            SqlField("label", entities.seriesLabel),
-            SqlField("hiddenImageUrl", entities.hiddenImageUrl, hidden = true),
-            CursorField("imageUrl", mkSeriesImageUrl, List("hiddenImageUrl"))
-          )
+        fieldMappings = List(
+          SqlField("title", entities.title),
+          SqlField("numberOfEpisodes", entities.seriesNumberOfEpisodes),
+          SqlObject("episodes", Join(entities.id, episodes.seriesId)),
+          SqlField("label", entities.seriesLabel),
+          SqlField("hiddenImageUrl", entities.hiddenImageUrl, hidden = true),
+          CursorField("imageUrl", mkSeriesImageUrl, List("hiddenImageUrl"))
+        )
       ),
       ObjectMapping(
         tpe = EpisodeType,
-        fieldMappings =
-          List(
-            SqlField("id", episodes.id, key = true),
-            SqlField("title", episodes.title),
-            SqlField("episodeId", episodes.seriesId, hidden = true),
-            SqlObject("synopses"),
-          )
+        fieldMappings = List(
+          SqlField("id", episodes.id, key = true),
+          SqlField("title", episodes.title),
+          SqlField("episodeId", episodes.seriesId, hidden = true),
+          SqlObject("synopses")
+        )
       ),
       PrefixedMapping(
         tpe = SynopsesType,
-        mappings =
-          List(
-            List("entities", "synopses") ->
-              ObjectMapping(
-                tpe = SynopsesType,
-                fieldMappings =
-                  List(
-                    SqlField("id", entities.id, key = true, hidden = true),
-                    SqlField("short", entities.synopsisShort),
-                    SqlField("long", entities.synopsisLong)
-                  )
-              ),
-            List("films", "synopses") ->
-              ObjectMapping(
-                tpe = SynopsesType,
-                fieldMappings =
-                  List(
-                    SqlField("id", entities.id, key = true, hidden = true),
-                    SqlField("short", entities.synopsisShort),
-                    SqlField("long", entities.synopsisLong)
-                  )
-              ),
-            List("entities", "episodes", "synopses") ->
-              ObjectMapping(
-                tpe = SynopsesType,
-                fieldMappings =
-                  List(
-                    SqlField("id", episodes.id, key = true, hidden = true),
-                    SqlField("short", episodes.synopsisShort),
-                    SqlField("long", episodes.synopsisLong)
-                  )
+        mappings = List(
+          List("entities", "synopses") ->
+            ObjectMapping(
+              tpe = SynopsesType,
+              fieldMappings = List(
+                SqlField("id", entities.id, key = true, hidden = true),
+                SqlField("short", entities.synopsisShort),
+                SqlField("long", entities.synopsisLong)
               )
-          )
+            ),
+          List("films", "synopses") ->
+            ObjectMapping(
+              tpe = SynopsesType,
+              fieldMappings = List(
+                SqlField("id", entities.id, key = true, hidden = true),
+                SqlField("short", entities.synopsisShort),
+                SqlField("long", entities.synopsisLong)
+              )
+            ),
+          List("entities", "episodes", "synopses") ->
+            ObjectMapping(
+              tpe = SynopsesType,
+              fieldMappings = List(
+                SqlField("id", episodes.id, key = true, hidden = true),
+                SqlField("short", episodes.synopsisShort),
+                SqlField("long", episodes.synopsisLong)
+              )
+            )
+        )
       ),
       LeafMapping[EntityType](EntityTypeType)
     )
@@ -219,11 +210,13 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
   }
 
   def mkSeriesImageUrl(c: Cursor): Result[Option[String]] =
-    c.fieldAs[Option[String]]("hiddenImageUrl").map(_.map(hiu => s"http://example.com/series/$hiu"))
+    c.fieldAs[Option[String]]("hiddenImageUrl")
+      .map(_.map(hiu => s"http://example.com/series/$hiu"))
 
   override val selectElaborator = SelectElaborator {
     case (QueryType, "films", Nil) =>
-      Elab.transformChild(child => Filter(Eql[EntityType](FilmType / "entityType", Const(EntityType.Film)), child))
+      Elab.transformChild(child =>
+        Filter(Eql[EntityType](FilmType / "entityType", Const(EntityType.Film)), child))
   }
 
   sealed trait EntityType extends Product with Serializable
@@ -235,7 +228,7 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
 
     def fromString(s: String): Option[EntityType] =
       s.trim.toUpperCase match {
-        case "FILM"  => Some(Film)
+        case "FILM" => Some(Film)
         case "SERIES" => Some(Series)
         case _ => None
       }
@@ -254,7 +247,7 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
 
     def toInt(e: EntityType): Int =
       e match {
-        case Film  => 1
+        case Film => 1
         case Series => 2
       }
   }
