@@ -20,9 +20,9 @@ import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
+import grackle.Query._
+import grackle.Value._
 import grackle.syntax._
-import Query._
-import Value._
 
 final class VariablesSuite extends CatsEffectSuite {
   test("simple variables query") {
@@ -43,12 +43,17 @@ final class VariablesSuite extends CatsEffectSuite {
     """
 
     val expected =
-      UntypedSelect("user", None, List(Binding("id", IDValue("4"))), Nil,
-        Group(List(
-          UntypedSelect("id", None, Nil, Nil, Empty),
-          UntypedSelect("name", None, Nil, Nil, Empty),
-          UntypedSelect("profilePic", None, List(Binding("size", IntValue(60))), Nil, Empty)
-        ))
+      UntypedSelect(
+        "user",
+        None,
+        List(Binding("id", IDValue("4"))),
+        Nil,
+        Group(
+          List(
+            UntypedSelect("id", None, Nil, Nil, Empty),
+            UntypedSelect("name", None, Nil, Nil, Empty),
+            UntypedSelect("profilePic", None, List(Binding("size", IntValue(60))), Nil, Empty)
+          ))
       )
 
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
@@ -72,7 +77,9 @@ final class VariablesSuite extends CatsEffectSuite {
     """
 
     val expected =
-      UntypedSelect("users", None,
+      UntypedSelect(
+        "users",
+        None,
         List(Binding("ids", ListValue(List(IDValue("1"), IDValue("2"), IDValue("3"))))),
         Nil,
         UntypedSelect("name", None, Nil, Nil, Empty)
@@ -99,7 +106,9 @@ final class VariablesSuite extends CatsEffectSuite {
     """
 
     val expected =
-      UntypedSelect("usersByType", None,
+      UntypedSelect(
+        "usersByType",
+        None,
         List(Binding("userType", EnumValue("ADMIN"))),
         Nil,
         UntypedSelect("name", None, Nil, Nil, Empty)
@@ -126,7 +135,9 @@ final class VariablesSuite extends CatsEffectSuite {
     """
 
     val expected =
-      UntypedSelect("usersLoggedInByDate", None,
+      UntypedSelect(
+        "usersLoggedInByDate",
+        None,
         List(Binding("date", StringValue("2021-02-22"))),
         Nil,
         UntypedSelect("name", None, Nil, Nil, Empty)
@@ -153,7 +164,9 @@ final class VariablesSuite extends CatsEffectSuite {
     """
 
     val expected =
-      UntypedSelect("queryWithBigDecimal", None,
+      UntypedSelect(
+        "queryWithBigDecimal",
+        None,
         List(Binding("input", IntValue(2021))),
         Nil,
         UntypedSelect("name", None, Nil, Nil, Empty)
@@ -185,21 +198,27 @@ final class VariablesSuite extends CatsEffectSuite {
     """
 
     val expected =
-      UntypedSelect("search", None,
-        List(Binding("pattern",
-          ObjectValue(List(
-            ("name", StringValue("Foo")),
-            ("age", IntValue(23)),
-            ("id", IDValue("123")),
-            ("userType", AbsentValue),
-            ("date", AbsentValue)
-          ))
-        )),
+      UntypedSelect(
+        "search",
+        None,
+        List(
+          Binding(
+            "pattern",
+            ObjectValue(
+              List(
+                ("name", StringValue("Foo")),
+                ("age", IntValue(23)),
+                ("id", IDValue("123")),
+                ("userType", AbsentValue),
+                ("date", AbsentValue)
+              ))
+          )),
         Nil,
-        Group(List(
-          UntypedSelect("name", None, Nil, Nil, Empty),
-          UntypedSelect("id", None, Nil, Nil, Empty)
-        ))
+        Group(
+          List(
+            UntypedSelect("name", None, Nil, Nil, Empty),
+            UntypedSelect("id", None, Nil, Nil, Empty)
+          ))
       )
 
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
@@ -228,7 +247,8 @@ final class VariablesSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = Problem("Unknown field(s) 'quux' in input object value of type Pattern in variable values")
+    val expected = Problem(
+      "Unknown field(s) 'quux' in input object value of type Pattern in variable values")
 
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
 
@@ -251,7 +271,9 @@ final class VariablesSuite extends CatsEffectSuite {
     """
 
     val expected =
-      UntypedSelect("users", None,
+      UntypedSelect(
+        "users",
+        None,
         List(Binding("ids", ListValue(List(IDValue("1"), IDValue("2"), IDValue("3"))))),
         Nil,
         UntypedSelect("name", None, Nil, Nil, Empty)
@@ -279,21 +301,27 @@ final class VariablesSuite extends CatsEffectSuite {
     """
 
     val expected =
-      UntypedSelect("search", None,
-        List(Binding("pattern",
-          ObjectValue(List(
-            ("name", StringValue("Foo")),
-            ("age", IntValue(23)),
-            ("id", IDValue("123")),
-            ("userType", AbsentValue),
-            ("date", AbsentValue)
-          ))
-        )),
+      UntypedSelect(
+        "search",
+        None,
+        List(
+          Binding(
+            "pattern",
+            ObjectValue(
+              List(
+                ("name", StringValue("Foo")),
+                ("age", IntValue(23)),
+                ("id", IDValue("123")),
+                ("userType", AbsentValue),
+                ("date", AbsentValue)
+              ))
+          )),
         Nil,
-        Group(List(
-          UntypedSelect("name", None, Nil, Nil, Empty),
-          UntypedSelect("id", None, Nil, Nil, Empty)
-        ))
+        Group(
+          List(
+            UntypedSelect("name", None, Nil, Nil, Empty),
+            UntypedSelect("id", None, Nil, Nil, Empty)
+          ))
       )
 
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
@@ -318,21 +346,27 @@ final class VariablesSuite extends CatsEffectSuite {
     """
 
     val expected =
-      UntypedSelect("search", None,
-        List(Binding("pattern",
-          ObjectValue(List(
-            ("name", StringValue("Foo")),
-            ("age", IntValue(23)),
-            ("id", IDValue("123")),
-            ("userType", EnumValue("ADMIN")),
-            ("date", AbsentValue)
-          ))
-        )),
+      UntypedSelect(
+        "search",
+        None,
+        List(
+          Binding(
+            "pattern",
+            ObjectValue(
+              List(
+                ("name", StringValue("Foo")),
+                ("age", IntValue(23)),
+                ("id", IDValue("123")),
+                ("userType", EnumValue("ADMIN")),
+                ("date", AbsentValue)
+              ))
+          )),
         Nil,
-        Group(List(
-          UntypedSelect("name", None, Nil, Nil, Empty),
-          UntypedSelect("id", None, Nil, Nil, Empty)
-        ))
+        Group(
+          List(
+            UntypedSelect("name", None, Nil, Nil, Empty),
+            UntypedSelect("id", None, Nil, Nil, Empty)
+          ))
       )
 
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
@@ -357,21 +391,27 @@ final class VariablesSuite extends CatsEffectSuite {
     """
 
     val expected =
-      UntypedSelect("search", None,
-        List(Binding("pattern",
-          ObjectValue(List(
-            ("name", StringValue("Foo")),
-            ("age", IntValue(23)),
-            ("id", IDValue("123")),
-            ("userType", AbsentValue),
-            ("date", StringValue("2021-02-22"))
-          ))
-        )),
+      UntypedSelect(
+        "search",
+        None,
+        List(
+          Binding(
+            "pattern",
+            ObjectValue(
+              List(
+                ("name", StringValue("Foo")),
+                ("age", IntValue(23)),
+                ("id", IDValue("123")),
+                ("userType", AbsentValue),
+                ("date", StringValue("2021-02-22"))
+              ))
+          )),
         Nil,
-        Group(List(
-          UntypedSelect("name", None, Nil, Nil, Empty),
-          UntypedSelect("id", None, Nil, Nil, Empty)
-        ))
+        Group(
+          List(
+            UntypedSelect("name", None, Nil, Nil, Empty),
+            UntypedSelect("id", None, Nil, Nil, Empty)
+          ))
       )
 
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
@@ -396,7 +436,11 @@ final class VariablesSuite extends CatsEffectSuite {
     """
 
     val expected =
-      UntypedSelect("user", None, List(Binding("id", IDValue("4"))), Nil,
+      UntypedSelect(
+        "user",
+        None,
+        List(Binding("id", IDValue("4"))),
+        Nil,
         UntypedSelect("id", None, Nil, Nil, Empty)
       )
 
@@ -422,7 +466,6 @@ final class VariablesSuite extends CatsEffectSuite {
 
     assertEquals(compiled, expected)
   }
-
 
   test("variable not defined (2)") {
     val query = """
@@ -477,7 +520,6 @@ final class VariablesSuite extends CatsEffectSuite {
     assertEquals(compiled.map(_.query), expected)
   }
 
-
   test("variable not defined (5)") {
     val query = """
       query getZuckProfile($skipName: Boolean) {
@@ -526,7 +568,11 @@ final class VariablesSuite extends CatsEffectSuite {
 
     val expected =
       Operation(
-        UntypedSelect("user", None, List(Binding("id", IDValue("4"))), Nil,
+        UntypedSelect(
+          "user",
+          None,
+          List(Binding("id", IDValue("4"))),
+          Nil,
           Group(
             List(
               UntypedSelect("id", None, Nil, Nil, Empty),
@@ -557,14 +603,19 @@ final class VariablesSuite extends CatsEffectSuite {
     """
 
     val expected =
-      UntypedSelect("oneOfTest", None,
-        List(Binding("input",
-          ObjectValue(List(
-            ("a", AbsentValue),
-            ("b", BooleanValue(true)),
-            ("c", AbsentValue)
-          ))
-        )),
+      UntypedSelect(
+        "oneOfTest",
+        None,
+        List(
+          Binding(
+            "input",
+            ObjectValue(
+              List(
+                ("a", AbsentValue),
+                ("b", BooleanValue(true)),
+                ("c", AbsentValue)
+              ))
+          )),
         Nil,
         Empty
       )
@@ -589,7 +640,8 @@ final class VariablesSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = Problem("Exactly one key must be specified for oneOf input object OneOfInObj in field 'oneOfTest' of type 'Query', but found 'a', 'b'")
+    val expected = Problem(
+      "Exactly one key must be specified for oneOf input object OneOfInObj in field 'oneOfTest' of type 'Query', but found 'a', 'b'")
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
     assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
   }
@@ -608,7 +660,8 @@ final class VariablesSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = Problem("Value for member field 'a' must be non-null for OneOfInObj in field 'oneOfTest' of type 'Query'")
+    val expected = Problem(
+      "Value for member field 'a' must be non-null for OneOfInObj in field 'oneOfTest' of type 'Query'")
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
     assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
   }
@@ -623,7 +676,8 @@ final class VariablesSuite extends CatsEffectSuite {
       { "input": { } }
     """
 
-    val expected = Problem("Exactly one key must be specified for oneOf input object OneOfInObj in field 'oneOfTest' of type 'Query'")
+    val expected = Problem(
+      "Exactly one key must be specified for oneOf input object OneOfInObj in field 'oneOfTest' of type 'Query'")
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
     assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
   }
@@ -643,7 +697,8 @@ final class VariablesSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = Problem("Exactly one key must be specified for oneOf input object OneOfInObj in field 'oneOfTest' of type 'Query', but found 'a', 'b'")
+    val expected = Problem(
+      "Exactly one key must be specified for oneOf input object OneOfInObj in field 'oneOfTest' of type 'Query', but found 'a', 'b'")
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
     assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
   }
@@ -658,7 +713,8 @@ final class VariablesSuite extends CatsEffectSuite {
       { "a": 23 }
     """
 
-    val expected = Problem("Exactly one key must be specified for oneOf input object OneOfInObj in field 'oneOfTest' of type 'Query', but found 'a', 'b'")
+    val expected = Problem(
+      "Exactly one key must be specified for oneOf input object OneOfInObj in field 'oneOfTest' of type 'Query', but found 'a', 'b'")
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
     assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
   }

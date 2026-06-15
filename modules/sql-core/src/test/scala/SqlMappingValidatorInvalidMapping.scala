@@ -137,97 +137,92 @@ trait SqlMappingValidatorInvalidMapping[F[_]] extends SqlTestMapping[F] {
       List(
         ObjectMapping(
           tpe = QueryType,
-          fieldMappings =
-            List(
-              SqlObject("scalars"),
-              SqlObject("objs"),
-              SqlObject("union")
-            )
+          fieldMappings = List(
+            SqlObject("scalars"),
+            SqlObject("objs"),
+            SqlObject("union")
+          )
         ),
         ObjectMapping(
           tpe = ScalarsType,
-          fieldMappings =
-            List(
-              SqlField("boolField1", scalars.nullableBoolCol),
-              SqlField("boolField2", scalars.intCol),
-              SqlField("nullableBoolField1", scalars.boolCol),
-              SqlField("nullableBoolField2", scalars.nullableIntCol),
+          fieldMappings = List(
+            SqlField("boolField1", scalars.nullableBoolCol),
+            SqlField("boolField2", scalars.intCol),
+            SqlField("nullableBoolField1", scalars.boolCol),
+            SqlField("nullableBoolField2", scalars.nullableIntCol),
 
-              SqlField("stringsField", scalars.nullableStringsCol),
-              SqlField("nullableStringsField", scalars.stringsCol),
+            SqlField("stringsField", scalars.nullableStringsCol),
+            SqlField("nullableStringsField", scalars.stringsCol),
 
-              SqlJson("jsonbField", scalars.boolCol),
-              SqlJson("nullableJsonbField", scalars.nullableBoolCol)
-            )
+            SqlJson("jsonbField", scalars.boolCol),
+            SqlJson("nullableJsonbField", scalars.nullableBoolCol)
+          )
         ),
         SqlInterfaceMapping(
           tpe = IntrfType,
           discriminator = objectTypeDiscriminator,
-          fieldMappings =
-            List(
-              SqlField("id", obj1.idCol),
-              SqlField("typeField", obj1.typeCol, hidden = true)
-            )
+          fieldMappings = List(
+            SqlField("id", obj1.idCol),
+            SqlField("typeField", obj1.typeCol, hidden = true)
+          )
         ),
         ObjectMapping(
           tpe = Obj1Type,
-          fieldMappings =
-            List(
-              SqlField("id", obj1.idCol),
-              SqlField("intField", obj1.intCol),
-              SqlObject("embedded"),
-              SqlObject("sub1", Join(obj1.idCol, join.parentIdCol), Join(join.childIdCol, obj1.idCol))
-            )
+          fieldMappings = List(
+            SqlField("id", obj1.idCol),
+            SqlField("intField", obj1.intCol),
+            SqlObject("embedded"),
+            SqlObject(
+              "sub1",
+              Join(obj1.idCol, join.parentIdCol),
+              Join(join.childIdCol, obj1.idCol))
+          )
         ),
         ObjectMapping(
           tpe = Obj2Type,
-          fieldMappings =
-            List(
-              SqlField("id", obj2.idCol),
-              SqlField("assoc", obj1.idCol, associative = true, hidden = true),
-              SqlField("boolField", obj2.boolCol),
-              SqlObject("sub2", Join(List((obj2.idCol, subObj2.idCol), (obj2.boolCol, subObj3.idCol))))
-            )
+          fieldMappings = List(
+            SqlField("id", obj2.idCol),
+            SqlField("assoc", obj1.idCol, associative = true, hidden = true),
+            SqlField("boolField", obj2.boolCol),
+            SqlObject(
+              "sub2",
+              Join(List((obj2.idCol, subObj2.idCol), (obj2.boolCol, subObj3.idCol))))
+          )
         ),
         ObjectMapping(
           tpe = Obj3Type,
-          fieldMappings =
-            List(
-              SqlField("id", obj2.idCol, key = true, hidden = true),
-              SqlField("stringField", obj2.stringCol),
-              SqlObject("sub3", Join(Nil))
-            )
+          fieldMappings = List(
+            SqlField("id", obj2.idCol, key = true, hidden = true),
+            SqlField("stringField", obj2.stringCol),
+            SqlObject("sub3", Join(Nil))
+          )
         ),
         SqlUnionMapping(
           tpe = UnionType,
           discriminator = objectTypeDiscriminator,
-          fieldMappings =
-            List(
-              SqlField("id", obj1.idCol),
-              SqlField("typeField", obj1.typeCol, hidden = true),
-              SqlObject("bogus", Nil)
-            )
+          fieldMappings = List(
+            SqlField("id", obj1.idCol),
+            SqlField("typeField", obj1.typeCol, hidden = true),
+            SqlObject("bogus", Nil)
+          )
         ),
         ObjectMapping(
           tpe = SubObj1Type,
-          fieldMappings =
-            List(
-              SqlField("id", subObj1.idCol, key = true)
-            )
+          fieldMappings = List(
+            SqlField("id", subObj1.idCol, key = true)
+          )
         ),
         ObjectMapping(
           tpe = SubObj2Type,
-          fieldMappings =
-            List(
-              SqlField("id", subObj2.idCol, key = true)
-            )
+          fieldMappings = List(
+            SqlField("id", subObj2.idCol, key = true)
+          )
         ),
         ObjectMapping(
           tpe = SubObj3Type,
-          fieldMappings =
-            List(
-              SqlField("id", subObj3.idCol, key = true)
-            )
+          fieldMappings = List(
+            SqlField("id", subObj3.idCol, key = true)
+          )
         )
       )
     )

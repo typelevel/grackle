@@ -20,7 +20,6 @@ import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
-
 import grackle.test.GraphQLResponseTests.assertWeaklyEqualIO
 
 trait SqlSiblingListsSuite extends CatsEffectSuite {
@@ -62,7 +61,7 @@ trait SqlSiblingListsSuite extends CatsEffectSuite {
     """
 
     val res = mapping.compileAndRun(query)
-    //println(res)
+    // println(res)
 
     assertWeaklyEqualIO(res, expected)
   }

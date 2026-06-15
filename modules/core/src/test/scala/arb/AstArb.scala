@@ -15,20 +15,21 @@
 
 package arb
 
+import org.scalacheck.{Arbitrary, Gen}
+
 import grackle._
-import org.scalacheck.{ Arbitrary, Gen }
 
 trait AstArb {
   import Arbitrary.arbitrary
-  import Gen._
   import Ast._
+  import Gen._
 
   def shortListOf[A](gen: Gen[A]): Gen[List[A]] =
     choose(0, 5).flatMap(listOfN(_, gen))
 
   implicit lazy val arbName: Arbitrary[Name] =
     Arbitrary {
-      val initial    = ('A' to 'Z').toList ++ ('a' to 'z').toList :+ '_'
+      val initial = ('A' to 'Z').toList ++ ('a' to 'z').toList :+ '_'
       val subsequent = initial ++ ('0' to '9').toList
       for {
         h <- oneOf(initial)
@@ -47,7 +48,7 @@ trait AstArb {
       oneOf("String", "Float").map(s => Type.Named(Name(s)))
     }
 
-  implicit val arbTypeList: Arbitrary[Type.List]  =
+  implicit val arbTypeList: Arbitrary[Type.List] =
     Arbitrary {
       arbitrary[Type].map(Type.List.apply)
     }
@@ -70,7 +71,7 @@ trait AstArb {
         arbitrary[Double].map(Value.FloatValue.apply),
         alphaStr.map(Value.StringValue.apply),
         arbitrary[Boolean].map(Value.BooleanValue.apply),
-        Gen.const(Value.NullValue),
+        Gen.const(Value.NullValue)
         // TODO: enum
         // TODO: list
         // TODO: object
@@ -88,12 +89,15 @@ trait AstArb {
   def genValueForType(t: Type): Gen[Value] =
     t match {
 
-      case Type.Named(Name("String")) => oneOf(alphaStr.map(Value.StringValue.apply), const(Value.NullValue))
-      case Type.Named(Name("Float"))  => oneOf(arbitrary[Double].map(Value.FloatValue.apply), const(Value.NullValue))
+      case Type.Named(Name("String")) =>
+        oneOf(alphaStr.map(Value.StringValue.apply), const(Value.NullValue))
+      case Type.Named(Name("Float")) =>
+        oneOf(arbitrary[Double].map(Value.FloatValue.apply), const(Value.NullValue))
       // no other named types are known yet
       case Type.Named(_) => fail[Value]
 
-      case Type.NonNull(t) => genValueForType(t.merge).flatMap { case Value.NullValue => fail ; case v => const(v) }
+      case Type.NonNull(t) =>
+        genValueForType(t.merge).flatMap { case Value.NullValue => fail; case v => const(v) }
 
       case Type.List(t) => shortListOf(genValueForType(t)).map(vs => Value.ListValue(vs))
 
@@ -102,17 +106,17 @@ trait AstArb {
   implicit lazy val arbVariableDefinition: Arbitrary[VariableDefinition] =
     Arbitrary {
       for {
-        variable     <- arbitrary[Name]
-        tpe          <- arbitrary[Type]
+        variable <- arbitrary[Name]
+        tpe <- arbitrary[Type]
         defaultValue <- option(genValueForType(tpe))
-        directives   <- shortListOf(arbitrary[Directive])
+        directives <- shortListOf(arbitrary[Directive])
       } yield VariableDefinition(variable, tpe, defaultValue, directives)
     }
 
   implicit lazy val arbSelectionFragmentSpread: Arbitrary[Selection.FragmentSpread] =
     Arbitrary {
       for {
-        name       <- arbitrary[Name]
+        name <- arbitrary[Name]
         directives <- shortListOf(arbitrary[Directive])
       } yield Selection.FragmentSpread(name, directives)
     }
@@ -122,6 +126,5 @@ trait AstArb {
       arbitrary[Selection.FragmentSpread]
       // TODO: field, inlinefragment
     }
-
 
 }

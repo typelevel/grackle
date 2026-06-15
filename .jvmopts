@@ -1,6 +1,6 @@
 -Dsbt.color=always
 -Dsbt.supershell=true
 -Xms2g
--Xmx4g
+-Xmx6g
 -Xss4m
 -XX:+UseG1GC

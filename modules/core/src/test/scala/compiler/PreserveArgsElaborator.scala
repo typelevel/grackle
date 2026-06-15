@@ -16,8 +16,8 @@
 package compiler
 
 import grackle._
-import Query._
-import QueryCompiler._
+import grackle.Query._
+import grackle.QueryCompiler._
 
 object PreserveArgsElaborator extends SelectElaborator {
   case class Preserved(args: List[Binding], directives: List[Directive])
@@ -26,11 +26,16 @@ object PreserveArgsElaborator extends SelectElaborator {
     def loop(query: Query): Query =
       query match {
         case Select(`fieldName`, alias, child) =>
-          UntypedSelect(fieldName, alias, preserved.args, directives = preserved.directives, child)
+          UntypedSelect(
+            fieldName,
+            alias,
+            preserved.args,
+            directives = preserved.directives,
+            child)
         case Environment(env, child) if env.contains("preserved") => loop(child)
-        case e@Environment(_, child) => e.copy(child = loop(child))
+        case e @ Environment(_, child) => e.copy(child = loop(child))
         case g: Group => g.copy(queries = g.queries.map(loop))
-        case t@TransformCursor(_, child) => t.copy(child = loop(child))
+        case t @ TransformCursor(_, child) => t.copy(child = loop(child))
         case other => other
       }
 
@@ -41,7 +46,7 @@ object PreserveArgsElaborator extends SelectElaborator {
     query match {
       case UntypedSelect(fieldName, _, _, _, _) =>
         for {
-          t         <- super.transform(query)
+          t <- super.transform(query)
           preserved <- Elab.envE[Preserved]("preserved")
         } yield subst(t, fieldName, preserved)
 
@@ -49,6 +54,10 @@ object PreserveArgsElaborator extends SelectElaborator {
     }
   }
 
-  def select(ref: TypeRef, name: String, args: List[Binding], directives: List[Directive]): Elab[Unit] =
+  def select(
+      ref: TypeRef,
+      name: String,
+      args: List[Binding],
+      directives: List[Directive]): Elab[Unit] =
     Elab.env("preserved", Preserved(args, directives))
 }

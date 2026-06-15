@@ -17,46 +17,47 @@ package demo.world
 
 import cats.effect.{Async, Resource, Sync}
 import doobie.{Meta, Transactor}
+import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
+
+import grackle._
 import grackle.Predicate._
 import grackle.Query._
 import grackle.QueryCompiler._
 import grackle.Value._
-import grackle._
 import grackle.doobie.{DoobieMonitor, LoggedDoobieMappingCompanion}
-import grackle.doobie.postgres.{DoobiePgMapping}
+import grackle.doobie.postgres.DoobiePgMapping
 import grackle.sql.Like
 import grackle.syntax._
-import org.typelevel.log4cats.Logger
-import org.typelevel.log4cats.slf4j.Slf4jLogger
 
-import WorldData._
+import demo.world.WorldData._
 
 trait WorldMapping[F[_]] extends DoobiePgMapping[F] {
   // #db_tables
   object country extends TableDef("country") {
-    val code           = col("code", Meta[String])
-    val name           = col("name", Meta[String])
-    val continent      = col("continent", Meta[String])
-    val region         = col("region", Meta[String])
-    val surfacearea    = col("surfacearea", Meta[Float])
-    val indepyear      = col("indepyear", Meta[Int], nullable = true)
-    val population     = col("population", Meta[Int])
+    val code = col("code", Meta[String])
+    val name = col("name", Meta[String])
+    val continent = col("continent", Meta[String])
+    val region = col("region", Meta[String])
+    val surfacearea = col("surfacearea", Meta[Float])
+    val indepyear = col("indepyear", Meta[Int], nullable = true)
+    val population = col("population", Meta[Int])
     val lifeexpectancy = col("lifeexpectancy", Meta[Float], nullable = true)
-    val gnp            = col("gnp", Meta[BigDecimal], nullable = true)
-    val gnpold         = col("gnpold", Meta[BigDecimal], nullable = true)
-    val localname      = col("localname", Meta[String])
+    val gnp = col("gnp", Meta[BigDecimal], nullable = true)
+    val gnpold = col("gnpold", Meta[BigDecimal], nullable = true)
+    val localname = col("localname", Meta[String])
     val governmentform = col("governmentform", Meta[String])
-    val headofstate    = col("headofstate", Meta[String], nullable = true)
-    val capitalId      = col("capital", Meta[Int], nullable = true)
-    val numCities      = col("num_cities", Meta[Long])
+    val headofstate = col("headofstate", Meta[String], nullable = true)
+    val capitalId = col("capital", Meta[Int], nullable = true)
+    val numCities = col("num_cities", Meta[Long])
   }
 
   object city extends TableDef("city") {
-    val id          = col("id", Meta[Int])
+    val id = col("id", Meta[Int])
     val countrycode = col("countrycode", Meta[String])
-    val name        = col("name", Meta[String])
-    val district    = col("district", Meta[String])
-    val population  = col("population", Meta[Int])
+    val name = col("name", Meta[String])
+    val district = col("district", Meta[String])
+    val population = col("population", Meta[Int])
   }
 
   object countrylanguage extends TableDef("countrylanguage") {
@@ -112,9 +113,9 @@ trait WorldMapping[F[_]] extends DoobiePgMapping[F] {
     """
   // #schema
 
-  val QueryType    = schema.ref("Query")
-  val CountryType  = schema.ref("Country")
-  val CityType     = schema.ref("City")
+  val QueryType = schema.ref("Query")
+  val CountryType = schema.ref("Country")
+  val CityType = schema.ref("City")
   val LanguageType = schema.ref("Language")
 
   val typeMappings =
@@ -129,23 +130,23 @@ trait WorldMapping[F[_]] extends DoobiePgMapping[F] {
       // #root
       // #type_mappings
       ObjectMapping(CountryType)(
-        SqlField("code",           country.code, key = true),
-        SqlField("name",           country.name),
-        SqlField("continent",      country.continent),
-        SqlField("region",         country.region),
-        SqlField("surfacearea",    country.surfacearea),
-        SqlField("indepyear",      country.indepyear),
-        SqlField("population",     country.population),
+        SqlField("code", country.code, key = true),
+        SqlField("name", country.name),
+        SqlField("continent", country.continent),
+        SqlField("region", country.region),
+        SqlField("surfacearea", country.surfacearea),
+        SqlField("indepyear", country.indepyear),
+        SqlField("population", country.population),
         SqlField("lifeexpectancy", country.lifeexpectancy),
-        SqlField("gnp",            country.gnp),
-        SqlField("gnpold",         country.gnpold),
-        SqlField("localname",      country.localname),
+        SqlField("gnp", country.gnp),
+        SqlField("gnpold", country.gnpold),
+        SqlField("localname", country.localname),
         SqlField("governmentform", country.governmentform),
-        SqlField("headofstate",    country.headofstate),
-        SqlField("capitalId",      country.capitalId),
-        SqlField("numCities",      country.numCities),
-        SqlObject("cities",        Join(country.code, city.countrycode)),
-        SqlObject("languages",     Join(country.code, countrylanguage.countrycode))
+        SqlField("headofstate", country.headofstate),
+        SqlField("capitalId", country.capitalId),
+        SqlField("numCities", country.numCities),
+        SqlObject("cities", Join(country.code, city.countrycode)),
+        SqlObject("languages", Join(country.code, countrylanguage.countrycode))
       ),
       ObjectMapping(CityType)(
         SqlField("id", city.id, key = true),
@@ -153,7 +154,7 @@ trait WorldMapping[F[_]] extends DoobiePgMapping[F] {
         SqlField("name", city.name),
         SqlField("district", city.district),
         SqlField("population", city.population),
-        SqlObject("country", Join(city.countrycode, country.code)),
+        SqlObject("country", Join(city.countrycode, country.code))
       ),
       ObjectMapping(LanguageType)(
         SqlField("name", countrylanguage.language, key = true, associative = true),
@@ -170,14 +171,16 @@ trait WorldMapping[F[_]] extends DoobiePgMapping[F] {
         Unique(Filter(Eql(CountryType / "code", Const(code)), child))
       }
 
-    case (QueryType, "countries",
-           List(
-             Binding("maxPopulation", IntValue(max)),
-             Binding("sortByPopulation", BooleanValue(sortByPop)),
-             Binding("offset", IntValue(off)),
-             Binding("limit", IntValue(lim))
-           )
-         ) =>
+    case (
+          QueryType,
+          "countries",
+          List(
+            Binding("maxPopulation", IntValue(max)),
+            Binding("sortByPopulation", BooleanValue(sortByPop)),
+            Binding("offset", IntValue(off)),
+            Binding("limit", IntValue(lim))
+          )
+        ) =>
       def filter(query: Query): Query =
         if (max < 0) query
         else Filter(LtEql(CountryType / "population", Const(max)), query)
@@ -212,15 +215,13 @@ trait WorldMapping[F[_]] extends DoobiePgMapping[F] {
         }
 
     case (CountryType, "numCities", List(Binding("namePattern", AbsentValue))) =>
-      Elab.transformChild { _ =>
-        Count(Select("cities", Select("name")))
-      }
+      Elab.transformChild { _ => Count(Select("cities", Select("name"))) }
 
-    case (CountryType, "numCities",
-           List(Binding("namePattern", StringValue(namePattern)))) =>
+    case (CountryType, "numCities", List(Binding("namePattern", StringValue(namePattern)))) =>
       Elab.transformChild { _ =>
         Count(
-          Select("cities",
+          Select(
+            "cities",
             Filter(Like(CityType / "name", namePattern, true), Select("name"))
           )
         )
@@ -230,7 +231,9 @@ trait WorldMapping[F[_]] extends DoobiePgMapping[F] {
 }
 
 object WorldMapping extends LoggedDoobieMappingCompanion {
-  def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): WorldMapping[F] =
+  def mkMapping[F[_]: Sync](
+      transactor: Transactor[F],
+      monitor: DoobieMonitor[F]): WorldMapping[F] =
     new DoobiePgMapping(transactor, monitor) with WorldMapping[F]
 
   def mkMappingFromTransactor[F[_]: Sync](transactor: Transactor[F]): WorldMapping[F] = {

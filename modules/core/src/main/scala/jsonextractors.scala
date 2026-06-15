@@ -15,8 +15,7 @@
 
 package grackle
 
-import io.circe.Json
-import io.circe.JsonObject
+import io.circe.{Json, JsonObject}
 
 object JsonExtractor {
 

@@ -16,12 +16,11 @@
 package validator
 
 import cats.syntax.all._
+import compiler.TestMapping
 import munit.CatsEffectSuite
 
 import grackle.{Path, ValidationException}
 import grackle.syntax._
-
-import compiler.TestMapping
 
 final class ValidatorSuite extends CatsEffectSuite {
   test("missing type mapping") {
@@ -263,14 +262,14 @@ final class ValidatorSuite extends CatsEffectSuite {
               CursorField[String]("baz", _ => ???, Nil)
             )
           ),
-        ObjectMapping(
-          schema.ref("Baz"),
-          List(
-            CursorField[String]("quux", _ => ???, Nil)
-          )
-        ),
-        LeafMapping[String](schema.ref("Foo"))
-      )
+          ObjectMapping(
+            schema.ref("Baz"),
+            List(
+              CursorField[String]("quux", _ => ???, Nil)
+            )
+          ),
+          LeafMapping[String](schema.ref("Foo"))
+        )
     }
 
     val es = M.validate()
@@ -345,7 +344,6 @@ final class ValidatorSuite extends CatsEffectSuite {
 
   }
 
-
   test("nonexistent type (type mapping)") {
 
     object M extends TestMapping {
@@ -408,7 +406,7 @@ final class ValidatorSuite extends CatsEffectSuite {
               schema.ref("Foo"),
               List(
                 CursorField[String]("bar", _ => ???, Nil),
-                CursorField[String]("quz", _ => ???, Nil),
+                CursorField[String]("quz", _ => ???, Nil)
               )
             )
           )
@@ -448,8 +446,8 @@ final class ValidatorSuite extends CatsEffectSuite {
             schema.ref("Foo"),
             List(
               CursorField[String]("bar", _ => ???, Nil),
-              CursorField[String]("baz", _ => ???, Nil, hidden = true),
-            ),
+              CursorField[String]("baz", _ => ???, Nil, hidden = true)
+            )
           )
         )
     }
@@ -487,8 +485,8 @@ final class ValidatorSuite extends CatsEffectSuite {
           ObjectMapping(
             schema.ref("Foo"),
             List(
-              CursorField[String]("bar", _ => ???, Nil, hidden = true),
-            ),
+              CursorField[String]("bar", _ => ???, Nil, hidden = true)
+            )
           )
         )
     }
@@ -499,7 +497,6 @@ final class ValidatorSuite extends CatsEffectSuite {
       case _ => fail(es.foldMap(_.toErrorMessage))
     }
   }
-
 
   test("unsafeValidate") {
     object M extends TestMapping {

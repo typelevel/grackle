@@ -23,11 +23,11 @@ import cats.implicits._
 import io.circe.literal._
 
 import grackle._
-import syntax._
-import Query._
-import Predicate._
-import Value._
-import QueryCompiler._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
+import grackle.syntax._
 
 // Mapping illustrating arbitrary mapping mixins with root query fields
 // defined by sql, value and circe mappings.
@@ -73,31 +73,28 @@ trait SqlMixedMapping[F[_]] extends SqlTestMapping[F] with ValueMappingLike[F] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            SqlObject("movie"),
-            SqlObject("movies"),
-            ValueField[Unit]("foo", _ => Foo(23)),
-            CirceField("bar", json"""{ "message": "Hello world" }""")
-          )
+        fieldMappings = List(
+          SqlObject("movie"),
+          SqlObject("movies"),
+          ValueField[Unit]("foo", _ => Foo(23)),
+          CirceField("bar", json"""{ "message": "Hello world" }""")
+        )
       ),
       ObjectMapping(
         tpe = MovieType,
-        fieldMappings =
-          List(
-            SqlField("id", movies.id, key = true),
-            SqlField("title", movies.title),
-            CirceField("nested", json"""{ "message": "Hello world nested" }"""),
-            ValueField[Unit]("genre", _ => "comedy"),
-            CirceField("rating", json"""7.8""")
-          )
+        fieldMappings = List(
+          SqlField("id", movies.id, key = true),
+          SqlField("title", movies.title),
+          CirceField("nested", json"""{ "message": "Hello world nested" }"""),
+          ValueField[Unit]("genre", _ => "comedy"),
+          CirceField("rating", json"""7.8""")
+        )
       ),
       ValueObjectMapping[Foo](
         tpe = FooType,
-        fieldMappings =
-          List(
-            ValueField("value", _.value)
-          )
+        fieldMappings = List(
+          ValueField("value", _.value)
+        )
       ),
       LeafMapping[UUID](UUIDType)
     )

@@ -30,7 +30,12 @@ object Output {
       for {
         txt <- IO.blocking(Files.readString(Path.of(path), StandardCharsets.UTF_8))
       } yield {
-        val tagged = txt.split("\n").dropWhile(!_.contains(tag)).drop(1).takeWhile(!_.contains(tag)).mkString("\n")
+        val tagged = txt
+          .split("\n")
+          .dropWhile(!_.contains(tag))
+          .drop(1)
+          .takeWhile(!_.contains(tag))
+          .mkString("\n")
         s"$header\n$tagged\n$footer"
       }
 

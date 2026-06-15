@@ -64,9 +64,9 @@ jobs:
       - name: Start up test databases
         run: docker compose up --force-recreate -d --wait --quiet-pull
 
-      - name: Check headers
+      - name: Check headers and formatting
         if: matrix.java == 'temurin@11' && matrix.os == 'ubuntu-22.04'
-        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' headerCheckAll
+        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' headerCheckAll scalafmtCheckAll 'project /' scalafmtSbtCheck
 
       - name: scalaJSLink
         if: matrix.project == 'rootJS'

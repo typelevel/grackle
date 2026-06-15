@@ -20,7 +20,6 @@ import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
-
 import grackle.test.GraphQLResponseTests.assertWeaklyEqualIO
 
 trait SqlFilterOrderOffsetLimitSuite extends CatsEffectSuite {
@@ -1241,7 +1240,10 @@ trait SqlFilterOrderOffsetLimitSuite extends CatsEffectSuite {
 
     val res = mapping.compileAndRun(query)
 
-    assertWeaklyEqualIO(res, expected, strictPaths = List(List("root", "listA"), List("root", "listB")))
+    assertWeaklyEqualIO(
+      res,
+      expected,
+      strictPaths = List(List("root", "listA"), List("root", "listB")))
   }
 
   test("alias with order on one side") {
@@ -1377,7 +1379,10 @@ trait SqlFilterOrderOffsetLimitSuite extends CatsEffectSuite {
 
     val res = mapping.compileAndRun(query)
 
-    assertWeaklyEqualIO(res, expected, strictPaths = List(List("root", "one"), List("root", "two")))
+    assertWeaklyEqualIO(
+      res,
+      expected,
+      strictPaths = List(List("root", "one"), List("root", "two")))
   }
 
   test("order and limit on one side") {
@@ -1533,7 +1538,10 @@ trait SqlFilterOrderOffsetLimitSuite extends CatsEffectSuite {
 
     val res = mapping.compileAndRun(query)
 
-    assertWeaklyEqualIO(res, expected, strictPaths = List(List("root", "listA"), List("root", "listB")))
+    assertWeaklyEqualIO(
+      res,
+      expected,
+      strictPaths = List(List("root", "listA"), List("root", "listB")))
   }
 
   test("alias with order and limit on one side") {
@@ -1633,6 +1641,9 @@ trait SqlFilterOrderOffsetLimitSuite extends CatsEffectSuite {
 
     val res = mapping.compileAndRun(query)
 
-    assertWeaklyEqualIO(res, expected, strictPaths = List(List("root", "one"), List("root", "two")))
+    assertWeaklyEqualIO(
+      res,
+      expected,
+      strictPaths = List(List("root", "one"), List("root", "two")))
   }
 }

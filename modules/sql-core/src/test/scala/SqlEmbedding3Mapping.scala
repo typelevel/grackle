@@ -25,7 +25,7 @@ trait SqlEmbedding3Mapping[F[_]] extends SqlTestMapping[F] {
 
   object ObservationTable extends TableDef("t_observation") {
     val Pid = col("c_program_id", varchar)
-    val Id  = col("c_observation_id", varchar)
+    val Id = col("c_observation_id", varchar)
   }
 
   val schema = schema"""
@@ -40,9 +40,9 @@ trait SqlEmbedding3Mapping[F[_]] extends SqlTestMapping[F] {
     }
   """
 
-  val QueryType                   = schema.ref("Query")
+  val QueryType = schema.ref("Query")
   val ObservationSelectResultType = schema.ref("ObservationSelectResult")
-  val ObservationType             = schema.ref("Observation")
+  val ObservationType = schema.ref("Observation")
 
   val typeMappings =
     List(
@@ -56,13 +56,13 @@ trait SqlEmbedding3Mapping[F[_]] extends SqlTestMapping[F] {
         ObservationSelectResultType,
         List(
           SqlField("<key>", Bogus.Id, hidden = true),
-          SqlObject("matches"),
+          SqlObject("matches")
         )
       ),
       ObjectMapping(
         ObservationType,
         List(
-          SqlField("id", ObservationTable.Id, key = true),
+          SqlField("id", ObservationTable.Id, key = true)
         )
       )
     )

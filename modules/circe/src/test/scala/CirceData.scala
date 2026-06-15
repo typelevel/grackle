@@ -13,19 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package circetests
+package grackle.circetests
 
-import cats.effect.IO
 import cats.data.OptionT
+import cats.effect.IO
 import io.circe.Json
 import io.circe.literal._
 
+import grackle._
+import grackle.Query._
+import grackle.QueryCompiler._
 import grackle.circe.CirceMapping
 import grackle.syntax._
-
-import Query._
-import QueryCompiler._
 
 object TestCirceMapping extends CirceMapping[IO] {
   val schema =
@@ -103,17 +102,15 @@ object TestCirceMapping extends CirceMapping[IO] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            CirceField("root", data),
-          )
+        fieldMappings = List(
+          CirceField("root", data)
+        )
       ),
       ObjectMapping(
         tpe = RootType,
-        fieldMappings =
-          List(
-            CursorField("computed", computeField, List("hidden"))
-          )
+        fieldMappings = List(
+          CursorField("computed", computeField, List("hidden"))
+        )
       ),
       LeafMapping[BigDecimal](BigDecimalType)
     )
@@ -122,7 +119,7 @@ object TestCirceMapping extends CirceMapping[IO] {
     (for {
       n <- OptionT(c.fieldAs[Json]("hidden").map(_.asNumber))
       i <- OptionT(Result(n.toInt))
-    } yield i+1).value
+    } yield i + 1).value
   }
 
   override val selectElaborator = SelectElaborator {

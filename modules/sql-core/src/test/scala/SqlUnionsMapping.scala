@@ -16,8 +16,8 @@
 package grackle.sql.test
 
 import grackle._
+import grackle.Predicate._
 import grackle.syntax._
-import Predicate._
 
 trait SqlUnionsMapping[F[_]] extends SqlTestMapping[F] {
 
@@ -51,35 +51,31 @@ trait SqlUnionsMapping[F[_]] extends SqlTestMapping[F] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            SqlObject("collection")
-          )
+        fieldMappings = List(
+          SqlObject("collection")
+        )
       ),
       SqlUnionMapping(
         tpe = ItemType,
         discriminator = itemTypeDiscriminator,
-        fieldMappings =
-          List(
-            SqlField("id", collections.id, key = true, hidden = true),
-            SqlField("itemType", collections.itemType, discriminator = true, hidden = true)
-          )
+        fieldMappings = List(
+          SqlField("id", collections.id, key = true, hidden = true),
+          SqlField("itemType", collections.itemType, discriminator = true, hidden = true)
+        )
       ),
       ObjectMapping(
         tpe = ItemAType,
-        fieldMappings =
-          List(
-            SqlField("id", collections.id, key = true, hidden = true),
-            SqlField("itema", collections.itemA)
-          )
+        fieldMappings = List(
+          SqlField("id", collections.id, key = true, hidden = true),
+          SqlField("itema", collections.itemA)
+        )
       ),
       ObjectMapping(
         tpe = ItemBType,
-        fieldMappings =
-          List(
-            SqlField("id", collections.id, key = true, hidden = true),
-            SqlField("itemb", collections.itemB)
-          )
+        fieldMappings = List(
+          SqlField("id", collections.id, key = true, hidden = true),
+          SqlField("itemb", collections.itemB)
+        )
       )
     )
 

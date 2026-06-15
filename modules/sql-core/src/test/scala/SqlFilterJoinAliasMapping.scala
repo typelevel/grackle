@@ -18,11 +18,11 @@ package grackle.sql.test
 import cats.implicits._
 
 import grackle._
-import syntax._
-import Predicate.{Const, Eql}
-import Query.{Binding, Filter, Unique}
-import QueryCompiler.{Elab, SelectElaborator}
-import Value.{AbsentValue, NullValue, ObjectValue, StringValue}
+import grackle.Predicate.{Const, Eql}
+import grackle.Query.{Binding, Filter, Unique}
+import grackle.QueryCompiler.{Elab, SelectElaborator}
+import grackle.Value.{AbsentValue, NullValue, ObjectValue, StringValue}
+import grackle.syntax._
 
 trait SqlFilterJoinAliasMapping[F[_]] extends SqlTestMapping[F] {
 
@@ -69,35 +69,31 @@ trait SqlFilterJoinAliasMapping[F[_]] extends SqlTestMapping[F] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            SqlObject("episode")
-          )
+        fieldMappings = List(
+          SqlObject("episode")
+        )
       ),
       ObjectMapping(
         tpe = EpisodeType,
-        fieldMappings =
-          List(
-            SqlField("id", episode.id, key = true),
-            SqlField("name", episode.name, key = true),
-            SqlObject("images", Join(episode.id, image.id))
-          )
+        fieldMappings = List(
+          SqlField("id", episode.id, key = true),
+          SqlField("name", episode.name, key = true),
+          SqlObject("images", Join(episode.id, image.id))
+        )
       ),
       ObjectMapping(
         tpe = ImageType,
-        fieldMappings =
-          List(
-            SqlField("id", image.id),
-            SqlField("publicUrl", image.publicUrl, key = true),
-            SqlObject("inner")
-          )
+        fieldMappings = List(
+          SqlField("id", image.id),
+          SqlField("publicUrl", image.publicUrl, key = true),
+          SqlObject("inner")
+        )
       ),
       ObjectMapping(
         tpe = InnerType,
-        fieldMappings =
-          List(
-            SqlField("name", image.name, key = true)
-          )
+        fieldMappings = List(
+          SqlField("name", image.name, key = true)
+        )
       )
     )
 
@@ -113,7 +109,7 @@ trait SqlFilterJoinAliasMapping[F[_]] extends SqlTestMapping[F] {
 
   def mkFilter(query: Query, filter: Value): Result[Query] = {
     filter match {
-      case AbsentValue|NullValue => query.success
+      case AbsentValue | NullValue => query.success
       case FilterValue(pred) => Filter(pred, query).success
       case _ => Result.failure(s"Expected filter value, found $filter")
     }
@@ -124,6 +120,6 @@ trait SqlFilterJoinAliasMapping[F[_]] extends SqlTestMapping[F] {
       Elab.transformChild(child => Unique(Filter(Eql(EpisodeType / "id", Const(id)), child)))
 
     case (EpisodeType, "images", List(Binding("filter", filter))) =>
-      Elab.transformChild(child =>  mkFilter(child, filter))
+      Elab.transformChild(child => mkFilter(child, filter))
   }
 }

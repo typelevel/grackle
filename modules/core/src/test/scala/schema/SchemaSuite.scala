@@ -18,7 +18,7 @@ package schema
 import cats.data.NonEmptyChain
 import munit.CatsEffectSuite
 
-import grackle.{Result, Schema, ScalarType}
+import grackle.{Result, ScalarType, Schema}
 import grackle.syntax._
 
 final class SchemaSuite extends CatsEffectSuite {
@@ -37,7 +37,8 @@ final class SchemaSuite extends CatsEffectSuite {
       )
 
     schema match {
-      case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("Reference to undefined type 'Episod'"))
+      case Result.Failure(ps) =>
+        assertEquals(ps.map(_.message), NonEmptyChain("Reference to undefined type 'Episod'"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -58,7 +59,7 @@ final class SchemaSuite extends CatsEffectSuite {
     )
 
     schema match {
-      case Result.Failure(ps)  =>
+      case Result.Failure(ps) =>
         assertEquals(ps.map(_.message), NonEmptyChain("Reference to undefined type 'CCid'"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
@@ -82,7 +83,10 @@ final class SchemaSuite extends CatsEffectSuite {
     )
 
     schema match {
-      case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("Duplicate definition of type 'Episode' found"))
+      case Result.Failure(ps) =>
+        assertEquals(
+          ps.map(_.message),
+          NonEmptyChain("Duplicate definition of type 'Episode' found"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -97,11 +101,13 @@ final class SchemaSuite extends CatsEffectSuite {
     )
 
     schema match {
-      case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("Directive 'deprecated' may not occur more than once"))
+      case Result.Failure(ps) =>
+        assertEquals(
+          ps.map(_.message),
+          NonEmptyChain("Directive 'deprecated' may not occur more than once"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
-
 
   test("schema validation: deprecated annotation with unsupported argument") {
     val schema = Schema(
@@ -113,7 +119,10 @@ final class SchemaSuite extends CatsEffectSuite {
     )
 
     schema match {
-      case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("Unknown argument(s) 'notareason' in directive deprecated"))
+      case Result.Failure(ps) =>
+        assertEquals(
+          ps.map(_.message),
+          NonEmptyChain("Unknown argument(s) 'notareason' in directive deprecated"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -129,7 +138,10 @@ final class SchemaSuite extends CatsEffectSuite {
     )
 
     schema match {
-      case Result.Failure(ps) => assertEquals(ps.map(_.message), NonEmptyChain("Duplicate definition of enum value 'NORTH' for type 'Direction'"))
+      case Result.Failure(ps) =>
+        assertEquals(
+          ps.map(_.message),
+          NonEmptyChain("Duplicate definition of enum value 'NORTH' for type 'Direction'"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -202,7 +214,8 @@ final class SchemaSuite extends CatsEffectSuite {
 
     schema match {
       case Result.Failure(ps) =>
-        assertEquals(ps.map(_.message),
+        assertEquals(
+          ps.map(_.message),
           NonEmptyChain(
             "Field 'id' from interface 'Character' is not defined by implementing type 'Human'",
             "Field 'email' from interface 'Character' is not defined by implementing type 'Human'"
@@ -229,7 +242,8 @@ final class SchemaSuite extends CatsEffectSuite {
 
     schema match {
       case Result.Failure(ps) =>
-        assertEquals(ps.map(_.message),
+        assertEquals(
+          ps.map(_.message),
           NonEmptyChain(
             "Field 'id' from interface 'Character' is not defined by implementing type 'Named'",
             "Field 'email' from interface 'Character' is not defined by implementing type 'Named'"
@@ -254,7 +268,8 @@ final class SchemaSuite extends CatsEffectSuite {
 
     schema match {
       case Result.Failure(ps) =>
-        assertEquals(ps.map(_.message),
+        assertEquals(
+          ps.map(_.message),
           NonEmptyChain(
             "Field 'name' of type 'Human' has type 'Int!', however implemented interface 'Character' requires it to be a subtype of 'String!'"
           )
@@ -278,7 +293,8 @@ final class SchemaSuite extends CatsEffectSuite {
 
     schema match {
       case Result.Failure(ps) =>
-        assertEquals(ps.map(_.message),
+        assertEquals(
+          ps.map(_.message),
           NonEmptyChain(
             "Field 'name' of type 'Human' has has an argument list that does not conform to that specified by implemented interface 'Character'"
           )
@@ -307,7 +323,8 @@ final class SchemaSuite extends CatsEffectSuite {
 
     schema match {
       case Result.Failure(ps) =>
-        assertEquals(ps.map(_.message),
+        assertEquals(
+          ps.map(_.message),
           NonEmptyChain(
             "Field 'id' from interface 'Character' is not defined by implementing type 'Human'",
             "Field 'id' from interface 'Character' is not defined by implementing type 'Dog'"
@@ -337,7 +354,8 @@ final class SchemaSuite extends CatsEffectSuite {
 
     schema match {
       case Result.Failure(ps) =>
-        assertEquals(ps.map(_.message),
+        assertEquals(
+          ps.map(_.message),
           NonEmptyChain(
             "Field 'id' from interface 'Character' is not defined by implementing type 'Human'",
             "Field 'email' from interface 'Contactable' is not defined by implementing type 'Human'"
@@ -367,7 +385,8 @@ final class SchemaSuite extends CatsEffectSuite {
     )
 
     schema match {
-      case Result.Success(a) => assertEquals(a.types.map(_.name), List("Node", "Resource", "Human"))
+      case Result.Success(a) =>
+        assertEquals(a.types.map(_.name), List("Node", "Resource", "Human"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -393,7 +412,10 @@ final class SchemaSuite extends CatsEffectSuite {
 
     schema match {
       case Result.Failure(ps) =>
-        assertEquals(ps.map(_.message), NonEmptyChain("Type 'Human' does not directly implement transitively implemented interface 'Node'"))
+        assertEquals(
+          ps.map(_.message),
+          NonEmptyChain(
+            "Type 'Human' does not directly implement transitively implemented interface 'Node'"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -418,7 +440,9 @@ final class SchemaSuite extends CatsEffectSuite {
 
     schema match {
       case Result.Failure(ps) =>
-        assertEquals(ps.map(_.message), NonEmptyChain("Non-interface type 'Foo' declared as implemented by type 'Bar'"))
+        assertEquals(
+          ps.map(_.message),
+          NonEmptyChain("Non-interface type 'Foo' declared as implemented by type 'Bar'"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -506,8 +530,8 @@ final class SchemaSuite extends CatsEffectSuite {
         }
       """
 
-    assert(schema.queryType                 =:= schema.ref("MyQuery"))
-    assert(schema.mutationType.exists(_     =:= schema.ref("MyMutation")))
+    assert(schema.queryType =:= schema.ref("MyQuery"))
+    assert(schema.mutationType.exists(_ =:= schema.ref("MyMutation")))
     assert(schema.subscriptionType.exists(_ =:= schema.ref("MySubscription")))
 
   }
@@ -530,7 +554,7 @@ final class SchemaSuite extends CatsEffectSuite {
         }
       """
 
-    assert(schema.queryType             =:= schema.ref("MyQuery"))
+    assert(schema.queryType =:= schema.ref("MyQuery"))
     assert(schema.mutationType.exists(_ =:= schema.ref("MyMutation")))
     assertEquals(schema.subscriptionType, None)
 
@@ -553,8 +577,8 @@ final class SchemaSuite extends CatsEffectSuite {
         }
       """
 
-    assert(schema.queryType                 =:= schema.ref("Query"))
-    assert(schema.mutationType.exists(_     =:= schema.ref("Mutation")))
+    assert(schema.queryType =:= schema.ref("Query"))
+    assert(schema.mutationType.exists(_ =:= schema.ref("Mutation")))
     assert(schema.subscriptionType.exists(_ =:= schema.ref("Subscription")))
   }
 
@@ -584,7 +608,10 @@ final class SchemaSuite extends CatsEffectSuite {
     )
 
     schema match {
-      case Result.Success(s) => assertEquals(s.types.map(_.name), List("Query", "Edge", "Connection", "MyEdge", "MyConnection"))
+      case Result.Success(s) =>
+        assertEquals(
+          s.types.map(_.name),
+          List("Query", "Edge", "Connection", "MyEdge", "MyConnection"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -608,8 +635,12 @@ final class SchemaSuite extends CatsEffectSuite {
     )
 
     schema match {
-      case Result.Failure(ps)  =>
-        assertEquals(ps.map(_.message), NonEmptyChain("Reference to undefined type 'Long'", "Reference to undefined type 'Long'"))
+      case Result.Failure(ps) =>
+        assertEquals(
+          ps.map(_.message),
+          NonEmptyChain(
+            "Reference to undefined type 'Long'",
+            "Reference to undefined type 'Long'"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -662,8 +693,10 @@ final class SchemaSuite extends CatsEffectSuite {
     )
 
     schema match {
-      case Result.Failure(ps)  =>
-        assertEquals(ps.map(_.message), NonEmptyChain("Value of type String required for 'url' in directive specifiedBy"))
+      case Result.Failure(ps) =>
+        assertEquals(
+          ps.map(_.message),
+          NonEmptyChain("Value of type String required for 'url' in directive specifiedBy"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -697,8 +730,11 @@ final class SchemaSuite extends CatsEffectSuite {
     )
 
     schema match {
-      case Result.Failure(ps)  =>
-        assertEquals(ps.map(_.message), NonEmptyChain("oneOf input object type ExampleInput may not have non-nullable field(s): 'foo', 'baz'"))
+      case Result.Failure(ps) =>
+        assertEquals(
+          ps.map(_.message),
+          NonEmptyChain(
+            "oneOf input object type ExampleInput may not have non-nullable field(s): 'foo', 'baz'"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }

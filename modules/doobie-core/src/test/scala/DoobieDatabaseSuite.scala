@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle.doobie
-package test
+package grackle.doobie.test
 
 import java.time.Duration
 
@@ -22,6 +21,7 @@ import doobie.Meta
 import io.circe.{Decoder => CDecoder, Encoder => CEncoder}
 import munit.CatsEffectSuite
 
+import grackle.doobie.DoobieMappingLike
 import grackle.sql.test._
 
 trait DoobieDatabaseSuite extends CatsEffectSuite {
@@ -44,11 +44,14 @@ trait DoobieDatabaseSuite extends CatsEffectSuite {
 
     def nullable[T](c: TestCodec[T]): TestCodec[T] = (c._1, true)
 
-    def list[T: CDecoder : CEncoder](c: TestCodec[T]): TestCodec[List[T]] = {
+    def list[T: CDecoder: CEncoder](c: TestCodec[T]): TestCodec[List[T]] = {
       val cm = c._1
       val decode = cm.get.get.k.asInstanceOf[String => T]
       val encode = cm.put.put.k.asInstanceOf[T => String]
-      val cl = Meta.Advanced.array[String]("VARCHAR", "_VARCHAR").imap(_.toList.map(decode))(_.map(encode).toArray)
+      val cl = Meta
+        .Advanced
+        .array[String]("VARCHAR", "_VARCHAR")
+        .imap(_.toList.map(decode))(_.map(encode).toArray)
       (cl, false)
     }
   }

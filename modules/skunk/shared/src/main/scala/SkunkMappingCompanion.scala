@@ -13,11 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package skunk
+package grackle.skunk
 
-import _root_.skunk.Session
-import cats.effect.{ Resource, Sync }
+import cats.effect.{Resource, Sync}
+import skunk.Session
+
+import grackle.Mapping
 
 trait SkunkMappingCompanion {
 

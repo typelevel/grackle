@@ -17,12 +17,11 @@ package grackle.sql.test
 
 import cats.syntax.all._
 
-import grackle._
-import syntax._
-import Predicate._
-import Query._
-import QueryCompiler._
-import Value._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
+import grackle.syntax._
 
 trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
   object country extends TableDef("country") {
@@ -31,10 +30,10 @@ trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
   }
 
   object city extends TableDef("city_copy") {
-    val id          = col("id", int4)
+    val id = col("id", int4)
     val countrycode = col("countrycode", bpchar(2))
-    val name        = col("name", text)
-    val population  = col("population", int4)
+    val name = col("name", text)
+    val population = col("population", int4)
   }
 
   val schema =
@@ -64,10 +63,10 @@ trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
   def updatePopulation(id: Int, population: Int): F[Unit]
   def createCity(name: String, countryCode: String, population: Int): F[Int]
 
-  val QueryType    = schema.ref("Query")
+  val QueryType = schema.ref("Query")
   val MutationType = schema.ref("Mutation")
-  val CountryType  = schema.ref("Country")
-  val CityType     = schema.ref("City")
+  val CountryType = schema.ref("Country")
+  val CityType = schema.ref("City")
 
   case class UpdatePopulation(id: Int, population: Int)
   case class CreateCity(name: String, countryCode: String, population: Int)
@@ -77,8 +76,8 @@ trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
       ObjectMapping(
         tpe = QueryType,
         fieldMappings = List(
-          SqlObject("city"),
-        ),
+          SqlObject("city")
+        )
       ),
       ObjectMapping(
         tpe = MutationType,
@@ -86,25 +85,23 @@ trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
           RootEffect.computeUnit("updatePopulation")(env =>
             env.getR[UpdatePopulation]("updatePopulation").traverse {
               case UpdatePopulation(id, pop) => updatePopulation(id, pop)
-            }
-          ),
+            }),
           RootEffect.computeChild("createCity")((child, _, env) =>
             env.getR[CreateCity]("createCity").flatTraverse {
               case CreateCity(name, cc, pop) =>
                 createCity(name, cc, pop).map { id =>
                   Unique(Filter(Eql(CityType / "id", Const(id)), child)).success
                 }
-            }
-          )
+            })
         )
       ),
       ObjectMapping(
         tpe = CountryType,
         fieldMappings = List(
           SqlField("code", country.code, key = true, hidden = true),
-          SqlField("name",     country.name),
-          SqlObject("cities",  Join(country.code, city.countrycode)),
-        ),
+          SqlField("name", country.name),
+          SqlObject("cities", Join(country.code, city.countrycode))
+        )
       ),
       ObjectMapping(
         tpe = CityType,
@@ -113,22 +110,32 @@ trait SqlMutationMapping[F[_]] extends SqlTestMapping[F] {
           SqlField("countrycode", city.countrycode, hidden = true),
           SqlField("name", city.name),
           SqlField("population", city.population),
-          SqlObject("country", Join(city.countrycode, country.code)),
+          SqlObject("country", Join(city.countrycode, country.code))
         )
-      ),
+      )
     )
 
   override val selectElaborator = SelectElaborator {
     case (QueryType, "city", List(Binding("id", IntValue(id)))) =>
       Elab.transformChild(child => Unique(Filter(Eql(CityType / "id", Const(id)), child)))
 
-    case (MutationType, "updatePopulation", List(Binding("id", IntValue(id)), Binding("population", IntValue(pop)))) =>
+    case (
+          MutationType,
+          "updatePopulation",
+          List(Binding("id", IntValue(id)), Binding("population", IntValue(pop)))) =>
       for {
         _ <- Elab.env("updatePopulation", UpdatePopulation(id, pop))
-        _ <- Elab.transformChild(child => Unique(Filter(Eql(CityType / "id", Const(id)), child)))
+        _ <- Elab.transformChild(child =>
+          Unique(Filter(Eql(CityType / "id", Const(id)), child)))
       } yield ()
 
-    case (MutationType, "createCity", List(Binding("name", StringValue(name)), Binding("countryCode", StringValue(code)), Binding("population", IntValue(pop)))) =>
+    case (
+          MutationType,
+          "createCity",
+          List(
+            Binding("name", StringValue(name)),
+            Binding("countryCode", StringValue(code)),
+            Binding("population", IntValue(pop)))) =>
       Elab.env("createCity", CreateCity(name, code, pop))
   }
 }

@@ -13,18 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle.doobie.oracle
-package test
+package grackle.doobie.oracle.test
 
 import cats.effect.{IO, Resource}
 import doobie.{Meta, Transactor}
 import doobie.implicits._
 import munit.catseffect.IOFixture
 
+import grackle.Mapping
 import grackle.doobie.DoobieMonitor
 import grackle.sql.SqlStatsMonitor
-
-import grackle.Mapping
 import grackle.sql.test._
 
 final class ArrayJoinSuite extends DoobieOracleDatabaseSuite with SqlArrayJoinSuite {
@@ -33,15 +31,22 @@ final class ArrayJoinSuite extends DoobieOracleDatabaseSuite with SqlArrayJoinSu
 
 final class CoalesceSuite extends DoobieOracleDatabaseSuite with SqlCoalesceSuite {
   type Fragment = doobie.Fragment
-  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO,Fragment])] =
-    DoobieMonitor.statsMonitor[IO].map(mon => (new DoobieOracleTestMapping(transactor, mon) with SqlCoalesceMapping[IO], mon))
+  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO, Fragment])] =
+    DoobieMonitor
+      .statsMonitor[IO]
+      .map(mon =>
+        (new DoobieOracleTestMapping(transactor, mon) with SqlCoalesceMapping[IO], mon))
 }
 
 final class ComposedWorldSuite extends DoobieOracleDatabaseSuite with SqlComposedWorldSuite {
   def mapping: IO[(CurrencyMapping[IO], Mapping[IO])] =
     for {
       currencyMapping <- CurrencyMapping[IO]
-    } yield (currencyMapping, new SqlComposedMapping(new DoobieOracleTestMapping(transactor) with SqlWorldMapping[IO], currencyMapping))
+    } yield (
+      currencyMapping,
+      new SqlComposedMapping(
+        new DoobieOracleTestMapping(transactor) with SqlWorldMapping[IO],
+        currencyMapping))
 }
 
 final class CompositeKeySuite extends DoobieOracleDatabaseSuite with SqlCompositeKeySuite {
@@ -64,16 +69,24 @@ final class Embedding3Suite extends DoobieOracleDatabaseSuite with SqlEmbedding3
   lazy val mapping = new DoobieOracleTestMapping(transactor) with SqlEmbedding3Mapping[IO]
 }
 
-final class FilterJoinAliasSuite extends DoobieOracleDatabaseSuite with SqlFilterJoinAliasSuite {
+final class FilterJoinAliasSuite
+    extends DoobieOracleDatabaseSuite
+    with SqlFilterJoinAliasSuite {
   lazy val mapping = new DoobieOracleTestMapping(transactor) with SqlFilterJoinAliasMapping[IO]
 }
 
-final class FilterOrderOffsetLimitSuite extends DoobieOracleDatabaseSuite with SqlFilterOrderOffsetLimitSuite {
-  lazy val mapping = new DoobieOracleTestMapping(transactor) with SqlFilterOrderOffsetLimitMapping[IO]
+final class FilterOrderOffsetLimitSuite
+    extends DoobieOracleDatabaseSuite
+    with SqlFilterOrderOffsetLimitSuite {
+  lazy val mapping = new DoobieOracleTestMapping(transactor)
+    with SqlFilterOrderOffsetLimitMapping[IO]
 }
 
-final class FilterOrderOffsetLimit2Suite extends DoobieOracleDatabaseSuite with SqlFilterOrderOffsetLimit2Suite {
-  lazy val mapping = new DoobieOracleTestMapping(transactor) with SqlFilterOrderOffsetLimit2Mapping[IO]
+final class FilterOrderOffsetLimit2Suite
+    extends DoobieOracleDatabaseSuite
+    with SqlFilterOrderOffsetLimit2Suite {
+  lazy val mapping = new DoobieOracleTestMapping(transactor)
+    with SqlFilterOrderOffsetLimit2Mapping[IO]
 }
 
 final class GraphSuite extends DoobieOracleDatabaseSuite with SqlGraphSuite {
@@ -104,18 +117,24 @@ final class LikeSuite extends DoobieOracleDatabaseSuite with SqlLikeSuite {
   lazy val mapping = new DoobieOracleTestMapping(transactor) with SqlLikeMapping[IO]
 }
 
-final class MappingValidatorValidSuite extends DoobieOracleDatabaseSuite with SqlMappingValidatorValidSuite {
+final class MappingValidatorValidSuite
+    extends DoobieOracleDatabaseSuite
+    with SqlMappingValidatorValidSuite {
   // no DB instance needed for this suite
-  lazy val mapping = new DoobieOracleTestMapping(null) with SqlMappingValidatorValidMapping[IO] {
+  lazy val mapping = new DoobieOracleTestMapping(null)
+    with SqlMappingValidatorValidMapping[IO] {
     def genre: TestCodec[Genre] = (Meta[Int].imap(Genre.fromInt)(Genre.toInt), false)
     def feature: TestCodec[Feature] = (Meta[String].imap(Feature.fromString)(_.toString), false)
   }
   override def munitFixtures: Seq[IOFixture[_]] = Nil
 }
 
-final class MappingValidatorInvalidSuite extends DoobieOracleDatabaseSuite with SqlMappingValidatorInvalidSuite {
+final class MappingValidatorInvalidSuite
+    extends DoobieOracleDatabaseSuite
+    with SqlMappingValidatorInvalidSuite {
   // no DB instance needed for this suite
-  lazy val mapping = new DoobieOracleTestMapping(null) with SqlMappingValidatorInvalidMapping[IO]
+  lazy val mapping = new DoobieOracleTestMapping(null)
+    with SqlMappingValidatorInvalidMapping[IO]
   override def munitFixtures: Seq[IOFixture[_]] = Nil
 }
 
@@ -127,7 +146,8 @@ final class MovieSuite extends DoobieOracleDatabaseSuite with SqlMovieSuite {
   lazy val mapping =
     new DoobieOracleTestMapping(transactor) with SqlMovieMapping[IO] {
       def genre: TestCodec[Genre] = (Meta[Int].imap(Genre.fromInt)(Genre.toInt), false)
-      def feature: TestCodec[Feature] = (Meta[String].imap(Feature.fromString)(_.toString), false)
+      def feature: TestCodec[Feature] =
+        (Meta[String].imap(Feature.fromString)(_.toString), false)
       def tagList: TestCodec[List[String]] = (Meta[Int].imap(Tags.fromInt)(Tags.toInt), false)
     }
 }
@@ -135,8 +155,12 @@ final class MovieSuite extends DoobieOracleDatabaseSuite with SqlMovieSuite {
 final class MutationSuite extends DoobieOracleDatabaseSuite with SqlMutationSuite {
   // A resource that copies and drops the table used in the tests.
   def withDuplicatedTables(transactor: Transactor[IO]): Resource[IO, Transactor[IO]] = {
-    val alloc = sql"CREATE TABLE city_copy AS SELECT * FROM city".update.run.transact(transactor).as(transactor)
-    val free  = sql"DROP TABLE city_copy".update.run.transact(transactor).void
+    val alloc = sql"CREATE TABLE city_copy AS SELECT * FROM city"
+      .update
+      .run
+      .transact(transactor)
+      .as(transactor)
+    val free = sql"DROP TABLE city_copy".update.run.transact(transactor).void
     Resource.make(alloc)(_ => free)
   }
 
@@ -156,10 +180,7 @@ final class MutationSuite extends DoobieOracleDatabaseSuite with SqlMutationSuit
         sql"""
           INSERT INTO city_copy (id, name, countrycode, district, population)
           VALUES (city_id.nextval, $name, $countryCode, 'ignored', $population)
-        """
-          .update
-          .withUniqueGeneratedKeys[Int]("id")
-          .transact(transactor)
+        """.update.withUniqueGeneratedKeys[Int]("id").transact(transactor)
     }
 }
 
@@ -192,7 +213,9 @@ final class ProjectionSuite extends DoobieOracleDatabaseSuite with SqlProjection
   lazy val mapping = new DoobieOracleTestMapping(transactor) with SqlProjectionMapping[IO]
 }
 
-final class RecursiveInterfacesSuite extends DoobieOracleDatabaseSuite with SqlRecursiveInterfacesSuite {
+final class RecursiveInterfacesSuite
+    extends DoobieOracleDatabaseSuite
+    with SqlRecursiveInterfacesSuite {
   lazy val mapping =
     new DoobieOracleTestMapping(transactor) with SqlRecursiveInterfacesMapping[IO] {
       def itemType: TestCodec[ItemType] =
@@ -219,8 +242,10 @@ final class WorldSuite extends DoobieOracleDatabaseSuite with SqlWorldSuite {
 final class WorldCompilerSuite extends DoobieOracleDatabaseSuite with SqlWorldCompilerSuite {
   type Fragment = doobie.Fragment
 
-  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO,Fragment])] =
-    DoobieMonitor.statsMonitor[IO].map(mon => (new DoobieOracleTestMapping(transactor, mon) with SqlWorldMapping[IO], mon))
+  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO, Fragment])] =
+    DoobieMonitor
+      .statsMonitor[IO]
+      .map(mon => (new DoobieOracleTestMapping(transactor, mon) with SqlWorldMapping[IO], mon))
 
   def simpleRestrictedQuerySql: String =
     "SELECT country.code , country.name FROM country WHERE (( country.code = ?) )"

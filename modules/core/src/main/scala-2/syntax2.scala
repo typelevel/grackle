@@ -18,6 +18,7 @@ package grackle
 import cats.data.NonEmptyChain
 import cats.syntax.all._
 import org.typelevel.literally.Literally
+
 import grackle.Ast.Document
 import grackle.Schema
 
@@ -32,25 +33,37 @@ class StringContextOps(val sc: StringContext) extends AnyVal {
 }
 
 private object SchemaLiteral extends Literally[Schema] {
-  def validate(c: Context)(s: String): Either[String,c.Expr[Schema]] = {
+  def validate(c: Context)(s: String): Either[String, c.Expr[Schema]] = {
     import c.universe._
     def mkError(err: Either[Throwable, NonEmptyChain[Problem]]) =
       err.fold(
-        t  => s"Internal error: ${t.getMessage}",
-        ps => s"Invalid schema: ${ps.toList.distinct.mkString("\n  🐞 ", "\n  🐞 ", "\n")}",
+        t => s"Internal error: ${t.getMessage}",
+        ps => s"Invalid schema: ${ps.toList.distinct.mkString("\n  🐞 ", "\n  🐞 ", "\n")}"
       )
-    Schema(s, CompiletimeParsers.schemaParser).toEither.bimap(mkError, _ => c.Expr(q"_root_.grackle.Schema($s, _root_.grackle.CompiletimeParsers.schemaParser).toOption.get"))
+    Schema(s, CompiletimeParsers.schemaParser)
+      .toEither
+      .bimap(
+        mkError,
+        _ =>
+          c.Expr(
+            q"_root_.grackle.Schema($s, _root_.grackle.CompiletimeParsers.schemaParser).toOption.get"))
   }
   def make(c: Context)(args: c.Expr[Any]*): c.Expr[Schema] = apply(c)(args: _*)
 }
 
 private object DocumentLiteral extends Literally[Document] {
-  def validate(c: Context)(s: String): Either[String,c.Expr[Document]] = {
+  def validate(c: Context)(s: String): Either[String, c.Expr[Document]] = {
     import c.universe._
-    CompiletimeParsers.parser.parseText(s).toEither.bimap(
-      _.fold(thr => show"Invalid document: ${thr.getMessage}", _.toList.mkString("\n  🐞 ", "\n  🐞 ", "\n")),
-      _  => c.Expr(q"_root_.grackle.CompiletimeParsers.parser.parseText($s).toOption.get"),
-    )
+    CompiletimeParsers
+      .parser
+      .parseText(s)
+      .toEither
+      .bimap(
+        _.fold(
+          thr => show"Invalid document: ${thr.getMessage}",
+          _.toList.mkString("\n  🐞 ", "\n  🐞 ", "\n")),
+        _ => c.Expr(q"_root_.grackle.CompiletimeParsers.parser.parseText($s).toOption.get")
+      )
   }
   def make(c: Context)(args: c.Expr[Any]*): c.Expr[Document] = apply(c)(args: _*)
 }

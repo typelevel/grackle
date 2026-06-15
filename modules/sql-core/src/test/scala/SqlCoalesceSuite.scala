@@ -22,8 +22,7 @@ import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
-import sql.SqlStatsMonitor
-
+import grackle.sql.SqlStatsMonitor
 import grackle.test.GraphQLResponseTests.assertWeaklyEqual
 
 trait SqlCoalesceSuite extends CatsEffectSuite {
@@ -108,20 +107,21 @@ trait SqlCoalesceSuite extends CatsEffectSuite {
 
     val prog: IO[(Json, List[SqlStatsMonitor.SqlStats])] =
       for {
-        mm  <- mapping
+        mm <- mapping
         (map, mon) = mm
         res <- map.compileAndRun(query)
-        ss  <- mon.take
+        ss <- mon.take
       } yield (res, ss)
 
-    prog.map { case (res, stats) =>
-      assertWeaklyEqual(res, expected)
+    prog.map {
+      case (res, stats) =>
+        assertWeaklyEqual(res, expected)
 
-      val numQueries = stats.length
-      val numCells   = stats.foldMap(s => s.rows * s.cols)
+        val numQueries = stats.length
+        val numCells = stats.foldMap(s => s.rows * s.cols)
 
-      assert(numQueries == 1)
-      assert(numCells   == 40)
+        assert(numQueries == 1)
+        assert(numCells == 40)
     }
   }
 
@@ -201,7 +201,7 @@ trait SqlCoalesceSuite extends CatsEffectSuite {
     """
 
     for {
-      map  <- mapping.map(_._1)
+      map <- mapping.map(_._1)
       res <- map.compileAndRun(query)
     } yield assertWeaklyEqual(res, expected)
   }

@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package circetests
+package grackle.circetests
 
 import io.circe.literal._
 import munit.CatsEffectSuite

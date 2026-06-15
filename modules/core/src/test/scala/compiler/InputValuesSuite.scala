@@ -19,9 +19,9 @@ import cats.data.NonEmptyChain
 import munit.CatsEffectSuite
 
 import grackle._
+import grackle.Query._
+import grackle.Value._
 import grackle.syntax._
-import Query._
-import Value._
 
 final class InputValuesSuite extends CatsEffectSuite {
   test("null value") {
@@ -40,14 +40,30 @@ final class InputValuesSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Group(List(
-        UntypedSelect("field", Some("one"), List(Binding("arg", AbsentValue)), Nil, UntypedSelect("subfield", None, Nil, Nil, Empty)),
-        UntypedSelect("field", Some("two"), List(Binding("arg", NullValue)), Nil, UntypedSelect("subfield", None, Nil, Nil, Empty)),
-        UntypedSelect("field", Some("three"), List(Binding("arg", IntValue(23))), Nil, UntypedSelect("subfield", None, Nil, Nil, Empty))
-      ))
+      Group(
+        List(
+          UntypedSelect(
+            "field",
+            Some("one"),
+            List(Binding("arg", AbsentValue)),
+            Nil,
+            UntypedSelect("subfield", None, Nil, Nil, Empty)),
+          UntypedSelect(
+            "field",
+            Some("two"),
+            List(Binding("arg", NullValue)),
+            Nil,
+            UntypedSelect("subfield", None, Nil, Nil, Empty)),
+          UntypedSelect(
+            "field",
+            Some("three"),
+            List(Binding("arg", IntValue(23))),
+            Nil,
+            UntypedSelect("subfield", None, Nil, Nil, Empty))
+        ))
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
-    //println(compiled)
+    // println(compiled)
     assertEquals(compiled.map(_.query), Result.Success(expected))
   }
 
@@ -64,17 +80,26 @@ final class InputValuesSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Group(List(
-        UntypedSelect("listField", Some("one"), List(Binding("arg", ListValue(Nil))), Nil,
-          UntypedSelect("subfield", None, Nil, Nil, Empty)
-        ),
-        UntypedSelect("listField", Some("two"), List(Binding("arg", ListValue(List(StringValue("foo"),  StringValue("bar"))))), Nil,
-          UntypedSelect("subfield", None, Nil, Nil, Empty)
-        )
-      ))
+      Group(
+        List(
+          UntypedSelect(
+            "listField",
+            Some("one"),
+            List(Binding("arg", ListValue(Nil))),
+            Nil,
+            UntypedSelect("subfield", None, Nil, Nil, Empty)
+          ),
+          UntypedSelect(
+            "listField",
+            Some("two"),
+            List(Binding("arg", ListValue(List(StringValue("foo"), StringValue("bar"))))),
+            Nil,
+            UntypedSelect("subfield", None, Nil, Nil, Empty)
+          )
+        ))
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
-    //println(compiled)
+    // println(compiled)
     assertEquals(compiled.map(_.query), Result.Success(expected))
   }
 
@@ -88,22 +113,27 @@ final class InputValuesSuite extends CatsEffectSuite {
     """
 
     val expected =
-      UntypedSelect("objectField", None,
-        List(Binding("arg",
-          ObjectValue(List(
-            ("foo", IntValue(23)),
-            ("bar", BooleanValue(true)),
-            ("baz", StringValue("quux")),
-            ("defaulted", StringValue("quux")),
-            ("nullable", AbsentValue)
-          ))
-        )),
+      UntypedSelect(
+        "objectField",
+        None,
+        List(
+          Binding(
+            "arg",
+            ObjectValue(
+              List(
+                ("foo", IntValue(23)),
+                ("bar", BooleanValue(true)),
+                ("baz", StringValue("quux")),
+                ("defaulted", StringValue("quux")),
+                ("nullable", AbsentValue)
+              ))
+          )),
         Nil,
         UntypedSelect("subfield", None, Nil, Nil, Empty)
       )
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
-    //println(compiled)
+    // println(compiled)
     assertEquals(compiled.map(_.query), Result.Success(expected))
   }
 
@@ -116,10 +146,11 @@ final class InputValuesSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = Problem("Unknown field(s) 'wibble' for input object value of type InObj in field 'objectField' of type 'Query'")
+    val expected = Problem(
+      "Unknown field(s) 'wibble' for input object value of type InObj in field 'objectField' of type 'Query'")
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
-    //println(compiled)
+    // println(compiled)
     assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
   }
 
@@ -133,14 +164,19 @@ final class InputValuesSuite extends CatsEffectSuite {
     """
 
     val expected =
-      UntypedSelect("oneOfField", None,
-        List(Binding("arg",
-          ObjectValue(List(
-            ("a", IntValue(42)),
-            ("b", AbsentValue),
-            ("c", AbsentValue)
-          ))
-        )),
+      UntypedSelect(
+        "oneOfField",
+        None,
+        List(
+          Binding(
+            "arg",
+            ObjectValue(
+              List(
+                ("a", IntValue(42)),
+                ("b", AbsentValue),
+                ("c", AbsentValue)
+              ))
+          )),
         Nil,
         UntypedSelect("subfield", None, Nil, Nil, Empty)
       )
@@ -158,7 +194,8 @@ final class InputValuesSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = Problem("Exactly one key must be specified for oneOf input object OneOfInObj in field 'oneOfField' of type 'Query', but found 'a', 'b'")
+    val expected = Problem(
+      "Exactly one key must be specified for oneOf input object OneOfInObj in field 'oneOfField' of type 'Query', but found 'a', 'b'")
 
     val compiled = OneOfInputValuesMapping.compiler.compile(query, None)
     assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
@@ -173,7 +210,8 @@ final class InputValuesSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = Problem("Value for member field 'a' must be non-null for OneOfInObj in field 'oneOfField' of type 'Query'")
+    val expected = Problem(
+      "Value for member field 'a' must be non-null for OneOfInObj in field 'oneOfField' of type 'Query'")
 
     val compiled = OneOfInputValuesMapping.compiler.compile(query, None)
     assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
@@ -188,7 +226,8 @@ final class InputValuesSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = Problem("Exactly one key must be specified for oneOf input object OneOfInObj in field 'oneOfField' of type 'Query'")
+    val expected = Problem(
+      "Exactly one key must be specified for oneOf input object OneOfInObj in field 'oneOfField' of type 'Query'")
 
     val compiled = OneOfInputValuesMapping.compiler.compile(query, None)
     assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
@@ -203,7 +242,8 @@ final class InputValuesSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = Problem("Exactly one key must be specified for oneOf input object OneOfInObj in field 'oneOfField' of type 'Query', but found 'a', 'b'")
+    val expected = Problem(
+      "Exactly one key must be specified for oneOf input object OneOfInObj in field 'oneOfField' of type 'Query', but found 'a', 'b'")
 
     val compiled = OneOfInputValuesMapping.compiler.compile(query, None)
     assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))

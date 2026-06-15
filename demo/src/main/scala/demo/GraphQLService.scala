@@ -17,16 +17,17 @@ package demo
 
 import cats.effect.Concurrent
 import cats.syntax.all._
-import grackle.Mapping
-import io.circe.{Json, ParsingFailure, parser}
+import io.circe.{parser, Json, ParsingFailure}
+import org.http4s.{HttpRoutes, InvalidMessageBodyFailure, ParseFailure, QueryParamDecoder}
 import org.http4s.circe._
 import org.http4s.dsl.Http4sDsl
-import org.http4s.{HttpRoutes, InvalidMessageBodyFailure, ParseFailure, QueryParamDecoder}
+
+import grackle.Mapping
 
 // #service
 object GraphQLService {
   def mkRoutes[F[_]: Concurrent](prefix: String)(mapping: Mapping[F]): HttpRoutes[F] = {
-    val dsl = new Http4sDsl[F]{}
+    val dsl = new Http4sDsl[F] {}
     import dsl._
 
     implicit val jsonQPDecoder: QueryParamDecoder[Json] =
@@ -36,40 +37,45 @@ object GraphQLService {
         }
       }
 
-    object QueryMatcher
-      extends QueryParamDecoderMatcher[String]("query")
+    object QueryMatcher extends QueryParamDecoderMatcher[String]("query")
     object OperationNameMatcher
-      extends OptionalQueryParamDecoderMatcher[String]("operationName")
+        extends OptionalQueryParamDecoderMatcher[String]("operationName")
     object VariablesMatcher
-      extends OptionalValidatingQueryParamDecoderMatcher[Json]("variables")
+        extends OptionalValidatingQueryParamDecoderMatcher[Json]("variables")
 
     HttpRoutes.of[F] {
       // GraphQL query is embedded in the URI query string when queried via GET
-      case GET -> Root / `prefix` :? 
-             QueryMatcher(query) +& OperationNameMatcher(op) +& VariablesMatcher(vars0) =>
-        vars0.sequence.fold(
-          errors => BadRequest(errors.map(_.sanitized).mkString_("", ",", "")),
-          vars =>
-            for {
-              result <- mapping.compileAndRun(query, op, vars)
-              resp   <- Ok(result)
-            } yield resp
-        )
+      case GET -> Root / `prefix` :?
+          QueryMatcher(query) +& OperationNameMatcher(op) +& VariablesMatcher(vars0) =>
+        vars0
+          .sequence
+          .fold(
+            errors => BadRequest(errors.map(_.sanitized).mkString_("", ",", "")),
+            vars =>
+              for {
+                result <- mapping.compileAndRun(query, op, vars)
+                resp <- Ok(result)
+              } yield resp
+          )
 
       // GraphQL query is embedded in a Json request body when queried via POST
       case req @ POST -> Root / `prefix` =>
         for {
-          body   <- req.as[Json]
-          obj    <- body.asObject.liftTo[F](
-                      InvalidMessageBodyFailure("Invalid GraphQL query")
-                    )
-          query  <- obj("query").flatMap(_.asString).liftTo[F](
-                      InvalidMessageBodyFailure("Missing query field")
-                    )
-          op     =  obj("operationName").flatMap(_.asString)
-          vars   =  obj("variables")
+          body <- req.as[Json]
+          obj <- body
+            .asObject
+            .liftTo[F](
+              InvalidMessageBodyFailure("Invalid GraphQL query")
+            )
+          query <- obj("query")
+            .flatMap(_.asString)
+            .liftTo[F](
+              InvalidMessageBodyFailure("Missing query field")
+            )
+          op = obj("operationName").flatMap(_.asString)
+          vars = obj("variables")
           result <- mapping.compileAndRun(query, op, vars)
-          resp   <- Ok(result)
+          resp <- Ok(result)
         } yield resp
     }
   }

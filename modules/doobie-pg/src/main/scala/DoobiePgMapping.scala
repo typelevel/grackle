@@ -16,17 +16,18 @@
 package grackle.doobie.postgres
 
 import cats.effect.Sync
-import _root_.doobie.Transactor
+import doobie.Transactor
 
 import grackle.Mapping
 import grackle.doobie._
 import grackle.sqlpg._
 
 abstract class DoobiePgMapping[F[_]](
-  val transactor: Transactor[F],
-  val monitor:    DoobieMonitor[F],
+    val transactor: Transactor[F],
+    val monitor: DoobieMonitor[F]
 )(
-  implicit val M: Sync[F]
-) extends Mapping[F] with DoobiePgMappingLike[F]
+    implicit val M: Sync[F]
+) extends Mapping[F]
+    with DoobiePgMappingLike[F]
 
 trait DoobiePgMappingLike[F[_]] extends DoobieMappingLike[F] with SqlPgMappingLike[F]

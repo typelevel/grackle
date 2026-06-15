@@ -17,7 +17,7 @@ package grackle
 
 import io.circe.Encoder
 
-import ScalarType._
+import grackle.ScalarType._
 
 object Introspection {
   val schema =
@@ -137,13 +137,13 @@ object Introspection {
 
   val QueryType = schema.uncheckedRef(schema.queryType)
   val __SchemaType = schema.ref("__Schema")
-  val __TypeType =  schema.ref("__Type")
-  val __FieldType =  schema.ref("__Field")
-  val __InputValueType =  schema.ref("__InputValue")
-  val __EnumValueType =  schema.ref("__EnumValue")
-  val __DirectiveType =  schema.ref("__Directive")
-  val __TypeKindType =  schema.ref("__TypeKind")
-  val __DirectiveLocationType =  schema.ref("__DirectiveLocation")
+  val __TypeType = schema.ref("__Type")
+  val __FieldType = schema.ref("__Field")
+  val __InputValueType = schema.ref("__InputValue")
+  val __EnumValueType = schema.ref("__EnumValue")
+  val __DirectiveType = schema.ref("__Directive")
+  val __TypeKindType = schema.ref("__TypeKind")
+  val __DirectiveLocationType = schema.ref("__DirectiveLocation")
 
   object TypeKind extends Enumeration {
     val SCALAR, OBJECT, INTERFACE, UNION, ENUM, INPUT_OBJECT, LIST, NON_NULL = Value
@@ -154,25 +154,25 @@ object Introspection {
     import Ast.DirectiveLocation._
 
     Encoder[String].contramap {
-      case QUERY                  => "QUERY"
-      case MUTATION               => "MUTATION"
-      case SUBSCRIPTION           => "SUBSCRIPTION"
-      case FIELD                  => "FIELD"
-      case FRAGMENT_DEFINITION    => "FRAGMENT_DEFINITION"
-      case FRAGMENT_SPREAD        => "FRAGMENT_SPREAD"
-      case INLINE_FRAGMENT        => "INLINE_FRAGMENT"
-      case VARIABLE_DEFINITION    => "VARIABLE_DEFINITION"
+      case QUERY => "QUERY"
+      case MUTATION => "MUTATION"
+      case SUBSCRIPTION => "SUBSCRIPTION"
+      case FIELD => "FIELD"
+      case FRAGMENT_DEFINITION => "FRAGMENT_DEFINITION"
+      case FRAGMENT_SPREAD => "FRAGMENT_SPREAD"
+      case INLINE_FRAGMENT => "INLINE_FRAGMENT"
+      case VARIABLE_DEFINITION => "VARIABLE_DEFINITION"
 
-      case SCHEMA                 => "SCHEMA"
-      case SCALAR                 => "SCALAR"
-      case OBJECT                 => "OBJECT"
-      case FIELD_DEFINITION       => "FIELD_DEFINITION"
-      case ARGUMENT_DEFINITION    => "ARGUMENT_DEFINITION"
-      case INTERFACE              => "INTERFACE"
-      case UNION                  => "UNION"
-      case ENUM                   => "ENUM"
-      case ENUM_VALUE             => "ENUM_VALUE"
-      case INPUT_OBJECT           => "INPUT_OBJECT"
+      case SCHEMA => "SCHEMA"
+      case SCALAR => "SCALAR"
+      case OBJECT => "OBJECT"
+      case FIELD_DEFINITION => "FIELD_DEFINITION"
+      case ARGUMENT_DEFINITION => "ARGUMENT_DEFINITION"
+      case INTERFACE => "INTERFACE"
+      case UNION => "UNION"
+      case ENUM => "ENUM"
+      case ENUM_VALUE => "ENUM_VALUE"
+      case INPUT_OBJECT => "INPUT_OBJECT"
       case INPUT_FIELD_DEFINITION => "INPUT_FIELD_DEFINITION"
     }
   }
@@ -181,12 +181,12 @@ object Introspection {
 
   val flipNullityDealias: PartialFunction[Type, Any] = {
     case NullableType(tpe) => tpe.dealias
-    case tpe               => NonNullType(tpe)
+    case tpe => NonNullType(tpe)
   }
 
   val defaultTypes =
     schema.types.filterNot(_ =:= schema.queryType) ++
-    List(BooleanType, IntType, FloatType, StringType, IDType)
+      List(BooleanType, IntType, FloatType, StringType, IDType)
 
   def interpreter(targetSchema: Schema): QueryInterpreter[Either[Throwable, *]] =
     new IntrospectionMapping(targetSchema).interpreter
@@ -210,58 +210,82 @@ object Introspection {
           ValueField("directives", _.directives)
         ),
         ValueObjectMapping(__TypeType).on[Type](
-          ValueField("kind", flipNullityDealias andThen {
-            case _: ScalarType      => TypeKind.SCALAR
-            case _: ObjectType      => TypeKind.OBJECT
-            case _: UnionType       => TypeKind.UNION
-            case _: InterfaceType   => TypeKind.INTERFACE
-            case _: EnumType        => TypeKind.ENUM
-            case _: InputObjectType => TypeKind.INPUT_OBJECT
-            case _: ListType        => TypeKind.LIST
-            case _: NonNullType     => TypeKind.NON_NULL
-          }),
-          ValueField("name", flipNullityDealias andThen {
-            case nt: NamedType      => Some(nt.name)
-            case _ => None
-          }),
-          ValueField("description", flipNullityDealias andThen {
-            case nt: NamedType      => nt.description
-            case _ => None
-          }),
-          ValueField("specifiedByURL", flipNullityDealias andThen {
-            case s: ScalarType      => s.specifiedByURL
-            case _ => None
-          }),
-          ValueField("fields", flipNullityDealias andThen {
-            case tf: TypeWithFields => Some(tf.fields)
-            case _ => None
-          }),
-          ValueField("interfaces", flipNullityDealias andThen {
-            case tf: TypeWithFields => Some(tf.interfaces.map(_.nullable))
-            case _ => None
-          }),
-          ValueField("possibleTypes", flipNullityDealias andThen {
-            case u: UnionType       => Some(u.members.map(_.nullable))
-            case i: InterfaceType   => Some(targetSchema.implementations(i).map(_.nullable))
-            case _ => None
-          }),
-          ValueField("enumValues", flipNullityDealias andThen {
-            case e: EnumType        => Some(e.enumValues)
-            case _ => None
-          }),
-          ValueField("inputFields", flipNullityDealias andThen {
-            case i: InputObjectType => Some(i.inputFields)
-            case _ => None
-          }),
-          ValueField("ofType", flipNullityDealias andThen {
-            case l: ListType        => Some(l.ofType)
-            case NonNullType(t)     => Some(NullableType(t))
-            case _ => None
-          }),
-          ValueField("isOneOf", flipNullityDealias andThen {
-            case i: InputObjectType => Some(i.isOneOf)
-            case _ => None
-          }),
+          ValueField(
+            "kind",
+            flipNullityDealias andThen {
+              case _: ScalarType => TypeKind.SCALAR
+              case _: ObjectType => TypeKind.OBJECT
+              case _: UnionType => TypeKind.UNION
+              case _: InterfaceType => TypeKind.INTERFACE
+              case _: EnumType => TypeKind.ENUM
+              case _: InputObjectType => TypeKind.INPUT_OBJECT
+              case _: ListType => TypeKind.LIST
+              case _: NonNullType => TypeKind.NON_NULL
+            }
+          ),
+          ValueField(
+            "name",
+            flipNullityDealias andThen {
+              case nt: NamedType => Some(nt.name)
+              case _ => None
+            }),
+          ValueField(
+            "description",
+            flipNullityDealias andThen {
+              case nt: NamedType => nt.description
+              case _ => None
+            }),
+          ValueField(
+            "specifiedByURL",
+            flipNullityDealias andThen {
+              case s: ScalarType => s.specifiedByURL
+              case _ => None
+            }),
+          ValueField(
+            "fields",
+            flipNullityDealias andThen {
+              case tf: TypeWithFields => Some(tf.fields)
+              case _ => None
+            }),
+          ValueField(
+            "interfaces",
+            flipNullityDealias andThen {
+              case tf: TypeWithFields => Some(tf.interfaces.map(_.nullable))
+              case _ => None
+            }),
+          ValueField(
+            "possibleTypes",
+            flipNullityDealias andThen {
+              case u: UnionType => Some(u.members.map(_.nullable))
+              case i: InterfaceType => Some(targetSchema.implementations(i).map(_.nullable))
+              case _ => None
+            }
+          ),
+          ValueField(
+            "enumValues",
+            flipNullityDealias andThen {
+              case e: EnumType => Some(e.enumValues)
+              case _ => None
+            }),
+          ValueField(
+            "inputFields",
+            flipNullityDealias andThen {
+              case i: InputObjectType => Some(i.inputFields)
+              case _ => None
+            }),
+          ValueField(
+            "ofType",
+            flipNullityDealias andThen {
+              case l: ListType => Some(l.ofType)
+              case NonNullType(t) => Some(NullableType(t))
+              case _ => None
+            }),
+          ValueField(
+            "isOneOf",
+            flipNullityDealias andThen {
+              case i: InputObjectType => Some(i.isOneOf)
+              case _ => None
+            })
         ),
         ValueObjectMapping(__FieldType).on[Field](
           ValueField("name", _.name),

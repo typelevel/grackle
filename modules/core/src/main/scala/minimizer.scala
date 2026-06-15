@@ -58,10 +58,10 @@ object QueryMinimizer {
 
       def renderOperation(op: Operation): String =
         renderOperationType(op.operationType) +
-        op.name.map(nme => s" ${nme.value}").getOrElse("") +
-        renderVariableDefns(op.variables)+
-        renderDirectives(op.directives)+
-        renderSelectionSet(op.selectionSet)
+          op.name.map(nme => s" ${nme.value}").getOrElse("") +
+          renderVariableDefns(op.variables) +
+          renderDirectives(op.directives) +
+          renderSelectionSet(op.selectionSet)
 
       def renderOperationType(op: OperationType): String =
         op match {
@@ -71,16 +71,20 @@ object QueryMinimizer {
         }
 
       def renderDirectives(dirs: List[Directive]): String =
-        dirs.map { case Directive(name, args) => s"@${name.value}${renderArguments(args)}" }.mkString("")
+        dirs
+          .map { case Directive(name, args) => s"@${name.value}${renderArguments(args)}" }
+          .mkString("")
 
       def renderVariableDefns(vars: List[VariableDefinition]): String =
         vars match {
           case Nil => ""
           case _ =>
-            vars.map {
-              case VariableDefinition(name, tpe, default, dirs) =>
-                s"$$${name.value}:${tpe.name}${default.map(v => s"=${renderValue(v)}").getOrElse("")}${renderDirectives(dirs)}"
-            }.mkString("(", ",", ")")
+            vars
+              .map {
+                case VariableDefinition(name, tpe, default, dirs) =>
+                  s"$$${name.value}:${tpe.name}${default.map(v => s"=${renderValue(v)}").getOrElse("")}${renderDirectives(dirs)}"
+              }
+              .mkString("(", ",", ")")
         }
 
       def renderSelectionSet(sels: List[Selection]): String =
@@ -97,23 +101,25 @@ object QueryMinimizer {
         }
 
       def renderField(f: Field) = {
-        f.alias.map(a => s"${a.value}:").getOrElse("")+
-        f.name.value+
-        renderArguments(f.arguments)+
-        renderDirectives(f.directives)+
-        renderSelectionSet(f.selectionSet)
+        f.alias.map(a => s"${a.value}:").getOrElse("") +
+          f.name.value +
+          renderArguments(f.arguments) +
+          renderDirectives(f.directives) +
+          renderSelectionSet(f.selectionSet)
       }
 
       def renderArguments(args: List[(Name, Value)]): String =
         args match {
           case Nil => ""
-          case _ => args.map { case (n, v) => s"${n.value}:${renderValue(v)}" }.mkString("(", ",", ")")
+          case _ =>
+            args.map { case (n, v) => s"${n.value}:${renderValue(v)}" }.mkString("(", ",", ")")
         }
 
       def renderInputObject(args: List[(Name, Value)]): String =
         args match {
           case Nil => ""
-          case _ => args.map { case (n, v) => s"${n.value}:${renderValue(v)}" }.mkString("{", ",", "}")
+          case _ =>
+            args.map { case (n, v) => s"${n.value}:${renderValue(v)}" }.mkString("{", ",", "}")
         }
 
       def renderTypeCondition(tpe: Type): String =

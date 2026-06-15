@@ -22,25 +22,24 @@ import cats._
 import cats.data.NonEmptyList
 import cats.implicits._
 
-import ValidationFailure.Severity
+import grackle.ValidationFailure.Severity
 
 abstract class ValidationFailure(val severity: Severity) extends AnsiColor {
   protected def formattedMessage: String
 
   private val prefix: String =
     severity match {
-      case Severity.Error   => "🛑 "
+      case Severity.Error => "🛑 "
       case Severity.Warning => "⚠️ "
-      case Severity.Info    => "ℹ️  "
+      case Severity.Info => "ℹ️  "
     }
 
-  private val padding: String = " "*prefix.length
+  private val padding: String = " " * prefix.length
 
   protected def graphql(a: Any) = s"$BLUE$a$RESET"
   protected def scala(a: Any) = s"$RED$a$RESET"
   protected def key: String =
     s"Color Key: ${scala("◼")} Scala | ${graphql("◼")} GraphQL"
-
 
   final def toErrorMessage: String =
     s"""|$formattedMessage
@@ -64,20 +63,22 @@ abstract class ValidationFailure(val severity: Severity) extends AnsiColor {
 object ValidationFailure {
   sealed trait Severity extends Product
   object Severity {
-    case object  Error   extends Severity
-    case object  Warning extends Severity
-    case object  Info    extends Severity
+    case object Error extends Severity
+    case object Warning extends Severity
+    case object Info extends Severity
 
     implicit val OrderSeverity: Order[Severity] =
       Order.by {
-        case Error   => 3
+        case Error => 3
         case Warning => 2
-        case Info    => 1
+        case Info => 1
       }
   }
 }
 
-final case class ValidationException(failures: NonEmptyList[ValidationFailure]) extends RuntimeException with NoStackTrace {
+final case class ValidationException(failures: NonEmptyList[ValidationFailure])
+    extends RuntimeException
+    with NoStackTrace {
   override def getMessage(): String =
     s"\n\n${failures.foldMap(_.toErrorMessage)}\n"
 }

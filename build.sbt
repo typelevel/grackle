@@ -1,49 +1,54 @@
-import nl.zolotko.sbt.jfr.{JfrRecording, JfrRecorderOptions}
 import scala.concurrent.duration.DurationInt
 import scala.sys.process._
 
-val catsVersion            = "2.13.0"
-val catsParseVersion       = "1.1.0"
-val catsEffectVersion      = "3.7.0"
-val circeVersion           = "0.14.15"
+import nl.zolotko.sbt.jfr.{JfrRecorderOptions, JfrRecording}
+import spray.revolver.Actions._
+
+val catsVersion = "2.13.0"
+val catsParseVersion = "1.1.0"
+val catsEffectVersion = "3.7.0"
+val circeVersion = "0.14.15"
 val disciplineMunitVersion = "2.0.0"
-val doobieVersion          = "1.0.0-RC12"
-val fs2Version             = "3.13.0"
-val http4sVersion          = "0.23.34"
-val kindProjectorVersion   = "0.13.4"
-val literallyVersion       = "1.2.0"
-val logbackVersion         = "1.5.34"
-val log4catsVersion        = "2.8.0"
-val mssqlDriverVersion     = "13.4.0.jre11"
-val munitVersion           = "1.3.3"
+val doobieVersion = "1.0.0-RC12"
+val fs2Version = "3.13.0"
+val http4sVersion = "0.23.34"
+val kindProjectorVersion = "0.13.4"
+val literallyVersion = "1.2.0"
+val logbackVersion = "1.5.34"
+val log4catsVersion = "2.8.0"
+val mssqlDriverVersion = "13.4.0.jre11"
+val munitVersion = "1.3.3"
 val munitCatsEffectVersion = "2.2.0"
 val munitScalaCheckVersion = "1.3.0"
-val oracleDriverVersion    = "23.26.2.0.0"
-val skunkVersion           = "1.0.0"
-val shapeless2Version      = "2.3.13"
-val shapeless3Version      = "3.6.0"
-val sourcePosVersion       = "1.2.0"
-val typenameVersion        = "1.1.2"
+val oracleDriverVersion = "23.26.2.0.0"
+val skunkVersion = "1.0.0"
+val shapeless2Version = "2.3.13"
+val shapeless3Version = "3.6.0"
+val sourcePosVersion = "1.2.0"
+val typenameVersion = "1.1.2"
 
 val Scala2 = "2.13.18"
 val Scala3 = "3.3.7"
 
-ThisBuild / scalaVersion        := Scala2
-ThisBuild / crossScalaVersions  := Seq(Scala2, Scala3)
-ThisBuild / tlJdkRelease        := Some(11)
+ThisBuild / scalaVersion := Scala2
+ThisBuild / crossScalaVersions := Seq(Scala2, Scala3)
+ThisBuild / tlJdkRelease := Some(11)
 
-ThisBuild / tlBaseVersion    := "0.27"
-ThisBuild / startYear        := Some(2019)
-ThisBuild / licenses         := Seq(License.Apache2)
-ThisBuild / developers       := List(
-  Developer("milessabin", "Miles Sabin", "miles@milessabin.com", url("http://milessabin.com/blog")),
-  Developer("tpolecat",   "Rob Norris",  "rnorris@gemini.edu",   url("http://www.tpolecat.org")),
+ThisBuild / tlBaseVersion := "0.27"
+ThisBuild / startYear := Some(2019)
+ThisBuild / licenses := Seq(License.Apache2)
+ThisBuild / developers := List(
+  Developer(
+    "milessabin",
+    "Miles Sabin",
+    "miles@milessabin.com",
+    url("http://milessabin.com/blog")),
+  Developer("tpolecat", "Rob Norris", "rnorris@gemini.edu", url("http://www.tpolecat.org"))
 )
 
-ThisBuild / tlFatalWarnings         := sys.env.contains("CI")
-ThisBuild / tlCiScalafmtCheck       := false
-ThisBuild / tlCiReleaseBranches     := Seq("main")
-ThisBuild / githubWorkflowBuild     ~= { steps =>
+ThisBuild / tlFatalWarnings := sys.env.contains("CI")
+ThisBuild / tlCiReleaseBranches := Seq("main")
+ThisBuild / githubWorkflowBuild ~= { steps =>
   Seq(
     WorkflowStep.Sbt(
       commands = List("headerCheckAll"),
@@ -100,40 +105,42 @@ def runDocker(cmd: String): Unit = {
 }
 
 lazy val commonSettings = Seq(
-  //scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
+  // scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
   scalacOptions -= "-Wunused:privates", // Temporarily disable unused privates warning due to spurious warnings in Scala 3.3.7
   scalacOptions ++= Seq("-Xlint:-pattern-shadow").filterNot(_ => tlIsScala3.value),
   resolvers += Resolver.sonatypeCentralSnapshots,
   libraryDependencies ++= Seq(
-    "org.scalameta" %%% "munit"             % munitVersion % "test",
-    "org.scalameta" %%% "munit-scalacheck"  % munitScalaCheckVersion % "test",
-    "org.typelevel" %%% "cats-laws"         % catsVersion % "test",
-    "org.typelevel" %%% "discipline-munit"  % disciplineMunitVersion % "test",
+    "org.scalameta" %%% "munit" % munitVersion % "test",
+    "org.scalameta" %%% "munit-scalacheck" % munitScalaCheckVersion % "test",
+    "org.typelevel" %%% "cats-laws" % catsVersion % "test",
+    "org.typelevel" %%% "discipline-munit" % disciplineMunitVersion % "test",
     "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion % "test",
-    "io.circe"      %%% "circe-literal"     % circeVersion % "test",
-    "io.circe"      %%% "circe-jawn"        % circeVersion % "test",
-    "io.circe"      %%% "circe-parser"      % circeVersion % "test",
+    "io.circe" %%% "circe-literal" % circeVersion % "test",
+    "io.circe" %%% "circe-jawn" % circeVersion % "test",
+    "io.circe" %%% "circe-parser" % circeVersion % "test"
   ) ++ Seq(
-    compilerPlugin("org.typelevel" %% "kind-projector" % kindProjectorVersion cross CrossVersion.full),
+    compilerPlugin(
+      "org.typelevel" %% "kind-projector" % kindProjectorVersion cross CrossVersion.full)
   ).filterNot(_ => tlIsScala3.value),
   headerMappings := headerMappings.value + (HeaderFileType.scala -> HeaderCommentStyle.cppStyleLineComment),
-  headerLicense  := Some(HeaderLicense.Custom(
-    """|Copyright (c) 2016-2025 Association of Universities for Research in Astronomy, Inc. (AURA)
-       |Copyright (c) 2016-2025 Grackle Contributors
-       |
-       |Licensed under the Apache License, Version 2.0 (the "License");
-       |you may not use this file except in compliance with the License.
-       |You may obtain a copy of the License at
-       |
-       |  http://www.apache.org/licenses/LICENSE-2.0
-       |
-       |Unless required by applicable law or agreed to in writing, software
-       |distributed under the License is distributed on an "AS IS" BASIS,
-       |WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-       |See the License for the specific language governing permissions and
-       |limitations under the License.
-       |""".stripMargin
-  ))
+  headerLicense := Some(
+    HeaderLicense.Custom(
+      """|Copyright (c) 2016-2025 Association of Universities for Research in Astronomy, Inc. (AURA)
+         |Copyright (c) 2016-2025 Grackle Contributors
+         |
+         |Licensed under the Apache License, Version 2.0 (the "License");
+         |you may not use this file except in compliance with the License.
+         |You may obtain a copy of the License at
+         |
+         |  http://www.apache.org/licenses/LICENSE-2.0
+         |
+         |Unless required by applicable law or agreed to in writing, software
+         |distributed under the License is distributed on an "AS IS" BASIS,
+         |WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+         |See the License for the specific language governing permissions and
+         |limitations under the License.
+         |""".stripMargin
+    ))
 )
 
 lazy val nativeSettings = Seq(
@@ -162,9 +169,7 @@ lazy val modules: List[CompositeProject] = List(
   profile
 )
 
-lazy val root = tlCrossRootProject
-  .aggregate(modules:_*)
-  .disablePlugins(RevolverPlugin)
+lazy val root = tlCrossRootProject.aggregate(modules: _*).disablePlugins(RevolverPlugin)
 
 lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
@@ -176,13 +181,13 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     name := "grackle-core",
     libraryDependencies ++=
       Seq(
-        "org.typelevel" %%% "cats-parse"   % catsParseVersion,
-        "org.typelevel" %%% "cats-core"    % catsVersion,
-        "org.typelevel" %%% "literally"    % literallyVersion,
-        "io.circe"      %%% "circe-core"   % circeVersion,
-        "org.tpolecat"  %%% "typename"     % typenameVersion,
-        "org.tpolecat"  %%% "sourcepos"    % sourcePosVersion,
-        "co.fs2"        %%% "fs2-core"     % fs2Version,
+        "org.typelevel" %%% "cats-parse" % catsParseVersion,
+        "org.typelevel" %%% "cats-core" % catsVersion,
+        "org.typelevel" %%% "literally" % literallyVersion,
+        "io.circe" %%% "circe-core" % circeVersion,
+        "org.tpolecat" %%% "typename" % typenameVersion,
+        "org.tpolecat" %%% "sourcepos" % sourcePosVersion,
+        "co.fs2" %%% "fs2-core" % fs2Version
       )
   )
   .jsSettings(
@@ -199,7 +204,7 @@ lazy val circe = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .dependsOn(core)
   .settings(commonSettings)
   .settings(
-    name := "grackle-circe",
+    name := "grackle-circe"
   )
   .nativeSettings(nativeSettings)
 
@@ -223,8 +228,8 @@ lazy val sqlcore = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .settings(
     name := "grackle-sql-core",
     libraryDependencies ++= Seq(
-      "io.circe"          %%% "circe-generic"      % circeVersion % "test",
-      "co.fs2"            %%% "fs2-io"             % fs2Version % "test",
+      "io.circe" %%% "circe-generic" % circeVersion % "test",
+      "co.fs2" %%% "fs2-io" % fs2Version % "test"
     )
   )
   .nativeSettings(nativeSettings)
@@ -237,7 +242,7 @@ lazy val sqlpg = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .dependsOn(sqlcore % "test->test;compile->compile", circe)
   .settings(commonSettings)
   .settings(
-    name := "grackle-sql-pg",
+    name := "grackle-sql-pg"
   )
   .nativeSettings(nativeSettings)
 
@@ -252,9 +257,9 @@ lazy val doobiecore = project
     Test / fork := true,
     Test / parallelExecution := false,
     libraryDependencies ++= Seq(
-      "org.tpolecat"   %% "doobie-core"     % doobieVersion,
-      "org.typelevel"  %% "log4cats-core"   % log4catsVersion,
-      "ch.qos.logback" %  "logback-classic" % logbackVersion % "test"
+      "org.tpolecat" %% "doobie-core" % doobieVersion,
+      "org.typelevel" %% "log4cats-core" % log4catsVersion,
+      "ch.qos.logback" % "logback-classic" % logbackVersion % "test"
     )
   )
 
@@ -262,13 +267,16 @@ lazy val doobiepg = project
   .in(file("modules/doobie-pg"))
   .enablePlugins(AutomateHeaderPlugin)
   .disablePlugins(RevolverPlugin)
-  .dependsOn(doobiecore % "test->test;compile->compile", sqlpg.jvm % "test->test;compile->compile")
+  .dependsOn(
+    doobiecore % "test->test;compile->compile",
+    sqlpg.jvm % "test->test;compile->compile")
   .settings(commonSettings)
   .settings(
     name := "grackle-doobie-pg",
     Test / fork := true,
     Test / parallelExecution := false,
-    Test / testOptions += Tests.Setup(_ => runDocker("docker compose up -d --wait --quiet-pull postgres")),
+    Test / testOptions += Tests
+      .Setup(_ => runDocker("docker compose up -d --wait --quiet-pull postgres")),
     libraryDependencies ++= Seq(
       "org.tpolecat" %% "doobie-postgres-circe" % doobieVersion
     )
@@ -284,7 +292,8 @@ lazy val doobieoracle = project
     name := "grackle-doobie-oracle",
     Test / fork := true,
     Test / parallelExecution := false,
-    Test / testOptions += Tests.Setup(_ => runDocker("docker compose up -d --wait --quiet-pull oracle")),
+    Test / testOptions += Tests
+      .Setup(_ => runDocker("docker compose up -d --wait --quiet-pull oracle")),
     libraryDependencies ++= Seq(
       "com.oracle.database.jdbc" % "ojdbc8" % oracleDriverVersion
     )
@@ -300,7 +309,8 @@ lazy val doobiemssql = project
     name := "grackle-doobie-mssql",
     Test / fork := true,
     Test / parallelExecution := false,
-    Test / testOptions += Tests.Setup(_ => runDocker("docker compose up -d --wait --quiet-pull mssql")),
+    Test / testOptions += Tests
+      .Setup(_ => runDocker("docker compose up -d --wait --quiet-pull mssql")),
     libraryDependencies ++= Seq(
       "com.microsoft.sqlserver" % "mssql-jdbc" % mssqlDriverVersion
     )
@@ -317,14 +327,15 @@ lazy val skunk = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     name := "grackle-skunk",
     Test / parallelExecution := false,
     libraryDependencies ++= Seq(
-      "org.tpolecat"  %%% "skunk-core"    % skunkVersion,
-      "org.tpolecat"  %%% "skunk-circe"   % skunkVersion,
-      "org.typelevel" %%  "log4cats-core" % log4catsVersion
+      "org.tpolecat" %%% "skunk-core" % skunkVersion,
+      "org.tpolecat" %%% "skunk-circe" % skunkVersion,
+      "org.typelevel" %% "log4cats-core" % log4catsVersion
     )
   )
   .jvmSettings(
     Test / fork := true,
-    Test / testOptions += Tests.Setup(_ => runDocker("docker compose up -d --wait --quiet-pull postgres")),
+    Test / testOptions += Tests.Setup(_ =>
+      runDocker("docker compose up -d --wait --quiet-pull postgres")),
     libraryDependencies ++= Seq(
       "ch.qos.logback" % "logback-classic" % logbackVersion % "test"
     )
@@ -343,15 +354,12 @@ lazy val generic = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .settings(commonSettings)
   .settings(
     name := "grackle-generic",
-    libraryDependencies += (
-      scalaVersion.value match {
-        case Scala3 => "org.typelevel" %%% "shapeless3-deriving" % shapeless3Version
-        case Scala2 => "com.chuusai"   %%% "shapeless"           % shapeless2Version
-      })
+    libraryDependencies += (scalaVersion.value match {
+      case Scala3 => "org.typelevel" %%% "shapeless3-deriving" % shapeless3Version
+      case Scala2 => "com.chuusai" %%% "shapeless" % shapeless2Version
+    })
   )
   .nativeSettings(nativeSettings)
-
-import spray.revolver.Actions._
 
 lazy val demo = project
   .in(file("demo"))
@@ -362,18 +370,19 @@ lazy val demo = project
     name := "grackle-demo",
     coverageEnabled := false,
     libraryDependencies ++= Seq(
-      "org.typelevel"     %% "log4cats-slf4j"      % log4catsVersion,
-      "ch.qos.logback"    %  "logback-classic"     % logbackVersion,
-      "org.tpolecat"      %% "doobie-core"         % doobieVersion,
-      "org.tpolecat"      %% "doobie-postgres"     % doobieVersion,
-      "org.tpolecat"      %% "doobie-hikari"       % doobieVersion,
-      "org.http4s"        %% "http4s-ember-server" % http4sVersion,
-      "org.http4s"        %% "http4s-ember-client" % http4sVersion,
-      "org.http4s"        %% "http4s-circe"        % http4sVersion,
-      "org.http4s"        %% "http4s-dsl"          % http4sVersion
+      "org.typelevel" %% "log4cats-slf4j" % log4catsVersion,
+      "ch.qos.logback" % "logback-classic" % logbackVersion,
+      "org.tpolecat" %% "doobie-core" % doobieVersion,
+      "org.tpolecat" %% "doobie-postgres" % doobieVersion,
+      "org.tpolecat" %% "doobie-hikari" % doobieVersion,
+      "org.http4s" %% "http4s-ember-server" % http4sVersion,
+      "org.http4s" %% "http4s-ember-client" % http4sVersion,
+      "org.http4s" %% "http4s-circe" % http4sVersion,
+      "org.http4s" %% "http4s-dsl" % http4sVersion
     ),
     reStart := // Redefine reStart to depend on pgUp
-      Def.inputTask(reStart.evaluated)
+      Def
+        .inputTask(reStart.evaluated)
         .dependsOn(Compile / products)
         .dependsOn(ThisBuild / pgUp)
         .evaluated
@@ -385,7 +394,7 @@ lazy val benchmarks = project
   .enablePlugins(NoPublishPlugin, AutomateHeaderPlugin, JmhPlugin)
   .settings(commonSettings)
   .settings(
-    coverageEnabled := false,
+    coverageEnabled := false
   )
 
 lazy val profile = project
@@ -403,11 +412,11 @@ lazy val profile = project
         disk = true.some,
         dumpOnExit = true.some,
         duration = 30.seconds.some,
-        pathToGcRoots = true.some,
+        pathToGcRoots = true.some
       )
     ),
     fork := true,
-    coverageEnabled := false,
+    coverageEnabled := false
   )
 
 lazy val docs = project
@@ -419,7 +428,7 @@ lazy val docs = project
     libraryDependencies ++= Seq(
       "org.typelevel" %% "cats-effect" % catsEffectVersion
     ),
-    coverageEnabled := false,
+    coverageEnabled := false
   )
 
 // Run repoDocs / mdoc manually to generated README.md from docs/index.md and header.md
@@ -430,12 +439,12 @@ lazy val repoDocs = project
   .settings(
     mdocVariables :=
       Map(
-        "VERSION"       -> tlLatestVersion.value.getOrElse(version.value),
+        "VERSION" -> tlLatestVersion.value.getOrElse(version.value),
         "headerVariant" -> "repo"
-        ),
-    mdocIn  := file("docs/index.md"),
+      ),
+    mdocIn := file("docs/index.md"),
     mdocOut := file("README.md"),
-    coverageEnabled := false,
+    coverageEnabled := false
   )
 
 lazy val unidocs = project
@@ -454,6 +463,6 @@ lazy val unidocs = project
       doobieoracle,
       doobiemssql,
       skunk.jvm,
-      generic.jvm,
+      generic.jvm
     )
   )

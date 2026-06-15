@@ -13,37 +13,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package doobie
+package grackle.doobie
 
-import _root_.doobie.util.transactor.Transactor
 import cats.effect.Sync
+import doobie.util.transactor.Transactor
 import org.typelevel.log4cats.Logger
+
+import grackle.Mapping
 
 trait DoobieMappingCompanion {
   def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F]
 
-  def mkMapping[F[_] : Sync](transactor: Transactor[F]): Mapping[F] = {
+  def mkMapping[F[_]: Sync](transactor: Transactor[F]): Mapping[F] = {
     val monitor: DoobieMonitor[F] = DoobieMonitor.noopMonitor[F]
 
     mkMapping(transactor, monitor)
   }
 
   @deprecated("Use mkMapping instead", "0.2.0")
-  def fromTransactor[F[_] : Sync](transactor: Transactor[F]): Mapping[F] =
+  def fromTransactor[F[_]: Sync](transactor: Transactor[F]): Mapping[F] =
     mkMapping(transactor)
 }
 
 trait LoggedDoobieMappingCompanion {
   def mkMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F]): Mapping[F]
 
-  def mkMapping[F[_] : Sync : Logger](transactor: Transactor[F]): Mapping[F] = {
+  def mkMapping[F[_]: Sync: Logger](transactor: Transactor[F]): Mapping[F] = {
     val monitor: DoobieMonitor[F] = DoobieMonitor.loggerMonitor[F](Logger[F])
 
     mkMapping(transactor, monitor)
   }
 
   @deprecated("Use mkMapping instead", "0.2.0")
-  def fromTransactor[F[_] : Sync : Logger](transactor: Transactor[F]): Mapping[F] =
+  def fromTransactor[F[_]: Sync: Logger](transactor: Transactor[F]): Mapping[F] =
     mkMapping(transactor)
 }

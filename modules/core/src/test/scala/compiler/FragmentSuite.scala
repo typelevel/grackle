@@ -22,15 +22,21 @@ import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
 import grackle.syntax._
-import Query._
-import Predicate._, Value._
-import QueryCompiler._
 
 final class FragmentSuite extends CatsEffectSuite {
   def runOperation(op: Result[Operation]): IO[List[Json]] = {
     val op0 = op.toOption.get
-    FragmentMapping.interpreter.run(op0.query, op0.rootTpe, Env.empty).evalMap(FragmentMapping.mkResponse).compile.toList
+    FragmentMapping
+      .interpreter
+      .run(op0.query, op0.rootTpe, Env.empty)
+      .evalMap(FragmentMapping.mkResponse)
+      .compile
+      .toList
   }
 
   test("simple fragment query") {
@@ -54,28 +60,35 @@ final class FragmentSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Select("user",
+      Select(
+        "user",
         Unique(
-          Filter(Eql(FragmentMapping.UserType / "id", Const("1")),
-            Group(List(
-              Select("friends",
-                Group(List(
-                  Select("id"),
-                  Select("name"),
-                  Select("profilePic")
-                ))
-              ),
-              Select("mutualFriends",
-                Group(List(
-                  Select("id"),
-                  Select("name"),
-                  Select("profilePic")
-                ))
-              )
-            ))
+          Filter(
+            Eql(FragmentMapping.UserType / "id", Const("1")),
+            Group(
+              List(
+                Select(
+                  "friends",
+                  Group(
+                    List(
+                      Select("id"),
+                      Select("name"),
+                      Select("profilePic")
+                    ))
+                ),
+                Select(
+                  "mutualFriends",
+                  Group(
+                    List(
+                      Select("id"),
+                      Select("name"),
+                      Select("profilePic")
+                    ))
+                )
+              ))
           )
         )
-    )
+      )
 
     val expectedResult = json"""
       {
@@ -144,25 +157,32 @@ final class FragmentSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Select("user",
+      Select(
+        "user",
         Unique(
-          Filter(Eql(FragmentMapping.UserType / "id", Const("1")),
-            Group(List(
-              Select("friends",
-                Group(List(
-                  Select("id"),
-                  Select("name"),
-                  Select("profilePic")
-                ))
-              ),
-              Select("mutualFriends",
-                Group(List(
-                  Select("id"),
-                  Select("name"),
-                  Select("profilePic")
-                ))
-              )
-            ))
+          Filter(
+            Eql(FragmentMapping.UserType / "id", Const("1")),
+            Group(
+              List(
+                Select(
+                  "friends",
+                  Group(
+                    List(
+                      Select("id"),
+                      Select("name"),
+                      Select("profilePic")
+                    ))
+                ),
+                Select(
+                  "mutualFriends",
+                  Group(
+                    List(
+                      Select("id"),
+                      Select("name"),
+                      Select("profilePic")
+                    ))
+                )
+              ))
           )
         )
       )
@@ -238,25 +258,32 @@ final class FragmentSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Select("user",
+      Select(
+        "user",
         Unique(
-          Filter(Eql(FragmentMapping.UserType / "id", Const("1")),
-            Group(List(
-              Select("friends",
-                Group(List(
-                  Select("id"),
-                  Select("name"),
-                  Select("profilePic")
-                ))
-              ),
-              Select("mutualFriends",
-                Group(List(
-                  Select("id"),
-                  Select("name"),
-                  Select("profilePic")
-                ))
-              )
-            ))
+          Filter(
+            Eql(FragmentMapping.UserType / "id", Const("1")),
+            Group(
+              List(
+                Select(
+                  "friends",
+                  Group(
+                    List(
+                      Select("id"),
+                      Select("name"),
+                      Select("profilePic")
+                    ))
+                ),
+                Select(
+                  "mutualFriends",
+                  Group(
+                    List(
+                      Select("id"),
+                      Select("name"),
+                      Select("profilePic")
+                    ))
+                )
+              ))
           )
         )
       )
@@ -327,13 +354,15 @@ final class FragmentSuite extends CatsEffectSuite {
     val Page = FragmentMapping.schema.ref("Page")
 
     val expected =
-      Select("profiles",
-        Group(List(
-          Select("id"),
-          Introspect(FragmentMapping.schema, Select("__typename")),
-          Narrow(User, Select("name")),
-          Narrow(Page, Select("title"))
-        ))
+      Select(
+        "profiles",
+        Group(
+          List(
+            Select("id"),
+            Introspect(FragmentMapping.schema, Select("__typename")),
+            Narrow(User, Select("name")),
+            Narrow(Page, Select("title"))
+          ))
       )
 
     val expectedResult = json"""
@@ -398,12 +427,14 @@ final class FragmentSuite extends CatsEffectSuite {
     val Page = FragmentMapping.schema.ref("Page")
 
     val expected =
-      Select("profiles",
-        Group(List(
-          Select("id"),
-          Narrow(User, Select("name")),
-          Narrow(Page, Select("title"))
-        ))
+      Select(
+        "profiles",
+        Group(
+          List(
+            Select("id"),
+            Narrow(User, Select("name")),
+            Narrow(Page, Select("title"))
+          ))
       )
 
     val expectedResult = json"""
@@ -478,58 +509,66 @@ final class FragmentSuite extends CatsEffectSuite {
     val Page = FragmentMapping.schema.ref("Page")
 
     val expected =
-      Group(List(
-        Select("user",
-          Unique(
-            Filter(Eql(FragmentMapping.UserType / "id", Const("1")),
-              Select("favourite",
-                Group(List(
-                  Introspect(FragmentMapping.schema, Select("__typename")),
-                  Narrow(
-                    User,
-                    Group(List(
-                      Select("id"),
-                      Select("name")
-                    ))
-                  ),
-                  Narrow(
-                    Page,
-                    Group(List(
-                      Select("id"),
-                      Select("title")
-                    ))
-                   )
-                ))
+      Group(
+        List(
+          Select(
+            "user",
+            Unique(
+              Filter(
+                Eql(FragmentMapping.UserType / "id", Const("1")),
+                Select(
+                  "favourite",
+                  Group(List(
+                    Introspect(FragmentMapping.schema, Select("__typename")),
+                    Narrow(
+                      User,
+                      Group(List(
+                        Select("id"),
+                        Select("name")
+                      ))
+                    ),
+                    Narrow(
+                      Page,
+                      Group(List(
+                        Select("id"),
+                        Select("title")
+                      ))
+                    )
+                  ))
+                )
+              )
+            )
+          ),
+          Select(
+            "user",
+            Some("page"),
+            Unique(
+              Filter(
+                Eql(FragmentMapping.PageType / "id", Const("2")),
+                Select(
+                  "favourite",
+                  Group(List(
+                    Introspect(FragmentMapping.schema, Select("__typename")),
+                    Narrow(
+                      User,
+                      Group(List(
+                        Select("id"),
+                        Select("name")
+                      ))
+                    ),
+                    Narrow(
+                      Page,
+                      Group(List(
+                        Select("id"),
+                        Select("title")
+                      ))
+                    )
+                  ))
+                )
               )
             )
           )
-        ),
-        Select("user", Some("page"),
-          Unique(
-            Filter(Eql(FragmentMapping.PageType / "id", Const("2")),
-              Select("favourite",
-                Group(List(
-                  Introspect(FragmentMapping.schema, Select("__typename")),
-                  Narrow(
-                    User,
-                    Group(List(
-                      Select("id"),
-                      Select("name")
-                    ))
-                  ),
-                  Narrow(
-                    Page,
-                    Group(List(
-                      Select("id"),
-                      Select("title")
-                    ))
-                  )
-                ))
-              )
-            )
-          )
-        )
-      ))
+        ))
 
     val expectedResult = json"""
       {
@@ -592,27 +631,35 @@ final class FragmentSuite extends CatsEffectSuite {
     val Page = FragmentMapping.schema.ref("Page")
 
     val expected =
-      Select("user", None,
+      Select(
+        "user",
+        None,
         Unique(
-          Filter(Eql(FragmentMapping.UserType / "id", Const("1")),
-            Select("favourite", None,
-              Group(List(
-                Introspect(FragmentMapping.schema, Select("__typename", None, Empty)),
-                Narrow(
-                  User,
-                  Group(List(
-                    Select("id", None, Empty),
-                    Select("name", None, Empty)
-                  ))
-                ),
-                Narrow(
-                  Page,
-                  Group(List(
-                    Select("id", None, Empty),
-                    Select("title", None, Empty)
-                  ))
-                )
-              ))
+          Filter(
+            Eql(FragmentMapping.UserType / "id", Const("1")),
+            Select(
+              "favourite",
+              None,
+              Group(
+                List(
+                  Introspect(FragmentMapping.schema, Select("__typename", None, Empty)),
+                  Narrow(
+                    User,
+                    Group(
+                      List(
+                        Select("id", None, Empty),
+                        Select("name", None, Empty)
+                      ))
+                  ),
+                  Narrow(
+                    Page,
+                    Group(
+                      List(
+                        Select("id", None, Empty),
+                        Select("title", None, Empty)
+                      ))
+                  )
+                ))
             )
           )
         )
@@ -657,10 +704,13 @@ final class FragmentSuite extends CatsEffectSuite {
     """
 
     val expected =
-      Select("user",
+      Select(
+        "user",
         Unique(
-          Filter(Eql(FragmentMapping.UserType / "id", Const("1")),
-            Select("friends",
+          Filter(
+            Eql(FragmentMapping.UserType / "id", Const("1")),
+            Select(
+              "friends",
               Select("id")
             )
           )
@@ -1102,7 +1152,6 @@ final class FragmentSuite extends CatsEffectSuite {
     assertIO(res, expected)
   }
 
-
   test("fragment recursion (1)") {
     val query = """
       query withFragments {
@@ -1268,11 +1317,18 @@ object FragmentData {
     def id: String
   }
 
-  case class User(id: String, name: String, profilePic: String, friendIds: List[String], favouriteId: Option[String]) extends Profile {
+  case class User(
+      id: String,
+      name: String,
+      profilePic: String,
+      friendIds: List[String],
+      favouriteId: Option[String])
+      extends Profile {
     def friends: List[User] =
       friendIds.flatMap(fid => profiles.collect { case u: User if u.id == fid => u })
     def mutualFriends: List[User] =
-      friendIds.flatMap(fid => profiles.collect { case u: User if u.id == fid && u.friendIds.contains(id) => u })
+      friendIds.flatMap(fid =>
+        profiles.collect { case u: User if u.id == fid && u.friendIds.contains(id) => u })
     def favourite: Option[Profile] =
       favouriteId.flatMap(id => profiles.find(_.id == id))
   }
@@ -1328,42 +1384,39 @@ object FragmentMapping extends ValueMapping[IO] {
     List(
       ValueObjectMapping[Unit](
         tpe = QueryType,
-        fieldMappings =
-          List(
-            ValueField("user", _ => profiles.collect { case u: User => u }),
-            ValueField("profiles", _ => profiles)
-          )
+        fieldMappings = List(
+          ValueField("user", _ => profiles.collect { case u: User => u }),
+          ValueField("profiles", _ => profiles)
+        )
       ),
       ValueObjectMapping[Profile](
         tpe = ProfileType,
-        fieldMappings =
-          List(
-            ValueField("id", _.id)
-          )
+        fieldMappings = List(
+          ValueField("id", _.id)
+        )
       ),
       ValueObjectMapping[User](
         tpe = UserType,
-        fieldMappings =
-          List(
-            ValueField("name", _.name),
-            ValueField("profilePic", _.profilePic),
-            ValueField("friends", _.friends),
-            ValueField("mutualFriends", _.mutualFriends),
-            ValueField("favourite", _.favourite),
-          )
+        fieldMappings = List(
+          ValueField("name", _.name),
+          ValueField("profilePic", _.profilePic),
+          ValueField("friends", _.friends),
+          ValueField("mutualFriends", _.mutualFriends),
+          ValueField("favourite", _.favourite)
+        )
       ),
       ValueObjectMapping[Page](
         tpe = PageType,
-        fieldMappings =
-          List(
-            ValueField("title", _.title),
-            ValueField("likers", _.likers)
-          )
+        fieldMappings = List(
+          ValueField("title", _.title),
+          ValueField("likers", _.likers)
+        )
       )
     )
 
   override val selectElaborator = SelectElaborator {
     case (QueryType, "user", List(Binding("id", IDValue(id)))) =>
-      Elab.transformChild(child => Unique(Filter(Eql(FragmentMapping.UserType / "id", Const(id)), child)))
+      Elab.transformChild(child =>
+        Unique(Filter(Eql(FragmentMapping.UserType / "id", Const(id)), child)))
   }
 }

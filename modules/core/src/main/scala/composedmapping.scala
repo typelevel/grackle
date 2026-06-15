@@ -17,11 +17,14 @@ package grackle
 
 import cats.MonadThrow
 
-import Cursor.AbstractCursor
-import syntax._
+import grackle.Cursor.AbstractCursor
+import grackle.syntax._
 
 abstract class ComposedMapping[F[_]](implicit val M: MonadThrow[F]) extends Mapping[F] {
-  override def mkCursorForMappedField(parent: Cursor, fieldContext: Context, fm: FieldMapping): Result[Cursor] =
+  override def mkCursorForMappedField(
+      parent: Cursor,
+      fieldContext: Context,
+      fm: FieldMapping): Result[Cursor] =
     ComposedCursor(fieldContext, parent.env).success
 
   case class ComposedCursor(context: Context, env: Env) extends AbstractCursor {

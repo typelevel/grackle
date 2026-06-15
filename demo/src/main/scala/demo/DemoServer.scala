@@ -15,8 +15,7 @@
 
 package demo
 
-import cats.effect.IO
-import cats.effect.Resource
+import cats.effect.{IO, Resource}
 import cats.syntax.all._
 import com.comcast.ip4s._
 import org.http4s.{HttpApp, HttpRoutes}
@@ -30,27 +29,31 @@ object DemoServer {
     val httpApp0 = (
       // Routes for static resources, i.e. GraphQL Playground
       resourceServiceBuilder[IO]("/assets").toRoutes <+>
-      // GraphQL routes
-      graphQLRoutes
+        // GraphQL routes
+        graphQLRoutes
     ).orNotFound
 
     val httpApp = Logger.httpApp(true, false)(httpApp0)
 
-    val withErrorLogging: HttpApp[IO] = ErrorHandling.Recover.total(
-      ErrorAction.log(
-        httpApp,
-        messageFailureLogAction = errorHandler,
-        serviceErrorLogAction = errorHandler))
+    val withErrorLogging: HttpApp[IO] = ErrorHandling
+      .Recover
+      .total(
+        ErrorAction.log(
+          httpApp,
+          messageFailureLogAction = errorHandler,
+          serviceErrorLogAction = errorHandler))
 
     // Spin up the server ...
-    EmberServerBuilder.default[IO]
+    EmberServerBuilder
+      .default[IO]
       .withHost(ip"0.0.0.0")
       .withPort(port"8080")
       .withHttpApp(withErrorLogging)
-      .build.void
+      .build
+      .void
   }
 
-  def errorHandler(t: Throwable, msg: => String) : IO[Unit] =
+  def errorHandler(t: Throwable, msg: => String): IO[Unit] =
     IO.println(msg) >> IO.println(t) >> IO.println(t.printStackTrace())
 }
 // #server

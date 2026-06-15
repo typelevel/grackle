@@ -64,37 +64,33 @@ trait SqlArrayJoinMapping[F[_]] extends SqlTestMapping[F] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            SqlObject("root")
-          )
+        fieldMappings = List(
+          SqlObject("root")
+        )
       ),
       ObjectMapping(
         tpe = RootType,
-        fieldMappings =
-          List(
-            SqlField("id", root.id, key = true),
-            SqlObject("listA", Join(root.id, listA.rootId)),
-            SqlObject("listB", Join(root.id, listB.rootId))
-          )
+        fieldMappings = List(
+          SqlField("id", root.id, key = true),
+          SqlObject("listA", Join(root.id, listA.rootId)),
+          SqlObject("listB", Join(root.id, listB.rootId))
+        )
       ),
       ObjectMapping(
         tpe = ElemAType,
-        fieldMappings =
-          List(
-            SqlField("id", listA.id, key = true),
-            SqlField("rootId", listA.rootId, hidden = true),
-            SqlField("elemA", listA.aElem)
-          )
+        fieldMappings = List(
+          SqlField("id", listA.id, key = true),
+          SqlField("rootId", listA.rootId, hidden = true),
+          SqlField("elemA", listA.aElem)
+        )
       ),
       ObjectMapping(
         tpe = ElemBType,
-        fieldMappings =
-          List(
-            SqlField("id", listB.id, key = true),
-            SqlField("rootId", listB.rootId, hidden = true),
-            SqlField("elemB", listB.bElem)
-          )
+        fieldMappings = List(
+          SqlField("id", listB.id, key = true),
+          SqlField("rootId", listB.rootId, hidden = true),
+          SqlField("elemB", listB.bElem)
+        )
       )
     )
 }

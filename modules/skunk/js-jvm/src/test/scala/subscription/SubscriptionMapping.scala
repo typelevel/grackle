@@ -21,12 +21,12 @@ import skunk.codec.all._
 import skunk.implicits._
 
 import grackle._
-import syntax._
-import Predicate._
-import Query._
-import QueryCompiler._
-import skunk._
-import Value._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
+import grackle.skunk._
+import grackle.syntax._
 
 trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
 
@@ -55,32 +55,32 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
   }
 
   object city extends TableDef("city") {
-    val id          = col("id", int4)
+    val id = col("id", int4)
     val countrycode = col("countrycode", bpchar(3))
-    val name        = col("name", text)
-    val population  = col("population", int4)
+    val name = col("name", text)
+    val population = col("population", int4)
   }
 
-  val QueryType        = schema.ref("Query")
+  val QueryType = schema.ref("Query")
   val SubscriptionType = schema.ref("Subscription")
-  val CountryType      = schema.ref("Country")
-  val CityType         = schema.ref("City")
+  val CountryType = schema.ref("Country")
+  val CityType = schema.ref("City")
 
   val typeMappings =
     List(
       ObjectMapping(
         tpe = QueryType,
         fieldMappings = List(
-          SqlObject("city"),
-        ),
+          SqlObject("city")
+        )
       ),
       ObjectMapping(
         tpe = CountryType,
         fieldMappings = List(
           SqlField("code", country.code, key = true, hidden = true),
-          SqlField("name",     country.name),
-          SqlObject("cities",  Join(country.code, city.countrycode)),
-        ),
+          SqlField("name", country.name),
+          SqlObject("cities", Join(country.code, city.countrycode))
+        )
       ),
       ObjectMapping(
         tpe = CityType,
@@ -89,7 +89,7 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
           SqlField("countrycode", city.countrycode, hidden = true),
           SqlField("name", city.name),
           SqlField("population", city.population),
-          SqlObject("country", Join(city.countrycode, country.code)),
+          SqlObject("country", Join(city.countrycode, country.code))
         )
       ),
       ObjectMapping(
@@ -97,10 +97,9 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
         fieldMappings = List(
           RootStream.computeChild("channel")((child, _, _) =>
             for {
-              s  <- fs2.Stream.resource(pool)
+              s <- fs2.Stream.resource(pool)
               id <- s.channel(id"city_channel").listen(256).map(_.value.toInt)
-            } yield Unique(Filter(Eql(CityType / "id", Const(id)), child)).success
-          )
+            } yield Unique(Filter(Eql(CityType / "id", Const(id)), child)).success)
         )
       )
     )
@@ -112,6 +111,8 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
 }
 
 object SubscriptionMapping extends SkunkMappingCompanion {
-  def mkMapping[F[_]: Sync](pool: Resource[F, Session[F]], monitor: SkunkMonitor[F]): Mapping[F] =
+  def mkMapping[F[_]: Sync](
+      pool: Resource[F, Session[F]],
+      monitor: SkunkMonitor[F]): Mapping[F] =
     new SkunkMapping[F](pool, monitor) with SubscriptionMapping[F]
 }

@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package circetests
+package grackle.circetests
 
 import cats.effect.IO
 import fs2.concurrent.SignallingRef
@@ -46,10 +45,10 @@ final class CirceEffectSuite extends CatsEffectSuite {
 
     val prg: IO[(Json, Int)] =
       for {
-        ref  <- SignallingRef[IO, Int](0)
-        map  =  new TestCirceEffectMapping(ref)
-        res  <- map.compileAndRun(query)
-        eff  <- ref.get
+        ref <- SignallingRef[IO, Int](0)
+        map = new TestCirceEffectMapping(ref)
+        res <- map.compileAndRun(query)
+        eff <- ref.get
       } yield (res, eff)
 
     assertIO(prg, (expected, 1))
@@ -78,10 +77,10 @@ final class CirceEffectSuite extends CatsEffectSuite {
 
     val prg: IO[(Json, Int)] =
       for {
-        ref  <- SignallingRef[IO, Int](0)
-        map  =  new TestCirceEffectMapping(ref)
-        res  <- map.compileAndRun(query)
-        eff  <- ref.get
+        ref <- SignallingRef[IO, Int](0)
+        map = new TestCirceEffectMapping(ref)
+        res <- map.compileAndRun(query)
+        eff <- ref.get
       } yield (res, eff)
 
     assertIO(prg, (expected, 1))
@@ -110,10 +109,10 @@ final class CirceEffectSuite extends CatsEffectSuite {
 
     val prg: IO[(Json, Int)] =
       for {
-        ref  <- SignallingRef[IO, Int](0)
-        map  =  new TestCirceEffectMapping(ref)
-        res  <- map.compileAndRun(query)
-        eff  <- ref.get
+        ref <- SignallingRef[IO, Int](0)
+        map = new TestCirceEffectMapping(ref)
+        res <- map.compileAndRun(query)
+        eff <- ref.get
       } yield (res, eff)
 
     assertIO(prg, (expected, 1))
@@ -142,10 +141,10 @@ final class CirceEffectSuite extends CatsEffectSuite {
 
     val prg: IO[(Json, Int)] =
       for {
-        ref  <- SignallingRef[IO, Int](0)
-        map  =  new TestCirceEffectMapping(ref)
-        res  <- map.compileAndRun(query)
-        eff  <- ref.get
+        ref <- SignallingRef[IO, Int](0)
+        map = new TestCirceEffectMapping(ref)
+        res <- map.compileAndRun(query)
+        eff <- ref.get
       } yield (res, eff)
 
     assertIO(prg, (expected, 1))
@@ -190,10 +189,10 @@ final class CirceEffectSuite extends CatsEffectSuite {
 
     val prg: IO[(Json, Int)] =
       for {
-        ref  <- SignallingRef[IO, Int](0)
-        map  =  new TestCirceEffectMapping(ref)
-        res  <- map.compileAndRun(query)
-        eff  <- ref.get
+        ref <- SignallingRef[IO, Int](0)
+        map = new TestCirceEffectMapping(ref)
+        res <- map.compileAndRun(query)
+        eff <- ref.get
       } yield (res, eff)
 
     assertIO(prg, (expected, 3))

@@ -16,26 +16,31 @@
 package grackle
 
 import scala.collection.Factory
-import scala.collection.mutable.{ Map => MMap }
+import scala.collection.mutable.{Map => MMap}
 import scala.reflect.ClassTag
 
 import cats.{ApplicativeError, Id, MonadThrow}
 import cats.data.{Chain, NonEmptyList, StateT}
 import cats.implicits._
-import fs2.{ Stream, Compiler }
+import fs2.{Compiler, Stream}
 import io.circe.{Encoder, Json}
 import io.circe.syntax._
 import org.tpolecat.sourcepos.SourcePos
 import org.tpolecat.typename._
 import org.typelevel.scalaccompat.annotation._
 
-import syntax._
-import Cursor.{AbstractCursor, ProxyCursor}
-import Query.EffectHandler
-import QueryCompiler.{ComponentElaborator, EffectElaborator, IntrospectionLevel, SelectElaborator}
-import QueryInterpreter.ProtoJson
-import IntrospectionLevel._
-import ValidationFailure.Severity
+import grackle.Cursor.{AbstractCursor, ProxyCursor}
+import grackle.Query.EffectHandler
+import grackle.QueryCompiler.{
+  ComponentElaborator,
+  EffectElaborator,
+  IntrospectionLevel,
+  SelectElaborator
+}
+import grackle.QueryCompiler.IntrospectionLevel._
+import grackle.QueryInterpreter.ProtoJson
+import grackle.ValidationFailure.Severity
+import grackle.syntax._
 
 /**
  * Represents a mapping between a GraphQL schema and an underlying abstract data source.
@@ -46,51 +51,80 @@ abstract class Mapping[F[_]] {
   val typeMappings: TypeMappings
 
   /**
-    * Compile and run a single GraphQL query or mutation.
-    *
-    * Yields a JSON response containing the result of the query or mutation.
-    */
-  def compileAndRun(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, reportUnused: Boolean = true, env: Env = Env.empty)(
-    implicit sc: Compiler[F,F]
+   * Compile and run a single GraphQL query or mutation.
+   *
+   * Yields a JSON response containing the result of the query or mutation.
+   */
+  def compileAndRun(
+      text: String,
+      name: Option[String] = None,
+      untypedVars: Option[Json] = None,
+      introspectionLevel: IntrospectionLevel = Full,
+      reportUnused: Boolean = true,
+      env: Env = Env.empty)(
+      implicit sc: Compiler[F, F]
   ): F[Json] =
-    compileAndRunSubscription(text, name, untypedVars, introspectionLevel, reportUnused, env).compile.toList.flatMap {
-      case List(j) => j.pure[F]
-      case Nil     => M.raiseError(new IllegalStateException("Result stream was empty."))
-      case js      => M.raiseError(new IllegalStateException(s"Result stream contained ${js.length} results; expected exactly one."))
-    }
+    compileAndRunSubscription(text, name, untypedVars, introspectionLevel, reportUnused, env)
+      .compile
+      .toList
+      .flatMap {
+        case List(j) => j.pure[F]
+        case Nil => M.raiseError(new IllegalStateException("Result stream was empty."))
+        case js =>
+          M.raiseError(
+            new IllegalStateException(
+              s"Result stream contained ${js.length} results; expected exactly one."))
+      }
 
   /**
    * Compile and run a GraphQL subscription.
    *
    * Yields a stream of JSON responses containing the results of the subscription.
    */
-  def compileAndRunSubscription(text: String, name: Option[String] = None, untypedVars: Option[Json] = None, introspectionLevel: IntrospectionLevel = Full, reportUnused: Boolean = true, env: Env = Env.empty): Stream[F,Json] = {
-    val compiled = compiler.compile(text, name, untypedVars, introspectionLevel, reportUnused, env)
-    Stream.eval(compiled.pure[F]).flatMap(_.flatTraverse(op => interpreter.run(op.query, op.rootTpe, env))).evalMap(mkResponse)
+  def compileAndRunSubscription(
+      text: String,
+      name: Option[String] = None,
+      untypedVars: Option[Json] = None,
+      introspectionLevel: IntrospectionLevel = Full,
+      reportUnused: Boolean = true,
+      env: Env = Env.empty): Stream[F, Json] = {
+    val compiled =
+      compiler.compile(text, name, untypedVars, introspectionLevel, reportUnused, env)
+    Stream
+      .eval(compiled.pure[F])
+      .flatMap(_.flatTraverse(op => interpreter.run(op.query, op.rootTpe, env)))
+      .evalMap(mkResponse)
   }
 
-  /** Combine and execute multiple queries.
+  /**
+   * Combine and execute multiple queries.
    *
-   *  Each query is interpreted in the context of the Cursor it is
-   *  paired with. The result list is aligned with the argument
-   *  query list. For each query at most one stage will be run and the
-   *  corresponding result may contain deferred components.
+   * Each query is interpreted in the context of the Cursor it is paired with. The result list
+   * is aligned with the argument query list. For each query at most one stage will be run and
+   * the corresponding result may contain deferred components.
    *
-   *  Errors are aggregated across all the argument queries and are
-   *  accumulated on the `Left` of the result.
+   * Errors are aggregated across all the argument queries and are accumulated on the `Left` of
+   * the result.
    *
-   *  This method is typically called at the end of a stage to evaluate
-   *  deferred subqueries in the result of that stage. These will be
-   *  grouped by and passed jointly to the responsible mapping in
-   *  the next stage using this method. Maappongs which are able
-   *  to benefit from combining queries may do so by overriding this
-   *  method to implement their specific combinging logic.
+   * This method is typically called at the end of a stage to evaluate deferred subqueries in
+   * the result of that stage. These will be grouped by and passed jointly to the responsible
+   * mapping in the next stage using this method. Maappongs which are able to benefit from
+   * combining queries may do so by overriding this method to implement their specific
+   * combinging logic.
    */
   def combineAndRun(queries: List[(Query, Cursor)]): F[Result[List[ProtoJson]]] =
-    queries.map { case (q, c) => (q, schema.queryType, c) }.traverse((interpreter.runOneShot _).tupled).map(ProtoJson.combineResults)
+    queries
+      .map { case (q, c) => (q, schema.queryType, c) }
+      .traverse((interpreter.runOneShot _).tupled)
+      .map(ProtoJson.combineResults)
 
-  /** Yields a `Cursor` focused on the top level operation type of the query */
-  def defaultRootCursor(query: Query, tpe: Type, parentCursor: Option[Cursor]): F[Result[(Query, Cursor)]] =
+  /**
+   * Yields a `Cursor` focused on the top level operation type of the query
+   */
+  def defaultRootCursor(
+      query: Query,
+      tpe: Type,
+      parentCursor: Option[Cursor]): F[Result[(Query, Cursor)]] =
     Result((query, RootCursor(Context(tpe), parentCursor, Env.empty))).pure[F].widen
 
   /**
@@ -99,7 +133,8 @@ abstract class Mapping[F[_]] {
    * Construction of mapping-specific cursors is handled by delegation to
    * `mkCursorForField which is typically overridden in `Mapping` subtypes.
    */
-  case class RootCursor(context: Context, parent: Option[Cursor], env: Env) extends AbstractCursor {
+  case class RootCursor(context: Context, parent: Option[Cursor], env: Env)
+      extends AbstractCursor {
     def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
     def focus: Any = ()
@@ -109,59 +144,70 @@ abstract class Mapping[F[_]] {
   }
 
   /**
-    * Yields a `Cursor` suitable for traversing the query result corresponding to
-    * the `fieldName` child of `parent`, and with the given field `Context` and
-    * `FieldMapping`.
-    *
-    * This method is typically overridden in and delegated to by `Mapping` subtypes.
-    */
-  protected def mkCursorForMappedField(parent: Cursor, fieldContext: Context, fm: FieldMapping): Result[Cursor] = {
+   * Yields a `Cursor` suitable for traversing the query result corresponding to the `fieldName`
+   * child of `parent`, and with the given field `Context` and `FieldMapping`.
+   *
+   * This method is typically overridden in and delegated to by `Mapping` subtypes.
+   */
+  protected def mkCursorForMappedField(
+      parent: Cursor,
+      fieldContext: Context,
+      fm: FieldMapping): Result[Cursor] = {
     def mkLeafCursor(focus: Any): Result[Cursor] =
       LeafCursor(fieldContext, focus, Some(parent), parent.env).success
 
     fm match {
-      case _ : EffectMapping =>
+      case _: EffectMapping =>
         mkLeafCursor(parent.focus)
       case CursorField(_, f, _, _, _) =>
         f(parent).flatMap(res => mkLeafCursor(res))
       case _ =>
-        Result.internalError(s"Unhandled mapping of type ${fm.getClass.getName} for field '${fieldContext.path.head}' for type ${parent.tpe}")
+        Result.internalError(
+          s"Unhandled mapping of type ${fm.getClass.getName} for field '${fieldContext.path.head}' for type ${parent.tpe}")
     }
   }
 
   /**
-    * Yields a `Cursor` suitable for traversing the query result corresponding to
-    * the `fieldName` child of `parent`.
-    */
-  protected final def mkCursorForField(parent: Cursor, fieldName: String, resultName: Option[String]): Result[Cursor] = {
-    typeMappings.fieldMapping(parent, fieldName).
-      flatMap(_.toResultOrError(s"No mapping for field '$fieldName' for type ${parent.tpe}")).
-        flatMap {
-          case (np, fm) =>
-            val fieldContext = np.context.forFieldOrAttribute(fieldName, resultName)
-            mkCursorForMappedField(np, fieldContext, fm)
-        }
+   * Yields a `Cursor` suitable for traversing the query result corresponding to the `fieldName`
+   * child of `parent`.
+   */
+  protected final def mkCursorForField(
+      parent: Cursor,
+      fieldName: String,
+      resultName: Option[String]): Result[Cursor] = {
+    typeMappings
+      .fieldMapping(parent, fieldName)
+      .flatMap(_.toResultOrError(s"No mapping for field '$fieldName' for type ${parent.tpe}"))
+      .flatMap {
+        case (np, fm) =>
+          val fieldContext = np.context.forFieldOrAttribute(fieldName, resultName)
+          mkCursorForMappedField(np, fieldContext, fm)
+      }
   }
 
   final class TypeMappings private (
-    val mappings: Seq[TypeMapping],
-    typeIndex: MMap[String, TypeMapping],
-    predicatedTypeIndex: MMap[String, Seq[TypeMapping]],
-    typeFieldIndex: MMap[String, MMap[String, FieldMapping]],
-    predicatedTypeFieldIndex: MMap[String, Seq[(ObjectMapping, MMap[String, FieldMapping])]],
-    unchecked: Boolean
+      val mappings: Seq[TypeMapping],
+      typeIndex: MMap[String, TypeMapping],
+      predicatedTypeIndex: MMap[String, Seq[TypeMapping]],
+      typeFieldIndex: MMap[String, MMap[String, FieldMapping]],
+      predicatedTypeFieldIndex: MMap[String, Seq[(ObjectMapping, MMap[String, FieldMapping])]],
+      unchecked: Boolean
   ) {
     import TypeMappings.{InheritedFieldMapping, PolymorphicFieldMapping}
 
-    /** Yields the `TypeMapping` associated with the provided context, if any. */
+    /**
+     * Yields the `TypeMapping` associated with the provided context, if any.
+     */
     def typeMapping(context: Context): Option[TypeMapping] = {
       val nt = context.tpe.underlyingNamed
       val nme = nt.name
       typeIndex.get(nme).orElse {
         val nc = context.asType(nt)
-        predicatedTypeIndex.getOrElse(nme, Nil).mapFilter { tm =>
-          tm.predicate(nc).map(prio => (prio, tm))
-        }.maxByOption(_._1).map(_._2)
+        predicatedTypeIndex
+          .getOrElse(nme, Nil)
+          .mapFilter { tm => tm.predicate(nc).map(prio => (prio, tm)) }
+          .maxByOption(_._1)
+          .map(_._2)
       }
     }
 
@@ -170,23 +216,29 @@ abstract class Mapping[F[_]] {
       val nme = nt.name
       typeFieldIndex.get(nme).orElse {
         val nc = context.asType(nt)
-        predicatedTypeFieldIndex.getOrElse(nme, Nil).mapFilter { tm =>
-          tm._1.predicate(nc).map(prio => (prio, tm))
-        }.maxByOption(_._1).map(_._2._2)
+        predicatedTypeFieldIndex
+          .getOrElse(nme, Nil)
+          .mapFilter { tm => tm._1.predicate(nc).map(prio => (prio, tm)) }
+          .maxByOption(_._1)
+          .map(_._2._2)
       }
     }
 
-    /** Yields the `ObjectMapping` associated with the provided context, if any. */
+    /**
+     * Yields the `ObjectMapping` associated with the provided context, if any.
+     */
     def objectMapping(context: Context): Option[ObjectMapping] =
-      typeMapping(context).collect {
-        case om: ObjectMapping => om
-      }
+      typeMapping(context).collect { case om: ObjectMapping => om }
 
-    /** Yields the unexpanded `FieldMapping` associated with `fieldName` in `context`, if any. */
+    /**
+     * Yields the unexpanded `FieldMapping` associated with `fieldName` in `context`, if any.
+     */
     def rawFieldMapping(context: Context, fieldName: String): Option[FieldMapping] =
       fieldIndex(context).flatMap(_.get(fieldName))
 
-    /** Yields the `FieldMapping` associated with `fieldName` in `context`, if any. */
+    /**
+     * Yields the `FieldMapping` associated with `fieldName` in `context`, if any.
+     */
     def fieldMapping(context: Context, fieldName: String): Option[FieldMapping] =
       rawFieldMapping(context, fieldName).flatMap {
         case ifm: InheritedFieldMapping =>
@@ -198,10 +250,12 @@ abstract class Mapping[F[_]] {
       }
 
     /**
-     *  Yields the `FieldMapping` associated with `fieldName` in the runtime context
-     *  determined by the given `Cursor`, if any.
+     * Yields the `FieldMapping` associated with `fieldName` in the runtime context determined
+     * by the given `Cursor`, if any.
      */
-    def fieldMapping(parent: Cursor, fieldName: String): Result[Option[(Cursor, FieldMapping)]] = {
+    def fieldMapping(
+        parent: Cursor,
+        fieldName: String): Result[Option[(Cursor, FieldMapping)]] = {
       val context = parent.context
       fieldIndex(context).flatMap(_.get(fieldName)) match {
         case Some(ifm: InheritedFieldMapping) =>
@@ -220,52 +274,70 @@ abstract class Mapping[F[_]] {
         case _ => false
       }
 
-    /** Yields the `FieldMapping` directly or ancestrally associated with `fieldName` in `context`, if any. */
+    /**
+     * Yields the `FieldMapping` directly or ancestrally associated with `fieldName` in
+     * `context`, if any.
+     */
     def ancestralFieldMapping(context: Context, fieldName: String): Option[FieldMapping] =
       fieldMapping(context, fieldName).orElse {
         for {
           parent <- context.parent
-          fm     <- ancestralFieldMapping(parent, context.path.head)
+          fm <- ancestralFieldMapping(parent, context.path.head)
           if fm.subtree
         } yield fm
       }
 
     /**
-    * Validatate this Mapping, yielding a list of `ValidationFailure`s of severity equal to or greater than the
-    * specified `Severity`.
-    */
+     * Validatate this Mapping, yielding a list of `ValidationFailure`s of severity equal to or
+     * greater than the specified `Severity`.
+     */
     def validate(severity: Severity = Severity.Warning): List[ValidationFailure] = {
       val queryType = schema.schemaType.field("query").flatMap(_.nonNull.asNamed)
-      val topLevelContexts = (queryType.toList ::: schema.mutationType.toList ::: schema.subscriptionType.toList).map(Context(_))
+      val topLevelContexts =
+        (queryType.toList ::: schema.mutationType.toList ::: schema.subscriptionType.toList)
+          .map(Context(_))
       validateRoots(topLevelContexts).filter(_.severity >= severity)
     }
 
     /**
-    * Validate this mapping, raising a `ValidationException` in `F` if there are any failures of
-    * severity equal to or greater than the specified `Severity`.
-    */
+     * Validate this mapping, raising a `ValidationException` in `F` if there are any failures
+     * of severity equal to or greater than the specified `Severity`.
+     */
     def validateInto[G[_]](severity: Severity = Severity.Warning)(
-      implicit ev: ApplicativeError[G, Throwable]
+        implicit ev: ApplicativeError[G, Throwable]
     ): G[Unit] =
-      NonEmptyList.fromList(validate(severity)).foldMapA(nec => ev.raiseError(ValidationException(nec)))
+      NonEmptyList
+        .fromList(validate(severity))
+        .foldMapA(nec => ev.raiseError(ValidationException(nec)))
 
     /**
-    * Validate this Mapping, throwing a `ValidationException` if there are any failures of severity equal
-    * to or greater than the specified `Severity`.
-    */
+     * Validate this Mapping, throwing a `ValidationException` if there are any failures of
+     * severity equal to or greater than the specified `Severity`.
+     */
     def unsafeValidate(severity: Severity = Severity.Warning): Unit =
       validateInto[Either[Throwable, *]](severity).fold(throw _, _ => ())
 
     private[Mapping] def unsafeValidateIfChecked(): Unit =
-      if(!unchecked) unsafeValidate()
+      if (!unchecked) unsafeValidate()
 
-    /** Validates these type mappings against an unfolding of the schema */
+    /**
+     * Validates these type mappings against an unfolding of the schema
+     */
     @nowarn3
     private def validateRoots(rootCtxts: List[Context]): List[ValidationFailure] = {
-      import TypeMappings.{MappingValidator => MV} // Bogus unused import warning with Scala 3.3.3
+      import TypeMappings.{
+        MappingValidator => MV
+      } // Bogus unused import warning with Scala 3.3.3
       import MV.{
-        initialState, addSeenType, addSeenTypeMapping, addSeenFieldMapping, addProblem,
-        addProblems, seenType, seenTypeMappings, seenFieldMappings
+        initialState,
+        addSeenType,
+        addSeenTypeMapping,
+        addSeenFieldMapping,
+        addProblem,
+        addProblems,
+        seenType,
+        seenTypeMappings,
+        seenFieldMappings
       }
 
       def allTypeMappings(context: Context): Seq[TypeMapping] = {
@@ -278,9 +350,7 @@ abstract class Mapping[F[_]] {
               case None => Nil
               case Some(tms) =>
                 val nc = context.asType(nt)
-                tms.mapFilter { tm =>
-                  tm.predicate(nc).map(prio => (prio, tm))
-                } match {
+                tms.mapFilter { tm => tm.predicate(nc).map(prio => (prio, tm)) } match {
                   case Seq() => Nil
                   case Seq((_, tm)) => List(tm)
                   case ptms =>
@@ -299,57 +369,60 @@ abstract class Mapping[F[_]] {
       def step(context: Context): MV[List[Context]] = {
         lazy val hasEnclosingSubtreeFieldMapping =
           if (context.path.isEmpty) false
-          else ancestralFieldMapping(context.parent.get, context.path.head).map(_.subtree).getOrElse(false)
+          else
+            ancestralFieldMapping(context.parent.get, context.path.head)
+              .map(_.subtree)
+              .getOrElse(false)
 
         def typeChecks(om: ObjectMapping): List[ValidationFailure] =
           validateTypeMapping(this, context, om) ++
             om.fieldMappings.reverse.flatMap(validateFieldMapping(this, context, om, _))
 
         (context.tpe.underlyingNamed.dealias, allTypeMappings(context)) match {
-          case (lt@((_: ScalarType) | (_: EnumType)), List(lm: LeafMapping[_])) =>
+          case (lt @ (_: ScalarType | _: EnumType), List(lm: LeafMapping[_])) =>
             addSeenType(lt) *>
-            addSeenTypeMapping(lm) *>
-            MV.pure(Nil)
+              addSeenTypeMapping(lm) *>
+              MV.pure(Nil)
 
-          case (lt@((_: ScalarType) | (_: EnumType)), Nil) if hasEnclosingSubtreeFieldMapping =>
+          case (lt @ (_: ScalarType | _: EnumType), Nil) if hasEnclosingSubtreeFieldMapping =>
             addSeenType(lt) *>
-            MV.pure(Nil)
+              MV.pure(Nil)
 
-          case (lt@((_: ScalarType) | (_: EnumType)), List(om: ObjectMapping)) =>
+          case (lt @ (_: ScalarType | _: EnumType), List(om: ObjectMapping)) =>
             addSeenType(lt) *>
-            addSeenTypeMapping(om) *>
-            addProblem(ObjectTypeExpected(om)) *>
-            MV.pure(Nil)
+              addSeenTypeMapping(om) *>
+              addProblem(ObjectTypeExpected(om)) *>
+              MV.pure(Nil)
 
           case (ut: UnionType, List(om: ObjectMapping)) =>
             val vs = ut.members.map(context.asType)
             addSeenType(ut) *>
-            addSeenTypeMapping(om) *>
-            addProblems(typeChecks(om)) *>
-            MV.pure(vs)
+              addSeenTypeMapping(om) *>
+              addProblems(typeChecks(om)) *>
+              MV.pure(vs)
 
           case (ut: UnionType, List(lm: LeafMapping[_])) =>
             val vs = ut.members.map(context.asType)
             addSeenType(ut) *>
-            addSeenTypeMapping(lm) *>
-            addProblem(LeafTypeExpected(lm)) *>
-            MV.pure(vs)
+              addSeenTypeMapping(lm) *>
+              addProblem(LeafTypeExpected(lm)) *>
+              MV.pure(vs)
 
           case (ut: UnionType, Nil) =>
             val vs = ut.members.map(context.asType)
             addSeenType(ut) *>
-            MV.pure(vs)
+              MV.pure(vs)
 
           case (twf: TypeWithFields, tms) if tms.sizeCompare(1) <= 0 =>
             def objectCheck(seen: Boolean) =
               (twf, tms) match {
                 case (_, List(om: ObjectMapping)) =>
                   addSeenTypeMapping(om) *>
-                  addProblems(typeChecks(om)).whenA(!seen)
+                    addProblems(typeChecks(om)).whenA(!seen)
 
                 case (_, List(lm: LeafMapping[_])) =>
                   addSeenTypeMapping(lm) *>
-                  addProblem(LeafTypeExpected(lm))
+                    addProblem(LeafTypeExpected(lm))
 
                 case (_: InterfaceType, Nil) =>
                   MV.unit
@@ -372,7 +445,7 @@ abstract class Mapping[F[_]] {
               val v = context.asType(it)
               for {
                 seen <- seenType(v.tpe.underlyingNamed)
-              } yield if(seen) None else Some(v)
+              } yield if (seen) None else Some(v)
             }
 
             val fieldNames = twf.fields.map(_.name)
@@ -381,33 +454,34 @@ abstract class Mapping[F[_]] {
               val fctx = context.forFieldOrAttribute(fieldName, None).forUnderlyingNamed
               lazy val allImplsHaveFieldMapping =
                 implCtxts.nonEmpty &&
-                implCtxts.forall { implCtxt =>
-                  objectMapping(implCtxt).exists { om =>
-                    om.fieldMapping(fieldName).isDefined
+                  implCtxts.forall { implCtxt =>
+                    objectMapping(implCtxt).exists { om =>
+                      om.fieldMapping(fieldName).isDefined
+                    }
                   }
-                }
 
               ((ancestralFieldMapping(context, fieldName), tms) match {
                 case (Some(fm), List(om: ObjectMapping)) if !allImplsHaveFieldMapping =>
                   addProblem(DeclaredFieldMappingIsHidden(om, fm)).whenA(fm.hidden) *>
-                  addSeenFieldMapping(om, fm)
+                    addSeenFieldMapping(om, fm)
 
-                case (None, List(om: ObjectMapping)) if !(hasEnclosingSubtreeFieldMapping || allImplsHaveFieldMapping) =>
+                case (None, List(om: ObjectMapping))
+                    if !(hasEnclosingSubtreeFieldMapping || allImplsHaveFieldMapping) =>
                   val field = context.tpe.fieldInfo(fieldName).get
                   addProblem(MissingFieldMapping(om, field))
 
                 case _ => // Other errors will have been reported earlier
                   MV.unit
               }) *>
-              seenType(fctx.tpe).map(if(_) None else Some(fctx))
+                seenType(fctx.tpe).map(if (_) None else Some(fctx))
             }
 
             for {
-              seen    <- seenType(twf)
-              _       <- addSeenType(twf)
-              _       <- objectCheck(seen)
+              seen <- seenType(twf)
+              _ <- addSeenType(twf)
+              _ <- objectCheck(seen)
               ifCtxts <- twf.interfaces.traverseFilter(interfaceContext)
-              fCtxts  <- fieldNames.traverseFilter(fieldCheck)
+              fCtxts <- fieldNames.traverseFilter(fieldCheck)
               pfCtxts <- MV.pure(if (!seen) allPrefixedMatchContexts(context) else Nil)
             } yield implCtxts ++ ifCtxts ++ fCtxts ++ pfCtxts
 
@@ -416,7 +490,7 @@ abstract class Mapping[F[_]] {
 
           case (_, Nil) =>
             addProblem(MissingTypeMapping(context)) *>
-            MV.pure(Nil)
+              MV.pure(Nil)
 
           case (_, tms) =>
             (tms.traverse_ { // Suppress false positive follow on errors
@@ -428,8 +502,8 @@ abstract class Mapping[F[_]] {
               case tm =>
                 addSeenTypeMapping(tm)
             }) *>
-            addProblem(AmbiguousTypeMappings(context, tms)) *>
-            MV.pure(Nil)
+              addProblem(AmbiguousTypeMappings(context, tms)) *>
+              MV.pure(Nil)
         }
       }
 
@@ -445,46 +519,51 @@ abstract class Mapping[F[_]] {
       def unseenTypeMappings(seen: Set[TypeMapping]): Seq[TypeMapping] = {
         @annotation.tailrec
         def loop(pending: Seq[TypeMapping], acc: Seq[TypeMapping]): Seq[TypeMapping] =
-        pending match {
-          case Seq(om: ObjectMapping, tail @ _*) =>
-            if (seen(om) || om.fieldMappings.forall { case _: Delegate => true ; case _ => false })
+          pending match {
+            case Seq(om: ObjectMapping, tail @ _*) =>
+              if (seen(om) || om.fieldMappings.forall {
+                  case _: Delegate => true; case _ => false
+                })
+                loop(tail, acc)
+              else
+                loop(tail, om +: acc)
+
+            case Seq(tm, tail @ _*) if seen(tm) =>
               loop(tail, acc)
-            else
-              loop(tail, om +: acc)
 
-          case Seq(tm,  tail @ _*) if seen(tm) =>
-            loop(tail, acc)
+            case Seq(tm, tail @ _*) =>
+              loop(tail, tm +: acc)
 
-          case Seq(tm,  tail @ _*) =>
-            loop(tail, tm +: acc)
-
-          case _ => acc.reverse
-        }
+            case _ => acc.reverse
+          }
 
         loop(mappings, Nil)
       }
 
       def refChecks(tm: TypeMapping): MV[Unit] = {
         addProblem(ReferencedTypeDoesNotExist(tm)).whenA(!tm.tpe.exists) *>
-        (tm match {
-          case om: ObjectMapping if !om.tpe.dealias.isUnion =>
-            for {
-              sfms  <- seenFieldMappings(om)
-              usfms =  om.fieldMappings.filterNot { case (_: Delegate) => true ; case fm => fm.hidden || sfms(fm) }
-              _     <- usfms.traverse_(fm => addProblem(UnusedFieldMapping(om, fm)))
-            } yield ()
-          case _ =>
-            MV.unit
-        })
+          (tm match {
+            case om: ObjectMapping if !om.tpe.dealias.isUnion =>
+              for {
+                sfms <- seenFieldMappings(om)
+                usfms = om.fieldMappings.filterNot {
+                  case _: Delegate => true; case fm => fm.hidden || sfms(fm)
+                }
+                _ <- usfms.traverse_(fm => addProblem(UnusedFieldMapping(om, fm)))
+              } yield ()
+            case _ =>
+              MV.unit
+          })
       }
 
       val res =
         for {
-          _    <- addProblem(MissingTypeMapping(Context(schema.uncheckedRef("Query")))).whenA(schema.schemaType.field("query").isEmpty)
-          _    <- validateAll(rootCtxts)
+          _ <- addProblem(MissingTypeMapping(Context(schema.uncheckedRef("Query"))))
+            .whenA(schema.schemaType.field("query").isEmpty)
+          _ <- validateAll(rootCtxts)
           seen <- seenTypeMappings
-          _    <- unseenTypeMappings(seen).traverse_(tm => addProblem(UnusedTypeMapping(tm)))
-          _    <- mappings.traverse_(refChecks)
+          _ <- unseenTypeMappings(seen).traverse_(tm => addProblem(UnusedTypeMapping(tm)))
+          _ <- mappings.traverse_(refChecks)
         } yield ()
 
       res.runS(initialState).problems.reverse
@@ -512,30 +591,45 @@ abstract class Mapping[F[_]] {
 
       Seq(
         LeafMapping[String](ScalarType.StringType),
-        LeafMapping.DefaultLeafMapping[Any](MappingPredicate.TypeMatch(ScalarType.IntType), intTypeEncoder, typeName[Int]),
-        LeafMapping.DefaultLeafMapping[Any](MappingPredicate.TypeMatch(ScalarType.FloatType), floatTypeEncoder, typeName[Float]),
+        LeafMapping.DefaultLeafMapping[Any](
+          MappingPredicate.TypeMatch(ScalarType.IntType),
+          intTypeEncoder,
+          typeName[Int]),
+        LeafMapping.DefaultLeafMapping[Any](
+          MappingPredicate.TypeMatch(ScalarType.FloatType),
+          floatTypeEncoder,
+          typeName[Float]),
         LeafMapping[Boolean](ScalarType.BooleanType),
         LeafMapping[String](ScalarType.IDType)
       )
     }
 
-    /** A synthetic field mapping representing a field mapped in an implemented interface */
-    case class InheritedFieldMapping(candidates: Seq[(MappingPredicate, FieldMapping)])(implicit val pos: SourcePos) extends FieldMapping {
+    /**
+     * A synthetic field mapping representing a field mapped in an implemented interface
+     */
+    case class InheritedFieldMapping(candidates: Seq[(MappingPredicate, FieldMapping)])(
+        implicit val pos: SourcePos)
+        extends FieldMapping {
       def fieldName: String = candidates.head._2.fieldName
       def hidden: Boolean = false
       def subtree: Boolean = false
 
       def select(context: Context): Option[FieldMapping] = {
         val applicable =
-          candidates.mapFilter { case (pred, fm) =>
-            pred(context.asType(pred.tpe)).map(prio => (prio, fm))
+          candidates.mapFilter {
+            case (pred, fm) =>
+              pred(context.asType(pred.tpe)).map(prio => (prio, fm))
           }
         applicable.maxByOption(_._1).map(_._2)
       }
     }
 
-    /** A synthetic field mapping representing a field mapped by one or more implementing types */
-    case class PolymorphicFieldMapping(candidates: Seq[(MappingPredicate, FieldMapping)])(implicit val pos: SourcePos) extends FieldMapping {
+    /**
+     * A synthetic field mapping representing a field mapped by one or more implementing types
+     */
+    case class PolymorphicFieldMapping(candidates: Seq[(MappingPredicate, FieldMapping)])(
+        implicit val pos: SourcePos)
+        extends FieldMapping {
       def fieldName: String = candidates.head._2.fieldName
       def hidden: Boolean = false
       def subtree: Boolean = false
@@ -547,7 +641,7 @@ abstract class Mapping[F[_]] {
               cursor.narrowsTo(schema.uncheckedRef(pred.tpe)).flatMap { narrows =>
                 if (narrows)
                   for {
-                    nc   <- cursor.narrow(schema.uncheckedRef(pred.tpe))
+                    nc <- cursor.narrow(schema.uncheckedRef(pred.tpe))
                   } yield pred(nc.context).map(prio => (prio, (nc, fm)))
                 else
                   None.success
@@ -558,15 +652,17 @@ abstract class Mapping[F[_]] {
 
       def select(context: Context): Option[FieldMapping] = {
         val applicable =
-          candidates.mapFilter { case (pred, fm) =>
-            pred(context).map(prio => (prio, fm))
+          candidates.mapFilter {
+            case (pred, fm) =>
+              pred(context).map(prio => (prio, fm))
           }
         applicable.maxByOption(_._1).map(_._2)
       }
     }
 
     private def mkMappings(mappings: Seq[TypeMapping], unchecked: Boolean): TypeMappings = {
-      val groupedMappings = (mappings ++ builtinLeafMappings).groupBy(_.tpe.underlyingNamed.name)
+      val groupedMappings =
+        (mappings ++ builtinLeafMappings).groupBy(_.tpe.underlyingNamed.name)
       val (typeIndex0, predicatedTypeIndex0) =
         groupedMappings.partitionMap {
           case (nme, tms) if tms.sizeCompare(1) == 0 => Left(nme -> tms.head)
@@ -577,76 +673,89 @@ abstract class Mapping[F[_]] {
       val predicatedTypeIndex = MMap.from(predicatedTypeIndex0)
 
       val interfaceMappingIndex =
-        MMap.from(mappings.collect { case om: ObjectMapping if om.tpe.dealias.isInterface => om.tpe.name -> om })
+        MMap.from(mappings.collect {
+          case om: ObjectMapping if om.tpe.dealias.isInterface => om.tpe.name -> om
+        })
 
-      val objectFieldIndices = mappings.collect {
-        case om: ObjectMapping if om.tpe.dealias.isObject =>
-          om.tpe.underlying match {
-            case o: ObjectType if o.interfaces.nonEmpty =>
-              val ims = o.interfaces.flatMap { i => interfaceMappingIndex.get(i.name).collect { case im: ObjectMapping => im } }
-              val allFieldsAndAttrs = (om.fieldMappings.map(_.fieldName) ++ ims.flatMap(_.fieldMappings.map(_.fieldName)) ++ o.fields.map(_.name)).distinct
-              val newFields =
-                allFieldsAndAttrs.flatMap { fnme =>
-                  om.fieldMapping(fnme).map(Seq(_)).getOrElse {
-                    val candidates =
-                      ims.flatMap { im =>
-                        im.fieldMapping(fnme).map { fm => (im.predicate, fm) }
-                      }
-
-                    if (candidates.isEmpty) Seq.empty
-                    else Seq(InheritedFieldMapping(candidates))
-                  }
+      val objectFieldIndices = mappings
+        .collect {
+          case om: ObjectMapping if om.tpe.dealias.isObject =>
+            om.tpe.underlying match {
+              case o: ObjectType if o.interfaces.nonEmpty =>
+                val ims = o.interfaces.flatMap { i =>
+                  interfaceMappingIndex.get(i.name).collect { case im: ObjectMapping => im }
                 }
-              val index = MMap.from((newFields).map(fm => fm.fieldName -> fm))
-              (om, index)
-
-            case _ =>
-              val index = MMap.from(om.fieldMappings.map(fm => fm.fieldName -> fm))
-              (om, index)
-          }
-      }.groupBy(_._1.tpe.underlyingNamed.name)
-
-      val nonObjectFieldIndices =
-        mappings.collect {
-          case im: ObjectMapping if !im.tpe.dealias.isObject =>
-            im.tpe.underlying match {
-              case i: InterfaceType =>
-                val impls = schema.implementations(i)
-                val ms = impls.flatMap(impl => objectFieldIndices.getOrElse(impl.name, Seq.empty))
-                val allFieldsAndAttrs = (im.fieldMappings.map(_.fieldName) ++ i.fields.map(_.name)).distinct
+                val allFieldsAndAttrs = (om.fieldMappings.map(_.fieldName) ++ ims.flatMap(
+                  _.fieldMappings.map(_.fieldName)) ++ o.fields.map(_.name)).distinct
                 val newFields =
                   allFieldsAndAttrs.flatMap { fnme =>
-                    val candidates: Seq[(MappingPredicate, FieldMapping)] =
-                      ms.flatMap { case (om, ofi) =>
-                        ofi.get(fnme).toSeq.flatMap {
-                          case InheritedFieldMapping(ifms) => ifms.filterNot { case (p, _) => p.tpe =:= i }
-                          case fm => Seq((om.predicate, fm))
+                    om.fieldMapping(fnme).map(Seq(_)).getOrElse {
+                      val candidates =
+                        ims.flatMap { im =>
+                          im.fieldMapping(fnme).map { fm => (im.predicate, fm) }
                         }
-                      }
 
-                    val dfm = im.fieldMapping(fnme).toSeq
-                    if (candidates.isEmpty) dfm
-                    else {
-                      val dfm0 = dfm.map(ifm => (im.predicate, ifm))
-                      val (tps, ifs) =
-                        (dfm0 ++ candidates).partitionMap {
-                          case pfm@(p, _) =>
-                            if (p.tpe.dealias.isInterface) Right(pfm)
-                            else Left(pfm)
-                        }
-                      val cands = tps ++ ifs
-                      Seq(PolymorphicFieldMapping(cands))
+                      if (candidates.isEmpty) Seq.empty
+                      else Seq(InheritedFieldMapping(candidates))
                     }
                   }
-
-                val index = MMap.from((newFields).map(fm => fm.fieldName -> fm))
-                (im, index)
+                val index = MMap.from(newFields.map(fm => fm.fieldName -> fm))
+                (om, index)
 
               case _ =>
-                val index = MMap.from(im.fieldMappings.map(fm => fm.fieldName -> fm))
-                (im, index)
+                val index = MMap.from(om.fieldMappings.map(fm => fm.fieldName -> fm))
+                (om, index)
             }
-        }.groupBy(_._1.tpe.underlyingNamed.name)
+        }
+        .groupBy(_._1.tpe.underlyingNamed.name)
+
+      val nonObjectFieldIndices =
+        mappings
+          .collect {
+            case im: ObjectMapping if !im.tpe.dealias.isObject =>
+              im.tpe.underlying match {
+                case i: InterfaceType =>
+                  val impls = schema.implementations(i)
+                  val ms =
+                    impls.flatMap(impl => objectFieldIndices.getOrElse(impl.name, Seq.empty))
+                  val allFieldsAndAttrs =
+                    (im.fieldMappings.map(_.fieldName) ++ i.fields.map(_.name)).distinct
+                  val newFields =
+                    allFieldsAndAttrs.flatMap { fnme =>
+                      val candidates: Seq[(MappingPredicate, FieldMapping)] =
+                        ms.flatMap {
+                          case (om, ofi) =>
+                            ofi.get(fnme).toSeq.flatMap {
+                              case InheritedFieldMapping(ifms) =>
+                                ifms.filterNot { case (p, _) => p.tpe =:= i }
+                              case fm => Seq((om.predicate, fm))
+                            }
+                        }
+
+                      val dfm = im.fieldMapping(fnme).toSeq
+                      if (candidates.isEmpty) dfm
+                      else {
+                        val dfm0 = dfm.map(ifm => (im.predicate, ifm))
+                        val (tps, ifs) =
+                          (dfm0 ++ candidates).partitionMap {
+                            case pfm @ (p, _) =>
+                              if (p.tpe.dealias.isInterface) Right(pfm)
+                              else Left(pfm)
+                          }
+                        val cands = tps ++ ifs
+                        Seq(PolymorphicFieldMapping(cands))
+                      }
+                    }
+
+                  val index = MMap.from(newFields.map(fm => fm.fieldName -> fm))
+                  (im, index)
+
+                case _ =>
+                  val index = MMap.from(im.fieldMappings.map(fm => fm.fieldName -> fm))
+                  (im, index)
+              }
+          }
+          .groupBy(_._1.tpe.underlyingNamed.name)
 
       val (typeFieldIndex0, predicatedTypeFieldIndex0) =
         (objectFieldIndices ++ nonObjectFieldIndices).partitionMap {
@@ -657,7 +766,13 @@ abstract class Mapping[F[_]] {
       val typeFieldIndex = MMap.from(typeFieldIndex0)
       val predicatedTypeFieldIndex = MMap.from(predicatedTypeFieldIndex0)
 
-      new TypeMappings(mappings, typeIndex, predicatedTypeIndex, typeFieldIndex, predicatedTypeFieldIndex, unchecked)
+      new TypeMappings(
+        mappings,
+        typeIndex,
+        predicatedTypeIndex,
+        typeFieldIndex,
+        predicatedTypeFieldIndex,
+        unchecked)
     }
 
     def apply(mappings: Seq[TypeMapping]): TypeMappings =
@@ -680,7 +795,8 @@ abstract class Mapping[F[_]] {
     def unsafe(mappings: TypeMapping*)(implicit dummy: DummyImplicit): TypeMappings =
       unchecked(mappings)
 
-    implicit def fromList(mappings: List[TypeMappingCompat]): TypeMappings = TypeMappings(mappings.flatMap(_.unwrap))
+    implicit def fromList(mappings: List[TypeMappingCompat]): TypeMappings = TypeMappings(
+      mappings.flatMap(_.unwrap))
 
     val empty: TypeMappings = unchecked(Nil)
 
@@ -693,16 +809,19 @@ abstract class Mapping[F[_]] {
       def addProblems(ps: List[ValidationFailure]): MV[Unit] = StateT.modify(_.addProblems(ps))
       def seenType(tpe: Type): MV[Boolean] = StateT.inspect(_.seenType(tpe))
       def addSeenType(tpe: Type): MV[Unit] = StateT.modify(_.addSeenType(tpe))
-      def addSeenTypeMapping(tm: TypeMapping): MV[Unit] = StateT.modify(_.addSeenTypeMapping(tm))
+      def addSeenTypeMapping(tm: TypeMapping): MV[Unit] =
+        StateT.modify(_.addSeenTypeMapping(tm))
       def seenTypeMappings: MV[Set[TypeMapping]] = StateT.inspect(_.seenTypeMappings)
-      def addSeenFieldMapping(om: ObjectMapping, fm: FieldMapping): MV[Unit] = StateT.modify(_.addSeenFieldMapping(om, fm))
-      def seenFieldMappings(om: ObjectMapping): MV[Set[FieldMapping]] = StateT.inspect(_.seenFieldMappings(om))
+      def addSeenFieldMapping(om: ObjectMapping, fm: FieldMapping): MV[Unit] =
+        StateT.modify(_.addSeenFieldMapping(om, fm))
+      def seenFieldMappings(om: ObjectMapping): MV[Set[FieldMapping]] =
+        StateT.inspect(_.seenFieldMappings(om))
 
       case class State(
-        seenTypes: Set[String],
-        seenTypeMappings: Set[TypeMapping],
-        seenFieldMappings0: Map[ObjectMapping, Set[FieldMapping]],
-        problems: List[ValidationFailure]
+          seenTypes: Set[String],
+          seenTypeMappings: Set[TypeMapping],
+          seenFieldMappings0: Map[ObjectMapping, Set[FieldMapping]],
+          problems: List[ValidationFailure]
       ) {
         def addProblem(p: ValidationFailure): State =
           copy(problems = p :: problems)
@@ -723,7 +842,10 @@ abstract class Mapping[F[_]] {
           copy(seenTypeMappings = seenTypeMappings + tm)
 
         def addSeenFieldMapping(om: ObjectMapping, fm: FieldMapping): State =
-          copy(seenTypeMappings = seenTypeMappings + om, seenFieldMappings0 = seenFieldMappings0.updatedWith(om)(_.map(_ + fm).orElse(Set(fm).some)))
+          copy(
+            seenTypeMappings = seenTypeMappings + om,
+            seenFieldMappings0 =
+              seenFieldMappings0.updatedWith(om)(_.map(_ + fm).orElse(Set(fm).some)))
 
         def seenFieldMappings(om: ObjectMapping): Set[FieldMapping] =
           seenFieldMappings0.getOrElse(om, Set.empty)
@@ -734,16 +856,26 @@ abstract class Mapping[F[_]] {
     }
   }
 
-
-  /** Check Mapping specific TypeMapping validity */
-  protected def validateTypeMapping(mappings: TypeMappings, context: Context, tm: TypeMapping): List[ValidationFailure] = Nil
-
-  /** Check Mapping specific FieldMapping validity */
-  protected def validateFieldMapping(mappings: TypeMappings, context: Context, om: ObjectMapping, fm: FieldMapping): List[ValidationFailure] = Nil
+  /**
+   * Check Mapping specific TypeMapping validity
+   */
+  protected def validateTypeMapping(
+      mappings: TypeMappings,
+      context: Context,
+      tm: TypeMapping): List[ValidationFailure] = Nil
 
   /**
-   * Validatate this Mapping, yielding a chain of `Failure`s of severity equal to or greater than the
-   * specified `Severity`.
+   * Check Mapping specific FieldMapping validity
+   */
+  protected def validateFieldMapping(
+      mappings: TypeMappings,
+      context: Context,
+      om: ObjectMapping,
+      fm: FieldMapping): List[ValidationFailure] = Nil
+
+  /**
+   * Validatate this Mapping, yielding a chain of `Failure`s of severity equal to or greater
+   * than the specified `Severity`.
    */
   def validate(severity: Severity = Severity.Warning): List[ValidationFailure] =
     typeMappings.validate(severity)
@@ -753,29 +885,31 @@ abstract class Mapping[F[_]] {
    * severity equal to or greater than the specified `Severity`.
    */
   def validateInto[G[_]](severity: Severity = Severity.Warning)(
-    implicit ev: ApplicativeError[G, Throwable]
+      implicit ev: ApplicativeError[G, Throwable]
   ): G[Unit] = typeMappings.validateInto(severity)(ev)
 
   /**
-   * Validate this Mapping, throwing a `ValidationException` if there are any failures of severity equal
-   * to or greater than the specified `Severity`.
+   * Validate this Mapping, throwing a `ValidationException` if there are any failures of
+   * severity equal to or greater than the specified `Severity`.
    */
   def unsafeValidate(severity: Severity = Severity.Warning): Unit =
     typeMappings.unsafeValidate(severity)
 
-  /** Yields the `RootEffect`, if any, associated with `fieldName`. */
+  /**
+   * Yields the `RootEffect`, if any, associated with `fieldName`.
+   */
   def rootEffect(context: Context, fieldName: String): Option[RootEffect] =
-    typeMappings.fieldMapping(context, fieldName).collect {
-      case re: RootEffect => re
-    }
+    typeMappings.fieldMapping(context, fieldName).collect { case re: RootEffect => re }
 
-  /** Yields the `RootStream`, if any, associated with `fieldName`. */
+  /**
+   * Yields the `RootStream`, if any, associated with `fieldName`.
+   */
   def rootStream(context: Context, fieldName: String): Option[RootStream] =
-    typeMappings.fieldMapping(context, fieldName).collect {
-      case rs: RootStream => rs
-    }
+    typeMappings.fieldMapping(context, fieldName).collect { case rs: RootStream => rs }
 
-  /** Yields the `Encoder` associated with the provided leaf context, if any. */
+  /**
+   * Yields the `Encoder` associated with the provided leaf context, if any.
+   */
   def encoderForLeaf(context: Context): Option[Encoder[Any]] =
     typeMappings.typeMapping(context).collect {
       case lm: LeafMapping[_] => lm.encoder.asInstanceOf[Encoder[Any]]
@@ -800,8 +934,11 @@ abstract class Mapping[F[_]] {
       case other => other
     }
 
-  /** Backwards compatible constructor for legacy `PrefixedMapping` */
-  def PrefixedMapping(tpe: NamedType, mappings: List[(List[String], ObjectMapping)]): TypeMappingCompat.PrefixedMappingCompat = {
+  /**
+   * Backwards compatible constructor for legacy `PrefixedMapping`
+   */
+  def PrefixedMapping(tpe: NamedType, mappings: List[(List[String], ObjectMapping)])
+      : TypeMappingCompat.PrefixedMappingCompat = {
     if (!mappings.forall(_._2.predicate.tpe =:= tpe))
       throw new IllegalArgumentException("All prefixed mappings must have the same type")
 
@@ -819,15 +956,21 @@ abstract class Mapping[F[_]] {
     def showMappingType: String = productPrefix
   }
 
-  /** A predicate determining the applicability of a `TypeMapping` in a given context */
+  /**
+   * A predicate determining the applicability of a `TypeMapping` in a given context
+   */
   trait MappingPredicate {
-    /** The type to which this predicate applies */
+
+    /**
+     * The type to which this predicate applies
+     */
     def tpe: NamedType
+
     /**
      * Does this predicate apply to the given context?
      *
-     * Yields the priority of the corresponding `TypeMapping` if the predicate applies,
-     * or `None` otherwise.
+     * Yields the priority of the corresponding `TypeMapping` if the predicate applies, or
+     * `None` otherwise.
      */
     def apply(ctx: Context): Option[Int]
 
@@ -839,12 +982,13 @@ abstract class Mapping[F[_]] {
   }
 
   object MappingPredicate {
+
     /**
      * Extend the given context by the given path, if possible, navigating through interfaces
      * and unions as necessary.
      */
     def extendContext(ctx: Context, path: List[String]): Option[Context] =
-      if(path.isEmpty) Some(ctx)
+      if (path.isEmpty) Some(ctx)
       else
         ctx.tpe.underlyingNamed.dealias match {
           case ot: ObjectType =>
@@ -859,7 +1003,9 @@ abstract class Mapping[F[_]] {
               case Some(_) =>
                 extendContext(ctx.forFieldOrAttribute(path.head, None), path.tail)
               case None =>
-                schema.implementations(it).collectFirstSome(tpe => extendContext(ctx.asType(tpe), path))
+                schema
+                  .implementations(it)
+                  .collectFirstSome(tpe => extendContext(ctx.asType(tpe), path))
             }
           case ut: UnionType =>
             ut.members.collectFirstSome(tpe => extendContext(ctx.asType(tpe), path))
@@ -868,7 +1014,9 @@ abstract class Mapping[F[_]] {
             None
         }
 
-    /** A predicate that matches a specific type in any context */
+    /**
+     * A predicate that matches a specific type in any context
+     */
     case class TypeMatch(tpe: NamedType) extends MappingPredicate {
       def apply(ctx: Context): Option[Int] =
         if (ctx.tpe.underlyingNamed =:= tpe)
@@ -888,15 +1036,13 @@ abstract class Mapping[F[_]] {
     /**
      * A predicate that matches a specific type with a given path prefix.
      *
-     * This predicate corresponds to the semantics of the `PrefixedMapping` in earlier
-     * releases.
+     * This predicate corresponds to the semantics of the `PrefixedMapping` in earlier releases.
      */
-    case class PrefixedTypeMatch(prefix: List[String], tpe: NamedType) extends MappingPredicate {
+    case class PrefixedTypeMatch(prefix: List[String], tpe: NamedType)
+        extends MappingPredicate {
       def apply(ctx: Context): Option[Int] =
-        if (
-          ctx.tpe.underlyingNamed =:= tpe &&
-          ctx.path.startsWith(prefix.reverse)
-        )
+        if (ctx.tpe.underlyingNamed =:= tpe &&
+          ctx.path.startsWith(prefix.reverse))
           Some(prefix.length)
         else
           None
@@ -915,29 +1061,33 @@ abstract class Mapping[F[_]] {
     /**
      * A predicate that matches the given `Path` as the suffix of the context path.
      *
-     * Note that a `Path` corresponds to an initial type, followed by a sequence of
-     * field selectors. The type found by following the field selectors from the initial
-     * type determines the final type to which the predicate applies.
+     * Note that a `Path` corresponds to an initial type, followed by a sequence of field
+     * selectors. The type found by following the field selectors from the initial type
+     * determines the final type to which the predicate applies.
      *
-     * This predicate is thus a slightly more restrictive variant of `PrefixedTypeMatch`
-     * which will match in any context with the given path and final type, irrespective
-     * of the initial type.
+     * This predicate is thus a slightly more restrictive variant of `PrefixedTypeMatch` which
+     * will match in any context with the given path and final type, irrespective of the initial
+     * type.
      *
-     * In practice `PathMatch` is more convenient to use in most
-     * circumstances and should be preferred to `PrefixedTypeMatch` unless the semantics
-     * of the latter are absolutely required.
+     * In practice `PathMatch` is more convenient to use in most circumstances and should be
+     * preferred to `PrefixedTypeMatch` unless the semantics of the latter are absolutely
+     * required.
      */
     case class PathMatch(path: Path) extends MappingPredicate {
       lazy val tpe: NamedType = path.tpe.underlyingNamed
 
       def apply(ctx: Context): Option[Int] =
-        if (
-          ctx.tpe.underlyingNamed =:= tpe &&
+        if (ctx.tpe.underlyingNamed =:= tpe &&
           ctx.path.startsWith(path.path.reverse) &&
-          ((ctx.path.lengthCompare(path.path) == 0 && ctx.rootTpe.underlyingNamed =:= path.rootTpe.underlyingNamed) ||
-           ctx.typePath.drop(path.path.length).headOption.exists(_.underlyingNamed =:= path.rootTpe.underlyingNamed))
-        )
-          Some(if(path.path.isEmpty) 0 else path.path.length+1)
+          ((ctx.path.lengthCompare(path.path) == 0 && ctx
+            .rootTpe
+            .underlyingNamed =:= path.rootTpe.underlyingNamed) ||
+            ctx
+              .typePath
+              .drop(path.path.length)
+              .headOption
+              .exists(_.underlyingNamed =:= path.rootTpe.underlyingNamed)))
+          Some(if (path.path.isEmpty) 0 else path.path.length + 1)
         else
           None
 
@@ -945,12 +1095,13 @@ abstract class Mapping[F[_]] {
        * Given a Context, yield a strictly extended Context which would be matched by this
        * predicate, if any, None otherwise.
        *
-       * For a PathMatch predicate, the contination context is the given context
-       * extended by the prefix path, navigating through interfaces and unions as necessary,
-       * but only if the path root type matches the given context type.
+       * For a PathMatch predicate, the contination context is the given context extended by the
+       * prefix path, navigating through interfaces and unions as necessary, but only if the
+       * path root type matches the given context type.
        */
       def continuationContext(ctx: Context): Option[Context] =
-        if(path.rootTpe.underlyingNamed =:= ctx.tpe.underlyingNamed) extendContext(ctx, path.path)
+        if (path.rootTpe.underlyingNamed =:= ctx.tpe.underlyingNamed)
+          extendContext(ctx, path.path)
         else None
     }
   }
@@ -962,29 +1113,31 @@ abstract class Mapping[F[_]] {
   }
 
   object ObjectMapping {
-    case class DefaultObjectMapping(predicate: MappingPredicate, fieldMappings: Seq[FieldMapping])(
-      implicit val pos: SourcePos
+    case class DefaultObjectMapping(
+        predicate: MappingPredicate,
+        fieldMappings: Seq[FieldMapping])(
+        implicit val pos: SourcePos
     ) extends ObjectMapping {
       override def showMappingType: String = "ObjectMapping"
     }
 
     def apply(predicate: MappingPredicate)(fieldMappings: FieldMapping*)(
-      implicit pos: SourcePos
+        implicit pos: SourcePos
     ): ObjectMapping =
       DefaultObjectMapping(predicate, fieldMappings)
 
     def apply(tpe: NamedType)(fieldMappings: FieldMapping*)(
-      implicit pos: SourcePos
+        implicit pos: SourcePos
     ): ObjectMapping =
       DefaultObjectMapping(MappingPredicate.TypeMatch(tpe), fieldMappings)
 
     def apply(path: Path)(fieldMappings: FieldMapping*)(
-      implicit pos: SourcePos
+        implicit pos: SourcePos
     ): ObjectMapping =
       DefaultObjectMapping(MappingPredicate.PathMatch(path), fieldMappings)
 
     def apply(tpe: NamedType, fieldMappings: List[FieldMapping])(
-      implicit pos: SourcePos
+        implicit pos: SourcePos
     ): ObjectMapping =
       DefaultObjectMapping(MappingPredicate.TypeMatch(tpe), fieldMappings)
   }
@@ -999,142 +1152,174 @@ abstract class Mapping[F[_]] {
   }
 
   /**
-    * Abstract type of field mappings with effects.
-    */
+   * Abstract type of field mappings with effects.
+   */
   trait EffectMapping extends FieldMapping {
     def subtree: Boolean = true
   }
 
-  case class EffectField(fieldName: String, handler: EffectHandler[F], required: List[String] = Nil, hidden: Boolean = false)(implicit val pos: SourcePos)
-    extends EffectMapping
+  case class EffectField(
+      fieldName: String,
+      handler: EffectHandler[F],
+      required: List[String] = Nil,
+      hidden: Boolean = false)(implicit val pos: SourcePos)
+      extends EffectMapping
 
   /**
-   * Root effects can perform an intial effect prior to computing the resulting
-   * `Cursor` and effective `Query`.
+   * Root effects can perform an intial effect prior to computing the resulting `Cursor` and
+   * effective `Query`.
    *
-   * These effects are used to perform initial effectful setup for a query or to
-   * perform the effect associated with a GraphQL mutation. Convenience methods
-   * are provided to cover the cases where only one of the query or the cursor
-   * are computed.
+   * These effects are used to perform initial effectful setup for a query or to perform the
+   * effect associated with a GraphQL mutation. Convenience methods are provided to cover the
+   * cases where only one of the query or the cursor are computed.
    *
-   * If only the query is computed the default root cursor for the mapping will
-   * be used. If only the cursor is computed the client query (after elaboration)
-   * is used unmodified ... in this case results of the performed effect can only
-   * be passed to the result construction stage via the environment associated
-   * with the returned cursor.
+   * If only the query is computed the default root cursor for the mapping will be used. If only
+   * the cursor is computed the client query (after elaboration) is used unmodified ... in this
+   * case results of the performed effect can only be passed to the result construction stage
+   * via the environment associated with the returned cursor.
    */
-  case class RootEffect private (fieldName: String, effect: (Query, Path, Env) => F[Result[(Query, Cursor)]])(implicit val pos: SourcePos)
-    extends EffectMapping {
+  case class RootEffect private (
+      fieldName: String,
+      effect: (Query, Path, Env) => F[Result[(Query, Cursor)]])(implicit val pos: SourcePos)
+      extends EffectMapping {
     def hidden = false
-    def toRootStream: RootStream = RootStream(fieldName)((q, p, e) => Stream.eval(effect(q, p, e)))
+    def toRootStream: RootStream =
+      RootStream(fieldName)((q, p, e) => Stream.eval(effect(q, p, e)))
   }
 
   object RootEffect {
+
     /**
-     * Yields a `RootEffect` which performs both an initial effect and yields an effect-specific query and
-     * corresponding root cursor.
+     * Yields a `RootEffect` which performs both an initial effect and yields an effect-specific
+     * query and corresponding root cursor.
      */
-    def apply(fieldName: String)(effect: (Query, Path, Env) => F[Result[(Query, Cursor)]])(implicit pos: SourcePos, di: DummyImplicit): RootEffect =
+    def apply(fieldName: String)(effect: (Query, Path, Env) => F[Result[(Query, Cursor)]])(
+        implicit pos: SourcePos,
+        di: DummyImplicit): RootEffect =
       new RootEffect(fieldName, effect)
 
     /**
-     * Yields a `RootEffect` which performs an initial effect which leaves the query and default root cursor
-     * unchanged.
+     * Yields a `RootEffect` which performs an initial effect which leaves the query and default
+     * root cursor unchanged.
      */
-    def computeUnit(fieldName: String)(effect: Env => F[Result[Unit]])(implicit pos: SourcePos): RootEffect =
+    def computeUnit(fieldName: String)(effect: Env => F[Result[Unit]])(
+        implicit pos: SourcePos): RootEffect =
       new RootEffect(
         fieldName,
         (query, path, env) =>
           (for {
-            _  <- ResultT(effect(env))
+            _ <- ResultT(effect(env))
             qc <- ResultT(defaultRootCursor(query, path.rootTpe, None))
           } yield qc.map(_.withEnv(env))).value
       )
 
     /**
-      * Yields a `RootEffect` which performs an initial effect and yields an effect-specific root cursor.
-      */
-    def computeCursor(fieldName: String)(effect: (Path, Env) => F[Result[Cursor]])(implicit pos: SourcePos): RootEffect =
+     * Yields a `RootEffect` which performs an initial effect and yields an effect-specific root
+     * cursor.
+     */
+    def computeCursor(fieldName: String)(effect: (Path, Env) => F[Result[Cursor]])(
+        implicit pos: SourcePos): RootEffect =
       new RootEffect(
         fieldName,
         (query, path, env) => effect(path, env).map(_.map(c => (query, c)))
       )
 
     /**
-      * Yields a `RootEffect` which performs an initial effect and yields an effect-specific query
-      * which is executed with respect to the default root cursor for the corresponding `Mapping`.
-      */
-    def computeChild(fieldName: String)(effect: (Query, Path, Env) => F[Result[Query]])(implicit pos: SourcePos): RootEffect =
+     * Yields a `RootEffect` which performs an initial effect and yields an effect-specific
+     * query which is executed with respect to the default root cursor for the corresponding
+     * `Mapping`.
+     */
+    def computeChild(fieldName: String)(effect: (Query, Path, Env) => F[Result[Query]])(
+        implicit pos: SourcePos): RootEffect =
       new RootEffect(
         fieldName,
         (query, path, env) =>
           (for {
-            child <- ResultT(Query.extractChild(query).toResultOrError("Root query has unexpected shape").pure[F])
-            q     <- ResultT(effect(child, path, env).map(_.flatMap(Query.substChild(query, _).toResultOrError("Root query has unexpected shape"))))
-            qc    <- ResultT(defaultRootCursor(q, path.rootTpe, None))
+            child <- ResultT(
+              Query
+                .extractChild(query)
+                .toResultOrError("Root query has unexpected shape")
+                .pure[F])
+            q <- ResultT(
+              effect(child, path, env).map(_.flatMap(
+                Query.substChild(query, _).toResultOrError("Root query has unexpected shape"))))
+            qc <- ResultT(defaultRootCursor(q, path.rootTpe, None))
           } yield qc.map(_.withEnv(env))).value
       )
   }
 
   /**
-   * Root streams can perform an intial effect prior to emitting the resulting
-   * cursors and effective queries.
+   * Root streams can perform an intial effect prior to emitting the resulting cursors and
+   * effective queries.
    *
-   * Stream effects are used for GraphQL subscriptions. Convenience methods are
-   * provided to cover the cases where only one of the query or the cursor are
-   * computed
+   * Stream effects are used for GraphQL subscriptions. Convenience methods are provided to
+   * cover the cases where only one of the query or the cursor are computed
    *
-   * If only the query is computed the default root cursor for the mapping will
-   * be used. If only the cursor is computed the client query (after elaboration)
-   * is used unmodified ... in this case results of the performed effect can only
-   * be passed to the result construction stage via the environment associated
-   * with the returned cursor.
+   * If only the query is computed the default root cursor for the mapping will be used. If only
+   * the cursor is computed the client query (after elaboration) is used unmodified ... in this
+   * case results of the performed effect can only be passed to the result construction stage
+   * via the environment associated with the returned cursor.
    */
-  case class RootStream private (fieldName: String, effect: (Query, Path, Env) => Stream[F, Result[(Query, Cursor)]])(implicit val pos: SourcePos)
-    extends EffectMapping {
+  case class RootStream private (
+      fieldName: String,
+      effect: (Query, Path, Env) => Stream[F, Result[(Query, Cursor)]])(
+      implicit val pos: SourcePos)
+      extends EffectMapping {
     def hidden = false
   }
 
   object RootStream {
+
     /**
-     * Yields a `RootStream` which performs both an initial effect and yields an effect-specific query and
-     * corresponding root cursor.
+     * Yields a `RootStream` which performs both an initial effect and yields an effect-specific
+     * query and corresponding root cursor.
      */
-    def apply(fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[(Query, Cursor)]])(implicit pos: SourcePos, di: DummyImplicit): RootStream =
+    def apply(fieldName: String)(
+        effect: (Query, Path, Env) => Stream[F, Result[(Query, Cursor)]])(
+        implicit pos: SourcePos,
+        di: DummyImplicit): RootStream =
       new RootStream(fieldName, effect)
 
     /**
-      * Yields a `RootStream` which yields a stream of effect-specific root cursors.
-      *
-      * This form of effect is typically used to implement GraphQL subscriptions.
-      */
-    def computeCursor(fieldName: String)(effect: (Path, Env) => Stream[F, Result[Cursor]])(implicit pos: SourcePos): RootStream =
+     * Yields a `RootStream` which yields a stream of effect-specific root cursors.
+     *
+     * This form of effect is typically used to implement GraphQL subscriptions.
+     */
+    def computeCursor(fieldName: String)(effect: (Path, Env) => Stream[F, Result[Cursor]])(
+        implicit pos: SourcePos): RootStream =
       new RootStream(
         fieldName,
         (query, path, env) => effect(path, env).map(_.map(c => (query, c)))
       )
 
     /**
-      * Yields a `RootStream` which yields a stream of effect-specific queries
-      * which are executed with respect to the default root cursor for the
-      * corresponding `Mapping`.
-      *
-      * This form of effect is typically used to implement GraphQL subscriptions.
-      */
-    def computeChild(fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[Query]])(implicit pos: SourcePos): RootStream =
+     * Yields a `RootStream` which yields a stream of effect-specific queries which are executed
+     * with respect to the default root cursor for the corresponding `Mapping`.
+     *
+     * This form of effect is typically used to implement GraphQL subscriptions.
+     */
+    def computeChild(fieldName: String)(effect: (Query, Path, Env) => Stream[F, Result[Query]])(
+        implicit pos: SourcePos): RootStream =
       new RootStream(
         fieldName,
         (query, path, env) =>
-          Query.extractChild(query).fold(Stream.emit[F, Result[(Query, Cursor)]](Result.internalError("Root query has unexpected shape"))) { child =>
-            effect(child, path, env).flatMap(child0 =>
-              Stream.eval(
-                (for {
-                  q  <- ResultT(child0.flatMap(Query.substChild(query, _).toResultOrError("Root query has unexpected shape")).pure[F])
-                  qc <- ResultT(defaultRootCursor(q, path.rootTpe, None))
-                } yield qc.map(_.withEnv(env))).value
-              )
-            )
-          }
+          Query
+            .extractChild(query)
+            .fold(Stream.emit[F, Result[(Query, Cursor)]](
+              Result.internalError("Root query has unexpected shape"))) { child =>
+              effect(child, path, env).flatMap(child0 =>
+                Stream.eval(
+                  (for {
+                    q <- ResultT(
+                      child0
+                        .flatMap(Query
+                          .substChild(query, _)
+                          .toResultOrError("Root query has unexpected shape"))
+                        .pure[F])
+                    qc <- ResultT(defaultRootCursor(q, path.rootTpe, None))
+                  } yield qc.map(_.withEnv(env))).value
+                ))
+            }
       )
   }
 
@@ -1146,40 +1331,59 @@ abstract class Mapping[F[_]] {
 
   object LeafMapping {
 
-    case class DefaultLeafMapping[T](predicate: MappingPredicate, encoder: Encoder[T], scalaTypeName: String)(
-      implicit val pos: SourcePos
+    case class DefaultLeafMapping[T](
+        predicate: MappingPredicate,
+        encoder: Encoder[T],
+        scalaTypeName: String)(
+        implicit val pos: SourcePos
     ) extends LeafMapping[T] {
       override def showMappingType: String = "LeafMapping"
     }
 
-    def apply[T: TypeName](predicate: MappingPredicate)(implicit encoder: Encoder[T], pos: SourcePos): LeafMapping[T] =
+    def apply[T: TypeName](predicate: MappingPredicate)(
+        implicit encoder: Encoder[T],
+        pos: SourcePos): LeafMapping[T] =
       DefaultLeafMapping(predicate, encoder, typeName)
 
-    def apply[T: TypeName](tpe: NamedType)(implicit encoder: Encoder[T], pos: SourcePos): LeafMapping[T] =
+    def apply[T: TypeName](
+        tpe: NamedType)(implicit encoder: Encoder[T], pos: SourcePos): LeafMapping[T] =
       DefaultLeafMapping(MappingPredicate.TypeMatch(tpe), encoder, typeName)
 
-    def apply[T: TypeName](path: Path)(implicit encoder: Encoder[T], pos: SourcePos): LeafMapping[T] =
+    def apply[T: TypeName](
+        path: Path)(implicit encoder: Encoder[T], pos: SourcePos): LeafMapping[T] =
       DefaultLeafMapping(MappingPredicate.PathMatch(path), encoder, typeName)
 
     def unapply[T](lm: LeafMapping[T]): Option[(Type, Encoder[T])] =
       Some((lm.tpe, lm.encoder))
   }
 
-  case class CursorField[T](fieldName: String, f: Cursor => Result[T], encoder: Encoder[T], required: List[String], hidden: Boolean)(
-    implicit val pos: SourcePos
+  case class CursorField[T](
+      fieldName: String,
+      f: Cursor => Result[T],
+      encoder: Encoder[T],
+      required: List[String],
+      hidden: Boolean)(
+      implicit val pos: SourcePos
   ) extends FieldMapping {
     def subtree = false
   }
   object CursorField {
-    def apply[T](fieldName: String, f: Cursor => Result[T], required: List[String] = Nil, hidden: Boolean = false)(implicit encoder: Encoder[T], di: DummyImplicit): CursorField[T] =
+    def apply[T](
+        fieldName: String,
+        f: Cursor => Result[T],
+        required: List[String] = Nil,
+        hidden: Boolean = false)(
+        implicit encoder: Encoder[T],
+        di: DummyImplicit): CursorField[T] =
       new CursorField(fieldName, f, encoder, required, hidden)
   }
 
   case class Delegate(
-    fieldName: String,
-    mapping: Mapping[F],
-    join: (Query, Cursor) => Result[Query] = ComponentElaborator.TrivialJoin
-  )(implicit val pos: SourcePos) extends FieldMapping {
+      fieldName: String,
+      mapping: Mapping[F],
+      join: (Query, Cursor) => Result[Query] = ComponentElaborator.TrivialJoin
+  )(implicit val pos: SourcePos)
+      extends FieldMapping {
     def hidden = false
     def subtree = true
   }
@@ -1192,7 +1396,11 @@ abstract class Mapping[F[_]] {
         case om: ObjectMapping =>
           om.fieldMappings.collect {
             case Delegate(fieldName, mapping, join) =>
-              ComponentElaborator.ComponentMapping(schema.uncheckedRef(om.tpe), fieldName, mapping, join)
+              ComponentElaborator.ComponentMapping(
+                schema.uncheckedRef(om.tpe),
+                fieldName,
+                mapping,
+                join)
           }
         case _ => Seq.empty
       }
@@ -1202,12 +1410,11 @@ abstract class Mapping[F[_]] {
 
   lazy val effectElaborator: EffectElaborator[F] =
     EffectElaborator { (ctx, fieldName) =>
-      typeMappings.fieldMapping(ctx, fieldName).collect {
-        case e: EffectField => e.handler
-      }
+      typeMappings.fieldMapping(ctx, fieldName).collect { case e: EffectField => e.handler }
     }
 
-  def compilerPhases: List[QueryCompiler.Phase] = List(selectElaborator, componentElaborator, effectElaborator)
+  def compilerPhases: List[QueryCompiler.Phase] =
+    List(selectElaborator, componentElaborator, effectElaborator)
 
   def parserConfig: GraphQLParser.Config = GraphQLParser.defaultConfig
   lazy val graphQLParser: GraphQLParser = GraphQLParser(parserConfig)
@@ -1220,8 +1427,11 @@ abstract class Mapping[F[_]] {
 
   val interpreter: QueryInterpreter[F] = new QueryInterpreter(this)
 
-  /** Cursor positioned at a GraphQL result leaf */
-  case class LeafCursor(context: Context, focus: Any, parent: Option[Cursor], env: Env) extends Cursor {
+  /**
+   * Cursor positioned at a GraphQL result leaf
+   */
+  case class LeafCursor(context: Context, focus: Any, parent: Option[Cursor], env: Env)
+      extends Cursor {
     def withEnv(env0: Env): Cursor = copy(env = env.add(env0))
 
     def mkChild(context: Context = context, focus: Any = focus): LeafCursor =
@@ -1230,9 +1440,13 @@ abstract class Mapping[F[_]] {
     def isLeaf: Boolean = tpe.isLeaf
 
     def asLeaf: Result[Json] =
-      encoderForLeaf(context).map(enc => enc(focus).success).getOrElse(Result.internalError(
-        s"Cannot encode value $focus at ${context.path.reverse.mkString("/")} (of GraphQL type ${context.tpe}). Did you forget a LeafMapping?".stripMargin.trim
-      ))
+      encoderForLeaf(context)
+        .map(enc => enc(focus).success)
+        .getOrElse(Result.internalError(
+          s"Cannot encode value $focus at ${context.path.reverse.mkString("/")} (of GraphQL type ${context.tpe}). Did you forget a LeafMapping?"
+            .stripMargin
+            .trim
+        ))
 
     def preunique: Result[Cursor] = {
       val listTpe = tpe.nonNull.list
@@ -1250,7 +1464,8 @@ abstract class Mapping[F[_]] {
       }
 
     def asList[C](factory: Factory[Cursor, C]): Result[C] = (tpe, focus) match {
-      case (ListType(tpe), it: Seq[_]) => it.view.map(f => mkChild(context.asType(tpe), focus = f)).to(factory).success
+      case (ListType(tpe), it: Seq[_]) =>
+        it.view.map(f => mkChild(context.asType(tpe), focus = f)).to(factory).success
       case _ => Result.internalError(s"Expected List type, found $tpe")
     }
 
@@ -1268,7 +1483,8 @@ abstract class Mapping[F[_]] {
     def asNullable: Result[Option[Cursor]] =
       (tpe, focus) match {
         case (NullableType(_), None) => None.success
-        case (NullableType(tpe), Some(v)) => Some(mkChild(context.asType(tpe), focus = v)).success
+        case (NullableType(tpe), Some(v)) =>
+          Some(mkChild(context.asType(tpe), focus = v)).success
         case _ => Result.internalError(s"Not nullable at ${context.path}")
       }
 
@@ -1289,13 +1505,15 @@ abstract class Mapping[F[_]] {
   /**
    * Proxy `Cursor` which applies a function to the focus of an underlying `LeafCursor`.
    */
-  case class FieldTransformCursor[T : ClassTag : TypeName](underlying: Cursor, f: T => Result[T]) extends ProxyCursor(underlying) {
-    override def withEnv(env: Env): Cursor = new FieldTransformCursor(underlying.withEnv(env), f)
+  case class FieldTransformCursor[T: ClassTag: TypeName](underlying: Cursor, f: T => Result[T])
+      extends ProxyCursor(underlying) {
+    override def withEnv(env: Env): Cursor =
+      new FieldTransformCursor(underlying.withEnv(env), f)
     override def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
       underlying.field(fieldName, resultName).flatMap {
         case l: LeafCursor =>
           for {
-            focus  <- l.as[T]
+            focus <- l.as[T]
             ffocus <- f(focus)
           } yield l.copy(focus = ffocus)
         case _ =>
@@ -1304,55 +1522,68 @@ abstract class Mapping[F[_]] {
   }
 
   /**
-   * Construct a GraphQL response from the possibly absent result `data`
-   * and a collection of errors.
+   * Construct a GraphQL response from the possibly absent result `data` and a collection of
+   * errors.
    */
   def mkResponse(data: Option[Json], errors: Chain[Problem]): Json = {
     val dataField = data.map { value => ("data", value) }.toList
     val fields =
       (dataField, errors.toList) match {
-        case (Nil, Nil)   => List(("errors", Json.fromValues(List(Problem("Invalid query").asJson))))
-        case (data, Nil)  => data
+        case (Nil, Nil) =>
+          List(("errors", Json.fromValues(List(Problem("Invalid query").asJson))))
+        case (data, Nil) => data
         case (data, errs) => ("errors", errs.asJson) :: data
       }
     Json.fromFields(fields)
   }
 
-  /** Construct a GraphQL response from a `Result`. */
+  /**
+   * Construct a GraphQL response from a `Result`.
+   */
   def mkResponse(result: Result[Json]): F[Json] =
     result match {
       case Result.InternalError(err) => M.raiseError(err)
       case _ => mkResponse(result.toOption, result.toProblems).pure[F]
     }
 
-  /** Missing type mapping. */
-  case class MissingTypeMapping(ctx: Context)
-    extends ValidationFailure(Severity.Error) {
+  /**
+   * Missing type mapping.
+   */
+  case class MissingTypeMapping(ctx: Context) extends ValidationFailure(Severity.Error) {
     override def toString: String =
       s"$productPrefix(${showNamedType(ctx.tpe)})"
     override def formattedMessage: String =
       s"""|Missing type mapping.
           |
           |- The type ${graphql(showNamedType(ctx.tpe))} is defined by a Schema at (1).
-          |- ${UNDERLINED}No mapping was found for this type for path ${ctx.path.reverse.mkString("", "/", "")}.$RESET
+          |- ${UNDERLINED}No mapping was found for this type for path ${ctx
+           .path
+           .reverse
+           .mkString("", "/", "")}.$RESET
           |
           |(1) ${schema.pos}
           |""".stripMargin
   }
 
-  /** Ambiguous type mappings. */
+  /**
+   * Ambiguous type mappings.
+   */
   case class AmbiguousTypeMappings(ctx: Context, conflicts: Seq[TypeMapping])
-    extends ValidationFailure(Severity.Error) {
+      extends ValidationFailure(Severity.Error) {
     override def toString: String =
       s"$productPrefix(${showNamedType(ctx.tpe)})"
     override def formattedMessage: String = {
       val n = conflicts.length
-      val ref = if(n > 2) s"(2)..(${n+1})" else "(2), (3)"
-      val posns = conflicts.zip(2 to n+1).map { case (c, n) => s"($n) ${c.pos}" }.mkString("\n")
+      val ref = if (n > 2) s"(2)..(${n + 1})" else "(2), (3)"
+      val posns =
+        conflicts.zip(2 to n + 1).map { case (c, n) => s"($n) ${c.pos}" }.mkString("\n")
       s"""|Ambiguous type mappings.
           |
           |- The type ${graphql(showNamedType(ctx.tpe))} is defined by a Schema at (1).
-          |- Multiple equally specific mappings were found at $ref for this type for path ${ctx.path.reverse.mkString("", "/", "")}.
+          |- Multiple equally specific mappings were found at $ref for this type for path ${ctx
+           .path
+           .reverse
+           .mkString("", "/", "")}.
           |- ${UNDERLINED}Mappings must be unambiguous.$RESET
           |
           |(1) ${schema.pos}
@@ -1361,32 +1592,43 @@ abstract class Mapping[F[_]] {
     }
   }
 
-  /** Object type `owner` declares `field` but no such mapping exists. */
+  /**
+   * Object type `owner` declares `field` but no such mapping exists.
+   */
   case class MissingFieldMapping(objectMapping: ObjectMapping, field: Field)
-    extends ValidationFailure(Severity.Error) {
+      extends ValidationFailure(Severity.Error) {
     override def toString: String =
       s"$productPrefix(${showNamedType(objectMapping.tpe)}.${field.name}:${showType(field.tpe)})"
     override def formattedMessage: String =
       s"""|Missing field mapping.
           |
-          |- The field ${graphql(s"${showNamedType(objectMapping.tpe)}.${field.name}:${showType(field.tpe)}")} is defined by a Schema at (1).
-          |- The ${scala(objectMapping.showMappingType)} for ${graphql(showNamedType(objectMapping.tpe))} at (2) ${UNDERLINED}does not define a mapping for this field$RESET.
+          |- The field ${graphql(
+           s"${showNamedType(objectMapping.tpe)}.${field.name}:${showType(field.tpe)}")} is defined by a Schema at (1).
+          |- The ${scala(objectMapping.showMappingType)} for ${graphql(showNamedType(
+           objectMapping.tpe))} at (2) ${UNDERLINED}does not define a mapping for this field$RESET.
           |
           |(1) ${schema.pos}
           |(2) ${objectMapping.pos}
           |""".stripMargin
   }
 
-  /** Referenced field does not exist. */
-  case class DeclaredFieldMappingIsHidden(objectMapping: ObjectMapping, fieldMapping: FieldMapping)
-    extends ValidationFailure(Severity.Error) {
+  /**
+   * Referenced field does not exist.
+   */
+  case class DeclaredFieldMappingIsHidden(
+      objectMapping: ObjectMapping,
+      fieldMapping: FieldMapping)
+      extends ValidationFailure(Severity.Error) {
     override def toString: String =
       s"$productPrefix(${showNamedType(objectMapping.tpe)}.${fieldMapping.fieldName})"
     override def formattedMessage: String =
       s"""|Declared field mapping is hidden.
           |
-          |- The field ${graphql(s"${showNamedType(objectMapping.tpe)}.${fieldMapping.fieldName}")} is defined by a Schema at (1).
-          |- The ${scala(objectMapping.showMappingType)} at (2) contains a ${scala(fieldMapping.showMappingType)} mapping for field ${graphql(fieldMapping.fieldName)} at (3).
+          |- The field ${graphql(
+           s"${showNamedType(objectMapping.tpe)}.${fieldMapping.fieldName}")} is defined by a Schema at (1).
+          |- The ${scala(objectMapping.showMappingType)} at (2) contains a ${scala(
+           fieldMapping.showMappingType)} mapping for field ${graphql(
+           fieldMapping.fieldName)} at (3).
           |- This field mapping is marked as hidden.
           |- ${UNDERLINED}The mappings for declared fields must not be hidden.$RESET
           |
@@ -1396,16 +1638,20 @@ abstract class Mapping[F[_]] {
           |""".stripMargin
   }
 
-  /** GraphQL type isn't applicable for mapping type. */
+  /**
+   * GraphQL type isn't applicable for mapping type.
+   */
   case class ObjectTypeExpected(objectMapping: ObjectMapping)
-    extends ValidationFailure(Severity.Error) {
+      extends ValidationFailure(Severity.Error) {
     override def toString: String =
       s"$productPrefix(${objectMapping.showMappingType}, ${showNamedType(objectMapping.tpe)})"
     override def formattedMessage: String =
       s"""|Inapplicable GraphQL type.
           |
-          |- The ${typeKind(objectMapping.tpe)} ${graphql(showNamedType(objectMapping.tpe))} is defined by a Schema at (1).
-          |- It is mapped by the ${scala(objectMapping.showMappingType)} at (2), which expects an object type.
+          |- The ${typeKind(objectMapping.tpe)} ${graphql(
+           showNamedType(objectMapping.tpe))} is defined by a Schema at (1).
+          |- It is mapped by the ${scala(
+           objectMapping.showMappingType)} at (2), which expects an object type.
           |- ${UNDERLINED}Use a different kind of mapping for this type.$RESET
           |
           |(1) ${schema.pos}
@@ -1413,16 +1659,20 @@ abstract class Mapping[F[_]] {
           |""".stripMargin
   }
 
-  /** GraphQL type isn't applicable for mapping type. */
+  /**
+   * GraphQL type isn't applicable for mapping type.
+   */
   case class LeafTypeExpected(leafMapping: LeafMapping[_])
-    extends ValidationFailure(Severity.Error) {
+      extends ValidationFailure(Severity.Error) {
     override def toString: String =
       s"$productPrefix(${leafMapping.showMappingType}, ${showNamedType(leafMapping.tpe)})"
     override def formattedMessage: String =
       s"""|Inapplicable GraphQL type.
           |
-          |- The ${typeKind(leafMapping.tpe)} ${graphql(showNamedType(leafMapping.tpe))} is defined by a Schema at (1).
-          |- It is mapped by the ${scala(leafMapping.showMappingType)} at (2), which expects a leaf type.
+          |- The ${typeKind(leafMapping.tpe)} ${graphql(
+           showNamedType(leafMapping.tpe))} is defined by a Schema at (1).
+          |- It is mapped by the ${scala(
+           leafMapping.showMappingType)} at (2), which expects a leaf type.
           |- ${UNDERLINED}Use a different kind of mapping for this type.$RESET
           |
           |(1) ${schema.pos}
@@ -1430,16 +1680,18 @@ abstract class Mapping[F[_]] {
           |""".stripMargin
   }
 
-
-  /** Referenced type does not exist. */
+  /**
+   * Referenced type does not exist.
+   */
   case class ReferencedTypeDoesNotExist(typeMapping: TypeMapping)
-    extends ValidationFailure(Severity.Error) {
+      extends ValidationFailure(Severity.Error) {
     override def toString: String =
       s"$productPrefix(${typeMapping.showMappingType}, ${showNamedType(typeMapping.tpe)})"
     override def formattedMessage: String =
       s"""|Referenced type does not exist.
           |
-          |- The ${scala(typeMapping.showMappingType)} at (1) references type ${graphql(showNamedType(typeMapping.tpe))}.
+          |- The ${scala(typeMapping.showMappingType)} at (1) references type ${graphql(
+           showNamedType(typeMapping.tpe))}.
           |- ${UNDERLINED}This type is undeclared$RESET in the Schema defined at (2).
           |
           |(1) ${typeMapping.pos}
@@ -1447,15 +1699,18 @@ abstract class Mapping[F[_]] {
           |""".stripMargin
   }
 
-  /** Type mapping is unused. */
+  /**
+   * Type mapping is unused.
+   */
   case class UnusedTypeMapping(typeMapping: TypeMapping)
-    extends ValidationFailure(Severity.Warning) {
+      extends ValidationFailure(Severity.Warning) {
     override def toString: String =
       s"$productPrefix(${typeMapping.showMappingType}, ${showNamedType(typeMapping.tpe)})"
     override def formattedMessage: String =
       s"""|Type mapping is unused.
           |
-          |- The ${scala(typeMapping.showMappingType)} at (1) references type ${graphql(showNamedType(typeMapping.tpe))}.
+          |- The ${scala(typeMapping.showMappingType)} at (1) references type ${graphql(
+           showNamedType(typeMapping.tpe))}.
           |- ${UNDERLINED}This type mapping is unused$RESET by queries conforming to the Schema at (2).
           |
           |(1) ${typeMapping.pos}
@@ -1463,15 +1718,19 @@ abstract class Mapping[F[_]] {
           |""".stripMargin
   }
 
-  /** Referenced field does not exist. */
+  /**
+   * Referenced field does not exist.
+   */
   case class UnusedFieldMapping(objectMapping: ObjectMapping, fieldMapping: FieldMapping)
-    extends ValidationFailure(Severity.Error) {
+      extends ValidationFailure(Severity.Error) {
     override def toString: String =
       s"$productPrefix(${showNamedType(objectMapping.tpe)}.${fieldMapping.fieldName})"
     override def formattedMessage: String =
       s"""|Field mapping is unused.
           |
-          |- The ${scala(objectMapping.showMappingType)} at (1) contains a ${scala(fieldMapping.showMappingType)} mapping for field ${graphql(fieldMapping.fieldName)} at (2).
+          |- The ${scala(objectMapping.showMappingType)} at (1) contains a ${scala(
+           fieldMapping.showMappingType)} mapping for field ${graphql(
+           fieldMapping.fieldName)} at (2).
           |- ${UNDERLINED}This field mapping is unused$RESET by queries conforming to the Schema at (3).
           |
           |(1) ${objectMapping.pos}

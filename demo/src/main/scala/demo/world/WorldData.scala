@@ -23,7 +23,8 @@ import cats.effect.{Async, Resource}
 import doobie.hikari.HikariTransactor
 
 object WorldData {
-  def mkTransactor[F[_]: Async](connInfo: PostgresConnectionInfo): Resource[F, HikariTransactor[F]] = {
+  def mkTransactor[F[_]: Async](
+      connInfo: PostgresConnectionInfo): Resource[F, HikariTransactor[F]] = {
     import connInfo._
     HikariTransactor.newHikariTransactor[F](
       driverClassName,

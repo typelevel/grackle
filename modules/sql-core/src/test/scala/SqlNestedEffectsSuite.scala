@@ -20,7 +20,6 @@ import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
-
 import grackle.test.GraphQLResponseTests.{assertWeaklyEqual, assertWeaklyEqualIO}
 
 trait SqlNestedEffectsSuite extends CatsEffectSuite {
@@ -203,17 +202,18 @@ trait SqlNestedEffectsSuite extends CatsEffectSuite {
     """
 
     val prg =
-      (for {
-        cm  <- mapping
-        m   =  cm._2
-        n0  <- cm._1.count
+      for {
+        cm <- mapping
+        m = cm._2
+        n0 <- cm._1.count
         res <- m.compileAndRun(query)
-        n1  <- cm._1.count
-      } yield (res, n0, n1))
+        n1 <- cm._1.count
+      } yield (res, n0, n1)
 
-    prg.map { case (res, n0, n1) =>
-      assert(n0 == 0 && n1 == 1)
-      assertWeaklyEqual(res, expected)
+    prg.map {
+      case (res, n0, n1) =>
+        assert(n0 == 0 && n1 == 1)
+        assertWeaklyEqual(res, expected)
     }
   }
 
@@ -300,23 +300,24 @@ trait SqlNestedEffectsSuite extends CatsEffectSuite {
     """
 
     val prg =
-      (for {
-        cm   <- mapping
-        c    =  cm._1
-        m    =  cm._2
-        n0   <- cm._1.count
+      for {
+        cm <- mapping
+        c = cm._1
+        m = cm._2
+        n0 <- cm._1.count
         res0 <- m.compileAndRun(query)
-        n1   <- cm._1.count
-        _    <- c.update("EUR", 1.13)
+        n1 <- cm._1.count
+        _ <- c.update("EUR", 1.13)
         res1 <- m.compileAndRun(query)
-        n2   <- cm._1.count
-      } yield (res0, res1, n0, n1, n2))
+        n2 <- cm._1.count
+      } yield (res0, res1, n0, n1, n2)
 
-    prg.map { case (res0, res1, n0, n1, n2) =>
-      assert(n0 == 0 && n1 == 1 && n2 == 2)
+    prg.map {
+      case (res0, res1, n0, n1, n2) =>
+        assert(n0 == 0 && n1 == 1 && n2 == 2)
 
-      assertWeaklyEqual(res0, expected0)
-      assertWeaklyEqual(res1, expected1)
+        assertWeaklyEqual(res0, expected0)
+        assertWeaklyEqual(res1, expected1)
     }
   }
 

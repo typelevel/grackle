@@ -15,17 +15,17 @@
 
 package compiler
 
-import PartialFunction.condOpt
+import scala.PartialFunction.condOpt
 
 import cats.effect.IO
 import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
 import grackle.syntax._
-import Query._
-import QueryCompiler._
-import Value._
 
 final class CascadeSuite extends CatsEffectSuite {
   test("elaboration of simple query") {
@@ -44,9 +44,13 @@ final class CascadeSuite extends CatsEffectSuite {
 
     val expected =
       Environment(
-        Env.NonEmptyEnv(Map("filter" -> CascadeMapping.CascadedFilter(Some("foo"), None, Some(23), Some(10)))),
-        Select("foo",
-          Select("cascaded",
+        Env.NonEmptyEnv(
+          Map(
+            "filter" -> CascadeMapping.CascadedFilter(Some("foo"), None, Some(23), Some(10)))),
+        Select(
+          "foo",
+          Select(
+            "cascaded",
             Group(
               List(
                 Select("foo"),
@@ -95,7 +99,7 @@ final class CascadeSuite extends CatsEffectSuite {
 
     val res = CascadeMapping.compileAndRun(query)
 
-    //res.flatMap(IO.println) *>
+    // res.flatMap(IO.println) *>
     assertIO(res, expected)
   }
 
@@ -136,7 +140,7 @@ final class CascadeSuite extends CatsEffectSuite {
 
     val res = CascadeMapping.compileAndRun(query)
 
-    //res.flatMap(IO.println) *>
+    // res.flatMap(IO.println) *>
     assertIO(res, expected)
   }
 
@@ -188,7 +192,7 @@ final class CascadeSuite extends CatsEffectSuite {
 
     val res = CascadeMapping.compileAndRun(query)
 
-    //res.flatMap(IO.println) *>
+    // res.flatMap(IO.println) *>
     assertIO(res, expected)
   }
 
@@ -284,7 +288,7 @@ final class CascadeSuite extends CatsEffectSuite {
 
     val res = CascadeMapping.compileAndRun(query)
 
-    //res.flatMap(IO.println) *>
+    // res.flatMap(IO.println) *>
     assertIO(res, expected)
   }
 
@@ -380,7 +384,7 @@ final class CascadeSuite extends CatsEffectSuite {
 
     val res = CascadeMapping.compileAndRun(query)
 
-    //res.flatMap(IO.println) *>
+    // res.flatMap(IO.println) *>
     assertIO(res, expected)
   }
 
@@ -502,7 +506,7 @@ final class CascadeSuite extends CatsEffectSuite {
 
     val res = CascadeMapping.compileAndRun(query)
 
-    //res.flatMap(IO.println) *>
+    // res.flatMap(IO.println) *>
     assertIO(res, expected)
   }
 
@@ -585,7 +589,7 @@ final class CascadeSuite extends CatsEffectSuite {
 
     val res = CascadeMapping.compileAndRun(query)
 
-    //res.flatMap(IO.println) *>
+    // res.flatMap(IO.println) *>
     assertIO(res, expected)
   }
 }
@@ -631,38 +635,34 @@ object CascadeMapping extends ValueMapping[IO] {
     List(
       ValueObjectMapping[Unit](
         tpe = QueryType,
-        fieldMappings =
-          List(
-            ValueField("foo", _ => Some(()))
-          )
+        fieldMappings = List(
+          ValueField("foo", _ => Some(()))
+        )
       ),
       ValueObjectMapping[Unit](
         tpe = FooType,
-        fieldMappings =
-          List(
-            ValueField("cascaded", identity),
-            ValueField("reset", identity),
-            ValueField("bar", _ => Some(()))
-          )
+        fieldMappings = List(
+          ValueField("cascaded", identity),
+          ValueField("reset", identity),
+          ValueField("bar", _ => Some(()))
+        )
       ),
       ValueObjectMapping[Unit](
         tpe = BarType,
-        fieldMappings =
-          List(
-            ValueField("cascaded", identity),
-            ValueField("reset", identity),
-            ValueField("foo", _ => Some(()))
-          )
+        fieldMappings = List(
+          ValueField("cascaded", identity),
+          ValueField("reset", identity),
+          ValueField("foo", _ => Some(()))
+        )
       ),
       ValueObjectMapping[CascadedFilter](
         tpe = FilterValueType,
-        fieldMappings =
-          List(
-            CursorField("foo", getFilterValue(_).map(_.foo)),
-            CursorField("bar", getFilterValue(_).map(_.bar)),
-            CursorField("fooBar", getFilterValue(_).map(_.fooBar)),
-            CursorField("limit", getFilterValue(_).map(_.limit))
-          )
+        fieldMappings = List(
+          CursorField("foo", getFilterValue(_).map(_.foo)),
+          CursorField("bar", getFilterValue(_).map(_.bar)),
+          CursorField("fooBar", getFilterValue(_).map(_.fooBar)),
+          CursorField("limit", getFilterValue(_).map(_.limit))
+        )
       )
     )
 
@@ -689,7 +689,11 @@ object CascadeMapping extends ValueMapping[IO] {
   object TriInt extends TriValue[Int](condOpt(_) { case IntValue(i) => i })
   object TriBoolean extends TriValue[Boolean](condOpt(_) { case BooleanValue(b) => b })
 
-  case class CascadedFilter(foo: Option[String], bar: Option[Boolean], fooBar: Option[Int], limit: Option[Int]) {
+  case class CascadedFilter(
+      foo: Option[String],
+      bar: Option[Boolean],
+      fooBar: Option[Int],
+      limit: Option[Int]) {
     def combine[T](current: Option[T], next: Tri[T]): Option[T] =
       next match {
         case Left(()) => current
@@ -743,18 +747,24 @@ object CascadeMapping extends ValueMapping[IO] {
   }
 
   override val selectElaborator = SelectElaborator {
-    case (QueryType | BarType, "foo", List(Binding("filter", FooFilter(filter)), Binding("limit", TriInt(limit)))) =>
+    case (
+          QueryType | BarType,
+          "foo",
+          List(Binding("filter", FooFilter(filter)), Binding("limit", TriInt(limit)))) =>
       for {
         current0 <- Elab.env[CascadedFilter]("filter")
-        current  =  current0.getOrElse(CascadedFilter.empty)
-        _        <- Elab.env("filter", filter(current).withLimit(limit))
+        current = current0.getOrElse(CascadedFilter.empty)
+        _ <- Elab.env("filter", filter(current).withLimit(limit))
       } yield ()
 
-    case (FooType, "bar", List(Binding("filter", BarFilter(filter)), Binding("limit", TriInt(limit)))) =>
+    case (
+          FooType,
+          "bar",
+          List(Binding("filter", BarFilter(filter)), Binding("limit", TriInt(limit)))) =>
       for {
         current0 <- Elab.env[CascadedFilter]("filter")
-        current  =  current0.getOrElse(CascadedFilter.empty)
-        _        <- Elab.env("filter", filter(current).withLimit(limit))
+        current = current0.getOrElse(CascadedFilter.empty)
+        _ <- Elab.env("filter", filter(current).withLimit(limit))
       } yield ()
 
     case (FooType | BarType, "reset", Nil) =>

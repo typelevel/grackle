@@ -16,14 +16,16 @@
 package directives
 
 import cats.effect.IO
+import directives.SchemaDirectivesMapping.AuthStatus
 import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
+import grackle.Cursor._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
 import grackle.syntax._
-import Cursor._, Query._, QueryCompiler._, Value._
-
-import SchemaDirectivesMapping.AuthStatus
 
 final class SchemaDirectivesSuite extends CatsEffectSuite {
   test("No auth, success") {
@@ -47,7 +49,7 @@ final class SchemaDirectivesSuite extends CatsEffectSuite {
 
     val res = SchemaDirectivesMapping.compileAndRun(query)
 
-    //res.flatMap(IO.println) *>
+    // res.flatMap(IO.println) *>
     assertIO(res, expected)
   }
 
@@ -74,7 +76,7 @@ final class SchemaDirectivesSuite extends CatsEffectSuite {
 
     val res = SchemaDirectivesMapping.compileAndRun(query)
 
-    //res.flatMap(IO.println) *>
+    // res.flatMap(IO.println) *>
     assertIO(res, expected)
   }
 
@@ -103,9 +105,11 @@ final class SchemaDirectivesSuite extends CatsEffectSuite {
       }
     """
 
-    val res = SchemaDirectivesMapping.compileAndRun(query, env = Env("authStatus" -> AuthStatus("USER")))
+    val res = SchemaDirectivesMapping.compileAndRun(
+      query,
+      env = Env("authStatus" -> AuthStatus("USER")))
 
-    //res.flatMap(IO.println) *>
+    // res.flatMap(IO.println) *>
     assertIO(res, expected)
   }
 
@@ -130,9 +134,11 @@ final class SchemaDirectivesSuite extends CatsEffectSuite {
       }
     """
 
-    val res = SchemaDirectivesMapping.compileAndRun(query, env = Env("authStatus" -> AuthStatus("USER")))
+    val res = SchemaDirectivesMapping.compileAndRun(
+      query,
+      env = Env("authStatus" -> AuthStatus("USER")))
 
-    //res.flatMap(IO.println) *>
+    // res.flatMap(IO.println) *>
     assertIO(res, expected)
   }
 
@@ -163,9 +169,11 @@ final class SchemaDirectivesSuite extends CatsEffectSuite {
       }
     """
 
-    val res = SchemaDirectivesMapping.compileAndRun(query, env = Env("authStatus" -> AuthStatus("ADMIN")))
+    val res = SchemaDirectivesMapping.compileAndRun(
+      query,
+      env = Env("authStatus" -> AuthStatus("ADMIN")))
 
-    //res.flatMap(IO.println) *>
+    // res.flatMap(IO.println) *>
     assertIO(res, expected)
   }
 
@@ -199,9 +207,11 @@ final class SchemaDirectivesSuite extends CatsEffectSuite {
       }
     """
 
-    val res = SchemaDirectivesMapping.compileAndRun(query, env = Env("authStatus" -> AuthStatus("USER")))
+    val res = SchemaDirectivesMapping.compileAndRun(
+      query,
+      env = Env("authStatus" -> AuthStatus("USER")))
 
-    //res.flatMap(IO.println) *>
+    // res.flatMap(IO.println) *>
     assertIO(res, expected)
   }
 
@@ -230,9 +240,11 @@ final class SchemaDirectivesSuite extends CatsEffectSuite {
       }
     """
 
-    val res = SchemaDirectivesMapping.compileAndRun(query, env = Env("authStatus" -> AuthStatus("ADMIN")))
+    val res = SchemaDirectivesMapping.compileAndRun(
+      query,
+      env = Env("authStatus" -> AuthStatus("ADMIN")))
 
-    //res.flatMap(IO.println) *>
+    // res.flatMap(IO.println) *>
     assertIO(res, expected)
   }
 
@@ -251,9 +263,11 @@ final class SchemaDirectivesSuite extends CatsEffectSuite {
       }
     """
 
-    val res = SchemaDirectivesMapping.compileAndRun(query, env = Env("authStatus" -> AuthStatus("USER")))
+    val res = SchemaDirectivesMapping.compileAndRun(
+      query,
+      env = Env("authStatus" -> AuthStatus("USER")))
 
-    //res.flatMap(IO.println) *>
+    // res.flatMap(IO.println) *>
     assertIO(res, expected)
   }
 
@@ -276,7 +290,7 @@ final class SchemaDirectivesSuite extends CatsEffectSuite {
 
     val res = SchemaDirectivesMapping.compileAndRun(query)
 
-    //res.flatMap(IO.println) *>
+    // res.flatMap(IO.println) *>
     assertIO(res, expected)
   }
 
@@ -295,9 +309,11 @@ final class SchemaDirectivesSuite extends CatsEffectSuite {
       }
     """
 
-    val res = SchemaDirectivesMapping.compileAndRun(query, env = Env("authStatus" -> AuthStatus("ADMIN")))
+    val res = SchemaDirectivesMapping.compileAndRun(
+      query,
+      env = Env("authStatus" -> AuthStatus("ADMIN")))
 
-    //res.flatMap(IO.println) *>
+    // res.flatMap(IO.println) *>
     assertIO(res, expected)
   }
 
@@ -318,9 +334,11 @@ final class SchemaDirectivesSuite extends CatsEffectSuite {
       }
     """
 
-    val res = SchemaDirectivesMapping.compileAndRun(query, env = Env("authStatus" -> AuthStatus("USER")))
+    val res = SchemaDirectivesMapping.compileAndRun(
+      query,
+      env = Env("authStatus" -> AuthStatus("USER")))
 
-    //res.flatMap(IO.println) *>
+    // res.flatMap(IO.println) *>
     assertIO(res, expected)
   }
 }
@@ -361,28 +379,25 @@ object SchemaDirectivesMapping extends ValueMapping[IO] {
     List(
       ValueObjectMapping[Unit](
         tpe = QueryType,
-        fieldMappings =
-          List(
-            ValueField("products", _ => List("Cheese", "Wine", "Bread")),
-            ValueField("user", _ => ())
-          )
+        fieldMappings = List(
+          ValueField("products", _ => List("Cheese", "Wine", "Bread")),
+          ValueField("user", _ => ())
+        )
       ),
       ValueObjectMapping[Unit](
         tpe = MutationType,
-        fieldMappings =
-          List(
-            ValueField("needsBackup", _ => true),
-            ValueField("backup", _ => true)
-          )
+        fieldMappings = List(
+          ValueField("needsBackup", _ => true),
+          ValueField("backup", _ => true)
+        )
       ),
       ValueObjectMapping[Unit](
         tpe = UserType,
-        fieldMappings =
-          List(
-            ValueField("name", _ => "Mary"),
-            ValueField("email", _ => "mary@example.com"),
-            ValueField("phone", _ => Some("123456789")),
-          )
+        fieldMappings = List(
+          ValueField("name", _ => "Mary"),
+          ValueField("email", _ => "mary@example.com"),
+          ValueField("phone", _ => Some("123456789"))
+        )
       )
     )
 
@@ -390,13 +405,20 @@ object SchemaDirectivesMapping extends ValueMapping[IO] {
 
   object permissionsElaborator extends Phase {
     override def transform(query: Query): Elab[Query] = {
-      def checkPermissions(c: Context, name: String, status: Option[AuthStatus], query: Query, nullAndWarn: Boolean): Elab[Query] = {
+      def checkPermissions(
+          c: Context,
+          name: String,
+          status: Option[AuthStatus],
+          query: Query,
+          nullAndWarn: Boolean): Elab[Query] = {
         val dirs = c.tpe.directives ++ c.tpe.fieldInfo(name).map(_.directives).getOrElse(Nil)
         val requiresAuth = dirs.exists(_.name == "authenticated")
         val roles =
-          dirs.filter(_.name == "hasRole").flatMap(_.args.filter(_.name == "requires")).map(_.value).collect {
-            case EnumValue(role) => role
-          }
+          dirs
+            .filter(_.name == "hasRole")
+            .flatMap(_.args.filter(_.name == "requires"))
+            .map(_.value)
+            .collect { case EnumValue(role) => role }
         val requiresRole =
           if (roles.contains("ADMIN")) Some(AuthStatus("ADMIN"))
           else if (roles.contains("USER")) Some(AuthStatus("USER"))
@@ -420,10 +442,10 @@ object SchemaDirectivesMapping extends ValueMapping[IO] {
       query match {
         case s: UntypedSelect =>
           for {
-            c      <- Elab.context
+            c <- Elab.context
             status <- Elab.env[AuthStatus]("authStatus")
             query0 <- super.transform(query)
-            res    <- checkPermissions(c, s.name, status, query0, s.name == "phone")
+            res <- checkPermissions(c, s.name, status, query0, s.name == "phone")
           } yield res
 
         case _ =>

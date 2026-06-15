@@ -21,21 +21,27 @@ import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
-import Predicate._, Query._
-import sql.{Like, SqlStatsMonitor}
-
+import grackle.Predicate._
+import grackle.Query._
+import grackle.sql.{Like, SqlStatsMonitor}
 import grackle.test.GraphQLResponseTests.assertWeaklyEqual
 
-/** Tests that confirm the compiler is writing the queries we want. */
+/**
+ * Tests that confirm the compiler is writing the queries we want.
+ */
 trait SqlWorldCompilerSuite extends CatsEffectSuite {
 
   type Fragment
   def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO, Fragment])]
 
-  /** Expected SQL string for the simple restricted query test. */
+  /**
+   * Expected SQL string for the simple restricted query test.
+   */
   def simpleRestrictedQuerySql: String
 
-  /** Expected SQL string for the simple filtered query test. */
+  /**
+   * Expected SQL string for the simple filtered query test.
+   */
   def simpleFilteredQuerySql: String
 
   def filterArg: String
@@ -66,26 +72,31 @@ trait SqlWorldCompilerSuite extends CatsEffectSuite {
 
     val prog: IO[(Json, List[SqlStatsMonitor.SqlStats], Schema)] =
       for {
-        mm  <- mapping
+        mm <- mapping
         (map, mon) = mm
         res <- map.compileAndRun(query)
-        ss  <- mon.take
+        ss <- mon.take
       } yield (res, ss.map(_.normalize), map.schema)
 
-    prog.map { case (res, stats, schema) =>
-      assertWeaklyEqual(res, expected)
+    prog.map {
+      case (res, stats, schema) =>
+        assertWeaklyEqual(res, expected)
 
-      assertEquals(stats,
-        List(
-          SqlStatsMonitor.SqlStats(
-            Select("country", Unique(Filter(Eql(schema.ref("Country") / "code",Const("GBR")), Select("name")))),
-            simpleRestrictedQuerySql,
-            List(encodeArg("GBR")),
-            1,
-            2
+        assertEquals(
+          stats,
+          List(
+            SqlStatsMonitor.SqlStats(
+              Select(
+                "country",
+                Unique(
+                  Filter(Eql(schema.ref("Country") / "code", Const("GBR")), Select("name")))),
+              simpleRestrictedQuerySql,
+              List(encodeArg("GBR")),
+              1,
+              2
+            )
           )
         )
-      )
     }
   }
 
@@ -121,26 +132,30 @@ trait SqlWorldCompilerSuite extends CatsEffectSuite {
 
     val prog: IO[(Json, List[SqlStatsMonitor.SqlStats], Schema)] =
       for {
-        mm  <- mapping
+        mm <- mapping
         (map, mon) = mm
         res <- map.compileAndRun(query)
-        ss  <- mon.take
+        ss <- mon.take
       } yield (res, ss.map(_.normalize), map.schema)
 
-    prog.map { case (res, stats, schema) =>
-      assertWeaklyEqual(res, expected)
+    prog.map {
+      case (res, stats, schema) =>
+        assertWeaklyEqual(res, expected)
 
-      assertEquals(stats,
-        List(
-          SqlStatsMonitor.SqlStats(
-            Select("cities", Filter(Like(schema.ref("City") / "name","Linh%",true), Select("name"))),
-            simpleFilteredQuerySql,
-            List(encodeArg(filterArg)),
-            3,
-            2
+        assertEquals(
+          stats,
+          List(
+            SqlStatsMonitor.SqlStats(
+              Select(
+                "cities",
+                Filter(Like(schema.ref("City") / "name", "Linh%", true), Select("name"))),
+              simpleFilteredQuerySql,
+              List(encodeArg(filterArg)),
+              3,
+              2
+            )
           )
         )
-      )
     }
   }
 }

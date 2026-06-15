@@ -16,13 +16,14 @@
 package demo.starwars
 
 import cats.MonadThrow
-import cats.syntax.all._
 import cats.effect.Resource
+import cats.syntax.all._
+
 import grackle.Predicate._
 import grackle.Query._
 import grackle.QueryCompiler._
+import grackle.Result
 import grackle.Value._
-import grackle._
 import grackle.generic._
 import grackle.syntax._
 
@@ -90,11 +91,11 @@ trait StarWarsMapping[F[_]] extends GenericMapping[F] { self: StarWarsData[F] =>
     case (QueryType, "hero", List(Binding("episode", EnumValue(e)))) =>
       for {
         ep <- Elab.liftR(
-                Episode.values.find(_.toString == e).toResult(s"Unknown episode '$e'")
-              )
-        _  <- Elab.transformChild { child =>
-                Unique(Filter(Eql(CharacterType / "id", Const(hero(ep).id)), child))
-              }
+          Episode.values.find(_.toString == e).toResult(s"Unknown episode '$e'")
+        )
+        _ <- Elab.transformChild { child =>
+          Unique(Filter(Eql(CharacterType / "id", Const(hero(ep).id)), child))
+        }
       } yield ()
 
     // The character, human and droid selectors all take a single ID argument and yield a
@@ -135,40 +136,38 @@ trait StarWarsData[F[_]] extends GenericMapping[F] { self: StarWarsMapping[F] =>
   }
 
   case class Human(
-    id: String,
-    name: Option[String],
-    appearsIn: Option[List[Episode.Value]],
-    friends: Option[List[String]],
-    homePlanet: Option[String]
+      id: String,
+      name: Option[String],
+      appearsIn: Option[List[Episode.Value]],
+      friends: Option[List[String]],
+      homePlanet: Option[String]
   ) extends Character
 
   object Human {
     implicit val cursorBuilder: CursorBuilder[Human] =
-      deriveObjectCursorBuilder[Human](HumanType)
-        .transformField("friends")(resolveFriends)
+      deriveObjectCursorBuilder[Human](HumanType).transformField("friends")(resolveFriends)
   }
 
   case class Droid(
-    id: String,
-    name: Option[String],
-    appearsIn: Option[List[Episode.Value]],
-    friends: Option[List[String]],
-    primaryFunction: Option[String]
+      id: String,
+      name: Option[String],
+      appearsIn: Option[List[Episode.Value]],
+      friends: Option[List[String]],
+      primaryFunction: Option[String]
   ) extends Character
 
   object Droid {
     implicit val cursorBuilder: CursorBuilder[Droid] =
-      deriveObjectCursorBuilder[Droid](DroidType)
-        .transformField("friends")(resolveFriends)
+      deriveObjectCursorBuilder[Droid](DroidType).transformField("friends")(resolveFriends)
   }
 
   def resolveFriends(c: Character): Result[Option[List[Character]]] =
     c.friends match {
       case None => None.success
       case Some(ids) =>
-        ids.traverse(id =>
-          characters.find(_.id == id).toResultOrError(s"Bad id '$id'")
-        ).map(_.some)
+        ids
+          .traverse(id => characters.find(_.id == id).toResultOrError(s"Bad id '$id'"))
+          .map(_.some)
     }
 
   // #model_types
@@ -228,15 +227,13 @@ trait StarWarsData[F[_]] extends GenericMapping[F] { self: StarWarsMapping[F] =>
   )
   // #model_values
 
-  import Episode._
-
-  val Some(lukeSkywalker) = characters.find(_.id == "1000") : @unchecked
-  val Some(r2d2) = characters.find(_.id == "2001") : @unchecked
+  val Some(lukeSkywalker) = characters.find(_.id == "1000"): @unchecked
+  val Some(r2d2) = characters.find(_.id == "2001"): @unchecked
 
   // Mapping from Episode to its hero Character
-  val hero: Map[Value, Character] = Map(
-    NEWHOPE -> r2d2,
-    EMPIRE -> lukeSkywalker,
-    JEDI -> r2d2
+  val hero: Map[Episode.Value, Character] = Map(
+    Episode.NEWHOPE -> r2d2,
+    Episode.EMPIRE -> lukeSkywalker,
+    Episode.JEDI -> r2d2
   )
 }

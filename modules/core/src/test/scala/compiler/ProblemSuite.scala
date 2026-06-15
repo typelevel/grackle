@@ -15,9 +15,9 @@
 
 package compiler
 
-import io.circe.syntax._
 import io.circe.JsonObject
 import io.circe.literal._
+import io.circe.syntax._
 import munit.CatsEffectSuite
 
 import grackle.Problem
@@ -98,32 +98,39 @@ final class ProblemSuite extends CatsEffectSuite {
 
   test("toString (full)") {
     assertEquals(
-      Problem("foo", List(1 -> 2, 5 -> 6), List("bar", "baz")).toString, "foo (at bar/baz: 1..2, 5..6)"
+      Problem("foo", List(1 -> 2, 5 -> 6), List("bar", "baz")).toString,
+      "foo (at bar/baz: 1..2, 5..6)"
     )
   }
 
   test("toString (no path)") {
     assertEquals(
-      Problem("foo", List(1 -> 2, 5 -> 6), Nil).toString, "foo (at 1..2, 5..6)"
+      Problem("foo", List(1 -> 2, 5 -> 6), Nil).toString,
+      "foo (at 1..2, 5..6)"
     )
   }
 
   test("toString (no locations)") {
     assertEquals(
-      Problem("foo", Nil, List("bar", "baz")).toString, "foo (at bar/baz)"
+      Problem("foo", Nil, List("bar", "baz")).toString,
+      "foo (at bar/baz)"
     )
   }
 
   test("toString (message only)") {
     assertEquals(
-      Problem("foo", Nil, Nil).toString, "foo"
+      Problem("foo", Nil, Nil).toString,
+      "foo"
     )
   }
 
   test("extension") {
-    val p = Problem("foo", extensions = Some(JsonObject("bar" -> 42.asJson, "baz" -> List("a", "b").asJson)))
+    val p = Problem(
+      "foo",
+      extensions = Some(JsonObject("bar" -> 42.asJson, "baz" -> List("a", "b").asJson)))
     assertEquals(
-      p.asJson, json"""
+      p.asJson,
+      json"""
         {
           "message" : "foo",
           "extensions" : {

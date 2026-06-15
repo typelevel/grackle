@@ -17,9 +17,11 @@ package sdl
 
 import munit.CatsEffectSuite
 
-import grackle.{ Ast, GraphQLParser, SchemaParser }
+import grackle.{GraphQLParser, SchemaParser}
+import grackle.Ast._
+import grackle.Ast.OperationType._
+import grackle.Ast.Type.{List => _, _}
 import grackle.syntax._
-import Ast._, OperationType._, Type.{ List => _, _ }
 
 final class SDLSuite extends CatsEffectSuite {
   val parser = GraphQLParser(GraphQLParser.defaultConfig)
@@ -63,7 +65,10 @@ final class SDLSuite extends CatsEffectSuite {
     val expected =
       List(
         ScalarTypeDefinition(Name("Url"), Some("A scalar type"), Nil),
-        ScalarTypeDefinition(Name("Time"), Some("A scalar type"), List(Directive(Name("deprecated"), Nil)))
+        ScalarTypeDefinition(
+          Name("Time"),
+          Some("A scalar type"),
+          List(Directive(Name("deprecated"), Nil)))
       )
 
     val res = parser.parseText(schema)
@@ -82,13 +87,21 @@ final class SDLSuite extends CatsEffectSuite {
 
     val expected =
       List(
-        ObjectTypeDefinition(Name("Query"), Some("An object type"),
+        ObjectTypeDefinition(
+          Name("Query"),
+          Some("An object type"),
           List(
             FieldDefinition(Name("posts"), None, Nil, Type.List(Named(Name("Post"))), Nil),
             FieldDefinition(
               Name("author"),
               None,
-              List(InputValueDefinition(Name("id"), None, NonNull(Left(Named(Name("Int")))), None, Nil)),
+              List(
+                InputValueDefinition(
+                  Name("id"),
+                  None,
+                  NonNull(Left(Named(Name("Int")))),
+                  None,
+                  Nil)),
               Named(Name("Author")),
               Nil
             )
@@ -118,11 +131,23 @@ final class SDLSuite extends CatsEffectSuite {
 
     val expected =
       List(
-        InterfaceTypeDefinition(Name("Post"), Some("An interface type"),
+        InterfaceTypeDefinition(
+          Name("Post"),
+          Some("An interface type"),
           List(
-            FieldDefinition(Name("id"), Some("A field"), Nil, NonNull(Left(Named(Name("Int")))), Nil),
+            FieldDefinition(
+              Name("id"),
+              Some("A field"),
+              Nil,
+              NonNull(Left(Named(Name("Int")))),
+              Nil),
             FieldDefinition(Name("title"), None, Nil, Named(Name("String")), Nil),
-            FieldDefinition(Name("author"), Some("A deprecated field"), Nil, Named(Name("Author")), List(Directive(Name("deprecated"), Nil))),
+            FieldDefinition(
+              Name("author"),
+              Some("A deprecated field"),
+              Nil,
+              Named(Name("Author")),
+              List(Directive(Name("deprecated"), Nil))),
             FieldDefinition(Name("votes"), None, Nil, Named(Name("Int")), Nil)
           ),
           Nil,
@@ -143,7 +168,10 @@ final class SDLSuite extends CatsEffectSuite {
 
     val expected =
       List(
-        UnionTypeDefinition(Name("ThisOrThat"), Some("A union type"), Nil,
+        UnionTypeDefinition(
+          Name("ThisOrThat"),
+          Some("A union type"),
+          Nil,
           List(
             Named(Name("This")),
             Named(Name("That"))
@@ -169,7 +197,10 @@ final class SDLSuite extends CatsEffectSuite {
 
     val expected =
       List(
-        EnumTypeDefinition(Name("Direction"), Some("An enum type"), Nil,
+        EnumTypeDefinition(
+          Name("Direction"),
+          Some("An enum type"),
+          Nil,
           List(
             EnumValueDefinition(Name("NORTH"), None, Nil),
             EnumValueDefinition(Name("EAST"), None, Nil),
@@ -195,7 +226,9 @@ final class SDLSuite extends CatsEffectSuite {
 
     val expected =
       List(
-        InputObjectTypeDefinition(Name("Point2D"), Some("An input object type"),
+        InputObjectTypeDefinition(
+          Name("Point2D"),
+          Some("An input object type"),
           List(
             InputValueDefinition(Name("x"), None, Named(Name("Float")), None, Nil),
             InputValueDefinition(Name("y"), None, Named(Name("Float")), None, Nil)
@@ -226,22 +259,22 @@ final class SDLSuite extends CatsEffectSuite {
 
   test("deserialize schema (1)") {
     val schema =
-    """|type Author {
-       |  id: Int!
-       |  firstName: String
-       |  lastName: String
-       |  posts: [Post]
-       |}
-       |type Post {
-       |  id: Int!
-       |  title: String
-       |  author: Author
-       |  votes: Int
-       |}
-       |type Query {
-       |  posts: [Post]
-       |  author(id: Int! = 23): Author
-       |}""".stripMargin
+      """|type Author {
+         |  id: Int!
+         |  firstName: String
+         |  lastName: String
+         |  posts: [Post]
+         |}
+         |type Post {
+         |  id: Int!
+         |  title: String
+         |  author: Author
+         |  votes: Int
+         |}
+         |type Query {
+         |  posts: [Post]
+         |  author(id: Int! = 23): Author
+         |}""".stripMargin
 
     val res = schemaParser.parseText(schema)
     val ser = res.map(_.toString)
@@ -251,41 +284,41 @@ final class SDLSuite extends CatsEffectSuite {
 
   test("deserialize schema (2)") {
     val schema =
-    """|type Query {
-       |  hero(episode: Episode!): Character!
-       |  character(id: ID!): Character
-       |  human(id: ID!): Human
-       |  droid(id: ID!): Droid
-       |}
-       |enum Episode {
-       |  ROGUEONE @deprecated(reason: "use NEWHOPE instead")
-       |  NEWHOPE
-       |  EMPIRE
-       |  JEDI
-       |}
-       |interface Character {
-       |  id: String!
-       |  name: String
-       |  fullname: String @deprecated(reason: "use 'name' instead")
-       |  friends: [Character!]
-       |  appearsIn: [Episode!]
-       |}
-       |type Human implements Character {
-       |  id: String!
-       |  name: String
-       |  fullname: String @deprecated(reason: "use 'name' instead")
-       |  friends: [Character!]
-       |  appearsIn: [Episode!]
-       |  homePlanet: String
-       |}
-       |type Droid implements Character {
-       |  id: String!
-       |  name: String
-       |  fullname: String @deprecated(reason: "use 'name' instead")
-       |  friends: [Character!]
-       |  appearsIn: [Episode!]
-       |  primaryFunction: String
-       |}""".stripMargin
+      """|type Query {
+         |  hero(episode: Episode!): Character!
+         |  character(id: ID!): Character
+         |  human(id: ID!): Human
+         |  droid(id: ID!): Droid
+         |}
+         |enum Episode {
+         |  ROGUEONE @deprecated(reason: "use NEWHOPE instead")
+         |  NEWHOPE
+         |  EMPIRE
+         |  JEDI
+         |}
+         |interface Character {
+         |  id: String!
+         |  name: String
+         |  fullname: String @deprecated(reason: "use 'name' instead")
+         |  friends: [Character!]
+         |  appearsIn: [Episode!]
+         |}
+         |type Human implements Character {
+         |  id: String!
+         |  name: String
+         |  fullname: String @deprecated(reason: "use 'name' instead")
+         |  friends: [Character!]
+         |  appearsIn: [Episode!]
+         |  homePlanet: String
+         |}
+         |type Droid implements Character {
+         |  id: String!
+         |  name: String
+         |  fullname: String @deprecated(reason: "use 'name' instead")
+         |  friends: [Character!]
+         |  appearsIn: [Episode!]
+         |  primaryFunction: String
+         |}""".stripMargin
 
     val res = schemaParser.parseText(schema)
     val ser = res.map(_.toString)
@@ -295,20 +328,20 @@ final class SDLSuite extends CatsEffectSuite {
 
   test("deserialize schema (3)") {
     val schema =
-    """|type Query {
-       |  whatsat(p: Point!): ThisOrThat!
-       |}
-       |union ThisOrThat = This | That
-       |type This {
-       |  id: ID!
-       |}
-       |type That {
-       |  id: ID!
-       |}
-       |input Point {
-       |  x: Int
-       |  y: Int
-       |}""".stripMargin
+      """|type Query {
+         |  whatsat(p: Point!): ThisOrThat!
+         |}
+         |union ThisOrThat = This | That
+         |type This {
+         |  id: ID!
+         |}
+         |type That {
+         |  id: ID!
+         |}
+         |input Point {
+         |  x: Int
+         |  y: Int
+         |}""".stripMargin
 
     val res = schemaParser.parseText(schema)
     val ser = res.map(_.toString)

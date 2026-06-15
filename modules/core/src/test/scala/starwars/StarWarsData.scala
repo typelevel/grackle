@@ -20,11 +20,11 @@ import cats.implicits._
 import io.circe.Encoder
 
 import grackle._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
 import grackle.syntax._
-
-import Query._
-import Predicate._, Value._
-import QueryCompiler._
 
 object StarWarsData {
   object Episode extends Enumeration {
@@ -40,19 +40,19 @@ object StarWarsData {
   }
 
   case class Human(
-    id: String,
-    name: Option[String],
-    appearsIn: Option[List[Episode.Value]],
-    friends: Option[List[String]],
-    homePlanet: Option[String]
+      id: String,
+      name: Option[String],
+      appearsIn: Option[List[Episode.Value]],
+      friends: Option[List[String]],
+      homePlanet: Option[String]
   ) extends Character
 
   case class Droid(
-    id: String,
-    name: Option[String],
-    appearsIn: Option[List[Episode.Value]],
-    friends: Option[List[String]],
-    primaryFunction: Option[String]
+      id: String,
+      name: Option[String],
+      appearsIn: Option[List[Episode.Value]],
+      friends: Option[List[String]],
+      primaryFunction: Option[String]
   ) extends Character
 
   def resolveFriends(c: Character): Option[List[Character]] =
@@ -116,8 +116,8 @@ object StarWarsData {
 
   import Episode._
 
-  val Some(lukeSkywalker) = characters.find(_.id == "1000") : @unchecked
-  val Some(r2d2) = characters.find(_.id == "2001") : @unchecked
+  val Some(lukeSkywalker) = characters.find(_.id == "1000"): @unchecked
+  val Some(r2d2) = characters.find(_.id == "2001"): @unchecked
 
   val hero: Map[Value, Character] = Map(
     NEWHOPE -> r2d2,
@@ -184,43 +184,39 @@ object StarWarsMapping extends ValueMapping[IO] {
     List(
       ValueObjectMapping[Unit](
         tpe = QueryType,
-        fieldMappings =
-          List(
-            ValueField("hero", _ => characters),
-            ValueField("character", _ => characters),
-            ValueField("characters", _ => characters),
-            ValueField("human", _ => characters.collect { case h: Human => h }),
-            ValueField("droid", _ => characters.collect { case d: Droid => d })
-          )
+        fieldMappings = List(
+          ValueField("hero", _ => characters),
+          ValueField("character", _ => characters),
+          ValueField("characters", _ => characters),
+          ValueField("human", _ => characters.collect { case h: Human => h }),
+          ValueField("droid", _ => characters.collect { case d: Droid => d })
+        )
       ),
       ValueObjectMapping[Character](
         tpe = CharacterType,
-        fieldMappings =
-          List(
-            ValueField("id", _.id),
-            ValueField("taggedId1", c => s"character-${c.id}"),
-            ValueField("name", _.name),
-            ValueField("appearsIn", _.appearsIn),
-            ValueField("numberOfFriends", _ => 0),
-            ValueField("friends", resolveFriends _)
-          )
+        fieldMappings = List(
+          ValueField("id", _.id),
+          ValueField("taggedId1", c => s"character-${c.id}"),
+          ValueField("name", _.name),
+          ValueField("appearsIn", _.appearsIn),
+          ValueField("numberOfFriends", _ => 0),
+          ValueField("friends", resolveFriends _)
+        )
       ),
       ValueObjectMapping[Human](
         tpe = HumanType,
-        fieldMappings =
-          List(
-            ValueField("taggedId1", h => s"human-${h.id}"),
-            ValueField("taggedId2", h => s"human2-${h.id}"),
-            ValueField("homePlanet", _.homePlanet)
-          )
+        fieldMappings = List(
+          ValueField("taggedId1", h => s"human-${h.id}"),
+          ValueField("taggedId2", h => s"human2-${h.id}"),
+          ValueField("homePlanet", _.homePlanet)
+        )
       ),
       ValueObjectMapping[Droid](
         tpe = DroidType,
-        fieldMappings =
-          List(
-            ValueField("taggedId2", h => s"droid2-${h.id}"),
-            ValueField("primaryFunction", _.primaryFunction)
-          )
+        fieldMappings = List(
+          ValueField("taggedId2", h => s"droid2-${h.id}"),
+          ValueField("primaryFunction", _.primaryFunction)
+        )
       ),
       LeafMapping[Episode.Value](EpisodeType)
     )
@@ -228,10 +224,14 @@ object StarWarsMapping extends ValueMapping[IO] {
   override val selectElaborator = SelectElaborator {
     case (QueryType, "hero", List(Binding("episode", EnumValue(e)))) =>
       val episode = Episode.values.find(_.toString == e).get
-      Elab.transformChild(child => Unique(Filter(Eql(CharacterType / "id", Const(hero(episode).id)), child)))
+      Elab.transformChild(child =>
+        Unique(Filter(Eql(CharacterType / "id", Const(hero(episode).id)), child)))
     case (QueryType, "character" | "human" | "droid", List(Binding("id", IDValue(id)))) =>
       Elab.transformChild(child => Unique(Filter(Eql(CharacterType / "id", Const(id)), child)))
-    case (QueryType, "characters", List(Binding("offset", IntValue(offset)), Binding("limit", IntValue(limit)))) =>
+    case (
+          QueryType,
+          "characters",
+          List(Binding("offset", IntValue(offset)), Binding("limit", IntValue(limit)))) =>
       Elab.transformChild(child => Limit(limit, Offset(offset, child)))
     case (CharacterType | HumanType | DroidType, "numberOfFriends", _) =>
       Elab.transformChild(_ => Count(Select("friends")))

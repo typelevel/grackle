@@ -17,13 +17,11 @@ package grackle.sql.test
 
 import cats.implicits._
 
-import grackle._
-import syntax._
-
-import Query._
-import Predicate._
-import Value._
-import QueryCompiler._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
+import grackle.syntax._
 
 trait SqlJsonbMapping[F[_]] extends SqlTestMapping[F] {
 
@@ -80,21 +78,19 @@ trait SqlJsonbMapping[F[_]] extends SqlTestMapping[F] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            SqlObject("record"),
-            SqlObject("records")
-          )
+        fieldMappings = List(
+          SqlObject("record"),
+          SqlObject("records")
+        )
       ),
       ObjectMapping(
         tpe = RowType,
-        fieldMappings =
-          List(
-            SqlField("id", records.id, key = true),
-            SqlJson("record", records.record),
-            SqlJson("nonNullRecord", records.record)
-          )
-      ),
+        fieldMappings = List(
+          SqlField("id", records.id, key = true),
+          SqlJson("record", records.record),
+          SqlJson("nonNullRecord", records.record)
+        )
+      )
     )
 
   override val selectElaborator = SelectElaborator {

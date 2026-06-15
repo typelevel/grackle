@@ -13,17 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle
-package generic
+package grackle.generic
 
 import cats.effect.IO
 import cats.implicits._
 import io.circe.literal._
 import munit.CatsEffectSuite
 
+import grackle._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
 import grackle.syntax._
-import Query._, Predicate._, Value._
-import QueryCompiler._
 
 object MutualRecursionData {
   import MutualRecursionMapping._
@@ -39,7 +41,9 @@ object MutualRecursionData {
       p.productions match {
         case None => None.success
         case Some(ids) =>
-          ids.traverse(id => productions.find(_.id == id).toResultOrError(s"Bad id '$id'")).map(_.some)
+          ids
+            .traverse(id => productions.find(_.id == id).toResultOrError(s"Bad id '$id'"))
+            .map(_.some)
       }
   }
 
@@ -86,11 +90,10 @@ object MutualRecursionMapping extends GenericMapping[IO] {
     List(
       ObjectMapping(
         tpe = QueryType,
-        fieldMappings =
-          List(
-            GenericField("programmeById", programmes),
-            GenericField("productionById", productions)
-          )
+        fieldMappings = List(
+          GenericField("programmeById", programmes),
+          GenericField("productionById", productions)
+        )
       )
     )
 
