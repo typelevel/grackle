@@ -19,6 +19,7 @@ import grackle._
 import grackle.Query._
 import grackle.QueryCompiler._
 
+// #preserve_args
 object PreserveArgsElaborator extends SelectElaborator {
   case class Preserved(args: List[Binding], directives: List[Directive])
 
@@ -61,3 +62,4 @@ object PreserveArgsElaborator extends SelectElaborator {
       directives: List[Directive]): Elab[Unit] =
     Elab.env("preserved", Preserved(args, directives))
 }
+// #preserve_args

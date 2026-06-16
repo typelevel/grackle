@@ -405,6 +405,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
     } yield res
   }
 
+  // #run_value
   /**
    * Interpret `query` against `cursor` with expected type `tpe`.
    *
@@ -498,6 +499,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
       }
     }
   }
+  // #run_value
 }
 
 object QueryInterpreter {
@@ -711,6 +713,7 @@ object QueryInterpreter {
           .map(_.map(_.head)) // result is 1:1 with the argument, so head is safe
     }
 
+  // #complete_all
   /**
    * Complete a collection of possibly deferred results.
    *
@@ -812,4 +815,5 @@ object QueryInterpreter {
       pjs.map(pj => scatterResults(pj, subst))
     }).value
   }
+  // #complete_all
 }

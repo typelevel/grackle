@@ -23,6 +23,7 @@ import grackle.Query._
 import grackle.syntax._
 
 final class SkipIncludeSuite extends CatsEffectSuite {
+  // #skip_include
   test("skip/include field") {
     val query = """
       query ($yup: Boolean, $nope: Boolean) {
@@ -59,6 +60,7 @@ final class SkipIncludeSuite extends CatsEffectSuite {
 
     assertEquals(compiled.map(_.query), Result.Success(expected))
   }
+  // #skip_include
 
   test("skip/include fragment spread") {
     val query = """

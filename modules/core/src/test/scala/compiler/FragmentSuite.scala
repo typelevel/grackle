@@ -331,6 +331,7 @@ final class FragmentSuite extends CatsEffectSuite {
   }
 
   test("typed fragment query") {
+    // #fragment_typed
     val query = """
       query FragmentTyping {
         profiles {
@@ -364,6 +365,7 @@ final class FragmentSuite extends CatsEffectSuite {
             Narrow(Page, Select("title"))
           ))
       )
+    // #fragment_typed
 
     val expectedResult = json"""
       {

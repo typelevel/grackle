@@ -111,6 +111,7 @@ class CurrencyMapping[F[_]: Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[F
       )
     )
 
+  // #composed_combine
   override def combineAndRun(queries: List[(Query, Cursor)]): F[Result[List[ProtoJson]]] = {
     import SimpleCurrencyQuery.unpackResults
 
@@ -200,6 +201,7 @@ class CurrencyMapping[F[_]: Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[F
         case _ => Nil
       }
   }
+  // #composed_combine
 }
 
 object CurrencyMapping {
@@ -219,6 +221,7 @@ object CurrencyMapping {
 
 /* Composition */
 
+// #composed_sql
 class SqlComposedMapping[F[_]: Sync](world: Mapping[F], currency: Mapping[F])
     extends ComposedMapping[F] {
   val schema =
@@ -297,3 +300,4 @@ class SqlComposedMapping[F[_]: Sync](world: Mapping[F], currency: Mapping[F])
       Elab.transformChild(child => Filter(Like(CityType / "name", namePattern, true), child))
   }
 }
+// #composed_sql

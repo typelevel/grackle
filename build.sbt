@@ -421,6 +421,7 @@ lazy val profile = project
 
 lazy val docs = project
   .in(file("modules/docs"))
+  .dependsOn(core.jvm, circe.jvm, generic.jvm)
   .enablePlugins(TypelevelSitePlugin, AutomateHeaderPlugin)
   .settings(commonSettings)
   .settings(

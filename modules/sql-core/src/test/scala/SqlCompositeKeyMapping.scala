@@ -19,6 +19,7 @@ import grackle.syntax._
 
 trait SqlCompositeKeyMapping[F[_]] extends SqlTestMapping[F] {
 
+  // #composite_key
   object compositeKeyParent extends TableDef("composite_key_parent") {
     val key1 = col("key_1", int4)
     val key2 = col("key_2", varchar)
@@ -81,4 +82,5 @@ trait SqlCompositeKeyMapping[F[_]] extends SqlTestMapping[F] {
         )
       )
     )
+  // #composite_key
 }

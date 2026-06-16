@@ -105,6 +105,7 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
   val EpisodeType = schema.ref("Episode")
   val SynopsesType = schema.ref("Synopses")
 
+  // #interfaces
   val typeMappings =
     List(
       ObjectMapping(
@@ -186,7 +187,9 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
       ),
       LeafMapping[EntityType](EntityTypeType)
     )
+  // #interfaces
 
+  // #discriminator
   lazy val entityTypeDiscriminator = new SqlDiscriminator {
     def discriminate(c: Cursor): Result[Type] = {
       for {
@@ -208,6 +211,7 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
       }
     }
   }
+  // #discriminator
 
   def mkSeriesImageUrl(c: Cursor): Result[Option[String]] =
     c.fieldAs[Option[String]]("hiddenImageUrl")

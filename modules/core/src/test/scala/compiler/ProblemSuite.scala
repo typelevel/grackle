@@ -70,6 +70,7 @@ final class ProblemSuite extends CatsEffectSuite {
     )
   }
 
+  // #problem_encoding
   test("encoding (no locations)") {
     assertEquals(
       Problem("foo", Nil, List("bar", "baz")).asJson,
@@ -102,6 +103,7 @@ final class ProblemSuite extends CatsEffectSuite {
       "foo (at bar/baz: 1..2, 5..6)"
     )
   }
+  // #problem_encoding
 
   test("toString (no path)") {
     assertEquals(

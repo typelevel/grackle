@@ -25,6 +25,7 @@ import grackle.QueryCompiler._
 import grackle.Value._
 import grackle.syntax._
 
+// #env_mapping
 object EnvironmentMapping extends ValueMapping[IO] {
   val schema =
     schema"""
@@ -97,6 +98,7 @@ object EnvironmentMapping extends ValueMapping[IO] {
       Elab.env("x" -> x, "y" -> y)
   }
 }
+// #env_mapping
 
 final class EnvironmentSuite extends CatsEffectSuite {
   test("field computed from arguments (1)") {

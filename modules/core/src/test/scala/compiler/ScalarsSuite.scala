@@ -181,6 +181,7 @@ object MovieData {
 object MovieMapping extends ValueMapping[IO] {
   import MovieData._
 
+  // #scalars_schema
   val schema =
     schema"""
       type Query {
@@ -211,6 +212,7 @@ object MovieMapping extends ValueMapping[IO] {
         duration: Interval!
       }
     """
+  // #scalars_schema
 
   val QueryType = schema.ref("Query")
   val MovieType = schema.ref("Movie")
@@ -246,14 +248,17 @@ object MovieMapping extends ValueMapping[IO] {
           ValueField("duration", _.duration)
         )
       ),
+      // #scalars_leafmappings
       LeafMapping[UUID](UUIDType),
       LeafMapping[Genre](GenreType),
       LeafMapping[LocalDate](DateType),
       LeafMapping[LocalTime](TimeType),
       LeafMapping[ZonedDateTime](DateTimeType),
       LeafMapping[Duration](IntervalType)
+      // #scalars_leafmappings
     )
 
+  // #scalars_values
   object UUIDValue {
     def unapply(s: StringValue): Option[UUID] =
       Try(UUID.fromString(s.value)).toOption
@@ -283,6 +288,7 @@ object MovieMapping extends ValueMapping[IO] {
     def unapply(s: StringValue): Option[Duration] =
       Try(Duration.parse(s.value)).toOption
   }
+  // #scalars_values
 
   override val selectElaborator = SelectElaborator {
     case (QueryType, "movieById", List(Binding("id", UUIDValue(id)))) =>

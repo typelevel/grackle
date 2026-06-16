@@ -27,6 +27,7 @@ import grackle.syntax._
 
 /* Currency component */
 
+// #composed_currency
 object CurrencyData {
   case class Currency(
       code: String,
@@ -79,9 +80,11 @@ object CurrencyMapping extends ValueMapping[IO] {
         Unique(Filter(Eql(CurrencyType / "code", Const(code)), child)))
   }
 }
+// #composed_currency
 
 /* Country component */
 
+// #composed_country
 object CountryData {
   case class Country(
       code: String,
@@ -138,9 +141,11 @@ object CountryMapping extends ValueMapping[IO] {
         Unique(Filter(Eql(CurrencyMapping.CurrencyType / "code", Const(code)), child)))
   }
 }
+// #composed_country
 
 /* Composition */
 
+// #composed_mapping
 object ComposedMapping extends ComposedMapping[IO] {
   val schema =
     schema"""
@@ -202,3 +207,4 @@ object ComposedMapping extends ComposedMapping[IO] {
     }
 
 }
+// #composed_mapping

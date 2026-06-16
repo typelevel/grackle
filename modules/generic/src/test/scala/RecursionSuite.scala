@@ -27,6 +27,7 @@ import grackle.QueryCompiler._
 import grackle.Value._
 import grackle.syntax._
 
+// #recursion_data
 object MutualRecursionData {
   import MutualRecursionMapping._
   import semiauto._
@@ -62,7 +63,9 @@ object MutualRecursionData {
   val programmes = List(Programme("prog1", Some(List("prod1"))))
   val productions = List(Production("prod1", "prog1"))
 }
+// #recursion_data
 
+// #recursion_mapping
 object MutualRecursionMapping extends GenericMapping[IO] {
   import MutualRecursionData._
 
@@ -102,6 +105,7 @@ object MutualRecursionMapping extends GenericMapping[IO] {
       Elab.transformChild(child => Unique(Filter(Eql(ProgrammeType / "id", Const(id)), child)))
   }
 }
+// #recursion_mapping
 
 final class RecursionSuite extends CatsEffectSuite {
   test("simple query") {

@@ -23,6 +23,7 @@ import munit.CatsEffectSuite
 import grackle.circe.CirceMapping
 import grackle.syntax._
 
+// #circe_priority
 object CircePriorityMapping extends CirceMapping[IO] {
 
   val schema = schema"""
@@ -63,6 +64,7 @@ object CircePriorityMapping extends CirceMapping[IO] {
     )
 
 }
+// #circe_priority
 
 final class CircePrioritySuite extends CatsEffectSuite {
 

@@ -38,6 +38,7 @@ trait SqlEmbeddingMapping[F[_]] extends SqlTestMapping[F] {
     val synopsisLong = col("synopsis_long", nullable(text))
   }
 
+  // #embedding
   val schema =
     schema"""
       type Query {
@@ -134,4 +135,5 @@ trait SqlEmbeddingMapping[F[_]] extends SqlTestMapping[F] {
         )
       )
     )
+  // #embedding
 }

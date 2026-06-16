@@ -105,6 +105,7 @@ trait SqlJsonbSuite extends CatsEffectSuite {
     assertWeaklyEqualIO(res, expected)
   }
 
+  // #jsonb_query
   test("objects") {
     val query = """
       query {
@@ -138,6 +139,7 @@ trait SqlJsonbSuite extends CatsEffectSuite {
 
     assertWeaklyEqualIO(res, expected)
   }
+  // #jsonb_query
 
   test("arrays") {
     val query = """

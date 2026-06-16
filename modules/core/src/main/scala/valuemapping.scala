@@ -137,6 +137,7 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
       case _ => super.unpackPrefixedMapping(prefix, om)
     }
 
+  // #value_cursor
   case class ValueCursor(
       context: Context,
       focus: Any,
@@ -214,4 +215,5 @@ trait ValueMappingLike[F[_]] extends Mapping[F] {
     def field(fieldName: String, resultName: Option[String]): Result[Cursor] =
       mkCursorForField(this, fieldName, resultName)
   }
+  // #value_cursor
 }

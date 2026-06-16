@@ -73,8 +73,8 @@ as a valid GraphQL schema at compile time.
 ## Database mapping
 
 The API is backed by mapping to database tables. Grackle contains ready to use integration with
-[doobie](https://tpolecat.github.io/doobie/) for accessing SQL database via JDBC and with
-[Skunk](https://tpolecat.github.io/skunk/) for accessing PostgreSQL via its native API. In this example we will use
+[doobie](https://typelevel.org/doobie/) for accessing SQL database via JDBC and with
+[Skunk](https://typelevel.org/skunk/) for accessing PostgreSQL via its native API. In this example we will use
 doobie.
 
 Let's start with defining what tables and columns are available in the database model,
@@ -127,3 +127,16 @@ println(grackle.docs.Output.snip("demo/src/main/scala/demo/Main.scala", "#main")
 ```scala mdoc:passthrough
 println(grackle.docs.Output.snip("demo/src/main/scala/demo/DemoServer.scala", "#server"))
 ```
+
+## Where to next
+
+You now have a GraphQL API served from PostgreSQL. The next tutorial adds write paths and live
+updates: [Mutations & subscriptions](mutations-subscriptions.md).
+
+To go deeper on the SQL machinery this tutorial relies on:
+
+- [Choose and configure a SQL backend](../how-to/sql-backends.md) — pick between Doobie and Skunk and wire up a transactor or session pool.
+- [SqlMapping reference](../reference/sql-mapping.md) — the full set of `SqlObject`, column and `Join` mapping constructors.
+- [Filter, sort and page a field](../how-to/filtering-ordering-paging.md) — add arguments that turn into SQL `WHERE`/`ORDER BY`/`LIMIT`/`OFFSET`.
+- [Serve interfaces and unions](../how-to/interfaces-unions.md) — map polymorphic types across tables.
+- [Filtering and paging nodes](../reference/filtering-paging-nodes.md) and [Predicates](../reference/predicates.md) — the query-algebra nodes that drive SQL predicates and paging.

@@ -25,6 +25,7 @@ import org.tpolecat.typename.TypeName
 import grackle.sql.SqlMappingLike
 
 trait SqlTestMapping[F[_]] extends SqlMappingLike[F] { outer =>
+  // #sql_codecs
   type TestCodec[T] <: Codec
 
   def bool: TestCodec[Boolean]
@@ -55,4 +56,5 @@ trait SqlTestMapping[F[_]] extends SqlMappingLike[F] { outer =>
       typeName: TypeName[T],
       pos: SourcePos): ColumnRef =
     ColumnRef(tableName.name, colName, codec, typeName.value, pos)
+  // #sql_codecs
 }
