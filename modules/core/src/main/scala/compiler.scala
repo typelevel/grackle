@@ -56,7 +56,7 @@ object QueryParser {
     new Impl(parser)
 
   private final class Impl(parser: GraphQLParser) extends QueryParser {
-    import Ast.{Directive => _, Type => _, Value => _, _}
+    import Ast.{Directive => _, Value => _, _}
     import OperationDefinition._
     import Selection._
 
