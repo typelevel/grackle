@@ -16,9 +16,9 @@
 package grackle.doobie.oracle.test
 
 import cats.effect.{IO, Resource}
-import doobie.{Meta, Transactor}
-import doobie.implicits._
 import munit.catseffect.IOFixture
+import org.typelevel.doobie.{Meta, Transactor}
+import org.typelevel.doobie.implicits._
 
 import grackle.Mapping
 import grackle.doobie.DoobieMonitor
@@ -30,7 +30,7 @@ final class ArrayJoinSuite extends DoobieOracleDatabaseSuite with SqlArrayJoinSu
 }
 
 final class CoalesceSuite extends DoobieOracleDatabaseSuite with SqlCoalesceSuite {
-  type Fragment = doobie.Fragment
+  type Fragment = org.typelevel.doobie.Fragment
   def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO, Fragment])] =
     DoobieMonitor
       .statsMonitor[IO]
@@ -240,7 +240,7 @@ final class WorldSuite extends DoobieOracleDatabaseSuite with SqlWorldSuite {
 }
 
 final class WorldCompilerSuite extends DoobieOracleDatabaseSuite with SqlWorldCompilerSuite {
-  type Fragment = doobie.Fragment
+  type Fragment = org.typelevel.doobie.Fragment
 
   def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO, Fragment])] =
     DoobieMonitor

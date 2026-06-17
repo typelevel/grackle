@@ -16,7 +16,7 @@
 package demo.world
 
 import cats.effect.{Async, Resource, Sync}
-import doobie.{Meta, Transactor}
+import org.typelevel.doobie.{Meta, Transactor}
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 

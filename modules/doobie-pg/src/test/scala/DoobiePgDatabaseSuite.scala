@@ -19,11 +19,11 @@ import java.time.{LocalDate, LocalTime, OffsetDateTime}
 import java.util.UUID
 
 import cats.effect.{IO, Resource, Sync}
-import doobie.{Get, Meta, Put, Transactor}
-import doobie.postgres.circe.jsonb.implicits._
-import doobie.postgres.implicits._
 import io.circe.Json
 import munit.catseffect.IOFixture
+import org.typelevel.doobie.{Get, Meta, Put, Transactor}
+import org.typelevel.doobie.postgres.circe.jsonb.implicits._
+import org.typelevel.doobie.postgres.implicits._
 
 import grackle.doobie.DoobieMonitor
 import grackle.doobie.postgres.DoobiePgMapping

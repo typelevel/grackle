@@ -17,7 +17,7 @@ package grackle.doobie.oracle
 
 import cats.effect.Sync
 import cats.syntax.all._
-import doobie.Transactor
+import org.typelevel.doobie.Transactor
 
 import grackle.Mapping
 import grackle.Query.OrderSelection

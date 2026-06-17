@@ -17,12 +17,12 @@ package grackle.doobie
 
 import cats.Reducible
 import cats.effect.Sync
-import doobie.{Fragment => DoobieFragment, Meta, Put, Read, Transactor}
-import doobie.enumerated.JdbcType._
-import doobie.implicits._
-import doobie.util.fragments
 import org.tpolecat.sourcepos.SourcePos
 import org.tpolecat.typename.TypeName
+import org.typelevel.doobie.{Fragment => DoobieFragment, Meta, Put, Read, Transactor}
+import org.typelevel.doobie.enumerated.JdbcType._
+import org.typelevel.doobie.implicits._
+import org.typelevel.doobie.util.fragments
 
 import grackle.Mapping
 import grackle.sql._

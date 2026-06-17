@@ -19,8 +19,8 @@ import scala.concurrent.duration._
 
 import cats.effect.{ExitCode, IO, IOApp, Sync}
 import cats.implicits._
-import doobie.util.meta.Meta
-import doobie.util.transactor.Transactor
+import org.typelevel.doobie.util.meta.Meta
+import org.typelevel.doobie.util.transactor.Transactor
 
 import grackle._
 import grackle.Predicate._

@@ -23,13 +23,13 @@ import scala.util.Try
 
 import cats.effect.{IO, Resource, Sync}
 import cats.syntax.all._
-import doobie.{Meta, Transactor}
-import doobie.enumerated.JdbcType
-import doobie.util.meta.MetaConstructors.Basic
 import io.circe.{Decoder => CDecoder, Encoder => CEncoder, Json}
 import io.circe.parser.parse
 import io.circe.syntax._
 import munit.catseffect._
+import org.typelevel.doobie.{Meta, Transactor}
+import org.typelevel.doobie.enumerated.JdbcType
+import org.typelevel.doobie.util.meta.MetaConstructors.Basic
 
 import grackle.doobie.DoobieMonitor
 import grackle.doobie.mssql.DoobieMSSqlMapping
