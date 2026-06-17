@@ -20,7 +20,7 @@ import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
 
 import cats.effect.{Async, Resource}
-import doobie.hikari.HikariTransactor
+import org.typelevel.doobie.hikari.HikariTransactor
 
 object WorldData {
   def mkTransactor[F[_]: Async](

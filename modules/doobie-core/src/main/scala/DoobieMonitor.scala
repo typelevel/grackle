@@ -18,7 +18,7 @@ package grackle.doobie
 import cats.Applicative
 import cats.effect.{Ref, Sync}
 import cats.implicits._
-import doobie.Fragment
+import org.typelevel.doobie.Fragment
 import org.typelevel.log4cats.Logger
 
 import grackle.{Query, Result}

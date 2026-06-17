@@ -16,7 +16,7 @@
 package grackle.doobie.postgres
 
 import cats.effect.Sync
-import doobie.Transactor
+import org.typelevel.doobie.Transactor
 
 import grackle.Mapping
 import grackle.doobie._

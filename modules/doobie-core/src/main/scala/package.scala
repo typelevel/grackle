@@ -15,7 +15,7 @@
 
 package grackle
 
-import _root_.doobie.Fragment
+import org.typelevel.doobie.Fragment
 
 import grackle.sql.SqlMonitor
 

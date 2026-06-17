@@ -17,9 +17,9 @@ package grackle.doobie.test
 
 import java.time.Duration
 
-import doobie.Meta
 import io.circe.{Decoder => CDecoder, Encoder => CEncoder}
 import munit.CatsEffectSuite
+import org.typelevel.doobie.Meta
 
 import grackle.doobie.DoobieMappingLike
 import grackle.sql.test._

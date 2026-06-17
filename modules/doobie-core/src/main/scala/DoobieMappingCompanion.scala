@@ -16,7 +16,7 @@
 package grackle.doobie
 
 import cats.effect.Sync
-import doobie.util.transactor.Transactor
+import org.typelevel.doobie.util.transactor.Transactor
 import org.typelevel.log4cats.Logger
 
 import grackle.Mapping
