@@ -424,7 +424,7 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
           else
             values.next() match {
               case VariableRef(nme) =>
-                loop(values, Set(nme))
+                loop(values, vars + nme)
               case ObjectValue(fields) =>
                 loop(fields.iterator.map(_._2) ++ values, vars)
               case ListValue(elems) =>
