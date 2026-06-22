@@ -587,6 +587,29 @@ final class VariablesSuite extends CatsEffectSuite {
     assertEquals(compiled, Result.success(expected))
   }
 
+  test("multiple variables used in one input object are all detected as used") {
+    val query = """
+      query doSearch($name: String, $age: Int, $id: ID) {
+        search(pattern: { name: $name, age: $age, id: $id }) {
+          name
+          id
+        }
+      }
+    """
+
+    val variables = json"""
+      {
+        "name": "Foo",
+        "age": 23,
+        "id": "123"
+      }
+    """
+
+    val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
+
+    assertEquals(compiled.toProblems.toList, List.empty[Problem])
+  }
+
   test("oneOf variables") {
     val query = """
       query oneOfTest($input: OneOfInObj!) {
