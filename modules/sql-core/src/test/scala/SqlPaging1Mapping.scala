@@ -127,6 +127,7 @@ trait SqlPaging1Mapping[F[_]] extends SqlTestMapping[F] {
   def genValue(key: String)(c: Cursor): Result[Int] =
     c.env[Int](key).toResultOrError(s"Missing key '$key'")
 
+  // #paging1
   abstract class PagingConfig(key: String, countAttr: String, orderTerm: Term[String]) {
     def setup(offset: Int, limit: Int): Elab[Unit] =
       Elab.env(key -> new PagingInfo(offset, limit))
@@ -184,4 +185,5 @@ trait SqlPaging1Mapping[F[_]] extends SqlTestMapping[F] {
     case (PagedCityType, "total", Nil) =>
       CityPaging.elabTotal
   }
+  // #paging1
 }

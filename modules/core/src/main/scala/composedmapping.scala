@@ -20,6 +20,7 @@ import cats.MonadThrow
 import grackle.Cursor.AbstractCursor
 import grackle.syntax._
 
+// #composed_base
 abstract class ComposedMapping[F[_]](implicit val M: MonadThrow[F]) extends Mapping[F] {
   override def mkCursorForMappedField(
       parent: Cursor,
@@ -37,3 +38,4 @@ abstract class ComposedMapping[F[_]](implicit val M: MonadThrow[F]) extends Mapp
       mkCursorForField(this, fieldName, resultName)
   }
 }
+// #composed_base

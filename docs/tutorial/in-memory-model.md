@@ -58,9 +58,9 @@ Click the play button in the centre and you should see the following response on
 
 The Star Wars API is described by a GraphQL schema,
 
-```yaml
+```graphql
 type Query {
-  hero(episode: Episode!): Character
+  hero(episode: Episode!): Character!
   character(id: ID!): Character
   human(id: ID!): Human
   droid(id: ID!): Droid
@@ -73,26 +73,26 @@ enum Episode {
 }
 
 interface Character {
-  id: ID!
-  name: String!
-  friends: [Character]
-  appearsIn: [Episode]!
-}
-
-type Droid implements Character {
-  id: ID!
-  name: String!
-  friends: [Character]
-  appearsIn: [Episode]!
-  primaryFunction: String
+  id: String!
+  name: String
+  friends: [Character!]
+  appearsIn: [Episode!]
 }
 
 type Human implements Character {
-  id: ID!
-  name: String!
-  friends: [Character]
-  appearsIn: [Episode]!
+  id: String!
+  name: String
+  friends: [Character!]
+  appearsIn: [Episode!]
   homePlanet: String
+}
+
+type Droid implements Character {
+  id: String!
+  name: String
+  friends: [Character!]
+  appearsIn: [Episode!]
+  primaryFunction: String
 }
 ```
 
@@ -180,8 +180,12 @@ yields,
             {
               "name": "Luke Skywalker"
             },
-            ...
+            {
+              "name": "Leia Organa"
+            }
+          ]
         }
+      ]
     }
   }
 }
@@ -203,83 +207,19 @@ are then transformed in a variety of ways, resulting in a program which can be i
 produce the query result. The process of transforming these values is called _elaboration_, and each elaboration step
 simplifies or expands the term to bring it into a form which can be executed directly by the query interpreter.
 
-Grackle's query algebra consists of the following elements,
-
-```scala
-case class UntypedSelect(
-  name: String, alias: Option[String],
-  args: List[Binding], directives: List[Directive],
-  child: Query
-)
-case class Select(name: String, alias: Option[String], child: Query)
-case class Group(queries: List[Query])
-case class Unique(child: Query)
-case class Filter(pred: Predicate, child: Query)
-case class Introspect(schema: Schema, child: Query)
-case class Environment(env: Env, child: Query)
-case class Narrow(subtpe: TypeRef, child: Query)
-case class Limit(num: Int, child: Query)
-case class Offset(num: Int, child: Query)
-case class OrderBy(selections: OrderSelections, child: Query)
-case class Count(child: Query)
-case class TransformCursor(f: Cursor => Result[Cursor], child: Query)
-case class Component[F[_]](mapping: Mapping[F], ...)
-case class Effect[F[_]](handler: EffectHandler[F], child: Query)
-case object Empty
-```
-
-A simple query like this,
-
-```yaml
-query {
-  character(id: 1000) {
-    name
-  }
-}
-```
-
-is first translated into a term in the query algebra of the form,
-
-```scala
-UntypedSelect("character", None, List(IntBinding("id", 1000)), Nil,
-  UntypedSelect("name", None, Nil, Nil, Empty)
-)
-```
-
-This first step is performed without reference to a GraphQL schema, hence the `id` argument is initially inferred to
-be of GraphQL type `Int` rather than the type `ID` which the schema expects.
-
-Following this initial translation the Star Wars example has a single elaboration step whose role is to translate the
-selection into something executable. Elaboration uses the GraphQL schema and so is able to translate an input value
-parsed as an `Int` into a GraphQL `ID`. The semantics associated with this (i.e. what an `id` is and how it relates to
-the model) is specific to this model, so we have to provide that semantic via some model-specific code,
+For the Star Wars example a single elaboration step is all we need: it rewrites the `character(id: …)` selector
+(whose meaning is specific to this model) into a `Filter`/`Unique` pair the interpreter can run directly against the
+data. The `Filter` refines the root list to the elements whose `id` matches, and `Unique` then picks out the single
+result. That model-specific semantics is supplied by the `selectElaborator`,
 
 ```scala mdoc:passthrough
 println(grackle.docs.Output.snip("demo/src/main/scala/demo/starwars/StarWarsMapping.scala", "#elaborator"))
 ```
 
-Extracting out the case for the `character` selector,
-
-```scala
-case (QueryType, "character", List(Binding("id", IDValue(id)))) =>
-  Elab.transformChild { child =>
-    Unique(Filter(Eql(CharacterType / "id", Const(id)), child))
-  }
-```
-
-the previous term is transformed as follows,
-
-```scala
-Select("character", None,
-  Unique(Eql(CharacterType / "id"), Const("1000")), Select("name", None, Empty))
-)
-```
-
-Here the original `UntypedSelect` terms have been converted to typed `Select` terms with the argument to the
-`character` selector translated into a predicate which refines the root data of the model to the single element which
-satisfies it via `Unique`. The remainder of the query (`Select("name", None, Nil)`) is then within the scope of that
-constraint. We have eliminated something with model-specific semantics (`character(id: 1000)`) in favour of something
-universal which can be interpreted directly against the model.
+You don't need to know the full query algebra to follow this tutorial. If you want the details of how a query string
+becomes an executable term — the `UntypedSelect` to `Select` transformation, and the complete set of algebra nodes —
+see [The compiler and elaboration](../concepts/compiler-elaboration.md) and the
+[Query algebra reference](../reference/query-algebra.md).
 
 ## The query interpreter and cursor
 
@@ -301,6 +241,11 @@ println(grackle.docs.Output.snip("demo/src/main/scala/demo/starwars/StarWarsMapp
 The first argument of the `GenericField` constructor corresponds to the top-level selection of the query (see the
 schema above) and the second argument is the initial model value for which a `Cursor` will be derived.  When the query
 is executed, navigation will start with that `Cursor` and the corresponding GraphQL type.
+
+> **How this uses generic derivation.** The `Cursor`s for the Star Wars model aren't hand-written: a `GenericMapping`
+> derives them automatically from your case classes and sealed traits, so the plain Scala ADT above is enough to serve
+> the schema. For how this derivation works — `deriveObjectCursorBuilder`, `GenericField`, resolving id references to
+> nested objects, and custom scalars — see [Serve Scala ADTs with generic derivation](../how-to/generic-derivation.md).
 
 ## The service
 
@@ -348,3 +293,23 @@ object Main extends IOApp {
 ```scala mdoc:passthrough
 println(grackle.docs.Output.snip("demo/src/main/scala/demo/DemoServer.scala", "#server"))
 ```
+
+## Next steps
+
+You now have an end-to-end in-memory GraphQL service. The next tutorial in this series swaps the in-memory model for a
+real database:
+
+- Next in this series: [DB-backed model](db-backed-model.md) — serve the same kind of API from PostgreSQL.
+- Then: [Mutations & subscriptions](mutations-subscriptions.md) — add write operations and streaming updates.
+
+## See also
+
+To go deeper on the concepts and APIs this tutorial used:
+
+- [The compiler and elaboration](../concepts/compiler-elaboration.md) — how a query string becomes an executable term.
+- [Mappings and cursors](../concepts/mappings-cursors.md) — how a `Mapping` ties the schema to your data and how
+  `Cursor`s navigate it.
+- [How the query interpreter works](../concepts/query-interpreter.md) — how the interpreter turns a `Query` and a
+  `Cursor` into the JSON response.
+- [Query algebra reference](../reference/query-algebra.md) — the full set of `Query` algebra nodes.
+- [Serve Scala ADTs with generic derivation](../how-to/generic-derivation.md) — the generic backend used here in depth.

@@ -24,6 +24,7 @@ import grackle._
 import grackle.circe.CirceMapping
 import grackle.syntax._
 
+// #circe_effects
 class TestCirceEffectMapping[F[_]: Sync](ref: SignallingRef[F, Int]) extends CirceMapping[F] {
   val schema =
     schema"""
@@ -111,3 +112,4 @@ class TestCirceEffectMapping[F[_]: Sync](ref: SignallingRef[F, Int]) extends Cir
     )
   )
 }
+// #circe_effects

@@ -151,6 +151,7 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
   val LanguageType = schema.ref("Language")
   val CurrencyType = schema.ref("Currency")
 
+  // #effect_typemappings
   val typeMappings =
     List(
       ObjectMapping(
@@ -211,7 +212,9 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
         )
       )
     )
+  // #effect_typemappings
 
+  // #currency_handler
   object CurrencyQueryHandler extends EffectHandler[F] {
     def runEffects(queries: List[(Query, Cursor)]): F[Result[List[Cursor]]] = {
       val countryCodes = queries.map(_._2.fieldAs[String]("code2").toOption)
@@ -249,7 +252,9 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
       }).value.widen
     }
   }
+  // #currency_handler
 
+  // #country_handler
   object CountryQueryHandler extends EffectHandler[F] {
     val toCode = Map("BR" -> "BRA", "GB" -> "GBR", "NL" -> "NLD")
     def runEffects(queries: List[(Query, Cursor)]): F[Result[List[Cursor]]] = {
@@ -310,6 +315,7 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
       groupedResults.sequence.map(_.sequence.map(_.flatten.sortBy(_._2).map(_._1)))
     }
   }
+  // #country_handler
 
   override val selectElaborator = SelectElaborator {
     case (QueryType, "cities", List(Binding("namePattern", StringValue(namePattern)))) =>

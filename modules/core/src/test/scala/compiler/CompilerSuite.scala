@@ -33,6 +33,7 @@ final class CompilerSuite extends CatsEffectSuite {
   val queryParser = QueryParser(
     GraphQLParser(GraphQLParser.defaultConfig.copy(terseError = false)))
 
+  // #compile_simple
   test("simple query") {
     val query = """
       query {
@@ -54,6 +55,7 @@ final class CompilerSuite extends CatsEffectSuite {
     val res = queryParser.parseText(query).map(_._1)
     assertEquals(res, Result.Success(List(UntypedQuery(None, expected, Nil, Nil))))
   }
+  // #compile_simple
 
   test("simple mutation") {
     val query = """
@@ -271,6 +273,7 @@ final class CompilerSuite extends CatsEffectSuite {
       Result.Success(List(UntypedQuery(Some("IntrospectionQuery"), expected, Nil, Nil))))
   }
 
+  // #compile_elaborated
   test("simple selector elaborated query") {
     val query = """
       query {
@@ -303,6 +306,7 @@ final class CompilerSuite extends CatsEffectSuite {
 
     assertEquals(res.map(_.query), Result.Success(expected))
   }
+  // #compile_elaborated
 
   test("invalid: object subselection set empty") {
     val query = """
@@ -558,6 +562,7 @@ final class CompilerSuite extends CatsEffectSuite {
   }
 }
 
+// #atomic_elaborator
 object AtomicMapping extends TestMapping {
   val schema =
     schema"""
@@ -579,6 +584,7 @@ object AtomicMapping extends TestMapping {
       Elab.transformChild(child => Unique(Filter(Eql(CharacterType / "id", Const(id)), child)))
   }
 }
+// #atomic_elaborator
 trait DummyComponent extends TestMapping {
   val schema = schema"type Query { dummy: Int }"
 }

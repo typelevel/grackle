@@ -28,6 +28,7 @@ import grackle.syntax._
 
 trait SqlCursorJsonMapping[F[_]] extends SqlTestMapping[F] {
 
+  // #cursor_json
   object brands extends TableDef("brands") {
     val id = col("id", int4)
     val category = col("categories", int4)
@@ -103,4 +104,5 @@ trait SqlCursorJsonMapping[F[_]] extends SqlTestMapping[F] {
     case (QueryType, "brands", List(Binding("id", IntValue(id)))) =>
       Elab.transformChild(child => Unique(Filter(Eql(BrandType / "id", Const(id)), child)))
   }
+  // #cursor_json
 }

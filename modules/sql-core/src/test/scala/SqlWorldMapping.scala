@@ -115,6 +115,7 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
   val CityType = schema.ref("City")
   val LanguageType = schema.ref("Language")
 
+  // #world_typemappings
   val typeMappings =
     List(
       ObjectMapping(
@@ -177,6 +178,7 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
         )
       )
     )
+  // #world_typemappings
 
   object StringListValue {
     def unapply(value: Value): Option[List[String]] =
@@ -190,6 +192,7 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
       }
   }
 
+  // #world_elaborator
   override val selectElaborator = SelectElaborator {
     case (QueryType, "country", List(Binding("code", StringValue(code)))) =>
       Elab.transformChild(child =>
@@ -277,4 +280,5 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
     case (CountryType, "city", List(Binding("id", IntValue(id)))) =>
       Elab.transformChild(child => Unique(Filter(Eql(CityType / "id", Const(id)), child)))
   }
+  // #world_elaborator
 }

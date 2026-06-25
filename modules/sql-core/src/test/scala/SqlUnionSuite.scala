@@ -60,6 +60,7 @@ trait SqlUnionSuite extends CatsEffectSuite {
   }
 
   test("union query with introspection") {
+    // #union_query
     val query = """
       query {
         collection {
@@ -91,6 +92,7 @@ trait SqlUnionSuite extends CatsEffectSuite {
         }
       }
     """
+    // #union_query
 
     val res = mapping.compileAndRun(query)
 

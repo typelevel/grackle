@@ -21,6 +21,7 @@ import grackle.syntax._
 
 trait SqlUnionsMapping[F[_]] extends SqlTestMapping[F] {
 
+  // #unions
   object collections extends TableDef("collections") {
     val id = col("id", text)
     val itemType = col("item_type", text)
@@ -99,4 +100,5 @@ trait SqlUnionsMapping[F[_]] extends SqlTestMapping[F] {
       }
     }
   }
+  // #unions
 }

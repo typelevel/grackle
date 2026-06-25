@@ -233,6 +233,7 @@ object StarWarsMapping extends GenericMapping[IO] {
 }
 
 final class DerivationSuite extends CatsEffectSuite {
+  // #cursor_primitive
   test("primitive types have leaf cursor builders") {
     val i =
       for {
@@ -266,6 +267,7 @@ final class DerivationSuite extends CatsEffectSuite {
       } yield l
     assertEquals(f, Result.Success(Json.fromDouble(13.0).get))
   }
+  // #cursor_primitive
 
   test("types with a Circe Encoder instance have leaf cursor builders") {
     val z =
@@ -291,6 +293,7 @@ final class DerivationSuite extends CatsEffectSuite {
     assertEquals(e, Result.Success(Json.fromString("JEDI")))
   }
 
+  // #cursor_product
   test("product types have cursor builders") {
     val name =
       for {
@@ -301,7 +304,9 @@ final class DerivationSuite extends CatsEffectSuite {
       } yield l
     assertEquals(name, Result.Success(Json.fromString("Luke Skywalker")))
   }
+  // #cursor_product
 
+  // #cursor_list
   test("cursor builders can be resolved for nested types") {
     val appearsIn =
       for {
@@ -317,6 +322,7 @@ final class DerivationSuite extends CatsEffectSuite {
       Result.Success(
         List(Json.fromString("NEWHOPE"), Json.fromString("EMPIRE"), Json.fromString("JEDI"))))
   }
+  // #cursor_list
 
   test("default cursor builders can be customised by mapping fields") {
     val friends =
@@ -339,6 +345,7 @@ final class DerivationSuite extends CatsEffectSuite {
           Json.fromString("R2-D2"))))
   }
 
+  // #cursor_narrow
   test("sealed ADTs have narrowable cursor builders") {
     val homePlanets =
       for {
@@ -351,6 +358,7 @@ final class DerivationSuite extends CatsEffectSuite {
       } yield l
     assertEquals(homePlanets, Result.Success(Json.fromString("Tatooine")))
   }
+  // #cursor_narrow
 
   test("simple query") {
     val query = """

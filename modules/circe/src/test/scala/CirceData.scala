@@ -26,6 +26,7 @@ import grackle.QueryCompiler._
 import grackle.circe.CirceMapping
 import grackle.syntax._
 
+// #circe_mapping
 object TestCirceMapping extends CirceMapping[IO] {
   val schema =
     schema"""
@@ -127,3 +128,4 @@ object TestCirceMapping extends CirceMapping[IO] {
       Elab.transformChild(_ => Count(Select("children")))
   }
 }
+// #circe_mapping

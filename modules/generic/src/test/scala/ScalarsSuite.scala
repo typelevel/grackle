@@ -38,6 +38,7 @@ object MovieData {
   import MovieMapping._
   import semiauto._
 
+  // #generic_scalars
   sealed trait Genre extends Product with Serializable
   object Genre {
     case object Drama extends Genre
@@ -91,6 +92,7 @@ object MovieData {
     implicit val cursorBuilder: CursorBuilder[Movie] =
       deriveObjectCursorBuilder[Movie](MovieType)
   }
+  // #generic_scalars
 
   val movies =
     List(

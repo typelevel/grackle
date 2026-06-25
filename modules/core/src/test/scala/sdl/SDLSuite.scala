@@ -257,6 +257,7 @@ final class SDLSuite extends CatsEffectSuite {
     assertEquals(ser, schema.success)
   }
 
+  // #sdl_roundtrip
   test("deserialize schema (1)") {
     val schema =
       """|type Author {
@@ -281,6 +282,7 @@ final class SDLSuite extends CatsEffectSuite {
 
     assertEquals(ser, schema.success)
   }
+  // #sdl_roundtrip
 
   test("deserialize schema (2)") {
     val schema =

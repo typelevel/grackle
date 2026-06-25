@@ -17,7 +17,7 @@ backing data, and cursors into that data. It supports in-memory, DB-backed, and 
 Grackle is structured as a compiler/interpreter. Queries are type-checked against a GraphQL schema and compiled into
 an internal query algebra. The query algebra may be further compiled in a backend-specific way to materialize data. In
 particular it can be compiled to efficient SQL and in that regard currently supports Postgres via
-[Doobie](https://tpolecat.github.io/doobie/) or [Skunk](https://typelevel.org/skunk/) and Oracle and SQL Server via
+[Doobie](https://typelevel.org/doobie/) or [Skunk](https://typelevel.org/skunk/) and Oracle and SQL Server via
 Doobie.
 
 Grackle is an [Apache 2.0 licensed](https://www.apache.org/licenses/LICENSE-2.0) Typelevel project and is available
@@ -29,9 +29,29 @@ and [imbus AG](https://www.imbus.de/) over the last five years.
 
 ## Getting Started
 
-- See the [tutorial](https://typelevel.org/grackle) and accompanying [demo](https://github.com/typelevel/grackle/tree/main/demo/src/main).
+- New to Grackle? Start with [What is Grackle?](https://typelevel.org/grackle/getting-started/overview.html), then
+  run [your first query](https://typelevel.org/grackle/getting-started/quick-start.html) in five minutes.
+- Work through the [tutorials](https://typelevel.org/grackle/tutorial/in-memory-model.html) and the accompanying
+  [demo](https://github.com/typelevel/grackle/tree/main/demo/src/main).
 - Online Scaladoc is available [here](https://javadoc.io/doc/org.typelevel/grackle-core_2.13).
-- Ask us anything the in **#grackle** channel on the Typelevel [discord server][grackle-dev].
+- Ask us anything in the **#grackle** channel on the Typelevel [discord server][grackle-dev].
+
+## Documentation
+
+The documentation is organised in four parts:
+
+- **[Tutorials](https://typelevel.org/grackle/tutorial/in-memory-model.html)** — learning-oriented, end-to-end builds:
+  an [in-memory model](https://typelevel.org/grackle/tutorial/in-memory-model.html), a
+  [database-backed model](https://typelevel.org/grackle/tutorial/db-backed-model.html), and
+  [mutations & subscriptions](https://typelevel.org/grackle/tutorial/mutations-subscriptions.html).
+- **[How-to guides](https://typelevel.org/grackle/how-to/filtering-ordering-paging.html)** — task-oriented recipes for
+  filtering & paging, composing mappings, choosing a SQL backend, effects, errors and more.
+- **[Concepts](https://typelevel.org/grackle/concepts/architecture.html)** — explanations of the
+  [architecture](https://typelevel.org/grackle/concepts/architecture.html), the compiler and
+  [elaboration](https://typelevel.org/grackle/concepts/compiler-elaboration.html), and
+  [mappings & cursors](https://typelevel.org/grackle/concepts/mappings-cursors.html).
+- **[Reference](https://typelevel.org/grackle/reference/schema-sdl.html)** — exhaustive lookup of schemas, mapping
+  types, the query algebra, predicates, `Result`/`Problem`, and the SQL/circe/generic backends.
 
 To add Grackle to your project you should add the following to your `build.sbt`,
 

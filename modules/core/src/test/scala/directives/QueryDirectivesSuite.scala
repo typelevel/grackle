@@ -114,6 +114,7 @@ final class QueryDirectivesSuite extends CatsEffectSuite {
   }
 
   test("query with directive (3)") {
+    // #upper_query
     val query = """
       query {
         user {
@@ -145,9 +146,11 @@ final class QueryDirectivesSuite extends CatsEffectSuite {
 
     // res.flatMap(IO.println) *>
     assertIO(res, expected)
+    // #upper_query
   }
 }
 
+// #upper_mapping
 object QueryDirectivesMapping extends ValueMapping[IO] {
   val schema =
     schema"""
@@ -183,6 +186,7 @@ object QueryDirectivesMapping extends ValueMapping[IO] {
       )
     )
 
+  // #upper_phase
   object upperCaseElaborator extends Phase {
     override def transform(query: Query): Elab[Query] =
       query match {
@@ -207,7 +211,9 @@ object QueryDirectivesMapping extends ValueMapping[IO] {
     def toUpperCase(c: Cursor): Result[Cursor] =
       FieldTransformCursor[String](c, _.toUpperCase.success).success
   }
+  // #upper_phase
 
   override def compilerPhases: List[QueryCompiler.Phase] =
     List(upperCaseElaborator, selectElaborator, componentElaborator, effectElaborator)
 }
+// #upper_mapping

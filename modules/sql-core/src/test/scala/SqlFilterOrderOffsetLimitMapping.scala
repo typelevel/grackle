@@ -128,6 +128,7 @@ trait SqlFilterOrderOffsetLimitMapping[F[_]] extends SqlTestMapping[F] {
       )
     )
 
+  // #fool_mk
   object FilterValue {
     def unapply(input: ObjectValue): Option[String] = {
       input.fields match {
@@ -174,7 +175,9 @@ trait SqlFilterOrderOffsetLimitMapping[F[_]] extends SqlTestMapping[F] {
         }
       case _ => Result.failure(s"Expected sort value, found $order")
     }
+  // #fool_mk
 
+  // #fool_elab
   override val selectElaborator = SelectElaborator {
     case (
           QueryType,
@@ -224,4 +227,5 @@ trait SqlFilterOrderOffsetLimitMapping[F[_]] extends SqlTestMapping[F] {
           lc <- mkLimit(oc, limit)
         } yield lc)
   }
+  // #fool_elab
 }

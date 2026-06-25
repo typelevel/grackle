@@ -30,6 +30,7 @@ import grackle.syntax._
 
 final class SubscriptionSuite extends CatsEffectSuite {
 
+  // #subscription_mapping
   def mapping(ref: SignallingRef[IO, Int]): Mapping[IO] =
     new ValueMapping[IO] {
 
@@ -83,6 +84,7 @@ final class SubscriptionSuite extends CatsEffectSuite {
             Elab.env("n" -> n)
         }
     }
+  // #subscription_mapping
 
   test("sanity check get") {
     val prog: IO[Json] =
@@ -197,6 +199,7 @@ final class SubscriptionSuite extends CatsEffectSuite {
 
   test("subscription") {
 
+    // #run_ops
     val prog: IO[List[Json]] =
       for {
         ref <- SignallingRef[IO, Int](0)
@@ -219,6 +222,7 @@ final class SubscriptionSuite extends CatsEffectSuite {
         out <- fib.join
         res <- out.embedNever
       } yield res
+    // #run_ops
 
     assertIO(
       prog,

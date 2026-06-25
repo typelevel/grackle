@@ -25,6 +25,7 @@ import grackle.syntax._
 
 trait SqlJsonbMapping[F[_]] extends SqlTestMapping[F] {
 
+  // #jsonb
   object records extends TableDef("records") {
     val id = col("id", int4)
     val record = col("record", nullable(jsonb))
@@ -97,4 +98,5 @@ trait SqlJsonbMapping[F[_]] extends SqlTestMapping[F] {
     case (QueryType, "record", List(Binding("id", IntValue(id)))) =>
       Elab.transformChild(child => Unique(Filter(Eql(RowType / "id", Const(id)), child)))
   }
+  // #jsonb
 }

@@ -177,6 +177,7 @@ object ComposedListMapping extends ComposedMapping[IO] {
         Unique(Filter(Eql(CollectionType / "name", Const(name)), child)))
   }
 
+  // #composed_list_join
   def collectionItemJoin(q: Query, c: Cursor): Result[Query] =
     (c.focus, q) match {
       case (c: CollectionData.Collection, Select("items", _, child)) =>
@@ -187,6 +188,7 @@ object ComposedListMapping extends ComposedMapping[IO] {
       case _ =>
         Result.internalError(s"Unexpected cursor focus type in collectionItemJoin")
     }
+  // #composed_list_join
 }
 
 final class ComposedListSuite extends CatsEffectSuite {

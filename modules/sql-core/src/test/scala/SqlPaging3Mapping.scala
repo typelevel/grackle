@@ -154,6 +154,7 @@ trait SqlPaging3Mapping[F[_]] extends SqlTestMapping[F] {
         c0 <- info.genHasMore(c)
       } yield c0
 
+    // #paging3
     case class PagingInfo(
         offset: Option[Int],
         limit: Option[Int],
@@ -199,6 +200,7 @@ trait SqlPaging3Mapping[F[_]] extends SqlTestMapping[F] {
           } yield num > offset.getOrElse(0) + limit.getOrElse(num.toInt)
         }
     }
+    // #paging3
   }
 
   object CountryPaging

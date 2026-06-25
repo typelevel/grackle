@@ -94,6 +94,7 @@ final class ValidatorSuite extends CatsEffectSuite {
 
   }
 
+  // #validator
   test("missing field mapping") {
 
     object M extends TestMapping {
@@ -132,6 +133,7 @@ final class ValidatorSuite extends CatsEffectSuite {
     }
 
   }
+  // #validator
 
   test("inapplicable type (object mapping for scalar)") {
 

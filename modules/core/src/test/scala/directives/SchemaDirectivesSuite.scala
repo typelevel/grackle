@@ -344,6 +344,7 @@ final class SchemaDirectivesSuite extends CatsEffectSuite {
 }
 
 object SchemaDirectivesMapping extends ValueMapping[IO] {
+  // #schema_directives
   val schema =
     schema"""
       type Query {
@@ -370,6 +371,7 @@ object SchemaDirectivesMapping extends ValueMapping[IO] {
         USER
       }
     """
+  // #schema_directives
 
   val QueryType = schema.ref("Query")
   val MutationType = schema.ref("Mutation")
@@ -401,6 +403,7 @@ object SchemaDirectivesMapping extends ValueMapping[IO] {
       )
     )
 
+  // #permissions_phase
   case class AuthStatus(role: String)
 
   object permissionsElaborator extends Phase {
@@ -453,6 +456,8 @@ object SchemaDirectivesMapping extends ValueMapping[IO] {
       }
     }
   }
+
+  // #permissions_phase
 
   override def compilerPhases: List[QueryCompiler.Phase] =
     List(permissionsElaborator, selectElaborator, componentElaborator, effectElaborator)
