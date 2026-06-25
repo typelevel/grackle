@@ -2,6 +2,7 @@ import scala.concurrent.duration.DurationInt
 import scala.sys.process._
 
 import nl.zolotko.sbt.jfr.{JfrRecorderOptions, JfrRecording}
+import org.typelevel.sbt.gha.{Permissions, PermissionValue}
 import spray.revolver.Actions._
 
 val catsVersion = "2.13.0"
@@ -21,6 +22,7 @@ val munitVersion = "1.3.3"
 val munitCatsEffectVersion = "2.2.0"
 val munitScalaCheckVersion = "1.3.0"
 val oracleDriverVersion = "23.26.2.0.0"
+val postgresVersion = "42.7.11"
 val skunkVersion = "1.0.0"
 val shapeless2Version = "2.3.13"
 val shapeless3Version = "3.6.0"
@@ -62,6 +64,24 @@ ThisBuild / githubWorkflowBuild ~= { steps =>
 }
 ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 ThisBuild / tlBspCrossProjectPlatforms := Set(JVMPlatform)
+ThisBuild / githubWorkflowPermissions := Some(Permissions.Specify.defaultRestrictive)
+ThisBuild / githubWorkflowIncludeClean := false
+
+ThisBuild / githubWorkflowGeneratedCI ~= {
+  _.map { job =>
+    if (Set("dependency-submission", "site")(job.id))
+      job.withPermissions(
+        Some(Permissions.Specify.defaultRestrictive.withContents(PermissionValue.Write)))
+    else if (job.id == "build")
+      job.withSteps(job.steps.map {
+        case use: WorkflowStep.Use
+            if use.ref == UseRef.Public("actions", "upload-artifact", "v5") =>
+          use.concatParams(List("retention-days" -> "1"))
+        case step => step
+      })
+    else job
+  }
+}
 
 ThisBuild / githubWorkflowAddedJobs +=
   WorkflowJob(
@@ -278,7 +298,9 @@ lazy val doobiepg = project
     Test / testOptions += Tests
       .Setup(_ => runDocker("docker compose up -d --wait --quiet-pull postgres")),
     libraryDependencies ++= Seq(
-      "org.typelevel" %% "doobie-postgres-circe" % doobieVersion
+      "org.typelevel" %% "doobie-postgres-circe" % doobieVersion,
+      // Pin transitive Postgres JDBC driver to >= 42.7.11 (CVE-2026-42198 / GHSA-98qh-xjc8-98pq)
+      "org.postgresql" % "postgresql" % postgresVersion
     )
   )
 
@@ -374,6 +396,8 @@ lazy val demo = project
       "ch.qos.logback" % "logback-classic" % logbackVersion,
       "org.typelevel" %% "doobie-core" % doobieVersion,
       "org.typelevel" %% "doobie-postgres" % doobieVersion,
+      // Pin transitive Postgres JDBC driver to >= 42.7.11 (CVE-2026-42198 / GHSA-98qh-xjc8-98pq)
+      "org.postgresql" % "postgresql" % postgresVersion,
       "org.typelevel" %% "doobie-hikari" % doobieVersion,
       "org.http4s" %% "http4s-ember-server" % http4sVersion,
       "org.http4s" %% "http4s-ember-client" % http4sVersion,

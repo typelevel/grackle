@@ -14,6 +14,20 @@ on:
     branches: ['**', '!update/**', '!pr/**']
     tags: [v*]
 
+permissions:
+  actions: none
+  checks: none
+  contents: read
+  deployments: none
+  id-token: none
+  issues: none
+  packages: read
+  pages: none
+  pull-requests: none
+  repository-projects: none
+  security-events: none
+  statuses: none
+
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -101,6 +115,7 @@ jobs:
         with:
           name: target-${{ matrix.os }}-${{ matrix.java }}-${{ matrix.scala }}-${{ matrix.project }}
           path: targets.tar
+          retention-days: 1
 
   publish:
     name: Publish Artifacts
@@ -225,6 +240,19 @@ jobs:
         os: [ubuntu-22.04]
         java: [temurin@11]
     runs-on: ${{ matrix.os }}
+    permissions:
+      actions: none
+      checks: none
+      contents: write
+      deployments: none
+      id-token: none
+      issues: none
+      packages: read
+      pages: none
+      pull-requests: none
+      repository-projects: none
+      security-events: none
+      statuses: none
     steps:
       - name: Checkout current branch (full)
         uses: actions/checkout@v6
@@ -296,6 +324,19 @@ jobs:
         os: [ubuntu-22.04]
         java: [temurin@11]
     runs-on: ${{ matrix.os }}
+    permissions:
+      actions: none
+      checks: none
+      contents: write
+      deployments: none
+      id-token: none
+      issues: none
+      packages: read
+      pages: none
+      pull-requests: none
+      repository-projects: none
+      security-events: none
+      statuses: none
     steps:
       - name: Checkout current branch (full)
         uses: actions/checkout@v6
