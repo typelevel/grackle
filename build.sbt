@@ -7,7 +7,7 @@ import spray.revolver.Actions._
 val catsVersion = "2.13.0"
 val catsParseVersion = "1.1.0"
 val catsEffectVersion = "3.7.0"
-val circeVersion = "0.14.15"
+val circeVersion = "0.14.16"
 val disciplineMunitVersion = "2.0.0"
 val doobieVersion = "1.0.0-RC13"
 val fs2Version = "3.13.0"
