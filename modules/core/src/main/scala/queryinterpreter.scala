@@ -765,51 +765,60 @@ object QueryInterpreter {
       loop(pj)
     }
 
+    // Note: `gatherDeferred` prepends as it descends, so it yields deferred fields in reverse
+    // document order; reversing once here recovers document order for everything below. We
+    // group by `(mapping, handler)`, but derive the batch ordering (and the member ordering
+    // within each batch) from document order rather than from `Map` iteration order, which is
+    // non-deterministic and made the accumulated error order non-deterministic.
+    val deferred = pjs.flatMap(gatherDeferred).reverse.asInstanceOf[List[EffectJson[F]]]
+    val grouped  = deferred.groupMap(ej => (ej.mapping, ej.handler))(identity)
     val batchedEffects =
-      pjs
-        .flatMap(gatherDeferred)
-        .asInstanceOf[List[EffectJson[F]]]
-        .groupMap(ej => (ej.mapping, ej.handler))(identity)
-        .toList
+      deferred.map(ej => (ej.mapping, ej.handler)).distinct.fproduct(grouped)
 
-    (for {
-      batchedResults <-
-        batchedEffects.traverse {
-          case ((mapping, handler), batch) =>
-            val queries = batch.map(e => (e.query, e.cursor))
-            for {
-              pnext <-
-                handler match {
-                  case None =>
-                    ResultT(mapping.combineAndRun(queries))
-                  case Some(handler) =>
-                    for {
-                      cs <- ResultT(handler.runEffects(queries))
-                      conts <- ResultT(
-                        queries
-                          .traverse {
-                            case (q, _) =>
-                              Query
-                                .extractChild(q)
-                                .toResultOrError("Continuation query has the wrong shape")
-                          }
-                          .pure[F])
-                      res <- ResultT(combineResults((conts, cs).parMapN {
-                        case (query, cursor) =>
-                          mapping.interpreter.runValue(query, cursor.tpe, cursor)
-                      }).pure[F])
-                    } yield res
-                }
-              next <- ResultT(completeAll[F](pnext))
-            } yield batch.zip(next)
-        }
-    } yield {
-      val subst = {
-        val m = new java.util.IdentityHashMap[DeferredJson, Json]
-        Monoid.combineAll(batchedResults).foreach { case (d, j) => m.put(d, j) }
-        m.asScala
+    // Run every batch independently, then combine the per-batch `Result`s with an
+    // accumulating combinator so that failures from *all* batches are preserved. Using
+    // `ResultT.traverse` here would short-circuit on the first failed batch, and since the
+    // batch order (from `groupMap(...).toList`) is non-deterministic, that produced a
+    // non-deterministic subset of the errors.
+    batchedEffects
+      .traverse {
+        case ((mapping, handler), batch) =>
+          (for {
+            pnext <-
+              handler match {
+                case None =>
+                  ResultT(mapping.combineAndRun(batch.map(e => (e.query, e.cursor))))
+                case Some(handler) =>
+                  val queries = batch.map(e => (e.query, e.cursor))
+                  for {
+                    cs <- ResultT(handler.runEffects(queries))
+                    conts <- ResultT(
+                      queries
+                        .traverse {
+                          case (q, _) =>
+                            Query
+                              .extractChild(q)
+                              .toResultOrError("Continuation query has the wrong shape")
+                        }
+                        .pure[F])
+                    res <- ResultT(combineResults((conts, cs).parMapN {
+                      case (query, cursor) =>
+                        mapping.interpreter.runValue(query, cursor.tpe, cursor)
+                    }).pure[F])
+                  } yield res
+              }
+            next <- ResultT(completeAll[F](pnext))
+          } yield batch.zip(next)).value
       }
-      pjs.map(pj => scatterResults(pj, subst))
-    }).value
+      .map { results =>
+        results.parSequence.map { batchedResults =>
+          val subst = {
+            val m = new java.util.IdentityHashMap[DeferredJson, Json]
+            Monoid.combineAll(batchedResults).foreach { case (d, j) => m.put(d, j) }
+            m.asScala
+          }
+          pjs.map(pj => scatterResults(pj, subst))
+        }
+      }
   }
 }
