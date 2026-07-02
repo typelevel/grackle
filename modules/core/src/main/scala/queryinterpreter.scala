@@ -771,7 +771,7 @@ object QueryInterpreter {
     // within each batch) from document order rather than from `Map` iteration order, which is
     // non-deterministic and made the accumulated error order non-deterministic.
     val deferred = pjs.flatMap(gatherDeferred).reverse.asInstanceOf[List[EffectJson[F]]]
-    val grouped  = deferred.groupMap(ej => (ej.mapping, ej.handler))(identity)
+    val grouped = deferred.groupMap(ej => (ej.mapping, ej.handler))(identity)
     val batchedEffects =
       deferred.map(ej => (ej.mapping, ej.handler)).distinct.fproduct(grouped)
 

@@ -39,10 +39,38 @@ final class CirceEffectHandlerErrorSuite extends CatsEffectSuite {
 
     val prg: IO[(Json, Int)] =
       for {
-        ref  <- SignallingRef[IO, Int](0)
-        map  =  new TestCirceEffectHandlerErrorMapping(ref)
-        res  <- map.compileAndRun(query)
-        eff  <- ref.get
+        ref <- SignallingRef[IO, Int](0)
+        map = new TestCirceEffectHandlerErrorMapping(ref)
+        res <- map.compileAndRun(query)
+        eff <- ref.get
+      } yield (res, eff)
+
+    assertIO(prg, (expected, 2))
+  }
+
+  test("circe shared effect handler") {
+    val query = """
+      query {
+        s,
+        n
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          { "message": "value: s" },
+          { "message": "value: n" }
+        ]
+      }
+    """
+
+    val prg: IO[(Json, Int)] =
+      for {
+        ref <- SignallingRef[IO, Int](0)
+        map = new TestCirceSharedEffectHandlerErrorMapping(ref)
+        res <- map.compileAndRun(query)
+        eff <- ref.get
       } yield (res, eff)
 
     assertIO(prg, (expected, 2))

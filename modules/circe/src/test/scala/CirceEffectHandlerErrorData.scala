@@ -17,14 +17,13 @@ import cats.effect.Sync
 import cats.implicits._
 import fs2.concurrent.SignallingRef
 
-import grackle.Cursor
-import grackle.Query
+import grackle.{Cursor, Query, Result}
 import grackle.Query.EffectHandler
-import grackle.Result
 import grackle.circe.CirceMapping
 import grackle.syntax._
 
-class TestCirceEffectHandlerErrorMapping[F[_]: Sync](ref: SignallingRef[F, Int]) extends CirceMapping[F] {
+class TestCirceEffectHandlerErrorMapping[F[_]: Sync](ref: SignallingRef[F, Int])
+    extends CirceMapping[F] {
   val schema =
     schema"""
       type Query {
@@ -37,11 +36,16 @@ class TestCirceEffectHandlerErrorMapping[F[_]: Sync](ref: SignallingRef[F, Int])
 
   case class TestEffectHandler[A](value: A) extends EffectHandler[F] {
     def runEffects(queries: List[(Query, Cursor)]): F[Result[List[Cursor]]] =
-      queries.traverse { case (_, _) =>
-        ref.update(_ + 1).as(
-          Result.failure[Cursor](s"value: $value")
-        )
-      }.map(_.sequence)
+      queries
+        .traverse {
+          case (_, _) =>
+            ref
+              .update(_ + 1)
+              .as(
+                Result.failure[Cursor](s"value: $value")
+              )
+        }
+        .map(_.sequence)
   }
 
   val nHandler = TestEffectHandler(42)
@@ -50,13 +54,57 @@ class TestCirceEffectHandlerErrorMapping[F[_]: Sync](ref: SignallingRef[F, Int])
   val typeMappings = List(
     ObjectMapping(
       tpe = QueryType,
-      fieldMappings =
-        List(
-          EffectField("n", nHandler, Nil),
-          EffectField("s", sHandler, Nil)
-        )
+      fieldMappings = List(
+        EffectField("n", nHandler, Nil),
+        EffectField("s", sHandler, Nil)
+      )
     )
   )
 
+}
 
+/**
+ * As `TestCirceEffectHandlerErrorMapping`, but both fields are backed by a *single, shared*
+ * handler. Because effects are batched by `(mapping, handler)`, this means both fields end up
+ * in one batch and are passed to `runEffects` together. The handler accumulates a failure per
+ * query using `parSequence`; note that combining with `sequence` here would short-circuit on
+ * the first failure and drop the others.
+ */
+class TestCirceSharedEffectHandlerErrorMapping[F[_]: Sync](ref: SignallingRef[F, Int])
+    extends CirceMapping[F] {
+  val schema =
+    schema"""
+      type Query {
+        n: Int!
+        s: String!
+      }
+    """
+
+  val QueryType = schema.ref("Query")
+
+  val sharedHandler: EffectHandler[F] =
+    new EffectHandler[F] {
+      def runEffects(queries: List[(Query, Cursor)]): F[Result[List[Cursor]]] =
+        queries
+          .traverse {
+            case (query, _) =>
+              val name = Query.rootName(query).map(_._1).getOrElse("?")
+              ref
+                .update(_ + 1)
+                .as(
+                  Result.failure[Cursor](s"value: $name")
+                )
+          }
+          .map(_.parSequence)
+    }
+
+  val typeMappings = List(
+    ObjectMapping(
+      tpe = QueryType,
+      fieldMappings = List(
+        EffectField("n", sharedHandler, Nil),
+        EffectField("s", sharedHandler, Nil)
+      )
+    )
+  )
 }
