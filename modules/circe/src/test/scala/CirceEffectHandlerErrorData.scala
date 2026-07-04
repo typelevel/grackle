@@ -16,14 +16,20 @@
 import cats.effect.Sync
 import cats.implicits._
 import fs2.concurrent.SignallingRef
+import io.circe.Json
 
-import grackle.{Cursor, Query, Result}
+import grackle.{Cursor, Env, Query, Result}
 import grackle.Query.EffectHandler
+import grackle.QueryInterpreter.EffectErrorPolicy
 import grackle.circe.CirceMapping
 import grackle.syntax._
 
-class TestCirceEffectHandlerErrorMapping[F[_]: Sync](ref: SignallingRef[F, Int])
+class TestCirceEffectHandlerErrorMapping[F[_]: Sync](
+    ref: SignallingRef[F, Int],
+    policy: EffectErrorPolicy)
     extends CirceMapping[F] {
+  override def effectErrorPolicy: EffectErrorPolicy = policy
+
   val schema =
     schema"""
       type Query {
@@ -104,6 +110,74 @@ class TestCirceSharedEffectHandlerErrorMapping[F[_]: Sync](ref: SignallingRef[F,
       fieldMappings = List(
         EffectField("n", sharedHandler, Nil),
         EffectField("s", sharedHandler, Nil)
+      )
+    )
+  )
+}
+
+/**
+ * Two top-level fields (`a`, `b`) share a single, succeeding handler, so they are batched
+ * together and their continuations are completed as a *group* in the recursive `completeAll`
+ * call. Each continuation contains nested effect fields (`x`, `y`) backed by a shared failing
+ * handler which reports its position; the accumulated errors should appear in document order
+ * (a/x, a/y, b/x, b/y).
+ */
+class TestCirceNestedEffectHandlerErrorMapping[F[_]: Sync] extends CirceMapping[F] {
+  val schema =
+    schema"""
+      type Query {
+        a: Child!
+        b: Child!
+      }
+      type Child {
+        x: Int!
+        y: Int!
+      }
+    """
+
+  val QueryType = schema.ref("Query")
+  val ChildType = schema.ref("Child")
+
+  val outerHandler: EffectHandler[F] =
+    new EffectHandler[F] {
+      def runEffects(queries: List[(Query, Cursor)]): F[Result[List[Cursor]]] =
+        queries
+          .traverse {
+            case (query, parentCursor) =>
+              Query
+                .childContext(parentCursor.context, query)
+                .map(ctx => CirceCursor(ctx, Json.obj(), Some(parentCursor), Env.empty): Cursor)
+          }
+          .pure[F]
+    }
+
+  val innerHandler: EffectHandler[F] =
+    new EffectHandler[F] {
+      def runEffects(queries: List[(Query, Cursor)]): F[Result[List[Cursor]]] =
+        queries
+          .map {
+            case (query, cursor) =>
+              val parent = cursor.context.path.headOption.getOrElse("?")
+              val field = Query.rootName(query).map(_._1).getOrElse("?")
+              Result.failure[Cursor](s"nested: $parent/$field")
+          }
+          .parSequence
+          .pure[F]
+    }
+
+  val typeMappings = List(
+    ObjectMapping(
+      tpe = QueryType,
+      fieldMappings = List(
+        EffectField("a", outerHandler, Nil),
+        EffectField("b", outerHandler, Nil)
+      )
+    ),
+    ObjectMapping(
+      tpe = ChildType,
+      fieldMappings = List(
+        EffectField("x", innerHandler, Nil),
+        EffectField("y", innerHandler, Nil)
       )
     )
   )
