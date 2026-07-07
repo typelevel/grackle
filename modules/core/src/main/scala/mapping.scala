@@ -38,7 +38,7 @@ import grackle.QueryCompiler.{
   SelectElaborator
 }
 import grackle.QueryCompiler.IntrospectionLevel._
-import grackle.QueryInterpreter.ProtoJson
+import grackle.QueryInterpreter.{EffectErrorPolicy, ProtoJson}
 import grackle.ValidationFailure.Severity
 import grackle.syntax._
 
@@ -1415,6 +1415,18 @@ abstract class Mapping[F[_]] {
 
   def compilerPhases: List[QueryCompiler.Phase] =
     List(selectElaborator, componentElaborator, effectElaborator)
+
+  /**
+   * Policy determining how errors arising from batches of deferred effects contributed by this
+   * mapping are combined during result completion.
+   *
+   * `Accumulate` (the default) runs every batch and reports errors from all of them, in
+   * document order; `FailFast` stops at the first failed effect batch, leaving subsequent
+   * batches' effects unrun. Accumulation applies only if every mapping contributing effects to
+   * a completion uses `Accumulate`; any `FailFast` mapping forces the whole completion to fail
+   * fast.
+   */
+  def effectErrorPolicy: EffectErrorPolicy = EffectErrorPolicy.Accumulate
 
   def parserConfig: GraphQLParser.Config = GraphQLParser.defaultConfig
   lazy val graphQLParser: GraphQLParser = GraphQLParser(parserConfig)

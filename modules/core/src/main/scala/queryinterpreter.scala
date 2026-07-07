@@ -503,6 +503,34 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
 object QueryInterpreter {
 
   /**
+   * Policy determining how errors arising from batches of deferred effects (effect handlers and
+   * delegated components) are combined during result completion.
+   *
+   * When batches from multiple mappings are completed together, accumulation only applies if
+   * every contributing mapping opts in: any `FailFast` mapping makes the whole completion fail
+   * fast, since fail fast is a promise not to run further effects after a failure.
+   */
+  sealed trait EffectErrorPolicy
+
+  object EffectErrorPolicy {
+
+    /**
+     * Stop at the first failed effect batch; subsequent batches' effects are not run.
+     */
+    case object FailFast extends EffectErrorPolicy
+
+    /**
+     * Run every effect batch and accumulate errors from all of them, in document order.
+     */
+    case object Accumulate extends EffectErrorPolicy
+
+    implicit val monoidEffectErrorPolicy: Monoid[EffectErrorPolicy] =
+      Monoid.instance(
+        Accumulate,
+        (x, y) => if (x == FailFast || y == FailFast) FailFast else Accumulate)
+  }
+
+  /**
    * Opaque type of partially constructed query results.
    *
    * Values may be fully expanded Json values, objects or arrays which not yet fully evaluated
@@ -726,15 +754,16 @@ object QueryInterpreter {
    * result.
    */
   def completeAll[F[_]: Monad](pjs: List[ProtoJson]): F[Result[List[Json]]] = {
+    // Yields deferred fields in document order.
     def gatherDeferred(pj: ProtoJson): List[DeferredJson] = {
       @tailrec
-      def loop(pending: Chain[ProtoJson], acc: List[DeferredJson]): List[DeferredJson] =
+      def loop(pending: Chain[ProtoJson], acc: Chain[DeferredJson]): Chain[DeferredJson] =
         pending.uncons match {
           case None => acc
           case Some((hd, tl)) =>
             (hd: @unchecked) match {
               case _: Json => loop(tl, acc)
-              case d: DeferredJson => loop(tl, d :: acc)
+              case d: DeferredJson => loop(tl, acc :+ d)
               case ProtoObject(fields) => loop(Chain.fromSeq(fields.map(_._2)) ++ tl, acc)
               case ProtoArray(elems) => loop(Chain.fromSeq(elems) ++ tl, acc)
               case ProtoSelect(elem, _) => loop(elem +: tl, acc)
@@ -743,7 +772,7 @@ object QueryInterpreter {
 
       pj match {
         case _: Json => Nil
-        case _ => loop(Chain.one(pj), Nil)
+        case _ => loop(Chain.one(pj), Chain.empty).toList
       }
     }
 
@@ -765,51 +794,79 @@ object QueryInterpreter {
       loop(pj)
     }
 
+    // We group by `(mapping, handler)`, but derive the batch ordering (and the member
+    // ordering within each batch) from document order rather than from `Map` iteration
+    // order, which is non-deterministic and made the accumulated error order
+    // non-deterministic.
+    val deferred = pjs.flatMap(gatherDeferred).asInstanceOf[List[EffectJson[F]]]
+    val grouped = deferred.groupMap(ej => (ej.mapping, ej.handler))(identity)
     val batchedEffects =
-      pjs
-        .flatMap(gatherDeferred)
-        .asInstanceOf[List[EffectJson[F]]]
-        .groupMap(ej => (ej.mapping, ej.handler))(identity)
-        .toList
+      deferred.map(ej => (ej.mapping, ej.handler)).distinct.fproduct(grouped)
 
-    (for {
-      batchedResults <-
-        batchedEffects.traverse {
-          case ((mapping, handler), batch) =>
-            val queries = batch.map(e => (e.query, e.cursor))
-            for {
-              pnext <-
-                handler match {
-                  case None =>
-                    ResultT(mapping.combineAndRun(queries))
-                  case Some(handler) =>
-                    for {
-                      cs <- ResultT(handler.runEffects(queries))
-                      conts <- ResultT(
-                        queries
-                          .traverse {
-                            case (q, _) =>
-                              Query
-                                .extractChild(q)
-                                .toResultOrError("Continuation query has the wrong shape")
-                          }
-                          .pure[F])
-                      res <- ResultT(combineResults((conts, cs).parMapN {
-                        case (query, cursor) =>
-                          mapping.interpreter.runValue(query, cursor.tpe, cursor)
-                      }).pure[F])
-                    } yield res
-                }
-              next <- ResultT(completeAll[F](pnext))
-            } yield batch.zip(next)
-        }
-    } yield {
+    def runBatch(
+        mapping: Mapping[F],
+        handler: Option[EffectHandler[F]],
+        batch: List[EffectJson[F]]): F[Result[List[(EffectJson[F], Json)]]] = {
+      val queries = batch.map(e => (e.query, e.cursor))
+      (for {
+        pnext <-
+          handler match {
+            case None =>
+              ResultT(mapping.combineAndRun(queries))
+            case Some(handler) =>
+              for {
+                cs <- ResultT(handler.runEffects(queries))
+                conts <- ResultT(
+                  queries
+                    .traverse {
+                      case (q, _) =>
+                        Query
+                          .extractChild(q)
+                          .toResultOrError("Continuation query has the wrong shape")
+                    }
+                    .pure[F])
+                res <- ResultT(combineResults((conts, cs).parMapN {
+                  case (query, cursor) =>
+                    mapping.interpreter.runValue(query, cursor.tpe, cursor)
+                }).pure[F])
+              } yield res
+          }
+        next <- ResultT(completeAll[F](pnext))
+      } yield batch.zip(next)).value
+    }
+
+    val policy = deferred.map(_.mapping).distinct.foldMap(_.effectErrorPolicy)
+
+    val batchedResults =
+      policy match {
+        case EffectErrorPolicy.FailFast =>
+          // Monadic sequencing via `ResultT.flatMap` short-circuits at the first failed
+          // batch; subsequent batches' effects are not run. (`ResultT.traverse` would not
+          // do: its `Applicative` combines the underlying `F` actions with `map2`, running
+          // every batch's effects regardless of failures.)
+          batchedEffects
+            .foldLeft(ResultT(List.empty[List[(EffectJson[F], Json)]].success.pure[F])) {
+              case (acc, ((mapping, handler), batch)) =>
+                acc.flatMap(results =>
+                  ResultT(runBatch(mapping, handler, batch)).map(_ :: results))
+            }
+            .map(_.reverse)
+            .value
+        case EffectErrorPolicy.Accumulate =>
+          // Run every batch independently, then combine the per-batch `Result`s with an
+          // accumulating combinator so that failures from *all* batches are preserved.
+          batchedEffects
+            .traverse { case ((mapping, handler), batch) => runBatch(mapping, handler, batch) }
+            .map(_.parSequence)
+      }
+
+    batchedResults.map(_.map { results =>
       val subst = {
         val m = new java.util.IdentityHashMap[DeferredJson, Json]
-        Monoid.combineAll(batchedResults).foreach { case (d, j) => m.put(d, j) }
+        Monoid.combineAll(results).foreach { case (d, j) => m.put(d, j) }
         m.asScala
       }
       pjs.map(pj => scatterResults(pj, subst))
-    }).value
+    })
   }
 }
