@@ -102,7 +102,15 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
    */
   def supportsLateralJoin: Boolean = mkLateral(false) != Laterality.NotLateral
 
-  def defaultOffsetForSubquery(subquery: SqlQuery): SqlQuery
+  /**
+   * Supplies any offset/limit defaults the dialect's rendering requires, applied to every
+   * `SqlSelect` just before it is rendered (root query and subqueries alike). MSSQL uses this
+   * to pair an `ORDER BY` with the `OFFSET` its grammar demands; SQLite to pair an explicit
+   * offset with the `LIMIT` its comma-form clause is anchored on. Must return its argument
+   * unchanged when no defaults are needed, and be idempotent - the query it returns is rendered
+   * directly, without a second normalization pass.
+   */
+  def normalizeOffsetLimit(query: SqlQuery): SqlQuery
   def defaultOffsetForLimit(limit: Option[Int]): Option[Int]
   def orderToFragment(col: Fragment, ascending: Boolean, nullsLast: Boolean): Fragment
   def nullsHigh: Boolean
@@ -1622,7 +1630,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       def toDefFragment: Aliased[Fragment] =
         for {
           alias <- Aliased.tableDef(this)
-          sub <- defaultOffsetForSubquery(subquery).toFragment
+          sub <- subquery.toFragment
         } yield laterality.toFragment |+| Fragments.parentheses(sub) |+| aliasDefToFragment(
           alias)
 
@@ -3405,9 +3413,16 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       }
 
       /**
-       * Render this `SqlSelect` as a `Fragment`
+       * Render this `SqlSelect` as a `Fragment`, first giving the dialect a chance to supply
+       * any offset/limit defaults its rendering requires (see `normalizeOffsetLimit`).
        */
-      def toFragment: Aliased[Fragment] = {
+      def toFragment: Aliased[Fragment] =
+        normalizeOffsetLimit(this) match {
+          case s: SqlSelect if !(s eq this) => s.toFragment0
+          case _ => toFragment0
+        }
+
+      private def toFragment0: Aliased[Fragment] = {
         for {
           _ <- Aliased.pushOwner(this)
           withs0 <-
