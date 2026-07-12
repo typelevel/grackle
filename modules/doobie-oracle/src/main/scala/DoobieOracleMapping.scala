@@ -89,6 +89,7 @@ trait DoobieOracleMappingLike[F[_]] extends DoobieMappingLike[F] with SqlMapping
     ) // TODO: check that passing orders works with Oracle
 
   def encapsulateUnionBranch(s: SqlSelect): SqlSelect = s
+  def unionBranchToFragment(branch: Fragment): Fragment = Fragments.parentheses(branch)
   def mkLateral(inner: Boolean): Laterality = Laterality.Lateral
   def defaultOffsetForSubquery(subquery: SqlQuery): SqlQuery = subquery
   def defaultOffsetForLimit(limit: Option[Int]): Option[Int] = None
