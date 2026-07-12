@@ -68,12 +68,10 @@ trait DoobieSqliteMappingLike[F[_]] extends DoobieMappingLike[F] with SqlMapping
   // rendering order used by the shared query builder (which suits Postgres, where either order is
   // legal, and MSSQL/Oracle's OFFSET-anchored `OFFSET .. FETCH ..`). We route around this by using
   // SQLite's legacy MySQL-style comma form `LIMIT <offset>, <limit>`: offsetToFragment opens the
-  // clause and limitToFragment supplies the trailing operand. defaultOffsetForLimit guarantees an
-  // offset (defaulting to 0) is always rendered whenever a limit is present, so the two halves are
-  // never split apart. A limit with no matching offset, or vice versa, renders as a normal,
-  // self-contained `LIMIT n` - only the "explicit offset with no limit" case (see
-  // defaultOffsetForSubquery below for the nested-subquery fix) can't be expressed this way, since
-  // there's no hook to conjure a limit value out of nothing at the true query root.
+  // clause and limitToFragment supplies the trailing operand. The two companion hooks below
+  // guarantee the pair is always complete: defaultOffsetForLimit supplies offset 0 whenever a
+  // limit is present, and normalizeOffsetLimit supplies `LIMIT -1` (SQLite's documented "no upper
+  // bound" idiom) whenever an explicit offset has no limit to pair with.
   def offsetToFragment(offset: Fragment): Fragment =
     Fragments.const(" LIMIT ") |+| offset |+| Fragments.const(", ")
 
@@ -139,15 +137,14 @@ trait DoobieSqliteMappingLike[F[_]] extends DoobieMappingLike[F] with SqlMapping
   def mkLateral(inner: Boolean): Laterality =
     Laterality.NotLateral
 
-  // Mirror image of defaultOffsetForLimit, but at the query-tree level: when this SqlSelect is
-  // used as a subquery (so it's rendered via defaultOffsetForSubquery rather than being the true
-  // query root) and it has an explicit offset but no limit, inject SQLite's documented idiom for
-  // "no upper bound", `LIMIT -1`, so the comma-form OFFSET/LIMIT pairing in offsetToFragment always
-  // has a second operand to pair with.
-  def defaultOffsetForSubquery(subquery: SqlQuery): SqlQuery =
-    subquery match {
+  // Mirror image of defaultOffsetForLimit, but at the query-tree level: a select with an
+  // explicit offset but no limit gets SQLite's documented idiom for "no upper bound",
+  // `LIMIT -1`, so the comma-form OFFSET/LIMIT pairing in offsetToFragment always has a second
+  // operand to pair with.
+  def normalizeOffsetLimit(query: SqlQuery): SqlQuery =
+    query match {
       case s: SqlSelect if s.offset.nonEmpty && s.limit.isEmpty => s.copy(limit = (-1).some)
-      case _ => subquery
+      case _ => query
     }
 
   // See offsetToFragment: forcing a default offset of 0 whenever a limit is present guarantees
