@@ -1,0 +1,3 @@
+-- SQLite has no sequences. DoobieSqliteSuites.MutationSuite mints ids for the tests using this
+-- file (via `city_copy`, a runtime copy of the `city` table from world.sql) by hand instead, so
+-- no schema setup is needed here.
