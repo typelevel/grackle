@@ -59,7 +59,49 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       predCols: List[SqlColumn],
       orders: List[OrderSelection[_]]): SqlColumn
   def encapsulateUnionBranch(s: SqlSelect): SqlSelect
+
+  /**
+   * Renders one branch of a `UNION ALL` compound select, typically by wrapping it in
+   * parentheses: `(branch1) UNION ALL (branch2)`. Dialects whose compound-select grammar
+   * forbids parenthesized branches (e.g. SQLite) return the fragment unmodified instead. That
+   * is safe for any dialect: grackle only ever combines branches with `UNION ALL` (never plain
+   * `UNION`), which is associative, so grouping never affects results. A branch that carries
+   * its own `ORDER BY`/`OFFSET`/`LIMIT` is wrapped in a derived-table subquery by
+   * `encapsulateUnionBranch` before this is applied.
+   */
+  def unionBranchToFragment(branch: Fragment): Fragment
+
   def mkLateral(inner: Boolean): Laterality
+
+  /**
+   * Whether this dialect can correlate a FROM-clause subquery with a sibling table (`LATERAL`,
+   * `CROSS`/`OUTER APPLY`, or equivalent). Derived from `mkLateral`: a dialect with no such
+   * mechanism at all (e.g. SQLite) has no lateral form for `mkLateral` to render and answers
+   * `Laterality.NotLateral` there, which is what this test detects.
+   *
+   * Two parts of `addFilterOrderByOffsetLimit` depend on it:
+   *
+   *   - When `false`, the parent-constraint equality predicate normally embedded in a nested
+   *     field's own `WHERE` clause is omitted. That predicate is redundant - the correlation it
+   *     expresses is supplied independently, via an ordinary `JOIN ... ON` clause, by
+   *     `SqlQuery.SqlSelect.nest` - so omitting it doesn't change results, it only removes a
+   *     reference to a column that isn't in scope inside a non-lateral subquery. The trade-off
+   *     is performance, not correctness: a genuinely lateral-evaluated subquery lets the
+   *     database restrict window-function/ordering work to just the current parent row, whereas
+   *     without it the same window function (e.g. `PARTITION BY <foreign key>`) runs across the
+   *     whole child table and the outer join selects out the relevant partition.
+   *   - The "Case 1" fast paths apply `OFFSET`/`LIMIT` directly to a query built from
+   *     pre-existing `joins`, trusting `oneToOne && predIsOneToOne` to mean the result is
+   *     already one row per key. That only holds when a lateral-evaluated correlated subquery
+   *     produced those joins (guaranteeing at most one contribution per outer row); without
+   *     one, `joins` can itself contain a nested one-to-many hop (e.g. a further
+   *     windowed/limited grandchild list) whose LEFT JOIN "no match" rows and real match rows
+   *     both carry this level's own key, so a physical-row-counting `LIMIT` applied on top
+   *     keeps an arbitrary one of the two. When `false`, the fast paths are therefore only
+   *     taken when no joins (or no offset/limit) are present to introduce that fan-out.
+   */
+  def supportsLateralJoin: Boolean = mkLateral(false) != Laterality.NotLateral
+
   def defaultOffsetForSubquery(subquery: SqlQuery): SqlQuery
   def defaultOffsetForLimit(limit: Option[Int]): Option[Int]
   def orderToFragment(col: Fragment, ascending: Boolean, nullsLast: Boolean): Fragment
@@ -2755,9 +2797,13 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
         val (pred, filterJoins) =
           filter.map { case (pred, joins) => (pred :: Nil, joins) }.getOrElse((Nil, Nil))
-        val pred0 = parentConstraints.flatMap(_.map {
-          case (p, c) => Eql(p.toTerm, c.toTerm)
-        }) ++ pred
+        // The parent-constraint equality is only meaningful (and only in scope) inside a
+        // lateral-evaluated subquery; the correlation it expresses is supplied independently by
+        // SqlSelect.nest's JOIN ... ON. See supportsLateralJoin.
+        val pred0 =
+          (if (supportsLateralJoin)
+             parentConstraints.flatMap(_.map { case (p, c) => Eql(p.toTerm, c.toTerm) })
+           else Nil) ++ pred
 
         val (oss, orderJoins) =
           orderBy.map { case (oss, joins) => (oss, joins) }.getOrElse((Nil, Nil))
@@ -2779,7 +2825,12 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
             val partitionBy = parentConstraints.head.map(_._2)
 
-            if (oneToOne && predIsOneToOne) {
+            // Without a lateral-evaluated subquery, oneToOne && predIsOneToOne doesn't guarantee
+            // one physical row per key if joins contains a one-to-many hop; see
+            // supportsLateralJoin.
+            val fastPathSafe = supportsLateralJoin || joins.isEmpty
+
+            if (oneToOne && predIsOneToOne && fastPathSafe) {
               // Case 1) one row is one object in this context
               pred0.traverse(p => contextualiseWhereTerms(context, table, p)).flatMap { pred1 =>
                 oss.traverse(os => contextualiseOrderTerms(context, table, os)).flatMap {
@@ -3158,7 +3209,12 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           } else {
             // No parent constraint so nothing to be gained from using window functions
 
-            if ((oneToOne && predIsOneToOne) || (offset0.isEmpty && limit0.isEmpty && filterJoins.isEmpty && orderJoins.isEmpty)) {
+            // As in the useWindow branch above, except that with no offset/limit there's
+            // nothing for join-introduced fan-out to corrupt; see supportsLateralJoin.
+            val fastPathSafe =
+              supportsLateralJoin || offset0.isEmpty && limit0.isEmpty || joins.isEmpty
+
+            if ((oneToOne && predIsOneToOne && fastPathSafe) || (offset0.isEmpty && limit0.isEmpty && filterJoins.isEmpty && orderJoins.isEmpty)) {
               // Case 1) one row is one object or query is simple enough to not require subqueries
 
               pred0.traverse(p => contextualiseWhereTerms(context, table, p)).flatMap { pred1 =>
@@ -3576,8 +3632,8 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           frags <- alignedElems.traverse(_.toFragment)
         } yield {
           frags.reduce((x, y) =>
-            Fragments.parentheses(x) |+| Fragments.const(" UNION ALL ") |+| Fragments
-              .parentheses(y))
+            unionBranchToFragment(x) |+| Fragments.const(
+              " UNION ALL ") |+| unionBranchToFragment(y))
         }
       }
     }

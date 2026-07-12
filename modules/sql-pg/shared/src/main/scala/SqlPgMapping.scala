@@ -66,6 +66,7 @@ trait SqlPgMappingLike[F[_]] extends SqlMappingLike[F] {
       orders: List[OrderSelection[_]]): SqlColumn = col
 
   def encapsulateUnionBranch(s: SqlSelect): SqlSelect = s
+  def unionBranchToFragment(branch: Fragment): Fragment = Fragments.parentheses(branch)
   def mkLateral(inner: Boolean): Laterality = Laterality.Lateral
   def defaultOffsetForSubquery(subquery: SqlQuery): SqlQuery = subquery
   def defaultOffsetForLimit(limit: Option[Int]): Option[Int] = None

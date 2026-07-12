@@ -93,6 +93,8 @@ trait DoobieMSSqlMappingLike[F[_]] extends DoobieMappingLike[F] with SqlMappingL
       // folded to a bare identifier first (issue #342).
       s.toSubquery(s.table.identifier + "_encaps", Laterality.NotLateral)
 
+  def unionBranchToFragment(branch: Fragment): Fragment = Fragments.parentheses(branch)
+
   def mkLateral(inner: Boolean): Laterality =
     Laterality.Apply(inner)
 
