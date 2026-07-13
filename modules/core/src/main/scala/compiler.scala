@@ -318,7 +318,14 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
    */
   def compileVars(varDefs: VarDefs, untypedVars: Option[Json]): Result[Vars] =
     untypedVars match {
-      case None => Map.empty.success
+      case None =>
+        // No variables supplied is equivalent to an empty variable values object: defaults
+        // apply, nullable variables are absent and non-nullable variables without defaults
+        // are errors, just as if they had been omitted from a supplied object.
+        varDefs
+          .traverse(iv =>
+            checkVarValue(iv, None, "variable values").map(v => (iv.name, (iv.tpe, v))))
+          .map(_.toMap)
       case Some(untypedVars) =>
         untypedVars.asObject match {
           case None =>
