@@ -214,6 +214,10 @@ final class ProjectionSuite extends SkunkDatabaseSuite with SqlProjectionSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlProjectionMapping[IO]
 }
 
+final class QualifiedNamesSuite extends SkunkDatabaseSuite with SqlQualifiedNamesSuite {
+  lazy val mapping = new SkunkTestMapping(pool) with SqlQualifiedNamesMapping[IO]
+}
+
 final class RecursiveInterfacesSuite
     extends SkunkDatabaseSuite
     with SqlRecursiveInterfacesSuite {
