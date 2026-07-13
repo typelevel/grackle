@@ -1,0 +1,3 @@
+-- No schema setup needed here: DoobieH2Suites.MutationSuite copies world.sql's city table into
+-- city_copy at runtime and mints ids by hand (see createCity there), so this script is
+-- intentionally empty.
