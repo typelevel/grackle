@@ -635,9 +635,32 @@ final class VariablesSuite extends CatsEffectSuite {
       }
     """
 
-    val compiled = VariablesMapping.compiler.compile(query, reportUnused = false)
+    val compiled = VariablesMapping.compiler.compile(query)
 
     assertEquals(compiled.toProblems.toList, List.empty[Problem])
+  }
+
+  test("variable default applies when no variables are supplied") {
+    val query = """
+      query getZuckProfile($devicePicSize: Int = 60) {
+        user(id: 4) {
+          profilePic(size: $devicePicSize)
+        }
+      }
+    """
+
+    val expected =
+      UntypedSelect(
+        "user",
+        None,
+        List(Binding("id", IDValue("4"))),
+        Nil,
+        UntypedSelect("profilePic", None, List(Binding("size", IntValue(60))), Nil, Empty)
+      )
+
+    val compiled = VariablesMapping.compiler.compile(query)
+
+    assertEquals(compiled.map(_.query), Result.Success(expected))
   }
 
   test("variable in input value with explicit empty variables object") {
