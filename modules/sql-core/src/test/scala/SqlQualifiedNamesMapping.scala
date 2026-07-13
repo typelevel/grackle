@@ -38,6 +38,18 @@ trait SqlQualifiedNamesMapping[F[_]] extends SqlTestMapping[F] {
     val name = col("name", text)
   }
 
+  object speaks extends TableDef("qualified.speaks") {
+    val countrycode = col("countrycode", bpchar(3))
+    val lang = col("lang", text)
+  }
+
+  // Named so that folding qualified.country's qualifier with an underscore yields exactly
+  // this table's name, pinning that synthesized identifiers and real tables coexist.
+  object twin extends TableDef("qualified_country") {
+    val code = col("code", bpchar(3))
+    val motto = col("motto", text)
+  }
+
   val schema =
     schema"""
       type Query {
@@ -48,16 +60,26 @@ trait SqlQualifiedNamesMapping[F[_]] extends SqlTestMapping[F] {
         code: String!
         name: String!
         cities(limit: Int): [City!]!
+        languages: [Language!]!
+        twin: Twin
       }
       type City {
         name: String!
         country: Country!
+      }
+      type Language {
+        language: String!
+      }
+      type Twin {
+        motto: String!
       }
     """
 
   val QueryType = schema.ref("Query")
   val CountryType = schema.ref("Country")
   val CityType = schema.ref("City")
+  val LanguageType = schema.ref("Language")
+  val TwinType = schema.ref("Twin")
 
   val typeMappings =
     List(
@@ -73,7 +95,9 @@ trait SqlQualifiedNamesMapping[F[_]] extends SqlTestMapping[F] {
         fieldMappings = List(
           SqlField("code", country.code, key = true),
           SqlField("name", country.name),
-          SqlObject("cities", Join(country.code, city.countrycode))
+          SqlObject("cities", Join(country.code, city.countrycode)),
+          SqlObject("languages", Join(country.code, speaks.countrycode)),
+          SqlObject("twin", Join(country.code, twin.code))
         )
       ),
       ObjectMapping(
@@ -83,6 +107,20 @@ trait SqlQualifiedNamesMapping[F[_]] extends SqlTestMapping[F] {
           SqlField("countrycode", city.countrycode, hidden = true),
           SqlField("name", city.name),
           SqlObject("country", Join(city.countrycode, country.code))
+        )
+      ),
+      ObjectMapping(
+        tpe = LanguageType,
+        fieldMappings = List(
+          SqlField("language", speaks.lang, key = true, associative = true),
+          SqlField("countrycode", speaks.countrycode, hidden = true)
+        )
+      ),
+      ObjectMapping(
+        tpe = TwinType,
+        fieldMappings = List(
+          SqlField("code", twin.code, key = true, hidden = true),
+          SqlField("motto", twin.motto)
         )
       )
     )

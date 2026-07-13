@@ -140,4 +140,98 @@ trait SqlQualifiedNamesSuite extends CatsEffectSuite {
 
     assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
   }
+
+  // An associative child reached through a single mergeable join takes the DerivedTableRef
+  // "_assoc" path, whose alias is derived from the raw table name - a further place a
+  // schema-qualified name must not leak into alias position.
+  test("associative field over schema-qualified tables (#342)") {
+    val query = """
+      query {
+        country(code: "CAN") {
+          name
+          languages {
+            language
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "name" : "Canada",
+            "languages" : [
+              { "language" : "English" },
+              { "language" : "French" }
+            ]
+          }
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
+
+  // qualified_country is a real table whose name equals qualified.country with its qualifier
+  // folded by an underscore. Recursing through qualified.country while joining
+  // qualified_country in the same statement pins that folded synthesized identifiers and
+  // identically-named real tables coexist (the render-time alias state uniquifies any
+  // second occurrence of an already-seen name).
+  test("folded qualified name coexists with an identically named table (#342)") {
+    val query = """
+      query {
+        country(code: "CAN") {
+          name
+          twin {
+            motto
+          }
+          cities {
+            name
+            country {
+              name
+              twin {
+                motto
+              }
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "name" : "Canada",
+            "twin" : {
+              "motto" : "A mari usque ad mare"
+            },
+            "cities" : [
+              {
+                "name" : "Toronto",
+                "country" : {
+                  "name" : "Canada",
+                  "twin" : {
+                    "motto" : "A mari usque ad mare"
+                  }
+                }
+              },
+              {
+                "name" : "Ottawa",
+                "country" : {
+                  "name" : "Canada",
+                  "twin" : {
+                    "motto" : "A mari usque ad mare"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
 }
