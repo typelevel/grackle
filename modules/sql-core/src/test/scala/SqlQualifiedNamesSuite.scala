@@ -70,4 +70,74 @@ trait SqlQualifiedNamesSuite extends CatsEffectSuite {
 
     assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
   }
+
+  // Top-level limit over a list with a child join forces the compiler to synthesize named
+  // subqueries (via syntheticName), a second path on which a schema-qualified table name
+  // must not leak into alias position.
+  test("top-level limit over schema-qualified tables (#342)") {
+    val query = """
+      query {
+        countries(limit: 2) {
+          name
+          cities {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "countries" : [
+            {
+              "name" : "Canada",
+              "cities" : [
+                { "name" : "Toronto" },
+                { "name" : "Ottawa" }
+              ]
+            },
+            {
+              "name" : "Germany",
+              "cities" : [
+                { "name" : "Berlin" }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
+
+  // A limit nested below the root exercises the window-function machinery and its
+  // synthesized subquery names.
+  test("nested limit over schema-qualified tables (#342)") {
+    val query = """
+      query {
+        country(code: "CAN") {
+          name
+          cities(limit: 1) {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "name" : "Canada",
+            "cities" : [
+              { "name" : "Ottawa" }
+            ]
+          }
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
 }

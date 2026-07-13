@@ -17,9 +17,9 @@ package grackle.sql.test
 
 import grackle._
 import grackle.Predicate.{Const, Eql}
-import grackle.Query.{Binding, Filter, Unique}
+import grackle.Query.{Binding, Filter, Limit, OrderBy, OrderSelection, OrderSelections, Unique}
 import grackle.QueryCompiler.{Elab, SelectElaborator}
-import grackle.Value.StringValue
+import grackle.Value.{IntValue, StringValue}
 import grackle.syntax._
 
 // Mapping over tables with schema-qualified names (issue #342). The City -> Country
@@ -42,11 +42,12 @@ trait SqlQualifiedNamesMapping[F[_]] extends SqlTestMapping[F] {
     schema"""
       type Query {
         country(code: String!): Country
+        countries(limit: Int!): [Country!]!
       }
       type Country {
         code: String!
         name: String!
-        cities: [City!]!
+        cities(limit: Int): [City!]!
       }
       type City {
         name: String!
@@ -63,7 +64,8 @@ trait SqlQualifiedNamesMapping[F[_]] extends SqlTestMapping[F] {
       ObjectMapping(
         tpe = QueryType,
         fieldMappings = List(
-          SqlObject("country")
+          SqlObject("country"),
+          SqlObject("countries")
         )
       ),
       ObjectMapping(
@@ -89,5 +91,21 @@ trait SqlQualifiedNamesMapping[F[_]] extends SqlTestMapping[F] {
     case (QueryType, "country", List(Binding("code", StringValue(code)))) =>
       Elab.transformChild(child =>
         Unique(Filter(Eql(CountryType / "code", Const(code)), child)))
+
+    case (QueryType, "countries", List(Binding("limit", IntValue(limit)))) =>
+      Elab.transformChild(child =>
+        Limit(
+          limit,
+          OrderBy(OrderSelections(List(OrderSelection[String](CountryType / "code"))), child)))
+
+    case (CountryType, "cities", List(Binding("limit", limit))) =>
+      Elab.transformChild(child =>
+        limit match {
+          case IntValue(lim) =>
+            Limit(
+              lim,
+              OrderBy(OrderSelections(List(OrderSelection[String](CityType / "name"))), child))
+          case _ => child
+        })
   }
 }

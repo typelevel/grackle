@@ -70,6 +70,14 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     val rootName = "<root>"
     val rootTableName = TableName(rootName)
     def isRoot(table: String): Boolean = table == rootName
+
+    /**
+     * Yields a name usable as a bare SQL identifier, for aliases and synthesized table names
+     * derived from `name`. A schema-qualified name like "public.country" is not a legal alias,
+     * so qualifiers are folded in with underscores (issue #342); unqualified names are
+     * unchanged.
+     */
+    def asIdentifier(name: String): String = name.replace('.', '_')
   }
   class TableDef(name: String) {
     implicit val tableName: TableName = TableName(name)
@@ -145,12 +153,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         case Some(alias) => (this, alias)
         case None =>
           if (seenTables(table.name)) {
-            // Derive the alias from the unqualified table name: an alias must be a bare
-            // identifier, so a qualified name like "public.country" cannot be used verbatim
-            // (issue #342). Uniqueness is preserved by the counter, which is shared across
-            // table and column aliases, so same-named tables in different schemas cannot
-            // collide. For unqualified names the derivation is the identity.
-            val alias = s"${table.name.substring(table.name.lastIndexOf('.') + 1)}_alias_$next"
+            // An alias must be a bare identifier, so a qualified name like "public.country"
+            // cannot seed it verbatim (issue #342); uniqueness is preserved by the counter,
+            // which is shared across table and column aliases.
+            val alias = s"${TableName.asIdentifier(table.name)}_alias_$next"
             val newState =
               copy(
                 next = next + 1,
@@ -2352,8 +2358,12 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
        * joins
        */
       def syntheticName(suffix: String): String = {
+        // Synthesized names are used as subquery aliases, so they must be bare identifiers
+        // even when built from schema-qualified table names (issue #342).
         val joinNames = joins.map(_.child.name)
-        (table.name :: joinNames).mkString("_").take(50 - suffix.length) + suffix
+        TableName
+          .asIdentifier((table.name :: joinNames).mkString("_"))
+          .take(50 - suffix.length) + suffix
       }
 
       /**
@@ -3374,7 +3384,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             for {
               withFilter0 <- withFilter
               table <- parentTableForType(context)
-              sel <- withFilter0.toSubquery(table.name)
+              // The subquery name lands in alias position, so it must be a bare
+              // identifier even for a schema-qualified table (issue #342).
+              sel <- withFilter0.toSubquery(TableName.asIdentifier(table.name))
               res <- sel.addFilterOrderByOffsetLimit(
                 None,
                 orderBy,
