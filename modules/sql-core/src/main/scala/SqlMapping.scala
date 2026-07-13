@@ -145,7 +145,12 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         case Some(alias) => (this, alias)
         case None =>
           if (seenTables(table.name)) {
-            val alias = s"${table.name}_alias_$next"
+            // Derive the alias from the unqualified table name: an alias must be a bare
+            // identifier, so a qualified name like "public.country" cannot be used verbatim
+            // (issue #342). Uniqueness is preserved by the counter, which is shared across
+            // table and column aliases, so same-named tables in different schemas cannot
+            // collide. For unqualified names the derivation is the identity.
+            val alias = s"${table.name.substring(table.name.lastIndexOf('.') + 1)}_alias_$next"
             val newState =
               copy(
                 next = next + 1,
