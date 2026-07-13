@@ -2466,9 +2466,11 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 val finalJoin = lastJoin.toSqlJoin(lastJoinParentTable, base.table, inner)
                 finalJoin :: Nil
               } else {
+                // On the mergeable branch base.table is the raw TableRef, so its name may be
+                // schema-qualified and must be folded before use in alias position (#342).
                 val assocTable = TableExpr.DerivedTableRef(
                   context,
-                  Some(base.table.name + "_assoc"),
+                  Some(TableName.asIdentifier(base.table.name) + "_assoc"),
                   base.table,
                   true)
                 val assocJoin = lastJoin.toSqlJoin(lastJoinParentTable, assocTable, inner)
