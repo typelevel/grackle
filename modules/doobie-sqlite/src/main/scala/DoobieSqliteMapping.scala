@@ -152,14 +152,17 @@ trait DoobieSqliteMappingLike[F[_]] extends DoobieMappingLike[F] with SqlMapping
   def defaultOffsetForLimit(limit: Option[Int]): Option[Int] =
     limit.as(0)
 
-  // Modern SQLite (>= 3.30) supports NULLS FIRST/LAST natively, same as Postgres/Oracle.
+  // Modern SQLite (>= 3.30) supports NULLS FIRST/LAST natively, but unlike Postgres/Oracle its
+  // default places NULLs low (first in ASC, last in DESC), so the explicit clause is needed on
+  // the mirror-image cases relative to the pg dialect - the same polarity correction the MSSQL
+  // dialect makes. Pinned by NullOrderingSuite.
   def orderToFragment(col: Fragment, ascending: Boolean, nullsLast: Boolean): Fragment = {
     val dir = if (ascending) Fragments.empty else Fragments.const(" DESC")
     val nulls =
-      if (!nullsLast && ascending)
-        Fragments.const(" NULLS FIRST ")
-      else if (nullsLast && !ascending)
+      if (nullsLast && ascending)
         Fragments.const(" NULLS LAST ")
+      else if (!nullsLast && !ascending)
+        Fragments.const(" NULLS FIRST ")
       else
         Fragments.empty
 
