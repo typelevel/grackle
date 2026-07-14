@@ -17,6 +17,7 @@ val kindProjectorVersion = "0.13.4"
 val literallyVersion = "1.2.0"
 val logbackVersion = "1.6.3"
 val log4catsVersion = "2.8.0"
+val mariadbDriverVersion = "3.5.9"
 val mssqlDriverVersion = "13.4.0.jre11"
 val munitVersion = "1.3.5"
 val munitCatsEffectVersion = "2.2.0"
@@ -183,6 +184,7 @@ lazy val modules: List[CompositeProject] = List(
   doobieoracle,
   doobiemssql,
   doobiemysql,
+  doobiemariadb,
   doobiesqlite,
   skunk,
   generic,
@@ -359,6 +361,23 @@ lazy val doobiemysql = project
       .Setup(_ => runDocker("docker compose up -d --wait --quiet-pull mysql")),
     libraryDependencies ++= Seq(
       "com.mysql" % "mysql-connector-j" % mysqlDriverVersion
+    )
+  )
+
+lazy val doobiemariadb = project
+  .in(file("modules/doobie-mariadb"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(doobiecore % "test->test;compile->compile")
+  .settings(commonSettings)
+  .settings(
+    name := "grackle-doobie-mariadb",
+    Test / fork := true,
+    Test / parallelExecution := false,
+    Test / testOptions += Tests
+      .Setup(_ => runDocker("docker compose up -d --wait --quiet-pull mariadb")),
+    libraryDependencies ++= Seq(
+      "org.mariadb.jdbc" % "mariadb-java-client" % mariadbDriverVersion
     )
   )
 
@@ -542,6 +561,7 @@ lazy val unidocs = project
       doobieoracle,
       doobiemssql,
       doobiemysql,
+      doobiemariadb,
       doobiesqlite,
       skunk.jvm,
       generic.jvm
