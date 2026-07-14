@@ -21,6 +21,7 @@ val mssqlDriverVersion = "13.4.0.jre11"
 val munitVersion = "1.3.5"
 val munitCatsEffectVersion = "2.2.0"
 val munitScalaCheckVersion = "1.3.0"
+val mysqlDriverVersion = "9.3.0"
 val oracleDriverVersion = "23.26.3.0.0"
 val postgresVersion = "42.7.13"
 val skunkVersion = "1.0.0"
@@ -181,6 +182,7 @@ lazy val modules: List[CompositeProject] = List(
   doobiepg,
   doobieoracle,
   doobiemssql,
+  doobiemysql,
   doobiesqlite,
   skunk,
   generic,
@@ -340,6 +342,23 @@ lazy val doobiemssql = project
       .Setup(_ => runDocker("docker compose up -d --wait --quiet-pull mssql")),
     libraryDependencies ++= Seq(
       "com.microsoft.sqlserver" % "mssql-jdbc" % mssqlDriverVersion
+    )
+  )
+
+lazy val doobiemysql = project
+  .in(file("modules/doobie-mysql"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(doobiecore % "test->test;compile->compile")
+  .settings(commonSettings)
+  .settings(
+    name := "grackle-doobie-mysql",
+    Test / fork := true,
+    Test / parallelExecution := false,
+    Test / testOptions += Tests
+      .Setup(_ => runDocker("docker compose up -d --wait --quiet-pull mysql")),
+    libraryDependencies ++= Seq(
+      "com.mysql" % "mysql-connector-j" % mysqlDriverVersion
     )
   )
 
@@ -522,6 +541,7 @@ lazy val unidocs = project
       doobiepg,
       doobieoracle,
       doobiemssql,
+      doobiemysql,
       doobiesqlite,
       skunk.jvm,
       generic.jvm
