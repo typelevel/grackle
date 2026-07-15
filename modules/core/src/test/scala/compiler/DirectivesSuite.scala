@@ -199,6 +199,9 @@ final class DirectivesSuite extends CatsEffectSuite {
       """|schema @foo {
          |  query: Query
          |}
+         |type Query @foo {
+         |  field(e: Enum, i: Input): Int @foo
+         |}
          |scalar Scalar @foo
          |interface Interface @foo {
          |  field(e: Enum, i: Input): Int @foo

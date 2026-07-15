@@ -94,6 +94,10 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: multiple deprecated annotations") {
     val schema = Schema(
       """
+        type Query {
+          foo: Int
+        }
+
         type ExampleType {
           oldField: String @deprecated @deprecated
         }
@@ -112,6 +116,10 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: deprecated annotation with unsupported argument") {
     val schema = Schema(
       """
+        type Query {
+          foo: Int
+        }
+
         type ExampleType {
           oldField: String @deprecated(notareason: "foo bar baz")
         }
@@ -130,6 +138,11 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: duplicate enum values") {
     val schema = Schema(
       """
+        type Query {
+          foo: Int
+        }
+
+
         enum Direction {
           NORTH
           NORTH
@@ -149,6 +162,10 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: object implementing unspecified interfaces") {
     val schema = Schema(
       """
+        type Query {
+          foo: Int
+        }
+
         type Human implements Character & Contactable {
           name: String!
         }
@@ -171,6 +188,10 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: object implementing duplicate interfaces") {
     val schema = Schema(
       """
+        type Query {
+          foo: Int
+        }
+
         interface Character {
           id: ID!
           name: String!
@@ -200,6 +221,10 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: object failing to implement interface fields") {
     val schema = Schema(
       """
+        type Query {
+          foo: Int
+        }
+
         interface Character {
           id: ID!
           name: String!
@@ -228,6 +253,11 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: interface failing to implement interface fields") {
     val schema = Schema(
       """
+        type Query {
+          foo: Int
+        }
+
+
         interface Character {
           id: ID!
           name: String!
@@ -256,6 +286,10 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: object implementing interface field with wrong type") {
     val schema = Schema(
       """
+        type Query {
+          foo: Int
+        }
+
         interface Character {
           name: String!
         }
@@ -281,6 +315,10 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: object implementing interface field with mismatched arguments") {
     val schema = Schema(
       """
+        type Query {
+          foo: Int
+        }
+
         interface Character {
           name(foo: Int!): String!
         }
@@ -306,6 +344,10 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: multiple objects failing to implement interface field") {
     val schema = Schema(
       """
+        type Query {
+          foo: Int
+        }
+
         interface Character {
           id: ID!
           name: String!
@@ -337,6 +379,10 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: object failing to implement multiple interface fields") {
     val schema = Schema(
       """
+        type Query {
+          foo: Int
+        }
+
         interface Character {
           id: ID!
           name: String!
@@ -368,6 +414,10 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: object correctly implements transitive interface") {
     val schema = Schema(
       """
+        type Query {
+          foo: Int
+        }
+
         interface Node {
           id: ID!
         }
@@ -386,7 +436,7 @@ final class SchemaSuite extends CatsEffectSuite {
 
     schema match {
       case Result.Success(a) =>
-        assertEquals(a.types.map(_.name), List("Node", "Resource", "Human"))
+        assertEquals(a.types.map(_.name), List("Query", "Node", "Resource", "Human"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -394,6 +444,10 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: object failing to implement transitive interface") {
     val schema = Schema(
       """
+        type Query {
+          foo: Int
+        }
+
         interface Node {
           id: ID!
         }
@@ -582,8 +636,61 @@ final class SchemaSuite extends CatsEffectSuite {
     assert(schema.subscriptionType.exists(_ =:= schema.ref("Subscription")))
   }
 
-  test("no query type (crashes)") {
-    intercept[NoSuchElementException](schema"scalar Foo".queryType)
+  test("schema validation: no query type") {
+    val schema = Schema("scalar Foo")
+
+    schema match {
+      case Result.Failure(ps) =>
+        assertEquals(
+          ps.map(_.message),
+          NonEmptyChain("No 'query' root operation type in schema"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
+  test("schema validation: dangling root operation type reference") {
+    val schema = Schema(
+      """
+        schema {
+          query: Query
+          mutation: MutationRoot
+        }
+
+        type Query {
+          foo: Int
+        }
+      """
+    )
+
+    schema match {
+      case Result.Failure(ps) =>
+        assertEquals(
+          ps.map(_.message),
+          NonEmptyChain(
+            "Undefined type 'MutationRoot' specified as 'mutation' root operation type"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
+  test("schema validation: non-object root operation type") {
+    val schema = Schema(
+      """
+        schema {
+          query: Foo
+        }
+
+        scalar Foo
+      """
+    )
+
+    schema match {
+      case Result.Failure(ps) =>
+        assertEquals(
+          ps.map(_.message),
+          NonEmptyChain(
+            "Type 'Foo' specified as 'query' root operation type is not an object type"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
   }
 
   test("schema validation: fields implementing interfaces can be subtypes") {
@@ -648,6 +755,11 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: input with non-nullable fields") {
     val schema = Schema(
       """
+        type Query {
+          foo: Int
+        }
+
+
         input ExampleInput {
           foo: String!
           bar: Int
@@ -657,7 +769,7 @@ final class SchemaSuite extends CatsEffectSuite {
     )
 
     schema match {
-      case Result.Success(s) => assertEquals(s.types.map(_.name), List("ExampleInput"))
+      case Result.Success(s) => assertEquals(s.types.map(_.name), List("Query", "ExampleInput"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -704,6 +816,11 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: oneOf with all nullable fields") {
     val schema = Schema(
       """
+        type Query {
+          foo: Int
+        }
+
+
         input ExampleInput @oneOf {
           foo: String
           bar: Int
@@ -713,7 +830,7 @@ final class SchemaSuite extends CatsEffectSuite {
     )
 
     schema match {
-      case Result.Success(s) => assertEquals(s.types.map(_.name), List("ExampleInput"))
+      case Result.Success(s) => assertEquals(s.types.map(_.name), List("Query", "ExampleInput"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
@@ -721,6 +838,11 @@ final class SchemaSuite extends CatsEffectSuite {
   test("schema validation: oneOf shouldn't have required fields") {
     val schema = Schema(
       """
+        type Query {
+          foo: Int
+        }
+
+
         input ExampleInput @oneOf {
           foo: String!
           bar: Int
@@ -740,7 +862,11 @@ final class SchemaSuite extends CatsEffectSuite {
   }
 
   test("operations on undefined types") {
-    val schema = schema""
+    val schema = schema"""
+      type Query {
+        foo: Int
+      }
+    """
 
     val QuuxType = schema.uncheckedRef("Quux")
     assertEquals(QuuxType.fieldInfo("quux"), None)

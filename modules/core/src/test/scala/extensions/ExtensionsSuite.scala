@@ -71,7 +71,11 @@ final class ExtensionsSuite extends CatsEffectSuite {
     val schema =
       schema"""
         schema {
-          query: Foo
+          query: Query
+        }
+
+        type Query {
+          foo: Int
         }
 
         scalar Foo
@@ -504,7 +508,11 @@ final class ExtensionsSuite extends CatsEffectSuite {
     val schema = Schema(
       """
         schema {
-          query: Foo
+          query: Query
+        }
+
+        type Query {
+          foo: Int
         }
 
         scalar Foo
