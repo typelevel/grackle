@@ -213,6 +213,10 @@ final class QualifiedNamesSuite extends DoobiePgDatabaseSuite with SqlQualifiedN
   lazy val mapping = new DoobiePgTestMapping(transactor) with SqlQualifiedNamesMapping[IO]
 }
 
+final class TableNameSuite extends DoobiePgDatabaseSuite with SqlTableNameSuite {
+  lazy val mapping = new DoobiePgTestMapping(transactor) with SqlQualifiedNamesMapping[IO]
+}
+
 final class RecursiveInterfacesSuite
     extends DoobiePgDatabaseSuite
     with SqlRecursiveInterfacesSuite {

@@ -218,6 +218,10 @@ final class QualifiedNamesSuite extends SkunkDatabaseSuite with SqlQualifiedName
   lazy val mapping = new SkunkTestMapping(pool) with SqlQualifiedNamesMapping[IO]
 }
 
+final class TableNameSuite extends SkunkDatabaseSuite with SqlTableNameSuite {
+  lazy val mapping = new SkunkTestMapping(pool) with SqlQualifiedNamesMapping[IO]
+}
+
 final class RecursiveInterfacesSuite
     extends SkunkDatabaseSuite
     with SqlRecursiveInterfacesSuite {

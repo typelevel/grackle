@@ -90,7 +90,7 @@ trait SkunkMappingLike[F[_]] extends Mapping[F] with SqlPgMappingLike[F] { outer
       typeName: NullableTypeName[T],
       isNullable: IsNullable[T],
       pos: SourcePos): ColumnRef =
-    ColumnRef(tableName.name, colName, (codec, isNullable.isNullable), typeName.value, pos)
+    ColumnRef(tableName, colName, (codec, isNullable.isNullable), typeName.value, pos)
 
   // We need to demonstrate that our `Fragment` type has certain compositional properties.
   implicit def Fragments: SqlFragment[AppliedFragment] =

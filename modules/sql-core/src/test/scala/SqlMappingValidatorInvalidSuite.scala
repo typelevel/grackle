@@ -46,7 +46,7 @@ trait SqlMappingValidatorInvalidSuite extends CatsEffectSuite {
               fm.fieldName,
               SchemaRenderer.renderType(field.tpe),
               field.tpe.isNullable,
-              columnRef.table,
+              columnRef.table.sqlRef,
               columnRef.column,
               colIsNullable))
         case _ => None
@@ -63,7 +63,7 @@ trait SqlMappingValidatorInvalidSuite extends CatsEffectSuite {
               om.tpe.name,
               fm.fieldName,
               SchemaRenderer.renderType(field.tpe),
-              columnRef.table,
+              columnRef.table.sqlRef,
               columnRef.column,
               columnRef.scalaTypeName))
         case _ => None
@@ -80,7 +80,7 @@ trait SqlMappingValidatorInvalidSuite extends CatsEffectSuite {
               om.tpe.name,
               fm.fieldName,
               SchemaRenderer.renderType(field.tpe),
-              columnRef.table,
+              columnRef.table.sqlRef,
               columnRef.column,
               columnRef.scalaTypeName))
         case _ => None

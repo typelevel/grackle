@@ -58,7 +58,7 @@ trait DoobieMappingLike[F[_]] extends Mapping[F] with SqlMappingLike[F] {
       implicit tableName: TableName,
       typeName: TypeName[T],
       pos: SourcePos): ColumnRef =
-    ColumnRef(tableName.name, colName, (codec, nullable), typeName.value, pos)
+    ColumnRef(tableName, colName, (codec, nullable), typeName.value, pos)
 
   implicit def Fragments: SqlFragment[Fragment] =
     new SqlFragment[Fragment] {
