@@ -91,7 +91,7 @@ trait DoobieMSSqlMappingLike[F[_]] extends DoobieMappingLike[F] with SqlMappingL
     else
       // The subquery name lands in alias position, so a schema-qualified table name must be
       // folded to a bare identifier first (issue #342).
-      s.toSubquery(TableName.asIdentifier(s.table.name) + "_encaps", Laterality.NotLateral)
+      s.toSubquery(s.table.identifier + "_encaps", Laterality.NotLateral)
 
   def mkLateral(inner: Boolean): Laterality =
     Laterality.Apply(inner)
