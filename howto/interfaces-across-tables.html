@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+  
+  <head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="generator" content="Typelevel Laika + Helium Theme" />
+  <title>Interfaces across multiple tables</title>
+  
+  <meta name="author" content="Miles Sabin"/>
+  
+  <meta name="author" content="Rob Norris"/>
+  
+  
+  <meta name="description" content="docs"/>
+  
+  
+  
+  <link rel="icon" sizes="32x32" type="image/png" href="https://typelevel.org/img/favicon.png"/>
+  
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato:400,700">
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Fira+Mono:500">
+  
+  <link rel="stylesheet" type="text/css" href="../helium/site/icofont.min.css" />
+    <link rel="stylesheet" type="text/css" href="../helium/site/laika-helium.css" />
+  <script src="../helium/site/laika-helium.js"></script>
+  
+  
+  <script> /* for avoiding page load transitions */ </script>
+</head>
+
+  <body>
+
+    <header id="top-bar" class="light-default dark-default">
+
+  <div class="row">
+    <a id="nav-icon">
+      <i class="icofont-laika navigationMenu" title="Navigation">&#xefa2;</i>
+    </a>
+    
+    
+  </div>
+
+  <a class="image-link" href="https://typelevel.org"><img src="https://typelevel.org/img/logo.svg"></a>
+
+  <div class="row links">
+    
+    <a class="icon-link svg-link" href="https://www.javadoc.io/doc/org.typelevel/grackle-docs_2.13/0.29.0/"><span class="api" title="API"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M75,47.5c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm-50,-0c13.246,-0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,-0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm2.705,16.735l7.239,0l0.622,-4.904l-21.833,0l-0,4.904l7.589,0l0,22.067l6.383,0l-0,-22.067Zm58.076,7.265c-0,-8.757 -3.698,-14.166 -10.781,-14.166c-7.083,-0 -10.781,5.604 -10.781,14.166c0,8.757 3.698,14.166 10.781,14.166c7.083,0 10.781,-5.604 10.781,-14.166Zm-6.539,0c0,6.538 -1.128,9.496 -4.242,9.496c-2.997,0 -4.242,-2.88 -4.242,-9.496c-0,-6.616 1.206,-9.496 4.242,-9.496c3.036,-0 4.242,2.88 4.242,9.496Zm-29.242,-67c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm0.512,9.834c-7.122,-0 -12.609,5.098 -12.609,14.127c-0,9.263 5.215,14.205 12.532,14.205c4.164,0 7.083,-1.634 9.068,-3.658l-2.88,-3.697c-1.518,1.206 -3.153,2.413 -5.838,2.413c-3.697,-0 -6.266,-2.763 -6.266,-9.263c-0,-6.616 2.724,-9.379 6.149,-9.379c2.102,-0 3.892,0.778 5.371,1.984l3.113,-3.775c-2.257,-1.868 -4.748,-2.957 -8.64,-2.957Z"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link svg-link" href="https://github.com/typelevel/grackle"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link glyph-link" href="https://discord.gg/XF3CXcMzqD"><i class="icofont-laika chat" title="Chat">&#xeed5;</i></a>
+    
+    <a class="icon-link svg-link" href="https://fosstodon.org/@typelevel"><span class="mastodon" title="Mastodon"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <g class="svg-shape">
+    <path d="M11.19 12.195c2.016-.24 3.77-1.475 3.99-2.603.348-1.778.32-4.339.32-4.339 0-3.47-2.286-4.488-2.286-4.488C12.062.238 10.083.017 8.027 0h-.05C5.92.017 3.942.238 2.79.765c0 0-2.285 1.017-2.285 4.488l-.002.662c-.004.64-.007 1.35.011 2.091.083 3.394.626 6.74 3.78 7.57 1.454.383 2.703.463 3.709.408 1.823-.1 2.847-.647 2.847-.647l-.06-1.317s-1.303.41-2.767.36c-1.45-.05-2.98-.156-3.215-1.928a3.614 3.614 0 0 1-.033-.496s1.424.346 3.228.428c1.103.05 2.137-.064 3.188-.189zm1.613-2.47H11.13v-4.08c0-.859-.364-1.295-1.091-1.295-.804 0-1.207.517-1.207 1.541v2.233H7.168V5.89c0-1.024-.403-1.541-1.207-1.541-.727 0-1.091.436-1.091 1.296v4.079H3.197V5.522c0-.859.22-1.541.66-2.046.456-.505 1.052-.764 1.793-.764.856 0 1.504.328 1.933.983L8 4.39l.417-.695c.429-.655 1.077-.983 1.934-.983.74 0 1.336.259 1.791.764.442.505.661 1.187.661 2.046v4.203z"/>
+  </g>
+</svg></span></a>
+    
+  </div>  
+
+</header>
+    
+    <nav id="sidebar">
+
+  <div class="row">
+    
+    <a class="icon-link svg-link" href="https://www.javadoc.io/doc/org.typelevel/grackle-docs_2.13/0.29.0/"><span class="api" title="API"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M75,47.5c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm-50,-0c13.246,-0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,-0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm2.705,16.735l7.239,0l0.622,-4.904l-21.833,0l-0,4.904l7.589,0l0,22.067l6.383,0l-0,-22.067Zm58.076,7.265c-0,-8.757 -3.698,-14.166 -10.781,-14.166c-7.083,-0 -10.781,5.604 -10.781,14.166c0,8.757 3.698,14.166 10.781,14.166c7.083,0 10.781,-5.604 10.781,-14.166Zm-6.539,0c0,6.538 -1.128,9.496 -4.242,9.496c-2.997,0 -4.242,-2.88 -4.242,-9.496c-0,-6.616 1.206,-9.496 4.242,-9.496c3.036,-0 4.242,2.88 4.242,9.496Zm-29.242,-67c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm0.512,9.834c-7.122,-0 -12.609,5.098 -12.609,14.127c-0,9.263 5.215,14.205 12.532,14.205c4.164,0 7.083,-1.634 9.068,-3.658l-2.88,-3.697c-1.518,1.206 -3.153,2.413 -5.838,2.413c-3.697,-0 -6.266,-2.763 -6.266,-9.263c-0,-6.616 2.724,-9.379 6.149,-9.379c2.102,-0 3.892,0.778 5.371,1.984l3.113,-3.775c-2.257,-1.868 -4.748,-2.957 -8.64,-2.957Z"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link svg-link" href="https://github.com/typelevel/grackle"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link glyph-link" href="https://discord.gg/XF3CXcMzqD"><i class="icofont-laika chat" title="Chat">&#xeed5;</i></a>
+    
+    <a class="icon-link svg-link" href="https://fosstodon.org/@typelevel"><span class="mastodon" title="Mastodon"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <g class="svg-shape">
+    <path d="M11.19 12.195c2.016-.24 3.77-1.475 3.99-2.603.348-1.778.32-4.339.32-4.339 0-3.47-2.286-4.488-2.286-4.488C12.062.238 10.083.017 8.027 0h-.05C5.92.017 3.942.238 2.79.765c0 0-2.285 1.017-2.285 4.488l-.002.662c-.004.64-.007 1.35.011 2.091.083 3.394.626 6.74 3.78 7.57 1.454.383 2.703.463 3.709.408 1.823-.1 2.847-.647 2.847-.647l-.06-1.317s-1.303.41-2.767.36c-1.45-.05-2.98-.156-3.215-1.928a3.614 3.614 0 0 1-.033-.496s1.424.346 3.228.428c1.103.05 2.137-.064 3.188-.189zm1.613-2.47H11.13v-4.08c0-.859-.364-1.295-1.091-1.295-.804 0-1.207.517-1.207 1.541v2.233H7.168V5.89c0-1.024-.403-1.541-1.207-1.541-.727 0-1.091.436-1.091 1.296v4.079H3.197V5.522c0-.859.22-1.541.66-2.046.456-.505 1.052-.764 1.793-.764.856 0 1.504.328 1.933.983L8 4.39l.417-.695c.429-.655 1.077-.983 1.934-.983.74 0 1.336.259 1.791.764.442.505.661 1.187.661 2.046v4.203z"/>
+  </g>
+</svg></span></a>
+    
+  </div>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="../">Grackle</a></li>
+    <li class="level1 nav-header">Tutorial</li>
+    <li class="level2 nav-leaf"><a href="../tutorial/intro.html">Introduction</a></li>
+    <li class="level2 nav-leaf"><a href="../tutorial/in-memory-model.html">In-memory Model</a></li>
+    <li class="level2 nav-leaf"><a href="../tutorial/db-backed-model.html">DB Backed Model</a></li>
+    <li class="level1 nav-header">How-to Guides</li>
+    <li class="level2 active nav-leaf"><a href="#">Interfaces across multiple tables</a></li>
+    <li class="level1 nav-leaf"><a href="../CONTRIBUTING.html">Contributing</a></li>
+  </ul>
+
+</nav>
+
+    <div id="container">
+
+      
+<nav id="page-nav">
+  <p class="header"><a href="#">Interfaces across multiple tables</a></p>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="#starting-point-one-table-per-subtype">Starting point: one table per subtype</a></li>
+    <li class="level1 nav-leaf"><a href="#merging-the-tables-with-a-view">Merging the tables with a view</a></li>
+    <li class="level1 nav-leaf"><a href="#mapping-the-view">Mapping the view</a></li>
+    <li class="level1 nav-leaf"><a href="#querying-it">Querying it</a></li>
+    <li class="level1 nav-leaf"><a href="#caveats">Caveats</a></li>
+  </ul>
+
+  <p class="footer"></p>
+</nav>
+
+
+      <main class="content">
+
+        <h1 id="interfaces-across-multiple-tables" class="title">Interfaces across multiple tables</h1>
+        <p>Grackle&#39;s SQL module requires all the implementors of a GraphQL interface — and likewise all
+        the branches of a union — to be represented by rows of a single table, with a column that
+        discriminates between the subtypes. If the subtypes of your interface live in separate tables,
+        as is common with pre-existing database schemas, you cannot point an interface mapping at both
+        tables directly: Grackle&#39;s mapping validator rejects the attempt as soon as the mapping is
+        constructed, reporting that &quot;Interface implementors are split across multiple tables&quot; and that
+        &quot;All implementors of an interface must map to a single database table.&quot;</p>
+        <p>Until that restriction is lifted, the standard workaround is to merge the tables with a
+        database view and map the view as if it were the single table Grackle expects. This page walks
+        through a complete example against PostgreSQL.</p>
+        
+        <h2 id="starting-point-one-table-per-subtype" class="section"><a class="anchor-link left" href="#starting-point-one-table-per-subtype"><i class="icofont-laika link">&#xef71;</i></a>Starting point: one table per subtype</h2>
+        <p>Suppose an existing schema stores films and series separately. The two tables share some
+        columns (<code>id</code>, <code>title</code>, <code>synopsis</code>) and each has columns of its own,</p>
+        <pre><code class="nohighlight"><span class="keyword">CREATE</span><span> </span><span class="keyword">TABLE</span><span> </span><span class="identifier">films</span><span> (
+    </span><span class="identifier">id</span><span> </span><span class="type-name">TEXT</span><span> </span><span class="keyword">PRIMARY</span><span> </span><span class="keyword">KEY</span><span>,
+    </span><span class="identifier">title</span><span> </span><span class="type-name">TEXT</span><span> </span><span class="keyword">NOT</span><span> </span><span class="literal-value">NULL</span><span>,
+    </span><span class="identifier">synopsis</span><span> </span><span class="type-name">TEXT</span><span>,
+    </span><span class="identifier">rating</span><span> </span><span class="type-name">TEXT</span><span>
+);
+
+</span><span class="keyword">CREATE</span><span> </span><span class="keyword">TABLE</span><span> </span><span class="identifier">series</span><span> (
+    </span><span class="identifier">id</span><span> </span><span class="type-name">TEXT</span><span> </span><span class="keyword">PRIMARY</span><span> </span><span class="keyword">KEY</span><span>,
+    </span><span class="identifier">title</span><span> </span><span class="type-name">TEXT</span><span> </span><span class="keyword">NOT</span><span> </span><span class="literal-value">NULL</span><span>,
+    </span><span class="identifier">synopsis</span><span> </span><span class="type-name">TEXT</span><span>,
+    </span><span class="type-name">number</span><span>_</span><span class="keyword">of</span><span>_</span><span class="identifier">episodes</span><span> </span><span class="type-name">INT</span><span>
+);</span></code></pre>
+        <p>with some sample data,</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">INSERT</span><span> </span><span class="keyword">INTO</span><span> </span><span class="identifier">films</span><span> (</span><span class="identifier">id</span><span>, </span><span class="identifier">title</span><span>, </span><span class="identifier">synopsis</span><span>, </span><span class="identifier">rating</span><span>) </span><span class="keyword">VALUES</span><span>
+  (</span><span class="string-literal">&#39;f1&#39;</span><span>, </span><span class="string-literal">&#39;Film 1&#39;</span><span>, </span><span class="string-literal">&#39;A film&#39;</span><span>, </span><span class="string-literal">&#39;PG&#39;</span><span>),
+  (</span><span class="string-literal">&#39;f2&#39;</span><span>, </span><span class="string-literal">&#39;Film 2&#39;</span><span>, </span><span class="string-literal">&#39;Another film&#39;</span><span>, </span><span class="string-literal">&#39;15&#39;</span><span>);
+
+</span><span class="keyword">INSERT</span><span> </span><span class="keyword">INTO</span><span> </span><span class="identifier">series</span><span> (</span><span class="identifier">id</span><span>, </span><span class="identifier">title</span><span>, </span><span class="identifier">synopsis</span><span>, </span><span class="type-name">number</span><span>_</span><span class="keyword">of</span><span>_</span><span class="identifier">episodes</span><span>) </span><span class="keyword">VALUES</span><span>
+  (</span><span class="string-literal">&#39;s1&#39;</span><span>, </span><span class="string-literal">&#39;Series 1&#39;</span><span>, </span><span class="string-literal">&#39;A series&#39;</span><span>, </span><span class="number-literal">6</span><span>);</span></code></pre>
+        <p>The GraphQL API we want models the common columns as an interface,</p>
+        <pre><code class="graphql">type Query {
+  entities: [Entity!]!
+}
+interface Entity {
+  id: ID!
+  title: String!
+  synopsis: String
+}
+type Film implements Entity {
+  id: ID!
+  title: String!
+  synopsis: String
+  rating: String
+}
+type Series implements Entity {
+  id: ID!
+  title: String!
+  synopsis: String
+  numberOfEpisodes: Int
+}</code></pre>
+        
+        <h2 id="merging-the-tables-with-a-view" class="section"><a class="anchor-link left" href="#merging-the-tables-with-a-view"><i class="icofont-laika link">&#xef71;</i></a>Merging the tables with a view</h2>
+        <p>A view gives Grackle the single-table shape it needs without changing how the data is stored.
+        Each branch of a <code>UNION ALL</code> contributes one subtype&#39;s rows: a string literal supplies the
+        discriminator column, the shared columns line up, and each subtype-specific column is
+        NULL-padded in the branches it doesn&#39;t belong to,</p>
+        <pre><code class="nohighlight"><span class="keyword">CREATE</span><span> </span><span class="keyword">VIEW</span><span> </span><span class="identifier">entities</span><span> </span><span class="keyword">AS</span><span>
+  </span><span class="keyword">SELECT</span><span>
+    </span><span class="identifier">id</span><span>,
+    </span><span class="string-literal">&#39;FILM&#39;</span><span> </span><span class="keyword">AS</span><span> </span><span class="identifier">entity_type</span><span>,
+    </span><span class="identifier">title</span><span>,
+    </span><span class="identifier">synopsis</span><span>,
+    </span><span class="identifier">rating</span><span>,
+    </span><span class="literal-value">NULL</span><span> :: </span><span class="type-name">INT</span><span> </span><span class="keyword">AS</span><span> </span><span class="type-name">number</span><span>_</span><span class="keyword">of</span><span>_</span><span class="identifier">episodes</span><span>
+  </span><span class="keyword">FROM</span><span> </span><span class="identifier">films</span><span>
+  </span><span class="keyword">UNION</span><span> </span><span class="keyword">ALL</span><span>
+  </span><span class="keyword">SELECT</span><span>
+    </span><span class="identifier">id</span><span>,
+    </span><span class="string-literal">&#39;SERIES&#39;</span><span> </span><span class="keyword">AS</span><span> </span><span class="identifier">entity_type</span><span>,
+    </span><span class="identifier">title</span><span>,
+    </span><span class="identifier">synopsis</span><span>,
+    </span><span class="literal-value">NULL</span><span> :: </span><span class="type-name">TEXT</span><span> </span><span class="keyword">AS</span><span> </span><span class="identifier">rating</span><span>,
+    </span><span class="type-name">number</span><span>_</span><span class="keyword">of</span><span>_</span><span class="identifier">episodes</span><span>
+  </span><span class="keyword">FROM</span><span> </span><span class="identifier">series</span><span>;</span></code></pre>
+        <p>One thing to check before relying on this: the interface&#39;s key must be unique across <em>all</em> the
+        branches. Here film and series ids never collide; if yours can, synthesize a namespaced key in
+        the view instead, for example <code>&#39;film:&#39; || id AS id</code>.</p>
+        
+        <h2 id="mapping-the-view" class="section"><a class="anchor-link left" href="#mapping-the-view"><i class="icofont-laika link">&#xef71;</i></a>Mapping the view</h2>
+        <p>From here on nothing is special: the mapping is an ordinary single-table interface mapping, and
+        never needs to know that <code>entities</code> is a view. The <code>TableDef</code> describes the view&#39;s columns, the
+        <code>SqlInterfaceMapping</code> carries the shared fields, and each implementor adds its own,</p>
+        <pre><code class="nohighlight"><span class="keyword">import</span><span> </span><span class="identifier">org</span><span>.</span><span class="identifier">typelevel</span><span>.</span><span class="identifier">doobie</span><span>.</span><span class="type-name">Meta</span><span>
+
+</span><span class="keyword">import</span><span> </span><span class="identifier">grackle</span><span>.</span><span class="identifier">_</span><span>
+</span><span class="keyword">import</span><span> </span><span class="identifier">grackle</span><span>.</span><span class="type-name">Predicate</span><span>.</span><span class="identifier">_</span><span>
+</span><span class="keyword">import</span><span> </span><span class="identifier">grackle</span><span>.</span><span class="identifier">doobie</span><span>.</span><span class="identifier">postgres</span><span>.</span><span class="type-name">DoobiePgMapping</span><span>
+</span><span class="keyword">import</span><span> </span><span class="identifier">grackle</span><span>.</span><span class="identifier">syntax</span><span>.</span><span class="identifier">_</span><span>
+
+</span><span class="keyword">trait</span><span> </span><span class="type-name">EntitiesMapping</span><span>[</span><span class="type-name">F</span><span>[</span><span class="identifier">_</span><span>]] </span><span class="keyword">extends</span><span> </span><span class="type-name">DoobiePgMapping</span><span>[</span><span class="type-name">F</span><span>] {
+
+  </span><span class="keyword">object</span><span> </span><span class="identifier">entities</span><span> </span><span class="keyword">extends</span><span> </span><span class="type-name">TableDef</span><span>(</span><span class="string-literal">&quot;entities&quot;</span><span>) {
+    </span><span class="keyword">val</span><span> </span><span class="identifier">id</span><span> = </span><span class="identifier">col</span><span>(</span><span class="string-literal">&quot;id&quot;</span><span>, </span><span class="type-name">Meta</span><span>[</span><span class="type-name">String</span><span>])
+    </span><span class="keyword">val</span><span> </span><span class="identifier">entityType</span><span> = </span><span class="identifier">col</span><span>(</span><span class="string-literal">&quot;entity_type&quot;</span><span>, </span><span class="type-name">Meta</span><span>[</span><span class="type-name">String</span><span>])
+    </span><span class="keyword">val</span><span> </span><span class="identifier">title</span><span> = </span><span class="identifier">col</span><span>(</span><span class="string-literal">&quot;title&quot;</span><span>, </span><span class="type-name">Meta</span><span>[</span><span class="type-name">String</span><span>])
+    </span><span class="keyword">val</span><span> </span><span class="identifier">synopsis</span><span> = </span><span class="identifier">col</span><span>(</span><span class="string-literal">&quot;synopsis&quot;</span><span>, </span><span class="type-name">Meta</span><span>[</span><span class="type-name">String</span><span>], </span><span class="identifier">nullable</span><span> = </span><span class="boolean-literal">true</span><span>)
+    </span><span class="keyword">val</span><span> </span><span class="identifier">rating</span><span> = </span><span class="identifier">col</span><span>(</span><span class="string-literal">&quot;rating&quot;</span><span>, </span><span class="type-name">Meta</span><span>[</span><span class="type-name">String</span><span>], </span><span class="identifier">nullable</span><span> = </span><span class="boolean-literal">true</span><span>)
+    </span><span class="keyword">val</span><span> </span><span class="identifier">numberOfEpisodes</span><span> = </span><span class="identifier">col</span><span>(</span><span class="string-literal">&quot;number_of_episodes&quot;</span><span>, </span><span class="type-name">Meta</span><span>[</span><span class="type-name">Int</span><span>], </span><span class="identifier">nullable</span><span> = </span><span class="boolean-literal">true</span><span>)
+  }
+
+  </span><span class="keyword">val</span><span> </span><span class="identifier">schema</span><span> =
+    </span><span class="string-literal">schema&quot;&quot;&quot;
+      type Query {
+        entities: [Entity!]!
+      }
+      interface Entity {
+        id: ID!
+        title: String!
+        synopsis: String
+      }
+      type Film implements Entity {
+        id: ID!
+        title: String!
+        synopsis: String
+        rating: String
+      }
+      type Series implements Entity {
+        id: ID!
+        title: String!
+        synopsis: String
+        numberOfEpisodes: Int
+      }
+    &quot;&quot;&quot;</span><span>
+
+  </span><span class="keyword">val</span><span> </span><span class="type-name">QueryType</span><span> = </span><span class="identifier">schema</span><span>.</span><span class="identifier">ref</span><span>(</span><span class="string-literal">&quot;Query&quot;</span><span>)
+  </span><span class="keyword">val</span><span> </span><span class="type-name">EntityType</span><span> = </span><span class="identifier">schema</span><span>.</span><span class="identifier">ref</span><span>(</span><span class="string-literal">&quot;Entity&quot;</span><span>)
+  </span><span class="keyword">val</span><span> </span><span class="type-name">FilmType</span><span> = </span><span class="identifier">schema</span><span>.</span><span class="identifier">ref</span><span>(</span><span class="string-literal">&quot;Film&quot;</span><span>)
+  </span><span class="keyword">val</span><span> </span><span class="type-name">SeriesType</span><span> = </span><span class="identifier">schema</span><span>.</span><span class="identifier">ref</span><span>(</span><span class="string-literal">&quot;Series&quot;</span><span>)
+
+  </span><span class="keyword">val</span><span> </span><span class="identifier">typeMappings</span><span> =
+    </span><span class="type-name">List</span><span>(
+      </span><span class="type-name">ObjectMapping</span><span>(
+        </span><span class="identifier">tpe</span><span> = </span><span class="type-name">QueryType</span><span>,
+        </span><span class="identifier">fieldMappings</span><span> = </span><span class="type-name">List</span><span>(
+          </span><span class="type-name">SqlObject</span><span>(</span><span class="string-literal">&quot;entities&quot;</span><span>)
+        )
+      ),
+      </span><span class="type-name">SqlInterfaceMapping</span><span>(
+        </span><span class="identifier">tpe</span><span> = </span><span class="type-name">EntityType</span><span>,
+        </span><span class="identifier">discriminator</span><span> = </span><span class="identifier">entityDiscriminator</span><span>,
+        </span><span class="identifier">fieldMappings</span><span> = </span><span class="type-name">List</span><span>(
+          </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;id&quot;</span><span>, </span><span class="identifier">entities</span><span>.</span><span class="identifier">id</span><span>, </span><span class="identifier">key</span><span> = </span><span class="boolean-literal">true</span><span>),
+          </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;entityType&quot;</span><span>, </span><span class="identifier">entities</span><span>.</span><span class="identifier">entityType</span><span>, </span><span class="identifier">discriminator</span><span> = </span><span class="boolean-literal">true</span><span>, </span><span class="identifier">hidden</span><span> = </span><span class="boolean-literal">true</span><span>),
+          </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;title&quot;</span><span>, </span><span class="identifier">entities</span><span>.</span><span class="identifier">title</span><span>),
+          </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;synopsis&quot;</span><span>, </span><span class="identifier">entities</span><span>.</span><span class="identifier">synopsis</span><span>)
+        )
+      ),
+      </span><span class="type-name">ObjectMapping</span><span>(
+        </span><span class="identifier">tpe</span><span> = </span><span class="type-name">FilmType</span><span>,
+        </span><span class="identifier">fieldMappings</span><span> = </span><span class="type-name">List</span><span>(
+          </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;rating&quot;</span><span>, </span><span class="identifier">entities</span><span>.</span><span class="identifier">rating</span><span>)
+        )
+      ),
+      </span><span class="type-name">ObjectMapping</span><span>(
+        </span><span class="identifier">tpe</span><span> = </span><span class="type-name">SeriesType</span><span>,
+        </span><span class="identifier">fieldMappings</span><span> = </span><span class="type-name">List</span><span>(
+          </span><span class="type-name">SqlField</span><span>(</span><span class="string-literal">&quot;numberOfEpisodes&quot;</span><span>, </span><span class="identifier">entities</span><span>.</span><span class="identifier">numberOfEpisodes</span><span>)
+        )
+      )
+    )
+
+  </span><span class="keyword">lazy</span><span> </span><span class="keyword">val</span><span> </span><span class="identifier">entityDiscriminator</span><span> = </span><span class="keyword">new</span><span> </span><span class="type-name">SqlDiscriminator</span><span> {
+    </span><span class="keyword">def</span><span> </span><span class="declaration-name">discriminate</span><span>(</span><span class="identifier">c</span><span>: </span><span class="type-name">Cursor</span><span>): </span><span class="type-name">Result</span><span>[</span><span class="type-name">Type</span><span>] =
+      </span><span class="keyword">for</span><span> {
+        </span><span class="identifier">et</span><span>  &lt;- </span><span class="identifier">c</span><span>.</span><span class="identifier">fieldAs</span><span>[</span><span class="type-name">String</span><span>](</span><span class="string-literal">&quot;entityType&quot;</span><span>)
+        </span><span class="identifier">tpe</span><span> &lt;- </span><span class="identifier">et</span><span> </span><span class="keyword">match</span><span> {
+                 </span><span class="keyword">case</span><span> </span><span class="string-literal">&quot;FILM&quot;</span><span>   =&gt; </span><span class="type-name">FilmType</span><span>.</span><span class="identifier">success</span><span>
+                 </span><span class="keyword">case</span><span> </span><span class="string-literal">&quot;SERIES&quot;</span><span> =&gt; </span><span class="type-name">SeriesType</span><span>.</span><span class="identifier">success</span><span>
+                 </span><span class="keyword">case</span><span> </span><span class="identifier">other</span><span>    =&gt; </span><span class="type-name">Result</span><span>.</span><span class="identifier">internalError</span><span>(</span><span class="string-literal">s&quot;Unexpected entity_type: </span><span class="substitution">$other</span><span class="string-literal">&quot;</span><span>)
+               }
+      } </span><span class="keyword">yield</span><span> </span><span class="identifier">tpe</span><span>
+
+    </span><span class="keyword">def</span><span> </span><span class="declaration-name">narrowPredicate</span><span>(</span><span class="identifier">subtpe</span><span>: </span><span class="type-name">Type</span><span>): </span><span class="type-name">Result</span><span>[</span><span class="type-name">Predicate</span><span>] =
+      </span><span class="identifier">subtpe</span><span> </span><span class="keyword">match</span><span> {
+        </span><span class="keyword">case</span><span> </span><span class="type-name">FilmType</span><span>   =&gt; </span><span class="type-name">Eql</span><span>(</span><span class="type-name">EntityType</span><span> / </span><span class="string-literal">&quot;entityType&quot;</span><span>, </span><span class="type-name">Const</span><span>(</span><span class="string-literal">&quot;FILM&quot;</span><span>)).</span><span class="identifier">success</span><span>
+        </span><span class="keyword">case</span><span> </span><span class="type-name">SeriesType</span><span> =&gt; </span><span class="type-name">Eql</span><span>(</span><span class="type-name">EntityType</span><span> / </span><span class="string-literal">&quot;entityType&quot;</span><span>, </span><span class="type-name">Const</span><span>(</span><span class="string-literal">&quot;SERIES&quot;</span><span>)).</span><span class="identifier">success</span><span>
+        </span><span class="keyword">case</span><span> </span><span class="identifier">_</span><span>          =&gt; </span><span class="type-name">Result</span><span>.</span><span class="identifier">internalError</span><span>(</span><span class="string-literal">s&quot;Invalid discriminator: </span><span class="substitution">$subtpe</span><span class="string-literal">&quot;</span><span>)
+      }
+  }
+}</span></code></pre>
+        <p>The discriminator ties the two directions together: <code>discriminate</code> inspects the <code>entity_type</code>
+        column to decide which GraphQL type a row is, and <code>narrowPredicate</code> produces the SQL predicate
+        that restricts the view to one subtype when a query asks for it.</p>
+        
+        <h2 id="querying-it" class="section"><a class="anchor-link left" href="#querying-it"><i class="icofont-laika link">&#xef71;</i></a>Querying it</h2>
+        <pre><code class="graphql">query {
+  entities {
+    id
+    title
+    synopsis
+    ... on Film {
+      rating
+    }
+    ... on Series {
+      numberOfEpisodes
+    }
+  }
+}</code></pre>
+        <p>yields</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span>{
+  </span><span class="attribute-name">&quot;data&quot;</span><span> : {
+    </span><span class="attribute-name">&quot;entities&quot;</span><span> : [
+      { </span><span class="attribute-name">&quot;id&quot;</span><span> : </span><span class="string-literal">&quot;f1&quot;</span><span>, </span><span class="attribute-name">&quot;title&quot;</span><span> : </span><span class="string-literal">&quot;Film 1&quot;</span><span>, </span><span class="attribute-name">&quot;synopsis&quot;</span><span> : </span><span class="string-literal">&quot;A film&quot;</span><span>, </span><span class="attribute-name">&quot;rating&quot;</span><span> : </span><span class="string-literal">&quot;PG&quot;</span><span> },
+      { </span><span class="attribute-name">&quot;id&quot;</span><span> : </span><span class="string-literal">&quot;f2&quot;</span><span>, </span><span class="attribute-name">&quot;title&quot;</span><span> : </span><span class="string-literal">&quot;Film 2&quot;</span><span>, </span><span class="attribute-name">&quot;synopsis&quot;</span><span> : </span><span class="string-literal">&quot;Another film&quot;</span><span>, </span><span class="attribute-name">&quot;rating&quot;</span><span> : </span><span class="string-literal">&quot;15&quot;</span><span> },
+      { </span><span class="attribute-name">&quot;id&quot;</span><span> : </span><span class="string-literal">&quot;s1&quot;</span><span>, </span><span class="attribute-name">&quot;title&quot;</span><span> : </span><span class="string-literal">&quot;Series 1&quot;</span><span>, </span><span class="attribute-name">&quot;synopsis&quot;</span><span> : </span><span class="string-literal">&quot;A series&quot;</span><span>, </span><span class="attribute-name">&quot;numberOfEpisodes&quot;</span><span> : </span><span class="number-literal">6</span><span> }
+    ]
+  }
+}</span></code></pre>
+        <p>(The order of the rows above reflects PostgreSQL&#39;s incidental evaluation order for this
+        particular <code>UNION ALL</code> view, not a guarantee Grackle or the view makes — don&#39;t rely on entities
+        of a given subtype coming back in any particular position relative to the others.)</p>
+        
+        <h2 id="caveats" class="section"><a class="anchor-link left" href="#caveats"><i class="icofont-laika link">&#xef71;</i></a>Caveats</h2>
+        <ul>
+          <li>Use <code>UNION ALL</code>, not <code>UNION</code> — the branches cannot produce duplicate rows (they carry
+          distinct discriminator values), and <code>UNION</code>&#39;s deduplication forces a needless sort of the
+          whole view.</li>
+          <li>Query performance depends on your database pushing predicates down into the view&#39;s branches.
+          PostgreSQL does this well for simple <code>UNION ALL</code> views like the one above; check your query
+          plans if the view grows cleverer.</li>
+          <li>Joins from a subtype to other tables work unchanged — join on the view&#39;s columns exactly as
+          you would on a table&#39;s.</li>
+          <li>Views like this are typically not updatable, which doesn&#39;t matter here: Grackle only ever
+          reads from them.</li>
+          <li>A union type across multiple tables works exactly the same way — the view just has no shared
+          columns to line up, other than the key and the discriminator.</li>
+        </ul>
+
+        
+<hr class="footer-rule"/>
+<footer>
+  grackle is a <a href="https://typelevel.org/">Typelevel</a> project distributed under the <a href="https://www.apache.org/licenses/LICENSE-2.0.txt">Apache-2.0</a> license.
+</footer>
+
+
+      </main>
+
+    </div>
+
+  </body>
+
+</html>
