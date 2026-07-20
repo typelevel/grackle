@@ -467,7 +467,7 @@ final class VariablesSuite extends CatsEffectSuite {
     assertEquals(compiled, expected)
   }
 
-  test("variable not defined (2)") {
+  test("variable declared but not provided is treated as absent") {
     val query = """
       query getZuckProfile($devicePicSize: Int) {
         user(id: 4) {
@@ -478,11 +478,23 @@ final class VariablesSuite extends CatsEffectSuite {
       }
     """
 
+    val expected =
+      UntypedSelect(
+        "user",
+        None,
+        List(Binding("id", IDValue("4"))),
+        Nil,
+        Group(
+          List(
+            UntypedSelect("id", None, Nil, Nil, Empty),
+            UntypedSelect("name", None, Nil, Nil, Empty),
+            UntypedSelect("profilePic", None, List(Binding("size", AbsentValue)), Nil, Empty)
+          ))
+      )
+
     val compiled = VariablesMapping.compiler.compile(query)
 
-    val expected = Result.failure("Variable 'devicePicSize' is undefined")
-
-    assertEquals(compiled, expected)
+    assertEquals(compiled.map(_.query), Result.Success(expected))
   }
 
   test("variable not defined (3)") {
@@ -530,7 +542,7 @@ final class VariablesSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = Result.failure("Variable 'skipName' is undefined")
+    val expected = Result.failure("Expected Boolean found 'null' for 'if' in directive skip")
 
     val compiled = VariablesMapping.compiler.compile(query)
 
@@ -608,6 +620,84 @@ final class VariablesSuite extends CatsEffectSuite {
     val compiled = VariablesMapping.compiler.compile(query, untypedVars = Some(variables))
 
     assertEquals(compiled.toProblems.toList, List.empty[Problem])
+  }
+
+  test("variable in input value should be seen as 'used'") {
+    val query = """
+      query getZuckProfile($x: String) {
+        search(
+          pattern: {
+            name: $x
+          }
+        ) {
+          id
+        }
+      }
+    """
+
+    val compiled = VariablesMapping.compiler.compile(query)
+
+    assertEquals(compiled.toProblems.toList, List.empty[Problem])
+  }
+
+  test("variable default applies when no variables are supplied") {
+    val query = """
+      query getZuckProfile($devicePicSize: Int = 60) {
+        user(id: 4) {
+          profilePic(size: $devicePicSize)
+        }
+      }
+    """
+
+    val expected =
+      UntypedSelect(
+        "user",
+        None,
+        List(Binding("id", IDValue("4"))),
+        Nil,
+        UntypedSelect("profilePic", None, List(Binding("size", IntValue(60))), Nil, Empty)
+      )
+
+    val compiled = VariablesMapping.compiler.compile(query)
+
+    assertEquals(compiled.map(_.query), Result.Success(expected))
+  }
+
+  test("variable in input value with explicit empty variables object") {
+    val query = """
+      query getZuckProfile($x: String) {
+        search(
+          pattern: {
+            name: $x
+          }
+        ) {
+          id
+        }
+      }
+    """
+
+    val compiled =
+      VariablesMapping
+        .compiler
+        .compile(query, reportUnused = false, untypedVars = Some(json"{}"))
+
+    assertEquals(compiled.toProblems.toList, List.empty[Problem])
+  }
+
+  test("non-nullable variable with no value provided is an error") {
+    val query = """
+      query getZuckProfile($x: Int!) {
+        user(id: 4) {
+          profilePic(size: $x)
+        }
+      }
+    """
+
+    val compiled = VariablesMapping.compiler.compile(query)
+
+    val expected = Result.failure("Value of type Int required for 'x' in variable values")
+
+    assertEquals(compiled.map(_.query), expected)
   }
 
   test("oneOf variables") {
