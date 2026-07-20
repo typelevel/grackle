@@ -1,5 +1,5 @@
-addSbtPlugin("org.typelevel" % "sbt-typelevel" % "0.8.6")
-addSbtPlugin("org.typelevel" % "sbt-typelevel-site" % "0.8.6")
+addSbtPlugin("org.typelevel" % "sbt-typelevel" % "0.8.7")
+addSbtPlugin("org.typelevel" % "sbt-typelevel-site" % "0.8.7")
 addSbtPlugin("io.spray" % "sbt-revolver" % "0.10.0")
 addSbtPlugin("com.timushev.sbt" % "sbt-updates" % "0.7.0")
 addSbtPlugin("pl.project13.scala" % "sbt-jmh" % "0.4.8")
