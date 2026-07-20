@@ -104,13 +104,18 @@ trait DoobieMSSqlMappingLike[F[_]] extends DoobieMappingLike[F] with SqlMappingL
 
   def orderToFragment(col: Fragment, ascending: Boolean, nullsLast: Boolean): Fragment = {
     val dir = if (ascending) Fragments.empty else Fragments.const(" DESC")
+    // SQL Server has no NULLS FIRST/LAST and sorts NULLs low (first in ASC, last in DESC), so
+    // the two requests that ask for the opposite placement are relocated by a leading sort key
+    // which maps NULL to 1 and everything else to 0: sorted ASC that puts NULLs last, sorted
+    // DESC it puts them first. Note the key is the same in both branches - only the direction
+    // it is sorted in differs. Pinned by NullOrderingSuite.
     val nulls =
       if (nullsLast && ascending)
         Fragments.const(" CASE WHEN ") |+| col |+| Fragments.const(
           " IS NULL THEN 1 ELSE 0 END ASC, ")
       else if (!nullsLast && !ascending)
         Fragments.const(" CASE WHEN ") |+| col |+| Fragments.const(
-          " IS NULL THEN 0 ELSE 1 END DESC, ")
+          " IS NULL THEN 1 ELSE 0 END DESC, ")
       else
         Fragments.empty
 

@@ -191,6 +191,10 @@ final class NestedEffectsSuite extends DoobieMSSqlDatabaseSuite with SqlNestedEf
     }
 }
 
+final class NullOrderingSuite extends DoobieMSSqlDatabaseSuite with SqlNullOrderingSuite {
+  lazy val mapping = new DoobieMSSqlTestMapping(transactor) with SqlNullOrderingMapping[IO]
+}
+
 final class Paging1Suite extends DoobieMSSqlDatabaseSuite with SqlPaging1Suite {
   lazy val mapping = new DoobieMSSqlTestMapping(transactor) with SqlPaging1Mapping[IO]
 }

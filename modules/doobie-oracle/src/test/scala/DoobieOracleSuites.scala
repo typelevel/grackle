@@ -197,6 +197,10 @@ final class NestedEffectsSuite extends DoobieOracleDatabaseSuite with SqlNestedE
     }
 }
 
+final class NullOrderingSuite extends DoobieOracleDatabaseSuite with SqlNullOrderingSuite {
+  lazy val mapping = new DoobieOracleTestMapping(transactor) with SqlNullOrderingMapping[IO]
+}
+
 final class Paging1Suite extends DoobieOracleDatabaseSuite with SqlPaging1Suite {
   lazy val mapping = new DoobieOracleTestMapping(transactor) with SqlPaging1Mapping[IO]
 }
