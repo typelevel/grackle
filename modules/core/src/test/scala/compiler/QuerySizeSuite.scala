@@ -193,6 +193,33 @@ class QuerySizeSuite extends CatsEffectSuite {
     val query = """
       query {
         character(id: "1000") {
+          friends {
+            friends {
+              friends {
+                friends {
+                  friends {
+                    friends {
+                      name
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    """
+
+    val expected = Problem("Query is too deep: depth is 8 levels, maximum is 5")
+
+    val res = StarWarsMapping.compiler.compile(query)
+    assertEquals(res, Result.Failure(NonEmptyChain(expected)))
+  }
+
+  test("query too deep and too wide") {
+    val query = """
+      query {
+        character(id: "1000") {
           name
           friends {
             name
@@ -216,7 +243,7 @@ class QuerySizeSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = Problem("Query is too deep: depth is 8 levels, maximum is 5")
+    val expected = Problem("Query is too complex: width/depth is 7/8 leaves/levels, maximum is 5/5")
 
     val res = StarWarsMapping.compiler.compile(query)
     assertEquals(res, Result.Failure(NonEmptyChain(expected)))
