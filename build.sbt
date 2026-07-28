@@ -171,13 +171,6 @@ lazy val nativeSettings = Seq(
   )
 )
 
-// Pin the forked test JVM to UTC: mssql-jdbc binds a zone-naive java.sql.Timestamp using the
-// ambient JVM zone, so MSSQL datetime tests fail off-UTC unless pinned. Only meaningful where
-// Test / fork := true.
-lazy val utcTestSettings = Seq(
-  Test / javaOptions += "-Duser.timezone=UTC"
-)
-
 lazy val modules: List[CompositeProject] = List(
   core,
   circe,
@@ -279,7 +272,6 @@ lazy val doobiecore = project
   .disablePlugins(RevolverPlugin)
   .dependsOn(sqlcore.jvm % "test->test;compile->compile", circe.jvm)
   .settings(commonSettings)
-  .settings(utcTestSettings)
   .settings(
     name := "grackle-doobie-core",
     Test / fork := true,
@@ -299,7 +291,6 @@ lazy val doobiepg = project
     doobiecore % "test->test;compile->compile",
     sqlpg.jvm % "test->test;compile->compile")
   .settings(commonSettings)
-  .settings(utcTestSettings)
   .settings(
     name := "grackle-doobie-pg",
     Test / fork := true,
@@ -319,7 +310,6 @@ lazy val doobieoracle = project
   .disablePlugins(RevolverPlugin)
   .dependsOn(doobiecore % "test->test;compile->compile")
   .settings(commonSettings)
-  .settings(utcTestSettings)
   .settings(
     name := "grackle-doobie-oracle",
     Test / fork := true,
@@ -337,11 +327,13 @@ lazy val doobiemssql = project
   .disablePlugins(RevolverPlugin)
   .dependsOn(doobiecore % "test->test;compile->compile")
   .settings(commonSettings)
-  .settings(utcTestSettings)
   .settings(
     name := "grackle-doobie-mssql",
     Test / fork := true,
     Test / parallelExecution := false,
+    // mssql-jdbc binds a zone-naive java.sql.Timestamp using the ambient JVM zone, so MSSQL
+    // datetime tests fail off-UTC unless pinned.
+    Test / javaOptions += "-Duser.timezone=UTC",
     Test / testOptions += Tests
       .Setup(_ => runDocker("docker compose up -d --wait --quiet-pull mssql")),
     libraryDependencies ++= Seq(
@@ -365,7 +357,6 @@ lazy val skunk = crossProject(JVMPlatform, JSPlatform, NativePlatform)
       "org.typelevel" %% "log4cats-core" % log4catsVersion
     )
   )
-  .jvmSettings(utcTestSettings)
   .jvmSettings(
     Test / fork := true,
     Test / testOptions += Tests.Setup(_ =>
