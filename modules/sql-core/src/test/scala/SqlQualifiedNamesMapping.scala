@@ -15,7 +15,6 @@
 
 package grackle.sql.test
 
-import grackle._
 import grackle.Predicate.{Const, Eql}
 import grackle.Query.{Binding, Filter, Limit, OrderBy, OrderSelection, OrderSelections, Unique}
 import grackle.QueryCompiler.{Elab, SelectElaborator}
