@@ -1152,6 +1152,67 @@ final class FragmentSuite extends CatsEffectSuite {
     assertIO(res, expected)
   }
 
+  test("fragment shared by multiple paths (not a cycle)") {
+    val query = """
+      query withFragments {
+        user(id: 1) {
+          ...userFields
+        }
+      }
+
+      fragment userFields on User {
+        friends {
+          ...nameFields
+        }
+        mutualFriends {
+          ...mutualFriendFields
+        }
+      }
+
+      fragment mutualFriendFields on User {
+        ...nameFields
+      }
+
+      fragment nameFields on User {
+        id
+        name
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "user" : {
+            "friends" : [
+              {
+                "id" : "2",
+                "name" : "Bob"
+              },
+              {
+                "id" : "3",
+                "name" : "Carol"
+              }
+            ],
+            "mutualFriends" : [
+              {
+                "id" : "2",
+                "name" : "Bob"
+              },
+              {
+                "id" : "3",
+                "name" : "Carol"
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
   test("fragment recursion (1)") {
     val query = """
       query withFragments {
