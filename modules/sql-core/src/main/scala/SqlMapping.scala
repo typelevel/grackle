@@ -31,6 +31,7 @@ import grackle.Predicate._
 import grackle.Query._
 import grackle.ValidationFailure.Severity
 import grackle.circe.CirceMappingLike
+import grackle.sql.FailedJoin.isFailedJoin
 import grackle.syntax._
 
 abstract class SqlMapping[F[_]](implicit val M: MonadThrow[F])
@@ -4267,6 +4268,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
   }
 
   object Table {
+    // Same rationale as `FailedJoin.isFailedJoin`: keeps `None` on the left of `==` so its
+    // cheap equals runs instead of a possibly-`BigDecimal` column value's.
+    private def isNone(v: Any): Boolean = None == v
+
     def apply(rows: Vector[Array[Any]]): Table = {
       if (rows.sizeCompare(1) == 0) OneRowTable(rows.head)
       else if (rows.isEmpty) EmptyTable
@@ -4304,7 +4309,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
       def definesAll(cols: List[Int]): Boolean = {
         val cs = cols
-        cs.forall(c => row(c) != FailedJoin)
+        cs.forall(c => !isFailedJoin(row(c)))
       }
 
       def group(cols: List[Int]): Iterator[Table] = {
@@ -4337,10 +4342,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         while (ir.hasNext) {
           ir.next()(c) match {
             case FailedJoin =>
-            case v if value == FailedJoin => value = v
+            case v if isFailedJoin(value) => value = v
             case v if value == v =>
             case None =>
-            case v @ Some(_) if value == None => value = v
+            case v @ Some(_) if isNone(value) => value = v
             case _ => return None
           }
         }
@@ -4349,12 +4354,12 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
       def filterDefined(cols: List[Int]): Table = {
         val cs = cols
-        Table(rows.filter(r => cs.forall(c => r(c) != FailedJoin)))
+        Table(rows.filter(r => cs.forall(c => !isFailedJoin(r(c)))))
       }
 
       def definesAll(cols: List[Int]): Boolean = {
         val cs = cols
-        rows.exists(r => cs.forall(c => r(c) != FailedJoin))
+        rows.exists(r => cs.forall(c => !isFailedJoin(r(c))))
       }
 
       def group(cols: List[Int]): Iterator[Table] = {
@@ -4369,7 +4374,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 case cs => row => cs.map(c => row(c))
               }
 
-            val nonNull = rows.filter(r => cs.forall(c => r(c) != FailedJoin))
+            val nonNull = rows.filter(r => cs.forall(c => !isFailedJoin(r(c))))
             val grouped = nonNull.groupBy(discrim)
             grouped.iterator.map { case (_, rows) => Table(rows) }
         }
@@ -4387,7 +4392,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 case cs => row => cs.map(c => row(c))
               }
 
-            val nonNull = rows.filter(r => cs.forall(c => r(c) != FailedJoin))
+            val nonNull = rows.filter(r => cs.forall(c => !isFailedJoin(r(c))))
             nonNull.map(discrim).distinct.size
         }
       }
@@ -4532,7 +4537,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                   case Some(f) if tpe.variantField(fieldName) && !fieldTpe.isNullable => f
                   case other => other
                 }
-                assert(leafFocus != FailedJoin)
+                assert(!isFailedJoin(leafFocus))
                 LeafCursor(fieldContext, leafFocus, Some(np), Env.empty)
               })
 
