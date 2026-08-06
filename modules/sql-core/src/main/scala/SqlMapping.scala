@@ -2439,6 +2439,15 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         parentTableForType(parentContext).flatMap { parentTable =>
           val inner = !context.tpe.isNullable && !context.tpe.isList
 
+          // Flattening moves the nested select's joins below the join that attaches it. If that
+          // join is LEFT and unmatched it yields a NULL-padded row an INNER join below would
+          // discard, losing a row that should return with the field null or empty. Every join
+          // in `nested.joins` is rooted at that select's table, so all land below the attaching
+          // join and see its padding, directly or transitively — safe, then, only if this join
+          // is INNER or the nested select has no INNER joins.
+          def mergePreservesRows(nested: SqlSelect): Boolean =
+            inner || !nested.joins.exists(_.inner)
+
           def mkJoins(joins: List[Join]): SqlSelect = {
             def mkSubquery(
                 multiTable: Boolean,
@@ -2446,7 +2455,8 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 joinCols: List[SqlColumn],
                 suffix: String): SqlSelect = {
               def isMergeable: Boolean =
-                !multiTable &&
+                mergePreservesRows(nested) &&
+                  !multiTable &&
                   !nested.joins.exists(_.isPredicate) &&
                   nested.wheres.isEmpty &&
                   nested.orders.isEmpty &&
