@@ -193,6 +193,10 @@ final class NestedEffectsSuite extends DoobiePgDatabaseSuite with SqlNestedEffec
     }
 }
 
+final class NullableParentSuite extends DoobiePgDatabaseSuite with SqlNullableParentSuite {
+  lazy val mapping = new DoobiePgTestMapping(transactor) with SqlNullableParentMapping[IO]
+}
+
 final class NullOrderingSuite extends DoobiePgDatabaseSuite with SqlNullOrderingSuite {
   lazy val mapping = new DoobiePgTestMapping(transactor) with SqlNullOrderingMapping[IO]
 }

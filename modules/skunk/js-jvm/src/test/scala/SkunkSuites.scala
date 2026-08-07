@@ -198,6 +198,10 @@ final class NestedEffectsSuite extends SkunkDatabaseSuite with SqlNestedEffectsS
     }
 }
 
+final class NullableParentSuite extends SkunkDatabaseSuite with SqlNullableParentSuite {
+  lazy val mapping = new SkunkTestMapping(pool) with SqlNullableParentMapping[IO]
+}
+
 final class NullOrderingSuite extends SkunkDatabaseSuite with SqlNullOrderingSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlNullOrderingMapping[IO]
 }
