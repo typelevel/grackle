@@ -17,7 +17,7 @@ package sdl
 
 import munit.CatsEffectSuite
 
-import grackle.{GraphQLParser, SchemaParser}
+import grackle.{GraphQLParser, SchemaParser, SchemaRenderer}
 import grackle.Ast._
 import grackle.Ast.OperationType._
 import grackle.Ast.Type.{List => _, _}
@@ -26,6 +26,8 @@ import grackle.syntax._
 final class SDLSuite extends CatsEffectSuite {
   val parser = GraphQLParser(GraphQLParser.defaultConfig)
   val schemaParser = SchemaParser(parser)
+
+  val TQ = "\"" * 3
 
   test("parse schema definition") {
     val schema = """
@@ -466,4 +468,158 @@ final class SDLSuite extends CatsEffectSuite {
 
     assertEquals(ser, schema.success)
   }
+
+  test("deserialize schema with descriptions") {
+    val schema =
+      """|"A scalar"
+         |scalar Scalar
+         |"An interface"
+         |interface Intrf {
+         |  "An interface field"
+         |  foo: Int
+         |}
+         |"An object"
+         |type Obj implements Intrf {
+         |  "An object field"
+         |  foo: Int
+         |  bar(
+         |    "An argument"
+         |    baz: Int
+         |  ): String
+         |}
+         |"A union"
+         |union Union = Obj
+         |"An enum"
+         |enum Enum {
+         |  "An enum value"
+         |  A
+         |  B
+         |}
+         |"An input object"
+         |input Input {
+         |  "An input field"
+         |  baz: Float
+         |}
+         |type Query {
+         |  obj: Obj
+         |}""".stripMargin
+
+    val res = schemaParser.parseText(schema)
+    val ser = res.map(_.toString)
+
+    assertEquals(ser, schema.success)
+  }
+
+  test("deserialize schema with described directive arguments") {
+    val schema =
+      """|type Query {
+         |  foo: Int
+         |}
+         |"A directive"
+         |directive @dir(
+         |  "An argument"
+         |  baz: Int
+         |) on FIELD
+         |""".stripMargin
+
+    val res = schemaParser.parseText(schema)
+    val ser = res.map(_.toString)
+
+    assertEquals(ser, schema.success)
+  }
+
+  test("deserialize schema with block descriptions") {
+    val schema =
+      s"""|$TQ
+          |A scalar described
+          |over several lines.
+          |$TQ
+          |scalar Scalar
+          |type Query {
+          |  $TQ
+          |  A field with a "quoted" word,
+          |  a backslash \\w, and more.
+          |  $TQ
+          |  foo: Scalar
+          |}""".stripMargin
+
+    val res = schemaParser.parseText(schema)
+    val ser = res.map(_.toString)
+
+    assertEquals(ser, schema.success)
+  }
+
+  test("descriptions survive a parse/render/parse round trip") {
+    val schema =
+      s"""|type Query {
+          |  $TQ
+          |  Indented | pipes, "quotes" and a trailing backslash \\
+          |  $TQ
+          |  foo: Int
+          |}
+          |""".stripMargin
+
+    val once = schemaParser.parseText(schema).map(_.toString)
+    val twice = once.flatMap(schemaParser.parseText).map(_.toString)
+
+    assertEquals(twice, once)
+  }
+
+  /**
+   * Descriptions which exercise the corners of both the quoted and the block string forms.
+   */
+  val trickyDescriptions: List[(String, String)] =
+    List(
+      "quotes" -> "he said \"hi\"",
+      "triple quotes" -> s"a ${TQ} b",
+      "four quotes" -> s"a ${TQ}\" b",
+      "trailing quote" -> "a trailing quote \"",
+      "trailing backslash" -> "a backslash \\",
+      "tab" -> "first\tsecond"
+    )
+
+  trickyDescriptions.foreach {
+    case (label, desc) =>
+      test(s"description round trips: $label") {
+        val rendered = SchemaRenderer.renderDescription(Some(desc))
+
+        val topLevel =
+          s"""|${rendered}scalar Scalar
+              |type Query {
+              |  foo: Scalar
+              |}""".stripMargin
+
+        assertEquals(
+          schemaParser.parseText(topLevel).map(_.definition("Scalar").flatMap(_.description)),
+          Some(desc).success,
+          clue = s"top level, rendered as: ${escape(rendered)}"
+        )
+
+        val indented =
+          rendered.linesIterator.map(l => if (l.isEmpty) l else s"  $l").mkString("\n")
+        val nested =
+          s"""|type Query {
+              |$indented
+              |  foo: Int
+              |}""".stripMargin
+
+        assertEquals(
+          schemaParser
+            .parseText(nested)
+            .map(
+              _.definition("Query")
+                .collect { case o: grackle.ObjectType => o }
+                .flatMap(_.fields.find(_.name == "foo"))
+                .flatMap(_.description)),
+          Some(desc).success,
+          clue = s"nested, rendered as: ${escape(rendered)}"
+        )
+      }
+  }
+
+  /**
+   * Renders control characters visibly, so that failure clues are legible.
+   */
+  private def escape(s: String): String =
+    s.flatMap(c => if (c.isControl) f"\\u${c.toInt}%04x" else c.toString)
 }
