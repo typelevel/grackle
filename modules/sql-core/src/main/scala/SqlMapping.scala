@@ -1483,31 +1483,25 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           subquery.toDefFragment
 
         /**
-         * An `APPLY` join is rendered without an `ON` clause, so its conditions have to be
-         * expressed elsewhere.
+         * Distributes an `APPLY` join's conditions, which it renders without an `ON` clause.
          *
-         * For `CROSS APPLY` they are lifted into the enclosing select's WHERE clause, which for
-         * an inner join is equivalent to an `ON` clause.
-         *
-         * For `OUTER APPLY` that would be wrong: the WHERE clause is applied after the join and
-         * would discard precisely the null padded rows the outer join produced. Instead the
-         * subquery is wrapped in a correlating select which applies the conditions to its
-         * result, referring to the enclosing select's tables. That is legal because `APPLY` is
-         * lateral, and is what makes `OUTER APPLY` equivalent to `LEFT JOIN LATERAL`.
-         *
-         * Only a subquery of the right shape can be correlated, and the conditions are lifted
-         * as a last resort otherwise. For an `OUTER APPLY` that reinstates the semantics
-         * described above, so it has to stay unreachable: the shapes `correlate` declines are
-         * those `addFilterOrderByOffsetLimit` builds, and those join on a predicate, which is
-         * short circuited before it.
+         * `CROSS APPLY` lifts them into the enclosing WHERE, an `ON` clause's equivalent for an
+         * inner join. `OUTER APPLY` can't: WHERE applies after the join and would discard its
+         * null-padded rows. Its subquery is instead wrapped in a correlating select, legal
+         * because `APPLY` is lateral — which is what makes `OUTER APPLY` equivalent to a
+         * `LEFT JOIN LATERAL`. A subquery that can't be correlated has no correct rendering,
+         * so a decline is a bug.
          */
         def distributeJoinConditions(
             join: SqlJoin,
             subquery: SubqueryRef): (SqlJoin, List[Predicate]) =
           if (inner || join.isPredicate) (join, liftedPredicates(join))
           else
-            correlate(join, subquery).fold((join, liftedPredicates(join)))(join0 =>
-              (join0, Nil))
+            // Every OUTER APPLY reachable here can be correlated; a None is a bug, not a query.
+            correlate(join, subquery)
+              .map((_, Nil))
+              .getOrElse(throw new SqlMappingException(
+                s"OUTER APPLY subquery '${subquery.name}' could not be correlated"))
 
         /**
          * The join's conditions expressed as predicates of the enclosing select.
@@ -1518,22 +1512,20 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         /**
          * Yields a copy of `join` with its conditions moved inside its subquery.
          *
-         * The subquery is wrapped in a select which applies the conditions to the subquery's
-         * result, so that any LIMIT, OFFSET, DISTINCT or window function in the subquery is
-         * evaluated first, exactly as it would be were the conditions in the ON clause of a
-         * `LEFT JOIN LATERAL`. Wrapping also ensures that only the subquery's exposed columns
-         * are in scope where the conditions are applied, so that a table of the enclosing
-         * select can't be shadowed by a same named table within the subquery.
+         * The subquery is wrapped in a select so any LIMIT, OFFSET or DISTINCT is evaluated
+         * first — as under a `LEFT JOIN LATERAL` ON clause — and so only the subquery's exposed
+         * columns are in scope, not a same-named table of the enclosing select.
          *
-         * The subquery side of each condition names a column exposed by the subquery, which has
-         * to be mapped to the corresponding column of the wrapper. Yields `None` if that isn't
-         * possible, in which case the caller falls back to lifting the conditions into the
-         * enclosing select.
+         * `None` means a subquery shape it doesn't handle; no `OUTER APPLY` produces one, so
+         * the caller treats it as a bug rather than lifting. An existing wrapper is returned
+         * unchanged, so re-nesting won't correlate it twice.
          */
         private def correlate(join: SqlJoin, subquery: SubqueryRef): Option[SqlJoin] =
           subquery.subquery match {
             case sel: SqlSelect if sel.withs.isEmpty =>
               sel.table match {
+                case wrapped: SubqueryRef if wrapped.correlated && sel.wheres.nonEmpty =>
+                  Some(join)
                 case table: TableRef =>
                   val exposed =
                     join.on.traverse {
@@ -1541,7 +1533,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                     }
                   exposed.map { exposed0 =>
                     val wrapper =
-                      sel.toSubquery(subquery.name + "_corr", NotLateral, correlated = true)
+                      sel.toSubquery(correlationName(subquery), NotLateral, correlated = true)
                     val wheres =
                       exposed0.map {
                         case (p, c) => Eql(p.toTerm, c.derive(wrapper.table).toTerm)
@@ -1552,6 +1544,12 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               }
             case _ => None
           }
+
+        /**
+         * The alias given to the correlating select `correlate` wraps around `subquery`. Only
+         * cosmetic: the wrapper is recognised by its `correlated` flag, not by this name.
+         */
+        private def correlationName(subquery: SubqueryRef): String = subquery.name + "_corr"
       }
     }
 
