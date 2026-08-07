@@ -23,13 +23,13 @@ import grackle._
 import grackle.test.GraphQLResponseTests.assertWeaklyEqualIO
 
 /**
- * A non-null field beneath a nullable one must not remove rows whose nullable field is absent.
+ * A non-null field beneath a nullable one, or beneath a list, must not remove rows whose parent
+ * is absent or empty.
  *
- * Both joins are individually correct — the nullable field's is a LEFT JOIN, the non-null
- * field's an INNER JOIN — but flattening them into one chain lets the INNER JOIN eliminate the
- * rows the LEFT JOIN null-padded. The non-null-ness of `c` only constrains anything when a `B`
- * exists at all: per the GraphQL spec, completing a nullable field with a null result returns
- * null without executing its sub-selections.
+ * The non-null-ness of such a field only constrains anything where its parent exists at all:
+ * per the GraphQL spec, completing a nullable field with a null result returns null without
+ * executing its sub-selections, and a `D` with no `E`s must still be returned with `es` as
+ * `[]`.
  */
 trait SqlNullableParentSuite extends CatsEffectSuite {
   def mapping: Mapping[IO]
@@ -115,6 +115,56 @@ trait SqlNullableParentSuite extends CatsEffectSuite {
             {
               "name" : "a-without-b",
               "b" : null
+            }
+          ]
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
+
+  test("a list field that is empty does not remove its row") {
+    val query = """
+      query {
+        ds {
+          name
+          es {
+            name
+            f {
+              name
+            }
+          }
+        }
+      }
+    """
+
+    // `d-without-es` is the row at issue: it has no `E`s, so nothing beneath `es` is selected at
+    // all, and the non-null-ness of `f` cannot bear on whether the `D` itself is returned.
+    val expected = json"""
+      {
+        "data" : {
+          "ds" : [
+            {
+              "name" : "d-with-es",
+              "es" : [
+                {
+                  "name" : "e-with-f",
+                  "f" : {
+                    "name" : "fish-1"
+                  }
+                },
+                {
+                  "name" : "e-with-another-f",
+                  "f" : {
+                    "name" : "fish-2"
+                  }
+                }
+              ]
+            },
+            {
+              "name" : "d-without-es",
+              "es" : []
             }
           ]
         }
