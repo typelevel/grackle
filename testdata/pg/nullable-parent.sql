@@ -39,6 +39,7 @@ CREATE TABLE nullable_parent_e (
   id INTEGER PRIMARY KEY,
   d_id INTEGER NOT NULL,
   f_id INTEGER NOT NULL,
+  other_d_id INTEGER NOT NULL,
   name TEXT NOT NULL
 );
 
@@ -52,9 +53,9 @@ COPY nullable_parent_f (id, name) FROM STDIN WITH DELIMITER '|';
 2|fish-2
 \.
 
-COPY nullable_parent_e (id, d_id, f_id, name) FROM STDIN WITH DELIMITER '|';
-10|100|1|e-with-f
-11|100|2|e-with-another-f
+COPY nullable_parent_e (id, d_id, f_id, other_d_id, name) FROM STDIN WITH DELIMITER '|';
+10|100|1|200|e-with-f
+11|100|2|100|e-with-another-f
 \.
 
 COPY nullable_parent_d (id, name) FROM STDIN WITH DELIMITER '|';

@@ -173,4 +173,73 @@ trait SqlNullableParentSuite extends CatsEffectSuite {
 
     assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
   }
+
+  // Reaching a second list through a non-null field nests the same shape twice, which on a
+  // backend joining by `APPLY` presents the inner join to correlation a second time, once the
+  // first has already rewritten it. `e-with-f` is the row at issue: its `otherD` is the `D`
+  // with no `E`s, so only a query which descends that far has a row to lose.
+  test("an empty list reached through a back reference does not remove its row") {
+    val query = """
+      query {
+        ds {
+          name
+          es {
+            name
+            otherD {
+              name
+              es {
+                name
+                f {
+                  name
+                }
+              }
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "ds" : [
+            {
+              "name" : "d-with-es",
+              "es" : [
+                {
+                  "name" : "e-with-f",
+                  "otherD" : {
+                    "name" : "d-without-es",
+                    "es" : []
+                  }
+                },
+                {
+                  "name" : "e-with-another-f",
+                  "otherD" : {
+                    "name" : "d-with-es",
+                    "es" : [
+                      {
+                        "name" : "e-with-f",
+                        "f" : { "name" : "fish-1" }
+                      },
+                      {
+                        "name" : "e-with-another-f",
+                        "f" : { "name" : "fish-2" }
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name" : "d-without-es",
+              "es" : []
+            }
+          ]
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
 }

@@ -45,6 +45,7 @@ trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
     val id = col("id", int4)
     val dId = col("d_id", int4)
     val fId = col("f_id", int4)
+    val otherDId = col("other_d_id", int4)
     val name = col("name", text)
   }
 
@@ -77,6 +78,7 @@ trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
       type E {
         name: String!
         f: F!
+        otherD: D!
       }
       type F {
         name: String!
@@ -122,8 +124,10 @@ trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
         SqlField("id", eTable.id, key = true, hidden = true),
         SqlField("dId", eTable.dId, hidden = true),
         SqlField("fId", eTable.fId, hidden = true),
+        SqlField("otherDId", eTable.otherDId, hidden = true),
         SqlField("name", eTable.name),
-        SqlObject("f", Join(eTable.fId, fTable.id))
+        SqlObject("f", Join(eTable.fId, fTable.id)),
+        SqlObject("otherD", Join(eTable.otherDId, dTable.id))
       ),
       ObjectMapping(FType)(
         SqlField("id", fTable.id, key = true, hidden = true),
