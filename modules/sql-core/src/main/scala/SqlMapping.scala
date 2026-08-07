@@ -2446,11 +2446,13 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 joinCols: List[SqlColumn],
                 suffix: String): SqlSelect = {
               def isMergeable: Boolean =
-                !multiTable && !nested.joins.exists(_.isPredicate) && nested
-                  .wheres
-                  .isEmpty && nested.orders.isEmpty && nested.offset.isEmpty && nested
-                  .limit
-                  .isEmpty && !nested.isDistinct
+                !multiTable &&
+                  !nested.joins.exists(_.isPredicate) &&
+                  nested.wheres.isEmpty &&
+                  nested.orders.isEmpty &&
+                  nested.offset.isEmpty &&
+                  nested.limit.isEmpty &&
+                  !nested.isDistinct
 
               if (isMergeable) nested
               else {
