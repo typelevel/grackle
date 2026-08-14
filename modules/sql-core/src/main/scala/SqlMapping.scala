@@ -1489,8 +1489,8 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
          * inner join. `OUTER APPLY` can't: WHERE applies after the join and would discard its
          * null-padded rows. Its subquery is instead wrapped in a correlating select, legal
          * because `APPLY` is lateral — which is what makes `OUTER APPLY` equivalent to a
-         * `LEFT JOIN LATERAL`. A subquery that can't be correlated has no correct rendering,
-         * so a decline is a bug.
+         * `LEFT JOIN LATERAL`. A subquery that can't be correlated has no correct rendering, so
+         * a decline is a bug.
          */
         def distributeJoinConditions(
             join: SqlJoin,
