@@ -445,34 +445,36 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
       val fragRefs: Map[String, (Set[String], Set[String])] =
         frags.map { frag => (frag.name, collectQueryRefs(frag.child)) }.toMap
 
-      @tailrec
-      def checkCycle(pendingFrags: Set[String], seen: Set[String]): Option[Set[String]] = {
-        if (pendingFrags.isEmpty) Some(seen)
-        else {
-          val hd = pendingFrags.head
-          if (seen.contains(hd)) None
-          else
-            checkCycle(
-              fragRefs.get(hd).map(_._2).getOrElse(Set.empty) ++ pendingFrags.tail,
-              seen + hd)
-        }
-      }
-
+      // Find a fragment which is reachable from itself, if any.
+      //
+      // `path` is the set of fragments on the current traversal path, and `done` the set of
+      // fragments whose references have already been explored in full without discovering a
+      // cycle. A fragment is added to `done` only once its references have been explored, and
+      // the `path` check precedes the `done` check, so that a fragment which is merely
+      // reachable by more than one path isn't mistaken for a cycle.
       def findCycle: Option[String] = {
-        @tailrec
-        def loop(pendingFrags: Set[String]): Either[Set[String], String] = {
-          if (pendingFrags.isEmpty) Left(Set.empty[String])
-          else {
-            val hd = pendingFrags.head
-            checkCycle(Set(hd), Set.empty[String]) match {
-              case None => Right(hd)
-              case Some(seen) => loop(pendingFrags.tail.diff(seen))
-            }
-          }
-        }
+        def visit(
+            frag: String,
+            path: Set[String],
+            done: Set[String]): Either[String, Set[String]] =
+          if (path.contains(frag)) Left(frag)
+          else if (done.contains(frag)) Right(done)
+          else
+            fragRefs
+              .get(frag)
+              .map(_._2)
+              .getOrElse(Set.empty)
+              .foldLeft(Right(done): Either[String, Set[String]]) { (acc, ref) =>
+                acc.flatMap(visit(ref, path + frag, _))
+              }
+              .map(_ + frag)
 
-        if (uniqueFrags.isEmpty) None
-        else loop(uniqueFrags).toOption
+        uniqueFrags
+          .foldLeft(Right(Set.empty[String]): Either[String, Set[String]]) { (acc, frag) =>
+            acc.flatMap(visit(frag, Set.empty[String], _))
+          }
+          .left
+          .toOption
       }
 
       findCycle match {
