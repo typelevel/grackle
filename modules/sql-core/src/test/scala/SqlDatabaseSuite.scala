@@ -13,23 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grackle.sqlpg.test
+package grackle.sql.test
 
-import grackle.sql.test.SqlDatabaseSuite
+import scala.concurrent.duration._
 
-trait SqlPgDatabaseSuite extends SqlDatabaseSuite {
-  case class PostgresConnectionInfo(host: String, port: Int) {
+import munit.CatsEffectSuite
 
-    val driverClassName = "org.postgresql.Driver"
-    val databaseName = "test"
-    val jdbcUrl = s"jdbc:postgresql://$host:$port/$databaseName"
-    val username = "test"
-    val password = "test"
-  }
-  object PostgresConnectionInfo {
-    val DefaultPort = 5432
-  }
-
-  val postgresConnectionInfo: PostgresConnectionInfo =
-    PostgresConnectionInfo("localhost", PostgresConnectionInfo.DefaultPort)
+/**
+ * Common base for the per-backend database suite traits, raising munit-cats-effect's 30s
+ * default timeout: database-backed tests can exceed it for reasons that have nothing to do with
+ * the test itself, e.g. several forked backend test JVMs contending for one docker daemon on a
+ * constrained machine, showing up as spurious timeouts rather than failures.
+ */
+trait SqlDatabaseSuite extends CatsEffectSuite {
+  override def munitIOTimeout: Duration = 2.minutes
 }
