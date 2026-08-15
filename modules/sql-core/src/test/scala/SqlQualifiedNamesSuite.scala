@@ -173,6 +173,60 @@ trait SqlQualifiedNamesSuite extends CatsEffectSuite {
     assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
   }
 
+  // A limit on a node with two sibling list children compiles to an SqlUnion whose branches are
+  // then wrapped in a subquery by SqlUnion.addFilterOrderByOffsetLimit. That subquery is named
+  // from the parent table, so for a schema-qualified table the name has to be folded - but
+  // folding it also changes the TableExpr's identity, since TableExprs are compared by name.
+  // Columns still bound to the unfolded TableRef are then rendered qualified by the raw dotted
+  // name while the FROM entry carries the folded one, e.g.
+  //
+  //   FROM ( ... UNION ALL ... ) AS qualified_city
+  //   WHERE (qualified.city.<col> IS NOT NULL)
+  //
+  // For an unqualified table the folded and unfolded names coincide, so the divergence is
+  // invisible; it only surfaces here. Note the limit must be nested - the same union under a
+  // top-level limit renders correctly.
+  test("nested limit over a union of schema-qualified tables (#342)") {
+    val query = """
+      query {
+        country(code: "CAN") {
+          cities(limit: 1) {
+            name
+            languages {
+              language
+            }
+            twins {
+              motto
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "country" : {
+            "cities" : [
+              {
+                "name" : "Ottawa",
+                "languages" : [
+                  { "language" : "English" },
+                  { "language" : "French" }
+                ],
+                "twins" : [
+                  { "motto" : "A mari usque ad mare" }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
+
   // qualified_country is a real table whose name equals qualified.country with its qualifier
   // folded by an underscore. Recursing through qualified.country while joining
   // qualified_country in the same statement pins that folded synthesized identifiers and
