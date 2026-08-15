@@ -2291,12 +2291,12 @@ object SchemaRenderer {
       else {
         val fields =
           schema.baseSchemaType match {
-            case twf: TypeWithFields => twf.fields.map(renderField)
+            case twf: TypeWithFields => twf.fields
             case _ => Nil
           }
 
         val dirs = renderDirectives(dirs0)
-        fields.mkString(s"schema$dirs {\n  ", "\n  ", "\n}\n")
+        s"schema$dirs {\n${renderMembers(fields)(renderField)}\n}\n"
       }
     }
 
@@ -2332,10 +2332,40 @@ object SchemaRenderer {
       dirDefns
   }
 
+  private val TripleQuote = "\"" * 3
+  private val Indent = "  "
+
+  /**
+   * Indents every non-empty line of `s` by one level.
+   */
+  private def indent(s: String): String =
+    s.linesIterator.map(line => if (line.isEmpty) line else s"$Indent$line").mkString("\n")
+
+  /**
+   * Renders and indents the members of a definition, for use between its braces.
+   */
+  private def renderMembers[A](as: List[A])(render: A => String): String =
+    indent(as.map(render).mkString("\n"))
+
+  /**
+   * As `renderMembers`, but including the enclosing braces, or empty if there are no members.
+   */
+  private def renderBlock[A](as: List[A])(render: A => String): String =
+    if (as.isEmpty) "" else s" {\n${renderMembers(as)(render)}\n}"
+
+  /**
+   * Renders `desc`, if any, followed by a newline, so that it can be used as a prefix to the
+   * definition it describes.
+   *
+   * A block string is used whenever the description contains something that can't be written
+   * literally in a single quoted string, so that no escaping beyond `\"""` is ever needed.
+   */
   def renderDescription(desc: Option[String]): String =
-    desc match {
-      case None => ""
-      case Some(desc) => s""""$desc"\n"""
+    desc.filter(_.nonEmpty).fold("") {
+      case desc if desc.exists(c => c == '\n' || c == '"' || c == '\\') =>
+        val body = desc.replace(TripleQuote, s"\\$TripleQuote").linesIterator.mkString("\n")
+        s"$TripleQuote\n$body\n$TripleQuote\n"
+      case desc => s""""$desc"\n"""
     }
 
   def renderDirectives(dirs: List[Directive]): String =
@@ -2353,25 +2383,25 @@ object SchemaRenderer {
   }
 
   def renderField(f: Field): String = {
-    val Field(nme, _, args, tpe, dirs0) = f
+    val Field(nme, desc, args, tpe, dirs0) = f
     val dirs = renderDirectives(dirs0)
-    if (args.isEmpty)
-      s"$nme: ${renderType(tpe)}$dirs"
-    else
-      s"$nme(${args.map(renderInputValue).mkString(", ")}): ${renderType(tpe)}$dirs"
+    s"${renderDescription(desc)}$nme${renderArgs(args)}: ${renderType(tpe)}$dirs"
   }
+
+  /**
+   * Argument lists are rendered inline unless an argument carries a description of its own.
+   */
+  private def renderArgs(args: List[InputValue]): String =
+    if (args.isEmpty) ""
+    else if (args.exists(_.description.exists(_.nonEmpty)))
+      s"(\n${renderMembers(args)(renderInputValue)}\n)"
+    else
+      args.map(renderInputValue).mkString("(", ", ", ")")
 
   def renderSchemaExtension(extension: SchemaExtension): String = {
     val SchemaExtension(ops0, dirs0) = extension
     val dirs = renderDirectives(dirs0)
-    val ops =
-      if (ops0.isEmpty) ""
-      else
-        s"""| {
-            |  ${ops0.map(renderField).mkString("\n  ")}
-            |}""".stripMargin
-
-    s"extend schema$dirs$ops"
+    s"extend schema$dirs${renderBlock(ops0)(renderField)}"
   }
 
   def renderTypeExtension(extension: TypeExtension): String = {
@@ -2383,26 +2413,12 @@ object SchemaRenderer {
       case ObjectExtension(nme, fields0, ifs0, dirs0) =>
         val ifs = if (ifs0.isEmpty) "" else " implements " + ifs0.map(_.name).mkString("&")
         val dirs = renderDirectives(dirs0)
-        val fields =
-          if (fields0.isEmpty) ""
-          else
-            s"""| {
-                |  ${fields0.map(renderField).mkString("\n  ")}
-                |}""".stripMargin
-
-        s"extend type $nme$ifs$dirs$fields"
+        s"extend type $nme$ifs$dirs${renderBlock(fields0)(renderField)}"
 
       case InterfaceExtension(nme, fields0, ifs0, dirs0) =>
         val ifs = if (ifs0.isEmpty) "" else " implements " + ifs0.map(_.name).mkString("&")
         val dirs = renderDirectives(dirs0)
-        val fields =
-          if (fields0.isEmpty) ""
-          else
-            s"""| {
-                |  ${fields0.map(renderField).mkString("\n  ")}
-                |}""".stripMargin
-
-        s"extend interface $nme$ifs$dirs$fields"
+        s"extend interface $nme$ifs$dirs${renderBlock(fields0)(renderField)}"
 
       case UnionExtension(nme, members0, dirs0) =>
         val dirs = renderDirectives(dirs0)
@@ -2414,25 +2430,11 @@ object SchemaRenderer {
 
       case EnumExtension(nme, values0, dirs0) =>
         val dirs = renderDirectives(dirs0)
-        val values =
-          if (values0.isEmpty) ""
-          else
-            s"""| {
-                |  ${values0.map(renderEnumValueDefinition).mkString("\n  ")}
-                |}""".stripMargin
-
-        s"extend enum $nme$dirs$values"
+        s"extend enum $nme$dirs${renderBlock(values0)(renderEnumValueDefinition)}"
 
       case InputObjectExtension(nme, fields0, dirs0) =>
         val dirs = renderDirectives(dirs0)
-        val fields =
-          if (fields0.isEmpty) ""
-          else
-            s"""| {
-                |  ${fields0.map(renderInputValue).mkString("\n  ")}
-                |}""".stripMargin
-
-        s"extend input $nme$dirs$fields"
+        s"extend input $nme$dirs${renderBlock(fields0)(renderInputValue)}"
     }
   }
 
@@ -2440,41 +2442,31 @@ object SchemaRenderer {
     tpe match {
       case tr: TypeRef => renderTypeDefn(tr.dealias)
 
-      case ScalarType(nme, _, dirs0) =>
+      case ScalarType(nme, desc, dirs0) =>
         val dirs = renderDirectives(dirs0)
-        s"""scalar $nme$dirs"""
+        s"${renderDescription(desc)}scalar $nme$dirs"
 
-      case ObjectType(nme, _, fields, ifs0, dirs0) =>
+      case ObjectType(nme, desc, fields, ifs0, dirs0) =>
         val ifs = if (ifs0.isEmpty) "" else " implements " + ifs0.map(_.name).mkString("&")
         val dirs = renderDirectives(dirs0)
+        s"${renderDescription(desc)}type $nme$ifs$dirs {\n${renderMembers(fields)(renderField)}\n}"
 
-        s"""|type $nme$ifs$dirs {
-            |  ${fields.map(renderField).mkString("\n  ")}
-            |}""".stripMargin
-
-      case InterfaceType(nme, _, fields, ifs0, dirs0) =>
+      case InterfaceType(nme, desc, fields, ifs0, dirs0) =>
         val ifs = if (ifs0.isEmpty) "" else " implements " + ifs0.map(_.name).mkString("&")
         val dirs = renderDirectives(dirs0)
+        s"${renderDescription(desc)}interface $nme$ifs$dirs {\n${renderMembers(fields)(renderField)}\n}"
 
-        s"""|interface $nme$ifs$dirs {
-            |  ${fields.map(renderField).mkString("\n  ")}
-            |}""".stripMargin
-
-      case UnionType(nme, _, members, dirs0) =>
+      case UnionType(nme, desc, members, dirs0) =>
         val dirs = renderDirectives(dirs0)
-        s"""union $nme$dirs = ${members.map(_.name).mkString(" | ")}"""
+        s"${renderDescription(desc)}union $nme$dirs = ${members.map(_.name).mkString(" | ")}"
 
-      case EnumType(nme, _, values, dirs0) =>
+      case EnumType(nme, desc, values, dirs0) =>
         val dirs = renderDirectives(dirs0)
-        s"""|enum $nme$dirs {
-            |  ${values.map(renderEnumValueDefinition).mkString("\n  ")}
-            |}""".stripMargin
+        s"${renderDescription(desc)}enum $nme$dirs {\n${renderMembers(values)(renderEnumValueDefinition)}\n}"
 
-      case InputObjectType(nme, _, fields, dirs0) =>
+      case InputObjectType(nme, desc, fields, dirs0) =>
         val dirs = renderDirectives(dirs0)
-        s"""|input $nme$dirs {
-            |  ${fields.map(renderInputValue).mkString("\n  ")}
-            |}""".stripMargin
+        s"${renderDescription(desc)}input $nme$dirs {\n${renderMembers(fields)(renderInputValue)}\n}"
     }
   }
 
@@ -2495,23 +2487,20 @@ object SchemaRenderer {
   def renderDirectiveDefn(directive: DirectiveDef): String = {
     val DirectiveDef(nme, desc, args, repeatable, locations) = directive
     val rpt = if (repeatable) " repeatable" else ""
-    if (args.isEmpty)
-      s"${renderDescription(desc)}directive @$nme$rpt on ${locations.mkString("|")}"
-    else
-      s"${renderDescription(desc)}directive @$nme(${args.map(renderInputValue).mkString(", ")})$rpt on ${locations.mkString("|")}"
+    s"${renderDescription(desc)}directive @$nme${renderArgs(args)}$rpt on ${locations.mkString("|")}"
   }
 
   def renderEnumValueDefinition(v: EnumValueDefinition): String = {
-    val EnumValueDefinition(nme, _, dirs0) = v
+    val EnumValueDefinition(nme, desc, dirs0) = v
     val dirs = renderDirectives(dirs0)
-    s"$nme$dirs"
+    s"${renderDescription(desc)}$nme$dirs"
   }
 
   def renderInputValue(iv: InputValue): String = {
-    val InputValue(nme, _, tpe, default, dirs0) = iv
+    val InputValue(nme, desc, tpe, default, dirs0) = iv
     val dirs = renderDirectives(dirs0)
     val df = default.map(v => s" = ${renderValue(v)}").getOrElse("")
-    s"$nme: ${renderType(tpe)}$df$dirs"
+    s"${renderDescription(desc)}$nme: ${renderType(tpe)}$df$dirs"
   }
 
   def renderValue(value: Value): String = value match {
