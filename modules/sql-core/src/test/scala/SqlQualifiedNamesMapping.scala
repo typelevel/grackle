@@ -65,6 +65,8 @@ trait SqlQualifiedNamesMapping[F[_]] extends SqlTestMapping[F] {
       type City {
         name: String!
         country: Country!
+        languages: [Language!]!
+        twins: [Twin!]!
       }
       type Language {
         language: String!
@@ -105,7 +107,12 @@ trait SqlQualifiedNamesMapping[F[_]] extends SqlTestMapping[F] {
           SqlField("id", city.id, key = true, hidden = true),
           SqlField("countrycode", city.countrycode, hidden = true),
           SqlField("name", city.name),
-          SqlObject("country", Join(city.countrycode, country.code))
+          SqlObject("country", Join(city.countrycode, country.code)),
+          // Two sibling list children of City. A limit on the parent `cities` field compiles
+          // these to the branches of an SqlUnion, which is the shape that exercises
+          // SqlUnion.addFilterOrderByOffsetLimit's subquery naming.
+          SqlObject("languages", Join(city.countrycode, speaks.countrycode)),
+          SqlObject("twins", Join(city.countrycode, twin.code))
         )
       ),
       ObjectMapping(
