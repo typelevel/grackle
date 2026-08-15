@@ -331,6 +331,9 @@ lazy val doobiemssql = project
     name := "grackle-doobie-mssql",
     Test / fork := true,
     Test / parallelExecution := false,
+    // mssql-jdbc binds a zone-naive java.sql.Timestamp using the ambient JVM zone, so MSSQL
+    // datetime tests fail off-UTC unless pinned.
+    Test / javaOptions += "-Duser.timezone=UTC",
     Test / testOptions += Tests
       .Setup(_ => runDocker("docker compose up -d --wait --quiet-pull mssql")),
     libraryDependencies ++= Seq(
