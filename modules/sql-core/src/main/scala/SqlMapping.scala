@@ -78,7 +78,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
    */
   case class TableName(schema: Option[String], name: String) {
     def sqlRef: String = schema.fold(name)(s => s"$s.$name")
-    def identifier: String = schema.fold(name)(s => s"${s.replace('.', '_')}_$name")
+    def identifier: String = TableName.foldToIdentifier(sqlRef)
     override def toString: String = sqlRef
   }
   object TableName {
@@ -89,6 +89,16 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           val (schema, dotName) = raw.splitAt(i)
           TableName(Some(schema), dotName.tail)
       }
+
+    /**
+     * Fold a raw SQL name into a bare identifier.
+     *
+     * `TableName.identifier` covers names that are still structured. Subquery and common table
+     * expression names reach an alias slot as plain strings, composed from whatever they were
+     * synthesized over, so they need the same fold applied to the composed result.
+     */
+    def foldToIdentifier(name: String): String = name.replace('.', '_')
+
     val rootName = "<root>"
     val rootTableName = TableName(None, rootName)
     def isRoot(table: TableName): Boolean = table == rootTableName
@@ -166,11 +176,17 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       tableAliases.get((table.context.resultPath, table.name)) match {
         case Some(alias) => (this, alias)
         case None =>
-          if (seenTables(table.name)) {
-            // An alias must be a bare identifier, so a qualified name like "public.country"
-            // cannot seed it verbatim (issue #342); uniqueness is preserved by the counter,
-            // which is shared across table and column aliases.
-            val alias = s"${table.identifier}_alias_$next"
+          // An alias must be a bare identifier, so a qualified name like "public.country"
+          // can never stand as its own alias (issue #342). Fold first and collision-check the
+          // folded form, since folding can land on a real table of that name; uniqueness is
+          // then preserved by the counter, which is shared across table and column aliases.
+          //
+          // Note that the map stays keyed by the unfolded name. That is what lets a table and
+          // a subquery synthesized over it — which share a name in order to share an identity
+          // — also share an alias, so columns of either render the same prefix.
+          val identifier = table.identifier
+          if (seenTables(identifier)) {
+            val alias = s"${identifier}_alias_$next"
             val newState =
               copy(
                 next = next + 1,
@@ -180,11 +196,11 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           } else {
             val newState =
               copy(
-                seenTables = seenTables + table.name,
+                seenTables = seenTables + identifier,
                 tableAliases =
-                  tableAliases + ((table.context.resultPath, table.name) -> table.name)
+                  tableAliases + ((table.context.resultPath, table.name) -> identifier)
               )
-            (newState, table.name)
+            (newState, identifier)
           }
       }
 
@@ -194,7 +210,13 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     def tableRef(table: TableExpr): (AliasState, String) =
       tableAliases.get((table.context.resultPath, table.name)) match {
         case Some(alias) => (this, alias)
-        case None => (this, table.name)
+        // No alias is registered under this result path when the reference is correlated to a
+        // table defined by an enclosing query, which registers under its own path. Falling back
+        // to the bare identifier is what reuses that enclosing alias; registering a fresh one
+        // here instead would name a table absent from the from clause. For a schema-qualified
+        // table the raw name is a dotted reference, which no longer matches the folded alias
+        // the enclosing query defined (issue #342).
+        case None => (this, table.identifier)
       }
 
     /**
@@ -1464,7 +1486,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         if (this == col.owner) Some(this) else subquery.findNamedOwner(col)
 
       def isRoot: Boolean = false
-      def identifier: String = name
+      def identifier: String = TableName.foldToIdentifier(name)
 
       def isUnion: Boolean = subquery.isUnion
 
@@ -3208,7 +3230,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       def subqueryToWithQuery: SqlSelect = {
         table match {
           case SubqueryRef(_, name, sq, _) =>
-            val with0 = WithRef(context, name + "_base", sq)
+            // A common table expression name is rendered verbatim rather than through the
+            // alias machinery, so it has to be folded here (issue #342). The derived table
+            // keeps the unfolded name, which carries the subquery's identity.
+            val with0 = WithRef(context, TableName.foldToIdentifier(name) + "_base", sq)
             val ref = TableExpr.DerivedTableRef(context, Some(name), with0, true)
             copy(withs = with0 :: withs, table = ref)
           case _ =>
@@ -3410,9 +3435,12 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             for {
               withFilter0 <- withFilter
               table <- parentTableForType(context)
-              // The subquery name lands in alias position, so it must be a bare
-              // identifier even for a schema-qualified table (issue #342).
-              sel <- withFilter0.toSubquery(table.identifier)
+              // Unlike the synthesized names elsewhere, this one is load bearing: naming the
+              // subquery after its parent table is what keeps it `isSameOwner` with that
+              // table, so columns still bound to the table resolve against the subquery.
+              // Folding here would break that identity, so the fold happens in alias
+              // position instead, when the name is emitted (issue #342).
+              sel <- withFilter0.toSubquery(table.name)
               res <- sel.addFilterOrderByOffsetLimit(
                 None,
                 orderBy,

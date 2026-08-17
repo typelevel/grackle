@@ -288,4 +288,162 @@ trait SqlQualifiedNamesSuite extends CatsEffectSuite {
 
     assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
   }
+
+  test("offset/limit paging over schema-qualified table names (#342)") {
+    val query = """
+      query {
+        paged(offset: 0, limit: 2) {
+          items {
+            code
+            name
+            cities(offset: 0, limit: 2) {
+              items {
+                name
+              }
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "paged" : {
+            "items" : [
+              {
+                "code" : "CAN",
+                "name" : "Canada",
+                "cities" : {
+                  "items" : [
+                    {
+                      "name" : "Ottawa"
+                    },
+                    {
+                      "name" : "Toronto"
+                    }
+                  ]
+                }
+              },
+              {
+                "code" : "DEU",
+                "name" : "Germany",
+                "cities" : {
+                  "items" : [
+                    {
+                      "name" : "Berlin"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
+
+  test("paging over a qualified table reached at two result paths (#342)") {
+    val query = """
+      query {
+        paged(offset: 0, limit: 2) {
+          total
+          items {
+            code
+            name
+            twin {
+              motto
+              cities(offset: 0, limit: 1) {
+                items {
+                  name
+                }
+              }
+            }
+            cities(offset: 0, limit: 2) {
+              items {
+                name
+                country {
+                  code
+                  name
+                }
+              }
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "paged" : {
+            "total" : 2,
+            "items" : [
+              {
+                "code" : "CAN",
+                "name" : "Canada",
+                "twin" : {
+                  "motto" : "A mari usque ad mare",
+                  "cities" : {
+                    "items" : [
+                      {
+                        "name" : "Ottawa"
+                      }
+                    ]
+                  }
+                },
+                "cities" : {
+                  "items" : [
+                    {
+                      "name" : "Ottawa",
+                      "country" : {
+                        "code" : "CAN",
+                        "name" : "Canada"
+                      }
+                    },
+                    {
+                      "name" : "Toronto",
+                      "country" : {
+                        "code" : "CAN",
+                        "name" : "Canada"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "code" : "DEU",
+                "name" : "Germany",
+                "twin" : {
+                  "motto" : "Einigkeit und Recht und Freiheit",
+                  "cities" : {
+                    "items" : [
+                      {
+                        "name" : "Berlin"
+                      }
+                    ]
+                  }
+                },
+                "cities" : {
+                  "items" : [
+                    {
+                      "name" : "Berlin",
+                      "country" : {
+                        "code" : "DEU",
+                        "name" : "Germany"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
 }
