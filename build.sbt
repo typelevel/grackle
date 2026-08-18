@@ -36,7 +36,7 @@ ThisBuild / scalaVersion := Scala2
 ThisBuild / crossScalaVersions := Seq(Scala2, Scala3)
 ThisBuild / tlJdkRelease := Some(11)
 
-ThisBuild / tlBaseVersion := "0.29"
+ThisBuild / tlBaseVersion := "0.30"
 ThisBuild / startYear := Some(2019)
 ThisBuild / licenses := Seq(License.Apache2)
 ThisBuild / developers := List(
