@@ -971,6 +971,15 @@ final class ParserSuite extends CatsEffectSuite {
     assertEquals(resFail, Result.failure(expectedFail))
   }
 
+  test("comment at end of file without a line terminator") {
+    val expected =
+      List(Operation(Query, None, Nil, Nil, List(Field(None, Name("x"), Nil, Nil, Nil))))
+
+    assertEquals(parser.parseText("query { x } # done"), Result(expected))
+    assertEquals(parser.parseText("query { x } #"), Result(expected))
+    assertEquals(parser.parseText("query { # inner\n x } # a\n# b"), Result(expected))
+  }
+
   def mkParser(
       maxSelectionDepth: Int = GraphQLParser.defaultConfig.maxSelectionDepth,
       maxSelectionWidth: Int = GraphQLParser.defaultConfig.maxSelectionWidth,

@@ -505,11 +505,13 @@ object GraphQLParser {
 
     /**
      * Parser that consumes a comment
+     *
+     * A comment ends at a line terminator or at the end of the file.
      */
     val comment: Parser[Unit] =
-      (char('#') *> charWhere(c => c != '\n' && c != '\r').rep0 <* charIn(
+      (char('#') *> charWhere(c => c != '\n' && c != '\r').rep0 <* (charIn(
         '\n',
-        '\r') <* skipWhitespace).void
+        '\r').void | Parser.end) <* skipWhitespace).void
 
     /**
      * Turns a parser into one that skips trailing whitespace and comments
