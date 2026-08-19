@@ -213,6 +213,14 @@ final class ProjectionSuite extends DoobiePgDatabaseSuite with SqlProjectionSuit
   lazy val mapping = new DoobiePgTestMapping(transactor) with SqlProjectionMapping[IO]
 }
 
+final class QualifiedNamesSuite extends DoobiePgDatabaseSuite with SqlQualifiedNamesSuite {
+  lazy val mapping = new DoobiePgTestMapping(transactor) with SqlQualifiedNamesMapping[IO]
+}
+
+final class TableNameSuite extends DoobiePgDatabaseSuite with SqlTableNameSuite {
+  lazy val mapping = new DoobiePgTestMapping(transactor) with SqlQualifiedNamesMapping[IO]
+}
+
 final class RecursiveInterfacesSuite
     extends DoobiePgDatabaseSuite
     with SqlRecursiveInterfacesSuite {

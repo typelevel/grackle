@@ -88,7 +88,10 @@ trait DoobieMSSqlMappingLike[F[_]] extends DoobieMappingLike[F] with SqlMappingL
 
   def encapsulateUnionBranch(s: SqlSelect): SqlSelect =
     if (s.orders.isEmpty) s
-    else s.toSubquery(s.table.name + "_encaps", Laterality.NotLateral)
+    else
+      // The subquery name lands in alias position, so a schema-qualified table name must be
+      // folded to a bare identifier first (issue #342).
+      s.toSubquery(s.table.identifier + "_encaps", Laterality.NotLateral)
 
   def mkLateral(inner: Boolean): Laterality =
     Laterality.Apply(inner)

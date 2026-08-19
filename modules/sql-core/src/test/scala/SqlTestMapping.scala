@@ -54,5 +54,5 @@ trait SqlTestMapping[F[_]] extends SqlMappingLike[F] { outer =>
       implicit tableName: TableName,
       typeName: TypeName[T],
       pos: SourcePos): ColumnRef =
-    ColumnRef(tableName.name, colName, codec, typeName.value, pos)
+    ColumnRef(tableName, colName, codec, typeName.value, pos)
 }

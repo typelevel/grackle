@@ -65,11 +65,43 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
   def orderToFragment(col: Fragment, ascending: Boolean, nullsLast: Boolean): Fragment
   def nullsHigh: Boolean
 
-  case class TableName(name: String)
+  /**
+   * The name of a SQL table, split into an optional schema qualifier and a local name.
+   *
+   * A table's raw SQL name plays two distinct roles depending on where it's used: a reference
+   * (`sqlRef`, schema-qualified, e.g. "public.country" — legal in a FROM/JOIN clause) and a
+   * bare identifier (`identifier`, e.g. "public_country" — required wherever an alias or
+   * synthesized name is minted, since a dot is not a legal identifier character). Keeping both
+   * derived from one structured value means a call site that needs the identifier form reaches
+   * for `.identifier` and can't accidentally reach for the raw, possibly-dotted `.sqlRef`
+   * instead (issue #342).
+   */
+  case class TableName(schema: Option[String], name: String) {
+    def sqlRef: String = schema.fold(name)(s => s"$s.$name")
+    def identifier: String = TableName.foldToIdentifier(sqlRef)
+    override def toString: String = sqlRef
+  }
   object TableName {
+    def apply(raw: String): TableName =
+      raw.lastIndexOf('.') match {
+        case -1 => TableName(None, raw)
+        case i =>
+          val (schema, dotName) = raw.splitAt(i)
+          TableName(Some(schema), dotName.tail)
+      }
+
+    /**
+     * Fold a raw SQL name into a bare identifier.
+     *
+     * `TableName.identifier` covers names that are still structured. Subquery and common table
+     * expression names reach an alias slot as plain strings, composed from whatever they were
+     * synthesized over, so they need the same fold applied to the composed result.
+     */
+    def foldToIdentifier(name: String): String = name.replace('.', '_')
+
     val rootName = "<root>"
-    val rootTableName = TableName(rootName)
-    def isRoot(table: String): Boolean = table == rootName
+    val rootTableName = TableName(None, rootName)
+    def isRoot(table: TableName): Boolean = table == rootTableName
   }
   class TableDef(name: String) {
     implicit val tableName: TableName = TableName(name)
@@ -88,7 +120,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
    * used to construct `SqlColumns`.
    */
   case class ColumnRef(
-      table: String,
+      table: TableName,
       column: String,
       codec: Codec,
       scalaTypeName: String,
@@ -144,8 +176,17 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       tableAliases.get((table.context.resultPath, table.name)) match {
         case Some(alias) => (this, alias)
         case None =>
-          if (seenTables(table.name)) {
-            val alias = s"${table.name}_alias_$next"
+          // An alias must be a bare identifier, so a qualified name like "public.country"
+          // can never stand as its own alias (issue #342). Fold first and collision-check the
+          // folded form, since folding can land on a real table of that name; uniqueness is
+          // then preserved by the counter, which is shared across table and column aliases.
+          //
+          // Note that the map stays keyed by the unfolded name. That is what lets a table and
+          // a subquery synthesized over it — which share a name in order to share an identity
+          // — also share an alias, so columns of either render the same prefix.
+          val identifier = table.identifier
+          if (seenTables(identifier)) {
+            val alias = s"${identifier}_alias_$next"
             val newState =
               copy(
                 next = next + 1,
@@ -155,11 +196,11 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           } else {
             val newState =
               copy(
-                seenTables = seenTables + table.name,
+                seenTables = seenTables + identifier,
                 tableAliases =
-                  tableAliases + ((table.context.resultPath, table.name) -> table.name)
+                  tableAliases + ((table.context.resultPath, table.name) -> identifier)
               )
-            (newState, table.name)
+            (newState, identifier)
           }
       }
 
@@ -169,7 +210,13 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     def tableRef(table: TableExpr): (AliasState, String) =
       tableAliases.get((table.context.resultPath, table.name)) match {
         case Some(alias) => (this, alias)
-        case None => (this, table.name)
+        // No alias is registered under this result path when the reference is correlated to a
+        // table defined by an enclosing query, which registers under its own path. Falling back
+        // to the bare identifier is what reuses that enclosing alias; registering a fresh one
+        // here instead would name a table absent from the from clause. For a schema-qualified
+        // table the raw name is a dotted reference, which no longer matches the folded alias
+        // the enclosing query defined (issue #342).
+        case None => (this, table.identifier)
       }
 
     /**
@@ -1310,6 +1357,12 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     def name: String
 
     /**
+     * A bare-identifier-safe form of this `TableExpr`'s name, for use in alias and synthesized
+     * subquery name positions where a dot is not legal (issue #342).
+     */
+    def identifier: String
+
+    /**
      * Is the supplied column an immediate component of this `TableExpr`?
      */
     def directlyOwns(col: SqlColumn): Boolean = this == col.owner
@@ -1355,14 +1408,17 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     /**
      * Table expression corresponding to a possibly aliased table
      */
-    case class TableRef(context: Context, name: String) extends TableExpr {
+    case class TableRef(context: Context, tableName: TableName) extends TableExpr {
+      def name: String = tableName.sqlRef
+      def identifier: String = tableName.identifier
+
       def owns(col: SqlColumn): Boolean = isSameOwner(col.owner)
       def contains(other: ColumnOwner): Boolean = isSameOwner(other)
 
       def findNamedOwner(col: SqlColumn): Option[TableExpr] =
         if (this == col.owner) Some(this) else None
 
-      def isRoot: Boolean = TableName.isRoot(name)
+      def isRoot: Boolean = TableName.isRoot(tableName)
 
       def isUnion: Boolean = false
 
@@ -1430,6 +1486,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         if (this == col.owner) Some(this) else subquery.findNamedOwner(col)
 
       def isRoot: Boolean = false
+      def identifier: String = TableName.foldToIdentifier(name)
 
       def isUnion: Boolean = subquery.isUnion
 
@@ -1464,6 +1521,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         if (this == col.owner) Some(this) else withQuery.findNamedOwner(col)
 
       def isRoot: Boolean = false
+      def identifier: String = name
 
       def isUnion: Boolean = withQuery.isUnion
 
@@ -1494,6 +1552,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       assert(!underlying.isInstanceOf[WithRef] || noalias)
 
       def name = alias.getOrElse(underlying.name)
+      def identifier: String = alias.getOrElse(underlying.identifier)
 
       def owns(col: SqlColumn): Boolean = col.owner.isSameOwner(this) || underlying.owns(col)
       def contains(other: ColumnOwner): Boolean =
@@ -2298,7 +2357,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       def isDistinct: Boolean = distinct.nonEmpty
 
       override def isSameOwner(other: ColumnOwner): Boolean =
-        other.isSameOwner(TableRef(context, table.name))
+        other.isSameOwner(TableRef(context, TableName(table.name)))
 
       def owns(col: SqlColumn): Boolean = cols.contains(col) || owns0(col)
       def contains(other: ColumnOwner): Boolean =
@@ -2347,8 +2406,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
        * joins
        */
       def syntheticName(suffix: String): String = {
-        val joinNames = joins.map(_.child.name)
-        (table.name :: joinNames).mkString("_").take(50 - suffix.length) + suffix
+        // Synthesized names are used as subquery aliases, so they must be bare identifiers
+        // even when built from schema-qualified table names (issue #342).
+        val joinNames = joins.map(_.child.identifier)
+        (table.identifier :: joinNames).mkString("_").take(50 - suffix.length) + suffix
       }
 
       /**
@@ -2452,9 +2513,11 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 val finalJoin = lastJoin.toSqlJoin(lastJoinParentTable, base.table, inner)
                 finalJoin :: Nil
               } else {
+                // On the mergeable branch base.table is the raw TableRef, so its name may be
+                // schema-qualified and must be folded before use in alias position (#342).
                 val assocTable = TableExpr.DerivedTableRef(
                   context,
-                  Some(base.table.name + "_assoc"),
+                  Some(base.table.identifier + "_assoc"),
                   base.table,
                   true)
                 val assocJoin = lastJoin.toSqlJoin(lastJoinParentTable, assocTable, inner)
@@ -3167,7 +3230,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       def subqueryToWithQuery: SqlSelect = {
         table match {
           case SubqueryRef(_, name, sq, _) =>
-            val with0 = WithRef(context, name + "_base", sq)
+            // A common table expression name is rendered verbatim rather than through the
+            // alias machinery, so it has to be folded here (issue #342). The derived table
+            // keeps the unfolded name, which carries the subquery's identity.
+            val with0 = WithRef(context, TableName.foldToIdentifier(name) + "_base", sq)
             val ref = TableExpr.DerivedTableRef(context, Some(name), with0, true)
             copy(withs = with0 :: withs, table = ref)
           case _ =>
@@ -3369,6 +3435,11 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             for {
               withFilter0 <- withFilter
               table <- parentTableForType(context)
+              // Unlike the synthesized names elsewhere, this one is load bearing: naming the
+              // subquery after its parent table is what keeps it `isSameOwner` with that
+              // table, so columns still bound to the table resolve against the subquery.
+              // Folding here would break that identity, so the fold happens in alias
+              // position instead, when the name is emitted (issue #342).
               sel <- withFilter0.toSubquery(table.name)
               res <- sel.addFilterOrderByOffsetLimit(
                 None,
@@ -4632,7 +4703,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       val tables = allTables(List(om))
       val split = tables.sizeCompare(1) > 0
       if (!split) Nil
-      else List(SplitObjectTypeMapping(om, tables))
+      else List(SplitObjectTypeMapping(om, tables.map(_.sqlRef)))
     }
 
     def checkSuperInterfaces(om: ObjectMapping): List[ValidationFailure] = {
@@ -4644,7 +4715,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       val tables = allTables(allMappings)
       val split = tables.sizeCompare(1) > 0
       if (!split) Nil
-      else List(SplitInterfaceTypeMapping(om, allMappings, tables))
+      else List(SplitInterfaceTypeMapping(om, allMappings, tables.map(_.sqlRef)))
     }
 
     def checkUnionMembers(om: ObjectMapping): List[ValidationFailure] = {
@@ -4654,7 +4725,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           val tables = allTables(allMappings)
           val split = tables.sizeCompare(1) > 0
           if (!split) Nil
-          else List(SplitUnionTypeMapping(om, allMappings, tables))
+          else List(SplitUnionTypeMapping(om, allMappings, tables.map(_.sqlRef)))
 
         case _ => Nil
       }
@@ -4779,7 +4850,14 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           } yield {
             val childTables = allTables(List(com))
             if (parentTables.sameElements(childTables)) Nil
-            else List(SplitEmbeddedObjectTypeMapping(om, fm, com, parentTables, childTables))
+            else
+              List(
+                SplitEmbeddedObjectTypeMapping(
+                  om,
+                  fm,
+                  com,
+                  parentTables.map(_.sqlRef),
+                  childTables.map(_.sqlRef)))
           }).getOrElse(Nil)
         }
 
@@ -4815,8 +4893,8 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                   InconsistentJoinConditions(
                     om,
                     fm,
-                    j.conditions.map(_._1.table).distinct,
-                    j.conditions.map(_._2.table).distinct)
+                    j.conditions.map(_._1.table.sqlRef).distinct,
+                    j.conditions.map(_._2.table.sqlRef).distinct)
                 }
 
                 val serConsistent = {
@@ -4836,9 +4914,12 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                       if (headIsParent && lastIsChild && consistentChain) Nil
                       else {
                         val path = nonEmptyJoins.map(j =>
-                          (j.conditions.head._1.table, j.conditions.last._2.table))
+                          (
+                            j.conditions.head._1.table.sqlRef,
+                            j.conditions.last._2.table.sqlRef))
 
-                        List(MisalignedJoins(om, fm, parentTable, childTable, path))
+                        List(
+                          MisalignedJoins(om, fm, parentTable.sqlRef, childTable.sqlRef, path))
                       }
                   }
                 }
@@ -4854,7 +4935,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     }
   }
 
-  private def allTables(oms: List[ObjectMapping]): List[String] =
+  private def allTables(oms: List[ObjectMapping]): List[TableName] =
     oms
       .flatMap(_.fieldMappings.flatMap {
         case SqlField(_, columnRef, _, _, _, _) => List(columnRef.table)
