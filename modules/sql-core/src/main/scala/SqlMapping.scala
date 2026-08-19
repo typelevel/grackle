@@ -2689,7 +2689,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 )
 
               case Some(SqlObject(_, joins)) =>
-                mkJoins(joins).success
+                // `mkJoins` can throw: an OUTER APPLY which declines to correlate is a bug, and
+                // `distributeJoinConditions` raises rather than render incorrect SQL. Lift that into
+                // the Result channel here rather than let it escape `nest`.
+                Result.catchNonFatal(mkJoins(joins))
 
               case _ =>
                 Result.internalError(
