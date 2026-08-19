@@ -1970,6 +1970,7 @@ object SchemaValidator {
       defns: List[TypeDefinition],
       typeExtnDefns: List[Ast.TypeExtension]): List[Problem] =
     validateReferences(schema, defns) ++
+      validateRootTypes(schema) ++
       validateUniqueDefns(schema) ++
       validateUniqueFields(schema) ++
       validateUnionMembers(schema) ++
@@ -1978,6 +1979,29 @@ object SchemaValidator {
       validateImplementations(schema) ++
       validateTypeExtensions(defns, typeExtnDefns) ++
       Directive.validateDirectivesForSchema(schema)
+
+  // https://spec.graphql.org/October2021/#sec-Root-Operation-Types
+  def validateRootTypes(schema: Schema): List[Problem] = {
+    def checkRoot(opName: String, mandatory: Boolean): List[Problem] =
+      schema.schemaType.field(opName).flatMap(_.nonNull.asNamed) match {
+        case None =>
+          if (mandatory) List(Problem(s"No '$opName' root operation type in schema")) else Nil
+        case Some(tpe) if !tpe.exists =>
+          List(
+            Problem(s"Undefined type '${tpe.name}' specified as '$opName' root operation type"))
+        case Some(tpe) =>
+          tpe.dealias match {
+            case _: ObjectType => Nil
+            case _ =>
+              List(Problem(
+                s"Type '${tpe.name}' specified as '$opName' root operation type is not an object type"))
+          }
+      }
+
+    checkRoot("query", mandatory = true) ++
+      checkRoot("mutation", mandatory = false) ++
+      checkRoot("subscription", mandatory = false)
+  }
 
   def validateReferences(schema: Schema, defns: List[TypeDefinition]): List[Problem] = {
     def underlyingName(tpe: Ast.Type): String =
