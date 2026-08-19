@@ -348,7 +348,7 @@ object GraphQLParser {
       }
 
     def InlineFragment(n: Int): Parser[Ast.Selection.InlineFragment] =
-      ((TypeCondition.? ~ Directives).with1 ~ SelectionSetN(n)).map {
+      ((TypeCondition.backtrack.? ~ Directives).with1 ~ SelectionSetN(n)).map {
         case ((cond, dirs), sel) => Ast.Selection.InlineFragment(cond, dirs, sel)
       }
 
@@ -371,7 +371,7 @@ object GraphQLParser {
       (Name <* punctuation(":")) ~ Value
 
     lazy val FragmentName: Parser[Ast.Name] =
-      not(string("on")).with1 *> Name
+      not(string("on") <* not(charIn(nameSubsequent))).with1 *> Name
 
     lazy val FragmentDefinition: Parser[Ast.FragmentDefinition] =
       ((keyword("fragment") *> FragmentName) ~ TypeCondition ~ Directives ~ SelectionSet).map {
@@ -382,11 +382,12 @@ object GraphQLParser {
       keyword("on") *> NamedType
 
     lazy val NullValue: Parser[Ast.Value.NullValue.type] =
-      keyword("null").as(Ast.Value.NullValue)
+      keyword("null").backtrack.as(Ast.Value.NullValue)
 
     lazy val EnumValue: Parser[Ast.Value.EnumValue] =
-      (not(string("true") | string("false") | string("null")).with1 *> Name)
-        .map(Ast.Value.EnumValue.apply)
+      (not(
+        (string("true") | string("false") | string("null")) <* not(
+          charIn(nameSubsequent))).with1 *> Name).map(Ast.Value.EnumValue.apply)
 
     def ListValue(n: Int): Parser[Ast.Value.ListValue] =
       token(
@@ -413,7 +414,8 @@ object GraphQLParser {
     }
 
     lazy val BooleanValue: Parser[Ast.Value.BooleanValue] =
-      token(booleanLiteral).map(Ast.Value.BooleanValue.apply)
+      token((booleanLiteral <* not(charIn(nameSubsequent))).backtrack)
+        .map(Ast.Value.BooleanValue.apply)
 
     def ObjectField(n: Int): Parser[(Ast.Name, Ast.Value)] =
       (Name <* punctuation(":")) ~ ValueN(n)
