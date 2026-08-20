@@ -260,6 +260,51 @@ final class SkipIncludeSuite extends CatsEffectSuite {
 
     assertEquals(compiled.map(_.query), Result.Success(expected))
   }
+
+  test("skip and include on the same selection") {
+    val query = """
+      query {
+        a: field @skip(if: false) @include(if: true) { subfieldA }
+        b: field @skip(if: true) @include(if: true) { subfieldA }
+        c: field @skip(if: false) @include(if: false) { subfieldA }
+        d: field @skip(if: true) @include(if: false) { subfieldA }
+      }
+    """
+
+    val expected = Select("field", Some("a"), Select("subfieldA"))
+
+    val compiled = SkipIncludeMapping.compiler.compile(query)
+
+    assertEquals(compiled.map(_.query), Result.Success(expected))
+  }
+
+  test("repeated skip on the same selection is rejected") {
+    val query = """
+      query {
+        field @skip(if: false) @skip(if: false) { subfieldA }
+      }
+    """
+
+    val compiled = SkipIncludeMapping.compiler.compile(query)
+
+    assertEquals(
+      compiled.map(_.query),
+      Result.failure("Directive 'skip' may not occur more than once"))
+  }
+
+  test("repeated include on the same selection is rejected") {
+    val query = """
+      query {
+        field @include(if: true) @include(if: true) { subfieldA }
+      }
+    """
+
+    val compiled = SkipIncludeMapping.compiler.compile(query)
+
+    assertEquals(
+      compiled.map(_.query),
+      Result.failure("Directive 'include' may not occur more than once"))
+  }
 }
 
 object SkipIncludeMapping extends TestMapping {

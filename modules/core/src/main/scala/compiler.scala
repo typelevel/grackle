@@ -1269,15 +1269,13 @@ object QueryCompiler {
       Elab.liftR(Value.elaborateValue(b.value, vars).map(ev => b.copy(value = ev)))
 
     def isSkipped(dirs: List[Directive]): Elab[Boolean] =
-      dirs.filter(d => d.name == "skip" || d.name == "include") match {
-        case Nil => Elab.pure(false)
-        case List(Directive(nme, List(Binding("if", value)))) =>
-          for {
-            c <- extractCond(value)
-          } yield (nme == "skip" && c) || (nme == "include" && !c)
-        case List(Directive(nme, _)) =>
+      dirs.filter(d => d.name == "skip" || d.name == "include").foldLeftM(false) {
+        case (skipped, Directive(nme, List(Binding("if", value)))) =>
+          extractCond(value).map { c =>
+            skipped || (nme == "skip" && c) || (nme == "include" && !c)
+          }
+        case (_, Directive(nme, _)) =>
           Elab.failure(s"Directive '$nme' must have a single Boolean 'if' argument")
-        case _ => Elab.failure("skip/include directives must be unique")
       }
 
     def extractCond(value: Value): Elab[Boolean] =
