@@ -980,6 +980,85 @@ final class ParserSuite extends CatsEffectSuite {
     assertEquals(parser.parseText("query { # inner\n x } # a\n# b"), Result(expected))
   }
 
+  test("fragment name that starts with 'on'") {
+    val query = """
+      query { x { ...onlyFriends } }
+      fragment onlyFriends on X { name }
+    """
+
+    val expected =
+      List(
+        Operation(
+          Query,
+          None,
+          Nil,
+          Nil,
+          List(
+            Field(None, Name("x"), Nil, Nil, List(FragmentSpread(Name("onlyFriends"), Nil))))),
+        FragmentDefinition(
+          Name("onlyFriends"),
+          Named(Name("X")),
+          Nil,
+          List(Field(None, Name("name"), Nil, Nil, Nil)))
+      )
+
+    assertEquals(parser.parseText(query), Result(expected))
+  }
+
+  test("fragment name 'on' is still rejected") {
+    assert(parser.parseText("fragment on on X { name }").hasValue == false)
+  }
+
+  test("enum values that start with 'true', 'false' or 'null'") {
+    val query = "query { x(a: trueStory, b: falseAlarm, c: nullable) }"
+
+    val expected =
+      Operation(
+        Query,
+        None,
+        Nil,
+        Nil,
+        List(
+          Field(
+            None,
+            Name("x"),
+            List(
+              (Name("a"), EnumValue(Name("trueStory"))),
+              (Name("b"), EnumValue(Name("falseAlarm"))),
+              (Name("c"), EnumValue(Name("nullable")))
+            ),
+            Nil,
+            Nil
+          ))
+      )
+
+    assertEquals(parser.parseText(query), Result(List(expected)))
+  }
+
+  test("bare keywords are still literals, not enum values") {
+    val query = "query { x(a: true, b: false, c: null) }"
+
+    val expected =
+      Operation(
+        Query,
+        None,
+        Nil,
+        Nil,
+        List(
+          Field(
+            None,
+            Name("x"),
+            List(
+              (Name("a"), BooleanValue(true)),
+              (Name("b"), BooleanValue(false)),
+              (Name("c"), NullValue)
+            ),
+            Nil,
+            Nil)))
+
+    assertEquals(parser.parseText(query), Result(List(expected)))
+  }
+
   def mkParser(
       maxSelectionDepth: Int = GraphQLParser.defaultConfig.maxSelectionDepth,
       maxSelectionWidth: Int = GraphQLParser.defaultConfig.maxSelectionWidth,
