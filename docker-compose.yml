@@ -52,3 +52,57 @@ services:
       retries: 10
       start_period: 5s
       start_interval: 5s
+
+  mysql:
+    # Defaults to the current LTS. The backend's documented floor is MySQL 8.0.14 (the first
+    # release with LATERAL); override to re-verify it, e.g.
+    # `MYSQL_VERSION=8.0.14 sbt doobiemysql/test` - green on 8.0.14, 8.0.46 and 8.4.
+    image: mysql:${MYSQL_VERSION:-8.4}
+    # initdb.d loads fixtures through the mysql CLI whose handshake may request latin1; force
+    # utf8mb4 for every session so fixture content can never be double-encoded.
+    # (--skip-character-set-client-handshake, the older way to pin this server-side, was
+    # removed in MySQL 8.3+; entrypoint.sh pins the client default instead - see its header
+    # comment for why that can't just be a bind-mounted conf.d file.)
+    command: ["--character-set-server=utf8mb4"]
+    entrypoint: ["/bin/bash", "/container-entrypoint-initdb.d/entrypoint.sh"]
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_DATABASE=test
+      - MYSQL_USER=test
+      - MYSQL_PASSWORD=test
+      - MYSQL_ROOT_PASSWORD=test
+    volumes:
+      - ./testdata/mysql/:/docker-entrypoint-initdb.d/
+      - ./modules/doobie-mysql/src/test/resources/scripts/:/container-entrypoint-initdb.d/
+    healthcheck:
+      # mysqladmin ping answers during the image's temporary init server phase too; a real
+      # TCP query against the test schema only succeeds once init (and initdb.d) finished.
+      test: ["CMD-SHELL", "mysql -h127.0.0.1 -utest -ptest -e 'SELECT 1' test"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mariadb:
+    # The official image's `lts` tag always tracks MariaDB's current long-term-support
+    # release, so no version number needs to be pinned or re-pinned later. Override to test a
+    # specific version, e.g. `MARIADB_VERSION=11.4 sbt doobiemariadb/test`.
+    image: mariadb:${MARIADB_VERSION:-lts}
+    ports:
+      - "3307:3306"
+    environment:
+      - MARIADB_DATABASE=test
+      - MARIADB_USER=test
+      - MARIADB_PASSWORD=test
+      - MARIADB_ROOT_PASSWORD=test
+    volumes:
+      # Reuses the MySQL backend's fixtures unchanged - verified by inspection to be plain
+      # standard SQL (CREATE TABLE/INSERT, nothing MySQL-8-exclusive). Do NOT copy this to a
+      # testdata/mariadb/ directory; if Task 3 finds a real incompatibility, fork only the one
+      # file that needs to differ and note it in the report.
+      - ./testdata/mysql/:/docker-entrypoint-initdb.d/
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h127.0.0.1 -utest -ptest --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20

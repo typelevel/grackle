@@ -17,13 +17,16 @@ val kindProjectorVersion = "0.13.4"
 val literallyVersion = "1.2.0"
 val logbackVersion = "1.6.3"
 val log4catsVersion = "2.8.0"
+val mariadbDriverVersion = "3.5.9"
 val mssqlDriverVersion = "13.4.0.jre11"
 val munitVersion = "1.3.5"
 val munitCatsEffectVersion = "2.2.0"
 val munitScalaCheckVersion = "1.3.0"
+val mysqlDriverVersion = "9.3.0"
 val oracleDriverVersion = "23.26.3.0.0"
 val postgresVersion = "42.7.13"
 val skunkVersion = "1.0.0"
+val sqliteDriverVersion = "3.53.2.0"
 val shapeless2Version = "2.3.13"
 val shapeless3Version = "3.6.0"
 val sourcePosVersion = "1.2.0"
@@ -180,6 +183,9 @@ lazy val modules: List[CompositeProject] = List(
   doobiepg,
   doobieoracle,
   doobiemssql,
+  doobiemysql,
+  doobiemariadb,
+  doobiesqlite,
   skunk,
   generic,
   docs,
@@ -341,6 +347,71 @@ lazy val doobiemssql = project
     )
   )
 
+lazy val doobiemysql = project
+  .in(file("modules/doobie-mysql"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(doobiecore % "test->test;compile->compile")
+  .settings(commonSettings)
+  .settings(
+    name := "grackle-doobie-mysql",
+    Test / fork := true,
+    Test / parallelExecution := false,
+    Test / testOptions += Tests
+      .Setup(_ => runDocker("docker compose up -d --wait --quiet-pull mysql")),
+    libraryDependencies ++= Seq(
+      "com.mysql" % "mysql-connector-j" % mysqlDriverVersion
+    )
+  )
+
+lazy val doobiemariadb = project
+  .in(file("modules/doobie-mariadb"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(doobiecore % "test->test;compile->compile")
+  .settings(commonSettings)
+  .settings(
+    name := "grackle-doobie-mariadb",
+    Test / fork := true,
+    Test / parallelExecution := false,
+    Test / testOptions += Tests
+      .Setup(_ => runDocker("docker compose up -d --wait --quiet-pull mariadb")),
+    libraryDependencies ++= Seq(
+      "org.mariadb.jdbc" % "mariadb-java-client" % mariadbDriverVersion
+    )
+  )
+
+lazy val doobiesqlite = project
+  .in(file("modules/doobie-sqlite"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(doobiecore % "test->test;compile->compile")
+  .settings(commonSettings)
+  .settings(
+    name := "grackle-doobie-sqlite",
+    Test / fork := true,
+    Test / parallelExecution := false,
+    // SQLite has no docker service: unlike Oracle/MSSQL, whose containers auto-run the seed SQL
+    // mounted from testdata/<db>/, the test harness loads and executes testdata/sqlite/*.sql
+    // itself against a fresh temp database file per suite. Pass the directory as a system property
+    // (fork'd tests don't share the build's working directory) rather than relying on a relative
+    // path guess.
+    Test / javaOptions += s"-Dgrackle.sqlite.testdata=${(ThisBuild / baseDirectory).value / "testdata" / "sqlite"}",
+    // sqlite-jdbc's native cleanup on Connection#close touches JNI from what recent JDKs treat as
+    // a restricted context; without this the forked test JVM logs "restricted method" warnings and
+    // native handle teardown can throw spuriously. The flag only exists on JDK 17+ (JEP 412) -
+    // older JVMs, such as CI's temurin@11, refuse to start when given it (the forked JVM inherits
+    // the JDK sbt runs on), so it has to be supplied conditionally.
+    Test / javaOptions ++= {
+      if (sys.props("java.specification.version").toDouble >= 17)
+        Seq("--enable-native-access=ALL-UNNAMED")
+      else Nil
+    },
+    libraryDependencies ++= Seq(
+      "org.xerial" % "sqlite-jdbc" % sqliteDriverVersion
+    )
+  )
+
 lazy val skunk = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Full)
   .in(file("modules/skunk"))
@@ -489,6 +560,9 @@ lazy val unidocs = project
       doobiepg,
       doobieoracle,
       doobiemssql,
+      doobiemysql,
+      doobiemariadb,
+      doobiesqlite,
       skunk.jvm,
       generic.jvm
     )
