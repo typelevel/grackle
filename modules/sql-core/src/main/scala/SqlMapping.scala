@@ -1442,7 +1442,19 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     trait Laterality {
       def toFragment: Fragment
       def joinToFragment(join: SqlJoin, subquery: SubqueryRef): Aliased[Fragment]
-      def joinPredicates(join: SqlJoin): List[Predicate]
+
+      /**
+       * Distribute the conditions of `join` between the join itself and the enclosing select.
+       *
+       * Yields a possibly rewritten join, together with the predicates which must be added to
+       * the enclosing select's WHERE clause for the join to have its intended semantics.
+       *
+       * Lateralities which render the join with an `ON` clause need neither, and so yield the
+       * join unchanged and no predicates.
+       */
+      def distributeJoinConditions(
+          join: SqlJoin,
+          subquery: SubqueryRef): (SqlJoin, List[Predicate])
     }
     object Laterality {
       def apply(lateral: Boolean, inner: Boolean): Laterality =
@@ -1452,21 +1464,92 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         def toFragment: Fragment = Fragments.empty
         def joinToFragment(join: SqlJoin, subquery: SubqueryRef): Aliased[Fragment] =
           join.toFragmentWithoutLaterality
-        def joinPredicates(join: SqlJoin): List[Predicate] = Nil
+        def distributeJoinConditions(
+            join: SqlJoin,
+            subquery: SubqueryRef): (SqlJoin, List[Predicate]) = (join, Nil)
       }
       case object Lateral extends Laterality {
         def toFragment: Fragment = Fragments.const("LATERAL ")
         def joinToFragment(join: SqlJoin, subquery: SubqueryRef): Aliased[Fragment] =
           join.toFragmentWithoutLaterality
-        def joinPredicates(join: SqlJoin): List[Predicate] = Nil
+        def distributeJoinConditions(
+            join: SqlJoin,
+            subquery: SubqueryRef): (SqlJoin, List[Predicate]) = (join, Nil)
       }
       case class Apply(inner: Boolean) extends Laterality {
         def toFragment: Fragment =
           Fragments.const(if (inner) "CROSS " else "OUTER ") |+| Fragments.const("APPLY ")
         def joinToFragment(join: SqlJoin, subquery: SubqueryRef): Aliased[Fragment] =
           subquery.toDefFragment
-        def joinPredicates(join: SqlJoin): List[Predicate] =
+
+        /**
+         * Distributes an `APPLY` join's conditions, which it renders without an `ON` clause.
+         *
+         * `CROSS APPLY` lifts them into the enclosing WHERE, an `ON` clause's equivalent for an
+         * inner join. `OUTER APPLY` can't: WHERE applies after the join and would discard its
+         * null-padded rows. Its subquery is instead wrapped in a correlating select, legal
+         * because `APPLY` is lateral — which is what makes `OUTER APPLY` equivalent to a
+         * `LEFT JOIN LATERAL`. A subquery that can't be correlated has no correct rendering, so
+         * a decline is a bug.
+         */
+        def distributeJoinConditions(
+            join: SqlJoin,
+            subquery: SubqueryRef): (SqlJoin, List[Predicate]) =
+          if (inner || join.isPredicate) (join, liftedPredicates(join))
+          else
+            // Every OUTER APPLY reachable here can be correlated; a None is a bug, not a query.
+            correlate(join, subquery)
+              .map((_, Nil))
+              .getOrElse(throw new SqlMappingException(
+                s"OUTER APPLY subquery '${subquery.name}' could not be correlated"))
+
+        /**
+         * The join's conditions expressed as predicates of the enclosing select.
+         */
+        private def liftedPredicates(join: SqlJoin): List[Predicate] =
           if (!join.isPredicate) join.on.map { case (p, c) => Eql(p.toTerm, c.toTerm) } else Nil
+
+        /**
+         * Yields a copy of `join` with its conditions moved inside its subquery.
+         *
+         * The subquery is wrapped in a select so any LIMIT, OFFSET or DISTINCT is evaluated
+         * first — as under a `LEFT JOIN LATERAL` ON clause — and so only the subquery's exposed
+         * columns are in scope, not a same-named table of the enclosing select.
+         *
+         * `None` means a subquery shape it doesn't handle; no `OUTER APPLY` produces one, so
+         * the caller treats it as a bug rather than lifting. An existing wrapper is returned
+         * unchanged, so re-nesting won't correlate it twice.
+         */
+        private def correlate(join: SqlJoin, subquery: SubqueryRef): Option[SqlJoin] =
+          subquery.subquery match {
+            case sel: SqlSelect if sel.withs.isEmpty =>
+              sel.table match {
+                case wrapped: SubqueryRef if wrapped.correlated && sel.wheres.nonEmpty =>
+                  Some(join)
+                case table: TableRef =>
+                  val exposed =
+                    join.on.traverse {
+                      case (p, c) => sel.cols.find(_ == c.subst(subquery, table)).map((p, _))
+                    }
+                  exposed.map { exposed0 =>
+                    val wrapper =
+                      sel.toSubquery(correlationName(subquery), NotLateral, correlated = true)
+                    val wheres =
+                      exposed0.map {
+                        case (p, c) => Eql(p.toTerm, c.derive(wrapper.table).toTerm)
+                      }
+                    join.copy(child = subquery.copy(subquery = wrapper.copy(wheres = wheres)))
+                  }
+                case _ => None
+              }
+            case _ => None
+          }
+
+        /**
+         * The alias given to the correlating select `correlate` wraps around `subquery`. Only
+         * cosmetic: the wrapper is recognised by its `correlated` flag, not by this name.
+         */
+        private def correlationName(subquery: SubqueryRef): String = subquery.name + "_corr"
       }
     }
 
@@ -1477,7 +1560,8 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         context: Context,
         name: String,
         subquery: SqlQuery,
-        laterality: Laterality)
+        laterality: Laterality,
+        correlated: Boolean = false)
         extends TableExpr {
       def owns(col: SqlColumn): Boolean = col.owner.isSameOwner(this) || subquery.owns(col)
       def contains(other: ColumnOwner): Boolean = isSameOwner(other) || subquery.contains(other)
@@ -2439,6 +2523,15 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         parentTableForType(parentContext).flatMap { parentTable =>
           val inner = !context.tpe.isNullable && !context.tpe.isList
 
+          // Flattening moves the nested select's joins below the join that attaches it. If that
+          // join is LEFT and unmatched it yields a NULL-padded row an INNER join below would
+          // discard, losing a row that should return with the field null or empty. Every join
+          // in `nested.joins` is rooted at that select's table, so all land below the attaching
+          // join and see its padding, directly or transitively — safe, then, only if this join
+          // is INNER or the nested select has no INNER joins.
+          def mergePreservesRows(nested: SqlSelect): Boolean =
+            inner || !nested.joins.exists(_.inner)
+
           def mkJoins(joins: List[Join]): SqlSelect = {
             def mkSubquery(
                 multiTable: Boolean,
@@ -2446,11 +2539,14 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 joinCols: List[SqlColumn],
                 suffix: String): SqlSelect = {
               def isMergeable: Boolean =
-                !multiTable && !nested.joins.exists(_.isPredicate) && nested
-                  .wheres
-                  .isEmpty && nested.orders.isEmpty && nested.offset.isEmpty && nested
-                  .limit
-                  .isEmpty && !nested.isDistinct
+                mergePreservesRows(nested) &&
+                  !multiTable &&
+                  !nested.joins.exists(_.isPredicate) &&
+                  nested.wheres.isEmpty &&
+                  nested.orders.isEmpty &&
+                  nested.offset.isEmpty &&
+                  nested.limit.isEmpty &&
+                  !nested.isDistinct
 
               if (isMergeable) nested
               else {
@@ -2472,22 +2568,23 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 cols: List[SqlColumn],
                 wheres: List[Predicate],
                 joins: List[SqlJoin]): SqlSelect = {
-              val extraWheres =
-                if (!outer) Nil
-                else
-                  joins.flatMap { join =>
-                    join.child match {
-                      case sq: SubqueryRef => sq.laterality.joinPredicates(join)
-                      case _ => Nil
-                    }
+              val distributed =
+                joins.map { join =>
+                  join.child match {
+                    case sq: SubqueryRef if outer =>
+                      sq.laterality.distributeJoinConditions(join, sq)
+                    case _ => (join, Nil)
                   }
+                }
+              val joins0 = distributed.map(_._1)
+              val extraWheres = distributed.flatMap(_._2)
 
               SqlSelect(
                 context = parentContext,
                 withs = withs,
                 table = table,
                 cols = cols,
-                joins = joins,
+                joins = joins0,
                 wheres = wheres ++ extraWheres,
                 orders = Nil,
                 offset = None,
@@ -2522,6 +2619,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                   true)
                 val assocJoin = lastJoin.toSqlJoin(lastJoinParentTable, assocTable, inner)
 
+                // This join is on the key between a table and itself, so it always matches and
+                // an outer join is as good as an inner one. `assocJoin` carries the join's real
+                // innerness, and it's that which decides how a subquery beneath it distributes
+                // its conditions.
                 val finalJoin =
                   SqlJoin(
                     assocTable,
@@ -2588,7 +2689,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 )
 
               case Some(SqlObject(_, joins)) =>
-                mkJoins(joins).success
+                // `mkJoins` can throw: an OUTER APPLY which declines to correlate is a bug, and
+                // `distributeJoinConditions` raises rather than render incorrect SQL. Lift that into
+                // the Result channel here rather than let it escape `nest`.
+                Result.catchNonFatal(mkJoins(joins))
 
               case _ =>
                 Result.internalError(
@@ -3207,8 +3311,11 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       def toSubquery(name: String): Result[SqlSelect] =
         toSubquery(name, Laterality.NotLateral).success
 
-      def toSubquery(name: String, lateral: Laterality): SqlSelect = {
-        val ref = SubqueryRef(context, name, this, lateral)
+      def toSubquery(
+          name: String,
+          lateral: Laterality,
+          correlated: Boolean = false): SqlSelect = {
+        val ref = SubqueryRef(context, name, this, lateral, correlated)
         SqlSelect(
           context,
           Nil,
@@ -3229,7 +3336,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
        */
       def subqueryToWithQuery: SqlSelect = {
         table match {
-          case SubqueryRef(_, name, sq, _) =>
+          case SubqueryRef(_, name, sq, _, _) =>
             // A common table expression name is rendered verbatim rather than through the
             // alias machinery, so it has to be folded here (issue #342). The derived table
             // keeps the unfolded name, which carries the subquery's identity.
@@ -3537,7 +3644,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
        */
       def isPredicate: Boolean =
         child match {
-          case SubqueryRef(_, _, sq: SqlSelect, _) => sq.predicate
+          case SubqueryRef(_, _, sq: SqlSelect, _, _) => sq.predicate
           case _ => false
         }
 
