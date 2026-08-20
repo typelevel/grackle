@@ -93,13 +93,18 @@ trait DoobieMSSqlMappingLike[F[_]] extends DoobieMappingLike[F] with SqlMappingL
       // folded to a bare identifier first (issue #342).
       s.toSubquery(s.table.identifier + "_encaps", Laterality.NotLateral)
 
+  def unionBranchToFragment(branch: Fragment): Fragment = Fragments.parentheses(branch)
+
   def mkLateral(inner: Boolean): Laterality =
     Laterality.Apply(inner)
 
-  def defaultOffsetForSubquery(subquery: SqlQuery): SqlQuery =
-    subquery match {
+  // MSSQL's grammar requires an ORDER BY inside a derived table to be paired with an
+  // OFFSET/FETCH clause; at the query root the pairing is optional and OFFSET 0 ROWS is a
+  // harmless no-op, so the default can be supplied unconditionally.
+  def normalizeOffsetLimit(query: SqlQuery): SqlQuery =
+    query match {
       case s: SqlSelect if s.orders.nonEmpty && s.offset.isEmpty => s.copy(offset = 0.some)
-      case _ => subquery
+      case _ => query
     }
 
   def defaultOffsetForLimit(limit: Option[Int]): Option[Int] =
