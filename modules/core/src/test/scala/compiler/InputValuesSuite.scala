@@ -16,6 +16,7 @@
 package compiler
 
 import cats.data.NonEmptyChain
+import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
@@ -100,6 +101,193 @@ final class InputValuesSuite extends CatsEffectSuite {
 
     val compiled = InputValuesMapping.compiler.compile(query, None)
     // println(compiled)
+    assertEquals(compiled.map(_.query), Result.Success(expected))
+  }
+
+  test("single value coerces to a list of size one") {
+    val query = """
+      query {
+        listField(arg: "foo") {
+          subfield
+        }
+      }
+    """
+
+    val expected =
+      UntypedSelect(
+        "listField",
+        None,
+        List(Binding("arg", ListValue(List(StringValue("foo"))))),
+        Nil,
+        UntypedSelect("subfield", None, Nil, Nil, Empty)
+      )
+
+    val compiled = InputValuesMapping.compiler.compile(query, None)
+    assertEquals(compiled.map(_.query), Result.Success(expected))
+  }
+
+  test("single value coerces to a nested list") {
+    val query = """
+      query {
+        nestedListField(arg: 1) {
+          subfield
+        }
+      }
+    """
+
+    val expected =
+      UntypedSelect(
+        "nestedListField",
+        None,
+        List(Binding("arg", ListValue(List(ListValue(List(IntValue(1))))))),
+        Nil,
+        UntypedSelect("subfield", None, Nil, Nil, Empty)
+      )
+
+    val compiled = InputValuesMapping.compiler.compile(query, None)
+    assertEquals(compiled.map(_.query), Result.Success(expected))
+  }
+
+  test("single input object coerces to a list of size one") {
+    val query = """
+      query {
+        objectListField(arg: { foo: 23, bar: true, baz: "quux" }) {
+          subfield
+        }
+      }
+    """
+
+    val expected =
+      UntypedSelect(
+        "objectListField",
+        None,
+        List(
+          Binding(
+            "arg",
+            ListValue(
+              List(
+                ObjectValue(
+                  List(
+                    ("foo", IntValue(23)),
+                    ("bar", BooleanValue(true)),
+                    ("baz", StringValue("quux")),
+                    ("defaulted", StringValue("quux")),
+                    ("nullable", AbsentValue)
+                  ))))
+          )),
+        Nil,
+        UntypedSelect("subfield", None, Nil, Nil, Empty)
+      )
+
+    val compiled = InputValuesMapping.compiler.compile(query, None)
+    assertEquals(compiled.map(_.query), Result.Success(expected))
+  }
+
+  test("null is not wrapped in a list") {
+    val query = """
+      query {
+        nullableListField(arg: null) {
+          subfield
+        }
+      }
+    """
+
+    val expected =
+      UntypedSelect(
+        "nullableListField",
+        None,
+        List(Binding("arg", NullValue)),
+        Nil,
+        UntypedSelect("subfield", None, Nil, Nil, Empty)
+      )
+
+    val compiled = InputValuesMapping.compiler.compile(query, None)
+    assertEquals(compiled.map(_.query), Result.Success(expected))
+  }
+
+  test("single value of the wrong type is still rejected for a list") {
+    val query = """
+      query {
+        listField(arg: 23) {
+          subfield
+        }
+      }
+    """
+
+    val expected =
+      Problem("Expected String found '23' for 'arg' in field 'listField' of type 'Query'")
+
+    val compiled = InputValuesMapping.compiler.compile(query, None)
+    assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
+  }
+
+  test("single variable value coerces to a list of size one") {
+    val query = """
+      query ($arg: [String]!) {
+        nullableListField(arg: $arg) {
+          subfield
+        }
+      }
+    """
+
+    val variables = json"""{ "arg": "foo" }"""
+
+    val expected =
+      UntypedSelect(
+        "nullableListField",
+        None,
+        List(Binding("arg", ListValue(List(StringValue("foo"))))),
+        Nil,
+        UntypedSelect("subfield", None, Nil, Nil, Empty)
+      )
+
+    val compiled = InputValuesMapping.compiler.compile(query, untypedVars = Some(variables))
+    assertEquals(compiled.map(_.query), Result.Success(expected))
+  }
+
+  test("an argument default applies to an absent variable") {
+    val query = """
+      query ($arg: [String]) {
+        defaultedListField(arg: $arg) {
+          subfield
+        }
+      }
+    """
+
+    val expected =
+      UntypedSelect(
+        "defaultedListField",
+        None,
+        List(Binding("arg", ListValue(List(StringValue("foo"))))),
+        Nil,
+        UntypedSelect("subfield", None, Nil, Nil, Empty)
+      )
+
+    val compiled = InputValuesMapping.compiler.compile(query, untypedVars = Some(json"""{}"""))
+    assertEquals(compiled.map(_.query), Result.Success(expected))
+  }
+
+  test("null variable value is not wrapped in a list") {
+    val query = """
+      query ($arg: [String]) {
+        nullableListField(arg: $arg) {
+          subfield
+        }
+      }
+    """
+
+    val variables = json"""{ "arg": null }"""
+
+    val expected =
+      UntypedSelect(
+        "nullableListField",
+        None,
+        List(Binding("arg", NullValue)),
+        Nil,
+        UntypedSelect("subfield", None, Nil, Nil, Empty)
+      )
+
+    val compiled = InputValuesMapping.compiler.compile(query, untypedVars = Some(variables))
     assertEquals(compiled.map(_.query), Result.Success(expected))
   }
 
@@ -248,6 +436,72 @@ final class InputValuesSuite extends CatsEffectSuite {
     val compiled = OneOfInputValuesMapping.compiler.compile(query, None)
     assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
   }
+
+  test("single value default coerces to a list of size one") {
+    val query = """
+      query {
+        defaultedListField {
+          subfield
+        }
+      }
+    """
+
+    val expected =
+      UntypedSelect(
+        "defaultedListField",
+        None,
+        List(Binding("arg", ListValue(List(StringValue("foo"))))),
+        Nil,
+        UntypedSelect("subfield", None, Nil, Nil, Empty)
+      )
+
+    val compiled = InputValuesMapping.compiler.compile(query, None)
+    assertEquals(compiled.map(_.query), Result.Success(expected))
+  }
+
+  test("a supplied value and a default of the same shape agree") {
+    val supplied = """
+      query {
+        defaultedListField(arg: "foo") {
+          subfield
+        }
+      }
+    """
+
+    val defaulted = """
+      query {
+        defaultedListField {
+          subfield
+        }
+      }
+    """
+
+    assertEquals(
+      InputValuesMapping.compiler.compile(supplied, None).map(_.query),
+      InputValuesMapping.compiler.compile(defaulted, None).map(_.query))
+  }
+
+  test("single value default of an input object field coerces to a list") {
+    val query = """
+      query {
+        defaultedObjectField(arg: {}) {
+          subfield
+        }
+      }
+    """
+
+    val expected =
+      UntypedSelect(
+        "defaultedObjectField",
+        None,
+        List(Binding("arg", ObjectValue(List(("xs", ListValue(List(IntValue(1)))))))),
+        Nil,
+        UntypedSelect("subfield", None, Nil, Nil, Empty)
+      )
+
+    val compiled = InputValuesMapping.compiler.compile(query, None)
+    assertEquals(compiled.map(_.query), Result.Success(expected))
+  }
 }
 
 object InputValuesMapping extends TestMapping {
@@ -256,10 +510,18 @@ object InputValuesMapping extends TestMapping {
       type Query {
         field(arg: Int): Result!
         listField(arg: [String!]!): Result!
+        nullableListField(arg: [String]): Result!
+        defaultedListField(arg: [String] = "foo"): Result!
+        nestedListField(arg: [[Int]]): Result!
+        objectListField(arg: [InObj!]!): Result!
         objectField(arg: InObj!): Result!
+        defaultedObjectField(arg: DefObj!): Result!
       }
       type Result {
         subfield: String!
+      }
+      input DefObj {
+        xs: [Int] = 1
       }
       input InObj {
         foo: Int!

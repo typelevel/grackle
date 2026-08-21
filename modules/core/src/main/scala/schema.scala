@@ -357,6 +357,9 @@ sealed trait Type extends Product {
 
   /**
    * `true` if this type is a subtype of `other`.
+   *
+   * @see
+   *   https://spec.graphql.org/September2025/#AreTypesCompatible()
    */
   def <:<(other: Type): Boolean =
     (this.dealias, other.dealias) match {
@@ -1167,11 +1170,14 @@ object Value {
    */
   def checkValue(iv: InputValue, value: Option[Value], location: String): Result[Value] =
     (iv.tpe.dealias, value) match {
-      case (_, None) if iv.defaultValue.isDefined =>
-        iv.defaultValue.get.success
-      case (_: NullableType, None) =>
-        AbsentValue.success
-      case (_: NullableType, Some(AbsentValue)) =>
+      // A default value is coerced in the same way as a supplied value. The default is
+      // cleared first, so that an absent default cannot fall back to itself.
+      //
+      // An absent variable yields `AbsentValue`, which counts as no value. The default value
+      // of the location applies to it, as it applies to an argument that is not present.
+      case (_, None | Some(AbsentValue)) if iv.defaultValue.isDefined =>
+        checkValue(iv.copy(defaultValue = None), iv.defaultValue, location)
+      case (_: NullableType, None | Some(AbsentValue)) =>
         AbsentValue.success
       case (_: NullableType, Some(NullValue)) =>
         NullValue.success
@@ -1212,6 +1218,10 @@ object Value {
             checkValue(iv.copy(tpe = tpe, defaultValue = None), Some(elem), location)
           }
           .map(ListValue.apply)
+      // A single value coerces to a list of size one. `null` is not wrapped.
+      case (ListType(tpe), Some(value)) if value != NullValue && value != AbsentValue =>
+        checkValue(iv.copy(tpe = tpe, defaultValue = None), Some(value), location).map(v =>
+          ListValue(List(v)))
       case (i @ InputObjectType(nme, _, ivs, _), Some(ObjectValue(fs))) =>
         val obj = fs.toMap
         val unknownFields = fs.map(_._1).filterNot(f => ivs.exists(_.name == f))
@@ -1256,8 +1266,9 @@ object Value {
     import JsonExtractor._
 
     (iv.tpe.dealias, value) match {
+      // A default value is a query algebra value, not JSON, so it is coerced by `checkValue`.
       case (_, None) if iv.defaultValue.isDefined =>
-        iv.defaultValue.get.success
+        checkValue(iv.copy(defaultValue = None), iv.defaultValue, location)
       case (_: NullableType, None) =>
         AbsentValue.success
       case (_: NullableType, Some(jsonNull(_))) =>
@@ -1295,6 +1306,10 @@ object Value {
             checkVarValue(iv.copy(tpe = tpe, defaultValue = None), Some(elem), location)
           }
           .map(vs => ListValue(vs.toList))
+      // A single value coerces to a list of size one. `null` is not wrapped.
+      case (ListType(tpe), Some(value)) if !value.isNull =>
+        checkVarValue(iv.copy(tpe = tpe, defaultValue = None), Some(value), location).map(v =>
+          ListValue(List(v)))
       case (InputObjectType(nme, _, ivs, _), Some(jsonObject(obj))) =>
         val unknownFields = obj.keys.filterNot(f => ivs.exists(_.name == f))
         if (unknownFields.nonEmpty)

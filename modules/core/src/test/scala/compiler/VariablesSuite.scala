@@ -63,7 +63,7 @@ final class VariablesSuite extends CatsEffectSuite {
 
   test("list variable query") {
     val query = """
-      query getProfile($ids: [ID!]) {
+      query getProfile($ids: [ID!]!) {
         users(ids: $ids) {
           name
         }
@@ -92,7 +92,7 @@ final class VariablesSuite extends CatsEffectSuite {
 
   test("enum variable query") {
     val query = """
-      query getUserType($userType: UserType) {
+      query getUserType($userType: UserType!) {
         usersByType(userType: $userType) {
           name
         }
@@ -121,7 +121,7 @@ final class VariablesSuite extends CatsEffectSuite {
 
   test("scalar variable query") {
     val query = """
-      query getLoggedInByDate($date: Date) {
+      query getLoggedInByDate($date: Date!) {
         usersLoggedInByDate(date: $date) {
           name
         }
@@ -150,7 +150,7 @@ final class VariablesSuite extends CatsEffectSuite {
 
   test("scalar variable query bigdecimal") {
     val query = """
-      query queryWithBigDecimal($input: BigDecimal) {
+      query queryWithBigDecimal($input: BigDecimal!) {
         queryWithBigDecimal(input: $input) {
           name
         }
@@ -179,7 +179,7 @@ final class VariablesSuite extends CatsEffectSuite {
 
   test("object variable query") {
     val query = """
-      query doSearch($pattern: Pattern) {
+      query doSearch($pattern: Pattern!) {
         search(pattern: $pattern) {
           name
           id
@@ -228,7 +228,7 @@ final class VariablesSuite extends CatsEffectSuite {
 
   test("invalid: bogus input object field") {
     val query = """
-      query doSearch($pattern: Pattern) {
+      query doSearch($pattern: Pattern!) {
         search(pattern: $pattern) {
           name
           id
@@ -421,7 +421,7 @@ final class VariablesSuite extends CatsEffectSuite {
 
   test("variables in directive argument") {
     val query = """
-      query getZuckProfile($skipName: Boolean) {
+      query getZuckProfile($skipName: Boolean!) {
         user(id: 4) {
           id
           name @skip(if: $skipName)
