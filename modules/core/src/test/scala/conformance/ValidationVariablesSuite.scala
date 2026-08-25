@@ -109,7 +109,7 @@ final class ValidationVariablesSuite extends ValidationSuite {
   // 5.8.2. The operation uses the variable, which leaves rule 5.8.2 as the only reason to reject
   // the document. Grackle has no check for that rule and accepts the document. Rule 5.8.5 also
   // forbids this usage, and grackle has no check for that rule either.
-  invalidQuery("a variable of object type which the operation uses".fail)("""
+  invalidQuery("a variable of object type which the operation uses")("""
     query takesCat($cat: Cat) {
       findDog(searchBy: $cat) {
         name
@@ -276,7 +276,7 @@ final class ValidationVariablesSuite extends ValidationSuite {
   // fits the argument therefore needs such a value here. Without one, the test case would pass
   // because the value is absent, not because the rule holds.
 
-  invalidQuery("an Int variable cannot go into a Boolean argument".fail)("""
+  invalidQuery("an Int variable cannot go into a Boolean argument")("""
     query intCannotGoIntoBoolean($intArg: Int) {
       arguments {
         booleanArgField(booleanArg: $intArg)
@@ -284,7 +284,7 @@ final class ValidationVariablesSuite extends ValidationSuite {
     }
   """)
 
-  invalidQuery("a list variable cannot go into a non-list argument".fail)("""
+  invalidQuery("a list variable cannot go into a non-list argument")("""
     query booleanListCannotGoIntoBoolean($booleanListArg: [Boolean]) {
       arguments {
         booleanArgField(booleanArg: $booleanListArg)
@@ -293,7 +293,7 @@ final class ValidationVariablesSuite extends ValidationSuite {
   """)
 
   invalidQuery(
-    "a nullable variable cannot go into a non-null argument".fail,
+    "a nullable variable cannot go into a non-null argument",
     vars = json"""{"booleanArg": true}""")("""
     query booleanArgQuery($booleanArg: Boolean) {
       arguments {
@@ -313,7 +313,7 @@ final class ValidationVariablesSuite extends ValidationSuite {
   """)
 
   invalidQuery(
-    "a nullable list variable cannot go into a non-null list argument".fail,
+    "a nullable list variable cannot go into a non-null list argument",
     vars = json"""{"booleanList": [true]}""")("""
     query listToNonNullList($booleanList: [Boolean]) {
       arguments {
@@ -348,7 +348,7 @@ final class ValidationVariablesSuite extends ValidationSuite {
     }
   """)
 
-  validQuery("a nullable variable can go into a non-null argument which has a default".fail)("""
+  validQuery("a nullable variable can go into a non-null argument which has a default")("""
     query booleanArgQueryWithDefault($booleanArg: Boolean) {
       arguments {
         optionalNonNullBooleanArgField(optionalBooleanArg: $booleanArg)
