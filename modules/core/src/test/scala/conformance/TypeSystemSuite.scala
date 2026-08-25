@@ -660,12 +660,8 @@ final class TypeSystemSuite extends ConformanceSuite {
     }
   """)
 
-  // The specification marks the next document as an example, and the note below it states that
-  // the Validation section defines the document as invalid. Rule 5.8.5 applies, and grackle has
-  // no check for that rule. The test case supplies a value for `$var`, because the rule holds
-  // for every value. Without a value, the test case would pass because the value is absent.
   invalidQuery(
-    "a nullable variable cannot be supplied to a non-null argument".fail,
+    "a nullable variable cannot be supplied to a non-null argument",
     NonNullArgSchema,
     json"""{"var": "x"}""")("""
     query withNullableVariable($var: String) {
