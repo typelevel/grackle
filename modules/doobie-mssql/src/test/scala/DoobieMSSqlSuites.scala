@@ -233,6 +233,10 @@ final class TreeSuite extends DoobieMSSqlDatabaseSuite with SqlTreeSuite {
   lazy val mapping = new DoobieMSSqlTestMapping(transactor) with SqlTreeMapping[IO]
 }
 
+final class UnionOrderSuite extends DoobieMSSqlDatabaseSuite with SqlUnionOrderSuite {
+  lazy val mapping = new DoobieMSSqlTestMapping(transactor) with SqlUnionOrderMapping[IO]
+}
+
 final class UnionsSuite extends DoobieMSSqlDatabaseSuite with SqlUnionSuite {
   lazy val mapping = new DoobieMSSqlTestMapping(transactor) with SqlUnionsMapping[IO]
 }
