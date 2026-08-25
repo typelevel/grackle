@@ -842,10 +842,10 @@ protected trait Deprecatable {
     directives.find(_.name == "deprecated")
   def isDeprecated: Boolean = deprecatedDirective.isDefined
   def deprecationReason: Option[String] =
-    for {
-      dir <- deprecatedDirective
-      reason <- dir.args.collectFirst { case Binding("reason", StringValue(reason)) => reason }
-    } yield reason
+    deprecatedDirective.map(
+      _.args
+        .collectFirst { case Binding("reason", StringValue(reason)) => reason }
+        .getOrElse(DirectiveDef.DefaultDeprecationReason))
 }
 
 /**
@@ -1342,6 +1342,15 @@ case class DirectiveDef(
 )
 
 object DirectiveDef {
+
+  /**
+   * The default value of the `reason` argument of the built-in `@deprecated` directive.
+   *
+   * @see
+   *   https://spec.graphql.org/draft/#sec--deprecated
+   */
+  val DefaultDeprecationReason: String = "No longer supported"
+
   val Skip: DirectiveDef =
     DirectiveDef(
       "skip",
@@ -1391,7 +1400,7 @@ object DirectiveDef {
           Some(
             "Explains why this element was deprecated, usually also including a suggestion for how to access supported similar data. Formatted using the Markdown syntax, as specified by [CommonMark](https://commonmark.org/)."),
           StringType,
-          Some(StringValue("No longer supported")),
+          Some(StringValue(DefaultDeprecationReason)),
           Nil
         )),
       false,
