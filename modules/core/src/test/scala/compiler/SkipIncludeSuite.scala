@@ -25,7 +25,7 @@ import grackle.syntax._
 final class SkipIncludeSuite extends CatsEffectSuite {
   test("skip/include field") {
     val query = """
-      query ($yup: Boolean, $nope: Boolean) {
+      query ($yup: Boolean!, $nope: Boolean!) {
         a: field @skip(if: $yup) {
           subfieldA
         }
@@ -62,7 +62,7 @@ final class SkipIncludeSuite extends CatsEffectSuite {
 
   test("skip/include fragment spread") {
     val query = """
-      query ($yup: Boolean, $nope: Boolean) {
+      query ($yup: Boolean!, $nope: Boolean!) {
         a: field {
           ...frag @skip(if: $yup)
         }
@@ -122,7 +122,7 @@ final class SkipIncludeSuite extends CatsEffectSuite {
 
   test("fragment spread with nested skip/include") {
     val query = """
-      query ($yup: Boolean, $nope: Boolean) {
+      query ($yup: Boolean!, $nope: Boolean!) {
         field {
           ...frag
         }
@@ -160,7 +160,7 @@ final class SkipIncludeSuite extends CatsEffectSuite {
 
   test("skip/include inline fragment") {
     val query = """
-      query ($yup: Boolean, $nope: Boolean) {
+      query ($yup: Boolean!, $nope: Boolean!) {
         a: field {
           ... on Value @skip(if: $yup) {
             subfieldA
@@ -227,7 +227,7 @@ final class SkipIncludeSuite extends CatsEffectSuite {
 
   test("inline fragment with nested skip/include") {
     val query = """
-      query ($yup: Boolean, $nope: Boolean) {
+      query ($yup: Boolean!, $nope: Boolean!) {
         field {
           ... on Value {
             a: subfieldA @skip(if: $yup)

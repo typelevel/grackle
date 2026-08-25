@@ -207,6 +207,223 @@ object QueryParser {
 }
 
 /**
+ * Validation of variable usages against the locations where they appear.
+ *
+ * @see
+ *   https://spec.graphql.org/September2025/#sec-All-Variable-Usages-Are-Allowed
+ */
+object VariableUsage {
+
+  /**
+   * Is the use of `varDef` allowed at a location of type `locationType`?
+   *
+   * A nullable variable is allowed at a non-null location if the variable has a non-null
+   * default value, or if the location itself has a default value. In that case the variable is
+   * compared against the nullable form of the location type.
+   *
+   * @see
+   *   https://spec.graphql.org/September2025/#IsVariableUsageAllowed()
+   */
+  def isVariableUsageAllowed(
+      varDef: InputValue,
+      locationType: Type,
+      locationHasDefault: Boolean): Boolean = {
+    val variableType = varDef.tpe
+    if (locationType.isNullable || !variableType.isNullable)
+      variableType <:< locationType
+    else {
+      val hasNonNullVariableDefaultValue =
+        varDef.defaultValue.exists(v => v != NullValue && v != AbsentValue)
+      (hasNonNullVariableDefaultValue || locationHasDefault) &&
+      variableType <:< locationType.nullable
+    }
+  }
+
+  /**
+   * Validate every variable usage of an operation and of the fragments it can reach.
+   *
+   * Each fragment is validated once against its own type condition, so a fragment which is
+   * spread more than once yields at most one problem per usage.
+   */
+  def validateVariableUsages(
+      schema: Schema,
+      rootTpe: Type,
+      op: UntypedOperation,
+      frags: List[UntypedFragment],
+      varDefs: VarDefs): Result[Unit] = {
+
+    // A problem is reported for a variable usage only, so an operation without variable
+    // definitions has nothing to check.
+    if (varDefs.isEmpty) Result.unit
+    else {
+      val varDefsByName = varDefs.map(varDef => (varDef.name, varDef)).toMap
+
+      /*
+       * Check the variable usages of `value` against a location of type `locationType`.
+       *
+       * A variable can appear directly, as an entry of a list value, or as a field of an input
+       * object value. The item type of a list carries no default value.
+       */
+      def checkValueUsages(
+          value: Value,
+          locationType: Type,
+          locationHasDefault: Boolean,
+          what: String,
+          where: String): List[Problem] =
+        value match {
+          case VariableRef(varName) =>
+            varDefsByName.get(varName) match {
+              // An undefined variable is reported by `Value.elaborateValue`.
+              case None => Nil
+              case Some(varDef) =>
+                if (isVariableUsageAllowed(varDef, locationType, locationHasDefault)) Nil
+                else
+                  List(Problem(
+                    s"Variable '$$$varName' of type '${SchemaRenderer.renderType(varDef.tpe)}' is not compatible with $what of type '${SchemaRenderer.renderType(locationType)}' in $where"))
+            }
+          case ListValue(elems) =>
+            locationType.item match {
+              case None => Nil
+              case Some(itemType) =>
+                val itemWhat = s"an item of $what"
+                elems.flatMap(checkValueUsages(_, itemType, false, itemWhat, where))
+            }
+          case ObjectValue(fields) =>
+            locationType.underlyingNamed.dealias match {
+              case io: InputObjectType =>
+                fields.flatMap {
+                  case (nme, fieldValue) =>
+                    checkLocation(
+                      io.inputFieldInfo(nme),
+                      fieldValue,
+                      s"input field '$nme'",
+                      where)
+                }
+              case _ => Nil
+            }
+          case _ => Nil
+        }
+
+      /*
+       * Check the variable usages of `value` against the definition of the location it fills.
+       *
+       * An unknown argument or input field is reported by `Value.checkValue`.
+       */
+      def checkLocation(
+          iv: Option[InputValue],
+          value: Value,
+          what: String,
+          where: String): List[Problem] =
+        iv.toList
+          .flatMap(iv0 =>
+            checkValueUsages(value, iv0.tpe, iv0.defaultValue.isDefined, what, where))
+
+      /*
+       * Check the variable usages of a set of arguments against their definitions.
+       */
+      def checkArgs(
+          args: List[Binding],
+          infos: List[InputValue],
+          where: String): List[Problem] =
+        args.flatMap {
+          case Binding(nme, value) =>
+            checkLocation(infos.find(_.name == nme), value, s"argument '$nme'", where)
+        }
+
+      /*
+       * Check the variable usages of the arguments of a set of directives.
+       */
+      def checkDirectives(dirs: List[Directive]): List[Problem] =
+        dirs.flatMap { dir =>
+          // An undefined directive is reported by `Directive.validateDirectivesForQuery`.
+          schema
+            .directives
+            .find(_.name == dir.name)
+            .toList
+            .flatMap(defn => checkArgs(dir.args, defn.args, s"directive '${dir.name}'"))
+        }
+
+      /*
+       * The definition of field `nme` of type `tpe`.
+       *
+       * The introspection meta-fields are not defined in the target schema, so they are looked
+       * up in the introspection schema. They are available at the root of a query only.
+       */
+      def fieldInfo(tpe: NamedType, nme: String): Option[Field] =
+        tpe.fieldInfo(nme).orElse {
+          if (tpe =:= schema.queryType) Introspection.schema.queryType.fieldInfo(nme)
+          else None
+        }
+
+      def loop(query: Query, tpe: Type): List[Problem] =
+        query match {
+          case UntypedSelect(nme, _, args, dirs, child) =>
+            val dirProblems = checkDirectives(dirs)
+            val named = tpe.underlyingNamed
+            // An unknown field is reported by `SelectElaborator`.
+            fieldInfo(named.dealias, nme) match {
+              case None => dirProblems
+              case Some(field) =>
+                val where = s"field '$nme' of type '${named.name}'"
+                dirProblems ++ checkArgs(args, field.args, where) ++ loop(child, field.tpe)
+            }
+          case UntypedFragmentSpread(_, dirs) =>
+            checkDirectives(dirs)
+          case UntypedInlineFragment(tpnme, dirs, child) =>
+            val childTpe = tpnme.flatMap(schema.definition).getOrElse(tpe)
+            checkDirectives(dirs) ++ loop(child, childTpe)
+          case Group(children) => children.flatMap(loop(_, tpe))
+          // Other query algebra nodes appear only after elaboration.
+          case _ => Nil
+        }
+
+      /*
+       * The fragments which `op` can reach, directly or through another fragment.
+       */
+      val reachableFrags: List[UntypedFragment] =
+        if (frags.isEmpty) Nil
+        else {
+          val fragsByName = frags.map(frag => (frag.name, frag)).toMap
+
+          @tailrec
+          def closeSpreads(
+              pending: List[String],
+              seen: Set[String],
+              acc: List[UntypedFragment]): List[UntypedFragment] =
+            pending match {
+              case Nil => acc.reverse
+              case hd :: tl if seen.contains(hd) => closeSpreads(tl, seen, acc)
+              case hd :: tl =>
+                fragsByName.get(hd) match {
+                  // An undefined fragment is reported by `validateVariablesAndFragments`.
+                  case None => closeSpreads(tl, seen + hd, acc)
+                  case Some(frag) =>
+                    closeSpreads(
+                      QueryCompiler.fragmentSpreads(frag.child).toList ::: tl,
+                      seen + hd,
+                      frag :: acc)
+                }
+            }
+
+          closeSpreads(QueryCompiler.fragmentSpreads(op.query).toList, Set.empty, Nil)
+        }
+
+      val varDefnProblems = op.variables.flatMap(varDef => checkDirectives(varDef.directives))
+      val opProblems = checkDirectives(op.directives) ++ loop(op.query, rootTpe)
+      val fragProblems =
+        reachableFrags.flatMap { frag =>
+          schema
+            .definition(frag.tpnme)
+            .toList
+            .flatMap(fragTpe => checkDirectives(frag.directives) ++ loop(frag.child, fragTpe))
+        }
+
+      Result.fromProblems(varDefnProblems ++ opProblems ++ fragProblems)
+    }
+  }
+}
+
+/**
  * GraphQL query compiler.
  *
  * A QueryCompiler parses GraphQL queries to query algebra terms, then applies a collection of
@@ -278,6 +495,7 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
       vars <- compileVars(varDefs, untypedVars)
       _ <- Directive.validateDirectivesForQuery(schema, op, frags, vars)
       rootTpe <- op.rootTpe(schema)
+      _ <- VariableUsage.validateVariableUsages(schema, rootTpe, op, frags, varDefs)
       res <- (
         for {
           query <- allPhases.foldLeftM(op.query) { (acc, phase) =>
@@ -373,75 +591,6 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
     if (duplicateFrags.nonEmpty)
       duplicateFrags.toList.map(nme => Problem(s"Fragment '$nme' is defined more than once"))
     else {
-      def collectQueryRefs(query: Query): (Set[String], Set[String]) = {
-        @tailrec
-        def loop(
-            queries: Iterator[Query],
-            vars: Set[String],
-            frags: Set[String]): (Set[String], Set[String]) =
-          if (!queries.hasNext) (vars, frags)
-          else
-            queries.next() match {
-              case UntypedSelect(_, _, args, dirs, child) =>
-                val v0 = args.iterator.flatMap(arg => collectValueRefs(arg.value)).toSet
-                val v1 = dirs
-                  .iterator
-                  .flatMap(dir => dir.args.iterator.flatMap(arg => collectValueRefs(arg.value)))
-                  .toSet
-                loop(Iterator.single(child) ++ queries, vars ++ v0 ++ v1, frags)
-              case UntypedFragmentSpread(nme, dirs) =>
-                val v0 = dirs
-                  .iterator
-                  .flatMap(dir => dir.args.iterator.flatMap(arg => collectValueRefs(arg.value)))
-                  .toSet
-                loop(queries, vars ++ v0, frags + nme)
-              case UntypedInlineFragment(_, dirs, child) =>
-                val v0 = dirs
-                  .iterator
-                  .flatMap(dir => dir.args.iterator.flatMap(arg => collectValueRefs(arg.value)))
-                  .toSet
-                loop(Iterator.single(child) ++ queries, vars ++ v0, frags)
-              case Group(children) =>
-                loop(children.iterator ++ queries, vars, frags)
-              case Select(_, _, child) => loop(Iterator.single(child) ++ queries, vars, frags)
-              case Narrow(_, child) => loop(Iterator.single(child) ++ queries, vars, frags)
-              case Unique(child) => loop(Iterator.single(child) ++ queries, vars, frags)
-              case Filter(_, child) => loop(Iterator.single(child) ++ queries, vars, frags)
-              case Limit(_, child) => loop(Iterator.single(child) ++ queries, vars, frags)
-              case Offset(_, child) => loop(Iterator.single(child) ++ queries, vars, frags)
-              case OrderBy(_, child) => loop(Iterator.single(child) ++ queries, vars, frags)
-              case Introspect(_, child) => loop(Iterator.single(child) ++ queries, vars, frags)
-              case Environment(_, child) => loop(Iterator.single(child) ++ queries, vars, frags)
-              case Component(_, _, child) =>
-                loop(Iterator.single(child) ++ queries, vars, frags)
-              case Effect(_, child) => loop(Iterator.single(child) ++ queries, vars, frags)
-              case TransformCursor(_, child) =>
-                loop(Iterator.single(child) ++ queries, vars, frags)
-              case Count(_) => loop(queries, vars, frags)
-              case Empty => loop(queries, vars, frags)
-            }
-
-        loop(Iterator.single(query), Set.empty[String], Set.empty[String])
-      }
-
-      def collectValueRefs(value: Value): Set[String] = {
-        @tailrec
-        def loop(values: Iterator[Value], vars: Set[String]): Set[String] =
-          if (!values.hasNext) vars
-          else
-            values.next() match {
-              case VariableRef(nme) =>
-                loop(values, vars + nme)
-              case ObjectValue(fields) =>
-                loop(fields.iterator.map(_._2) ++ values, vars)
-              case ListValue(elems) =>
-                loop(elems.iterator ++ values, vars)
-              case _ => loop(values, vars)
-            }
-
-        loop(Iterator.single(value), Set.empty[String])
-      }
-
       val fragRefs: Map[String, (Set[String], Set[String])] =
         frags.map { frag => (frag.name, collectQueryRefs(frag.child)) }.toMap
 
@@ -718,6 +867,62 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
 }
 
 object QueryCompiler {
+
+  /**
+   * The names of the variables and of the fragments which `query` refers to directly.
+   */
+  private[grackle] def collectQueryRefs(query: Query): (Set[String], Set[String]) = {
+    val noRefs = (Set.empty[String], Set.empty[String])
+
+    def argRefs(args: List[Binding]): Set[String] =
+      args.foldMap(arg => collectValueRefs(arg.value))
+
+    def dirRefs(dirs: List[Directive]): Set[String] =
+      dirs.foldMap(dir => argRefs(dir.args))
+
+    def loop(q: Query): (Set[String], Set[String]) = q match {
+      case UntypedSelect(_, _, args, dirs, child) =>
+        (argRefs(args) ++ dirRefs(dirs), Set.empty[String]) |+| loop(child)
+      case UntypedFragmentSpread(nme, dirs) =>
+        (dirRefs(dirs), Set(nme))
+      case UntypedInlineFragment(_, dirs, child) =>
+        (dirRefs(dirs), Set.empty[String]) |+| loop(child)
+      case Group(children) => children.foldMap(loop)
+      case Select(_, _, child) => loop(child)
+      case Narrow(_, child) => loop(child)
+      case Unique(child) => loop(child)
+      case Filter(_, child) => loop(child)
+      case Limit(_, child) => loop(child)
+      case Offset(_, child) => loop(child)
+      case OrderBy(_, child) => loop(child)
+      case Introspect(_, child) => loop(child)
+      case Environment(_, child) => loop(child)
+      case Component(_, _, child) => loop(child)
+      case Effect(_, child) => loop(child)
+      case TransformCursor(_, child) => loop(child)
+      case Count(_) => noRefs
+      case Empty => noRefs
+    }
+
+    loop(query)
+  }
+
+  /**
+   * The names of the variables which `value` refers to.
+   */
+  private[grackle] def collectValueRefs(value: Value): Set[String] =
+    value match {
+      case VariableRef(nme) => Set(nme)
+      case ObjectValue(fields) => fields.foldMap { case (_, v) => collectValueRefs(v) }
+      case ListValue(elems) => elems.foldMap(collectValueRefs)
+      case _ => Set.empty
+    }
+
+  /**
+   * The names of the fragments which `query` spreads directly.
+   */
+  private[grackle] def fragmentSpreads(query: Query): Set[String] = collectQueryRefs(query)._2
+
   sealed trait IntrospectionLevel
   object IntrospectionLevel {
     case object Full extends IntrospectionLevel
