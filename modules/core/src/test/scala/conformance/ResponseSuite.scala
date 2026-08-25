@@ -162,9 +162,8 @@ final class ResponseSuite extends ConformanceSuite {
     }
   """)
 
-  // Section 7.1.6 states that each location is a map with the keys `line` and `column`. Grackle
-  // writes the key `col`. This test case isolates that difference from the two above.
-  test("an error location uses the keys line and column".fail) {
+  // Section 7.1.6 states that each location is a map with the keys `line` and `column`.
+  test("an error location uses the keys line and column") {
     assertEquals(
       Problem(
         "Name for character with ID 1002 could not be fetched.",
