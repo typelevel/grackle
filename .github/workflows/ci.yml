@@ -75,6 +75,9 @@ jobs:
       - name: Check Headers
         run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' headerCheckAll
 
+      - name: Build the test data
+        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' genTestData
+
       - name: Start up test databases
         run: docker compose up --force-recreate -d --wait --quiet-pull
 
@@ -309,6 +312,9 @@ jobs:
       - name: sbt update
         if: matrix.java == 'temurin@11' && steps.setup-java-temurin-11.outputs.cache-hit == 'false'
         run: sbt +update
+
+      - name: Build the test data
+        run: sbt genTestData
 
       - name: Start up test databases
         run: docker compose up --force-recreate -d --wait --quiet-pull

@@ -1,0 +1,15 @@
+CREATE TABLE root (
+  id VARCHAR PRIMARY KEY
+);
+
+CREATE TABLE lista (
+  id VARCHAR PRIMARY KEY,
+  root_id VARCHAR,
+  a_elem VARCHAR
+);
+
+CREATE TABLE listb (
+  id VARCHAR PRIMARY KEY,
+  root_id VARCHAR,
+  b_elem INTEGER
+);

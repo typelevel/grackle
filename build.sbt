@@ -56,7 +56,13 @@ ThisBuild / githubWorkflowBuild ~= { steps =>
       commands = List("headerCheckAll"),
       name = Some("Check Headers")
     ),
+    WorkflowStep.Sbt(
+      commands = List("genTestData"),
+      name = Some("Build the test data")
+    ),
     WorkflowStep.Run(
+      // The scripts have to exist before this: compose mounts target/testdata into the
+      // containers, and a database only reads its init directory on a first start.
       commands = List("docker compose up --force-recreate -d --wait --quiet-pull"),
       name = Some("Start up test databases")
     )
@@ -91,6 +97,10 @@ ThisBuild / githubWorkflowAddedJobs +=
     sbtStepPreamble = Nil,
     steps = githubWorkflowJobSetup.value.toList ++
       List(
+        WorkflowStep.Sbt(
+          commands = List("genTestData"),
+          name = Some("Build the test data")
+        ),
         WorkflowStep.Run(
           commands = List("docker compose up --force-recreate -d --wait --quiet-pull"),
           name = Some("Start up test databases")
@@ -102,6 +112,8 @@ ThisBuild / githubWorkflowAddedJobs +=
 
 ThisBuild / tlSitePublishBranch := Some("main")
 
+lazy val genTestData =
+  taskKey[Unit]("Build the container init scripts from the shared test data")
 lazy val allUp = taskKey[Unit]("Start all docker compose services")
 lazy val allStop = taskKey[Unit]("Stop all docker compose services")
 lazy val pgUp = taskKey[Unit]("Start Postgres")
@@ -111,18 +123,38 @@ lazy val oracleStop = taskKey[Unit]("Stop Oracle")
 lazy val mssqlUp = taskKey[Unit]("Start SQL Server")
 lazy val mssqlStop = taskKey[Unit]("Stop SQL Server")
 
-ThisBuild / allUp := runDocker("docker compose up -d --wait --quiet-pull")
-ThisBuild / allStop := runDocker("docker compose stop")
-ThisBuild / pgUp := runDocker("docker compose up -d --wait --quiet-pull postgres")
-ThisBuild / pgStop := runDocker("docker compose stop postgres")
-ThisBuild / oracleUp := runDocker("docker compose up -d --wait --quiet-pull oracle")
-ThisBuild / oracleStop := runDocker("docker compose stop oracle")
-ThisBuild / mssqlUp := runDocker("docker compose up -d --wait --quiet-pull mssql")
-ThisBuild / mssqlStop := runDocker("docker compose stop mssql")
+ThisBuild / genTestData := GenTestData(buildRoot)
+ThisBuild / allUp := dockerUp()
+ThisBuild / allStop := dockerStop()
+ThisBuild / pgUp := dockerUp("postgres")
+ThisBuild / pgStop := dockerStop("postgres")
+ThisBuild / oracleUp := dockerUp("oracle")
+ThisBuild / oracleStop := dockerStop("oracle")
+ThisBuild / mssqlUp := dockerUp("mssql")
+ThisBuild / mssqlStop := dockerStop("mssql")
 
-def runDocker(cmd: String): Unit = {
-  require(cmd.! == 0, s"docker indicated an error")
+// The compose file is named relatively, so docker is already run from the build root; the
+// generated init scripts are written relative to the same place.
+def buildRoot: File = file(".").getAbsoluteFile
+
+/**
+ * Starts the named services, or every service when named none.
+ */
+def dockerUp(services: String*): Unit = {
+  // A container only reads its init scripts the first time it starts, so they have to be
+  // current before anything brings one up.
+  GenTestData(buildRoot)
+  runDocker("docker compose up -d --wait --quiet-pull", services)
 }
+
+/**
+ * Stops the named services, or every service when named none.
+ */
+def dockerStop(services: String*): Unit =
+  runDocker("docker compose stop", services)
+
+def runDocker(cmd: String, services: Seq[String]): Unit =
+  require((cmd +: services).mkString(" ").! == 0, s"docker indicated an error")
 
 lazy val commonSettings = Seq(
   // scalacOptions --= Seq("-Wunused:params", "-Wunused:imports", "-Wunused:patvars", "-Wdead-code", "-Wunused:locals", "-Wunused:privates", "-Wunused:implicits"),
@@ -295,8 +327,7 @@ lazy val doobiepg = project
     name := "grackle-doobie-pg",
     Test / fork := true,
     Test / parallelExecution := false,
-    Test / testOptions += Tests
-      .Setup(_ => runDocker("docker compose up -d --wait --quiet-pull postgres")),
+    Test / testOptions += Tests.Setup(_ => dockerUp("postgres")),
     libraryDependencies ++= Seq(
       "org.typelevel" %% "doobie-postgres-circe" % doobieVersion,
       // Pin transitive Postgres JDBC driver to >= 42.7.11 (CVE-2026-42198 / GHSA-98qh-xjc8-98pq)
@@ -314,8 +345,7 @@ lazy val doobieoracle = project
     name := "grackle-doobie-oracle",
     Test / fork := true,
     Test / parallelExecution := false,
-    Test / testOptions += Tests
-      .Setup(_ => runDocker("docker compose up -d --wait --quiet-pull oracle")),
+    Test / testOptions += Tests.Setup(_ => dockerUp("oracle")),
     libraryDependencies ++= Seq(
       "com.oracle.database.jdbc" % "ojdbc8" % oracleDriverVersion
     )
@@ -334,8 +364,7 @@ lazy val doobiemssql = project
     // mssql-jdbc binds a zone-naive java.sql.Timestamp using the ambient JVM zone, so MSSQL
     // datetime tests fail off-UTC unless pinned.
     Test / javaOptions += "-Duser.timezone=UTC",
-    Test / testOptions += Tests
-      .Setup(_ => runDocker("docker compose up -d --wait --quiet-pull mssql")),
+    Test / testOptions += Tests.Setup(_ => dockerUp("mssql")),
     libraryDependencies ++= Seq(
       "com.microsoft.sqlserver" % "mssql-jdbc" % mssqlDriverVersion
     )
@@ -359,8 +388,7 @@ lazy val skunk = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   )
   .jvmSettings(
     Test / fork := true,
-    Test / testOptions += Tests.Setup(_ =>
-      runDocker("docker compose up -d --wait --quiet-pull postgres")),
+    Test / testOptions += Tests.Setup(_ => dockerUp("postgres")),
     libraryDependencies ++= Seq(
       "ch.qos.logback" % "logback-classic" % logbackVersion % "test"
     )

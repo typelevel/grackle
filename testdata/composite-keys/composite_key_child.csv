@@ -1,0 +1,5 @@
+id|parent_1|parent_2
+1|1|foo
+2|1|bar
+3|2|foo
+4|2|bar

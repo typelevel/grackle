@@ -1,0 +1,17 @@
+CREATE TABLE root (
+  id VARCHAR(100) PRIMARY KEY
+);
+
+CREATE TABLE lista (
+  id VARCHAR(100) PRIMARY KEY,
+  root_id VARCHAR(100),
+  a_elem VARCHAR(100)
+);
+
+CREATE TABLE listb (
+  id VARCHAR(100) PRIMARY KEY,
+  root_id VARCHAR(100),
+  b_elem INTEGER
+);
+
+GO

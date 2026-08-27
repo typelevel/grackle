@@ -1,0 +1,4 @@
+id|b_id|name
+100|10|a-with-good-b
+200|20|a-with-dangling-b
+300|\N|a-without-b
