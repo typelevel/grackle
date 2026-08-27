@@ -57,8 +57,8 @@ ThisBuild / githubWorkflowBuild ~= { steps =>
       name = Some("Check Headers")
     ),
     WorkflowStep.Sbt(
-      commands = List("genTestData"),
-      name = Some("Build the test data")
+      commands = List("checkTestData", "genTestData"),
+      name = Some("Check and build the test data")
     ),
     WorkflowStep.Run(
       // The scripts have to exist before this: compose mounts target/testdata into the
@@ -114,6 +114,9 @@ ThisBuild / tlSitePublishBranch := Some("main")
 
 lazy val genTestData =
   taskKey[Unit]("Build the container init scripts from the shared test data")
+lazy val checkTestData =
+  taskKey[Unit]("Check every dataset's scripts and CSVs against each other")
+lazy val newDataset = inputKey[Unit]("Create an empty dataset directory: newDataset <name>")
 lazy val allUp = taskKey[Unit]("Start all docker compose services")
 lazy val allStop = taskKey[Unit]("Stop all docker compose services")
 lazy val pgUp = taskKey[Unit]("Start Postgres")
@@ -124,6 +127,18 @@ lazy val mssqlUp = taskKey[Unit]("Start SQL Server")
 lazy val mssqlStop = taskKey[Unit]("Stop SQL Server")
 
 ThisBuild / genTestData := GenTestData(buildRoot)
+ThisBuild / checkTestData := {
+  val problems = GenTestData.check(buildRoot)
+  val log = streams.value.log
+  problems.foreach(log.error(_))
+  if (problems.nonEmpty) sys.error(s"${problems.size} problems in testdata")
+}
+ThisBuild / newDataset := NewDataset(buildRoot, Def.spaceDelimited("<name>").parsed)
+
+// An input task is evaluated once per aggregated project, so without this newDataset creates the
+// directory and then fails three times saying it exists. Plain tasks resolve to one scoped key
+// and run once already.
+ThisBuild / newDataset / aggregate := false
 ThisBuild / allUp := dockerUp()
 ThisBuild / allStop := dockerStop()
 ThisBuild / pgUp := dockerUp("postgres")

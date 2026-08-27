@@ -57,6 +57,36 @@ object GenTestData {
   }
 
   /**
+   * Renders every dataset without writing anything, and reports what failed rather than
+   * stopping at the first problem. Needs no database, so it can run wherever the build does.
+   */
+  def check(baseDir: File): List[String] = {
+    val datasets = IO.listFiles(baseDir / "testdata").filter(_.isDirectory).sortBy(_.getName)
+    val problems =
+      datasets.toList.flatMap { dataset =>
+        val schemas = Dialects.filter(d => (dataset / s"${d.name}.sql").exists)
+        if (schemas.isEmpty) List(s"${dataset.getName}: no <dialect>.sql at all")
+        else
+          schemas.flatMap { dialect =>
+            try {
+              renderDataset(dataset, IO.read(dataset / s"${dialect.name}.sql"), dialect)
+              Nil
+            } catch {
+              case e: Throwable =>
+                val why = e
+                  .getMessage
+                  .stripPrefix("requirement failed: ")
+                  .stripPrefix(s"${dataset.getName}: ")
+                List(s"${dataset.getName} (${dialect.name}): $why")
+            }
+          }
+      }
+    val tables = datasets.map(d => IO.listFiles(d).count(_.getName.endsWith(".csv"))).sum
+    println(s"${datasets.length} datasets, $tables shared tables, ${Dialects.length} dialects")
+    problems
+  }
+
+  /**
    * The INSERTs for one dataset, in the order its tables are created.
    */
   private def renderDataset(dataset: File, schema: String, dialect: Dialect): String = {

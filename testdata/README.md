@@ -39,8 +39,13 @@ data belongs when it genuinely cannot be shared, and one with no `<dialect>.sql`
 
 ## Adding a dataset
 
-Make a directory, write `pg.sql`, `oracle.sql` and `mssql.sql` with the schema, and put the rows in `<table>.csv` next
-to them. Rows are inserted in the order the schema creates the tables, which is also a safe order for foreign keys.
+`sbt "newDataset foo"` creates the directory with a `CREATE TABLE` skeleton per dialect. Fill the schemas in and put
+the rows in `<table>.csv` next to them. Rows are inserted in the order the schema creates the tables, which is also a
+safe order for foreign keys.
+
+`sbt checkTestData` renders every dataset without writing anything or starting a database, and reports what does not
+line up: a CSV whose table no schema creates, a header naming an unknown kind, a ragged row, a dataset with no scripts
+at all.
 
 Recreate the containers before testing (`docker compose up --force-recreate --renew-anon-volumes`): a database image
 only runs its init scripts on a first start, so an existing container will not pick up a change.

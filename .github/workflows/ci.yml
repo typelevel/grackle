@@ -75,8 +75,8 @@ jobs:
       - name: Check Headers
         run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' headerCheckAll
 
-      - name: Build the test data
-        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' genTestData
+      - name: Check and build the test data
+        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' checkTestData genTestData
 
       - name: Start up test databases
         run: docker compose up --force-recreate -d --wait --quiet-pull
