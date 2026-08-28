@@ -71,6 +71,10 @@ final class Embedding3Suite extends SkunkDatabaseSuite with SqlEmbedding3Suite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlEmbedding3Mapping[IO]
 }
 
+final class ErrorKeysSuite extends SkunkDatabaseSuite with SqlErrorKeysSuite {
+  lazy val mapping = new SkunkTestMapping(pool) with SqlCompositeKeyMapping[IO]
+}
+
 final class FilterJoinAliasSuite extends SkunkDatabaseSuite with SqlFilterJoinAliasSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlFilterJoinAliasMapping[IO]
 }

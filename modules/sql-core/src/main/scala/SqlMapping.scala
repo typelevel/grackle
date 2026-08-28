@@ -4310,11 +4310,34 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             Result.internalError(s"Expected mapping for field '$fieldName' of type $obj")
 
           case col =>
-            table
-              .select(col)
-              .toResultOrError(
-                s"Expected single value for field '$fieldName' of type ${context.tpe.dealias} at ${context.path}, found many"
-              )
+            table.select(col).toResultOrError {
+              def renderLeaf(keyCol: SqlColumn, v: Any): String =
+                keyCol
+                  .resultPath
+                  .headOption
+                  .flatMap(fn => encoderForLeaf(context.forFieldOrAttribute(fn, None)))
+                  .map(enc => enc(v).noSpaces)
+                  .getOrElse(v.toString)
+
+              val keys = for {
+                keyCol <- self.keyColumnsForType(context)
+                col <- index.get(keyCol).toList
+                rendered = table.select(col) match {
+                  // `select` yields `None` only if the column holds more than one distinct value.
+                  case None => "<many>"
+                  case Some(value) =>
+                    value match {
+                      case None => "null"
+                      case Some(v) => renderLeaf(keyCol, v)
+                      case v if isFailedJoin(v) => "<no value>"
+                      case v => renderLeaf(keyCol, v)
+                    }
+                }
+              } yield s"$keyCol = $rendered"
+
+              val keyInfo = if (keys.isEmpty) "" else keys.mkString(" (keys: ", ", ", ")")
+              s"Expected single value for field '$fieldName' of type ${context.tpe.dealias} at ${context.path}, found many$keyInfo"
+            }
 
         }
 

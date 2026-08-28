@@ -68,6 +68,10 @@ final class Embedding3Suite extends DoobiePgDatabaseSuite with SqlEmbedding3Suit
   lazy val mapping = new DoobiePgTestMapping(transactor) with SqlEmbedding3Mapping[IO]
 }
 
+final class ErrorKeysSuite extends DoobiePgDatabaseSuite with SqlErrorKeysSuite {
+  lazy val mapping = new DoobiePgTestMapping(transactor) with SqlCompositeKeyMapping[IO]
+}
+
 final class FilterJoinAliasSuite extends DoobiePgDatabaseSuite with SqlFilterJoinAliasSuite {
   lazy val mapping = new DoobiePgTestMapping(transactor) with SqlFilterJoinAliasMapping[IO]
 }
