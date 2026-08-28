@@ -1,0 +1,16 @@
+CREATE TABLE level0 (
+  id VARCHAR(100) PRIMARY KEY
+);
+
+CREATE TABLE level1 (
+  id VARCHAR(100) PRIMARY KEY,
+  level0_id VARCHAR(100)
+);
+
+CREATE TABLE level2 (
+  id VARCHAR(100) PRIMARY KEY,
+  level1_id VARCHAR(100),
+  attr BIT
+);
+
+GO

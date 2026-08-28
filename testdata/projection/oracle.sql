@@ -1,0 +1,14 @@
+CREATE TABLE level0 (
+  id VARCHAR2(100) PRIMARY KEY
+);
+
+CREATE TABLE level1 (
+  id VARCHAR2(100) PRIMARY KEY,
+  level0_id VARCHAR2(100)
+);
+
+CREATE TABLE level2 (
+  id VARCHAR2(100) PRIMARY KEY,
+  level1_id VARCHAR2(100),
+  attr BOOLEAN
+);

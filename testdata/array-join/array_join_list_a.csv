@@ -1,0 +1,9 @@
+id|root_id|a_elem:array
+a0|r0|foo1,foo2
+a1|r0|bar1,bar2
+a2|r0|baz1,baz2
+a3|r0|quux1,quux2
+a4|r1|foo11,foo22
+a5|r1|bar11,bar22
+a6|r1|baz11,baz22
+a7|r1|quux11,quux22

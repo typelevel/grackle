@@ -9,3 +9,6 @@ addSbtPlugin("org.scala-js" % "sbt-scalajs" % "1.22.0")
 addSbtPlugin("org.scala-native" % "sbt-scala-native" % "0.5.12")
 addSbtPlugin("org.scoverage" % "sbt-scoverage" % "2.4.4")
 addSbtPlugin("com.github.sbt" % "sbt-unidoc" % "0.6.1")
+
+// Reads the shared test data (see GenTestData).
+libraryDependencies += "org.gnieh" %% "fs2-data-csv" % "1.11.3"

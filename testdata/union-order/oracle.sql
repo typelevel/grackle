@@ -1,0 +1,5 @@
+CREATE TABLE QUALIFIED.union_order_entities (
+    id VARCHAR2(100) NOT NULL PRIMARY KEY,
+    entity_type VARCHAR2(100) NOT NULL,
+    name VARCHAR2(100) NOT NULL
+);

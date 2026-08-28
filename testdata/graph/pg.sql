@@ -1,0 +1,9 @@
+CREATE TABLE graph_node (
+  id INTEGER PRIMARY KEY
+);
+
+CREATE TABLE graph_edge (
+  id INTEGER PRIMARY KEY,
+  a INTEGER,
+  b INTEGER
+);

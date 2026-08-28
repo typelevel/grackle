@@ -1,0 +1,7 @@
+id|entity_type|title|synopsis_short|synopsis_long|film_rating|film_label|series_number_of_episodes|series_label|image_url|hidden_image_url
+1|1|Film 1|Short film 1|Long film 1|PG|1|\N|\N|http://www.example.com/film1.jpg|\N
+2|1|Film 2|Short film 2|Long film 2|U|2|\N|\N|http://www.example.com/film2.jpg|\N
+3|1|Film 3|Short film 3|Long film 3|15|3|\N|\N|http://www.example.com/film3.jpg|\N
+4|2|Series 1|Short series 1|Long series 1|\N|\N|5|One|\N|hidden_series1.jpg
+5|2|Series 2|Short series 2|Long series 2|\N|\N|6|Two|\N|hidden_series2.jpg
+6|2|Series 3|Short series 3|Long series 3|\N|\N|7|Three|\N|hidden_series3.jpg
