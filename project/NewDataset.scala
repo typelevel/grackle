@@ -66,7 +66,12 @@ object NewDataset {
                       |    id VARCHAR(100) PRIMARY KEY,
                       |    value VARCHAR(100) NOT NULL
                       |);
-                      |""".stripMargin
+                      |""".stripMargin,
+      "h2" -> s"""|CREATE TABLE $table (
+                  |    id VARCHAR PRIMARY KEY,
+                  |    value VARCHAR NOT NULL
+                  |);
+                  |""".stripMargin
     )
   }
 }

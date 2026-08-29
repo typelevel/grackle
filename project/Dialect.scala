@@ -91,6 +91,17 @@ object Sqlite extends Dialect("sqlite") {
     literal(elements.map(quoted).mkString("[", ", ", "]"))
 }
 
+object H2 extends Dialect("h2") {
+  override def timestamp(value: String): String = literal(sqlTimestamp(value, ""))
+  override def boolean(value: String): String = if (value.toBoolean) "1" else "0"
+
+  /**
+   * H2 has an array type and builds a value with an array constructor.
+   */
+  def array(elements: List[String], sqlType: String): String =
+    elements.map(literal).mkString("ARRAY[", ", ", "]")
+}
+
 object Dialect {
 
   /**
@@ -112,6 +123,8 @@ object Dialect {
   /**
    * ISO-8601 in the CSV; `2020-05-22 19:35:00 +00:00` is what Oracle and SQL Server read.
    */
-  def sqlTimestamp(value: String): String =
-    OffsetDateTime.parse(value).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss xxx"))
+  def sqlTimestamp(value: String, beforeOffset: String = " "): String =
+    OffsetDateTime
+      .parse(value)
+      .format(DateTimeFormatter.ofPattern(s"yyyy-MM-dd HH:mm:ss${beforeOffset}xxx"))
 }
