@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import java.time.OffsetDateTime
+import java.time.{OffsetDateTime, ZoneOffset}
 import java.time.format.DateTimeFormatter
 
 import Dialect._
@@ -102,6 +102,22 @@ object H2 extends Dialect("h2") {
     elements.map(literal).mkString("ARRAY[", ", ", "]")
 }
 
+object MySql extends Dialect("mysql") {
+
+  /**
+   * MySQL's `DATETIME` carries no zone, so the instant is written in UTC with the offset
+   * dropped. Both MySQL and MariaDB read it.
+   */
+  override def timestamp(value: String): String = literal(utcTimestamp(value))
+  override def boolean(value: String): String = if (value.toBoolean) "1" else "0"
+
+  /**
+   * MySQL has no array type; the mappings read a JSON array out of a text column.
+   */
+  def array(elements: List[String], sqlType: String): String =
+    literal(elements.map(quoted).mkString("[", ",", "]"))
+}
+
 object Dialect {
 
   /**
@@ -123,6 +139,15 @@ object Dialect {
   /**
    * ISO-8601 in the CSV; `2020-05-22 19:35:00 +00:00` is what Oracle and SQL Server read.
    */
+  /**
+   * The same instant in UTC, without an offset: `2020-05-27 19:00:00`.
+   */
+  def utcTimestamp(value: String): String =
+    OffsetDateTime
+      .parse(value)
+      .withOffsetSameInstant(ZoneOffset.UTC)
+      .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+
   def sqlTimestamp(value: String, beforeOffset: String = " "): String =
     OffsetDateTime
       .parse(value)
