@@ -61,7 +61,12 @@ object NewDataset {
                      |);
                      |
                      |GO
-                     |""".stripMargin
+                     |""".stripMargin,
+      "sqlite" -> s"""|CREATE TABLE $table (
+                      |    id VARCHAR(100) PRIMARY KEY,
+                      |    value VARCHAR(100) NOT NULL
+                      |);
+                      |""".stripMargin
     )
   }
 }

@@ -80,6 +80,17 @@ object SqlServer extends Dialect("mssql") {
     literal(elements.map(quoted).mkString("[", ", ", "]"))
 }
 
+object Sqlite extends Dialect("sqlite") {
+  override def timestamp(value: String): String = literal(sqlTimestamp(value))
+  override def boolean(value: String): String = if (value.toBoolean) "1" else "0"
+
+  /**
+   * SQLite has no array type either; the mappings read a JSON array out of a text column.
+   */
+  def array(elements: List[String], sqlType: String): String =
+    literal(elements.map(quoted).mkString("[", ", ", "]"))
+}
+
 object Dialect {
 
   /**

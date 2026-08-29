@@ -1,4 +1,4 @@
-id|level1_id|attr
+id|level1_id|attr:boolean
 20|10|false
 21|10|false
 22|11|false

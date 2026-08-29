@@ -1,13 +1,14 @@
 # Test data
 
-Each directory here is one dataset. It holds a schema per dialect, as `pg.sql`, `oracle.sql` and `mssql.sql`, and the
-dataset's rows once, as one `<table>.csv` per table. The schema stays per dialect because column types and constraints
-legitimately differ between databases. Only the rows are shared.
+Each directory here is one dataset. It holds a schema per dialect, as `pg.sql`, `oracle.sql`, `mssql.sql` and
+`sqlite.sql`, and the dataset's rows once, as one `<table>.csv` per table. The schema stays per dialect because column
+types and constraints legitimately differ between databases. Only the rows are shared.
 
 At container-up time (see `GenTestData` in `project/`, called from `dockerUp` in `build.sbt`) the schema and the rows
 are written together into `target/testdata/<dialect>/<dataset>.sql`, which is what docker compose mounts into the
 container's init directory. Nothing is generated into the source tree, and the tests know nothing about any of this.
-They just query a database that already has the data in it.
+They just query a database that already has the data in it. SQLite is the exception to the container part: it has no
+server, so its suites build the scripts themselves and run them against a temporary database file.
 
 A dataset does not have to be complete. One with no CSVs keeps its rows in the per-dialect scripts, which is where
 data belongs when it genuinely cannot be shared, and one with no `<dialect>.sql` is simply skipped for that dialect.
@@ -21,13 +22,13 @@ data belongs when it genuinely cannot be shared, and one with no `<dialect>.sql`
   nothing about their type. Numbers are just their text.
 - A column whose values the dialects spell differently says so in the header, as `name:kind`:
 
-  | kind          | in the CSV             | pg                     | oracle                                    | mssql                          |
-  | ------------- | ---------------------- | ---------------------- | ----------------------------------------- | ------------------------------ |
-  | `array`       | `drama,comedy`         | `'{"drama","comedy"}'` | `string_array2('drama', 'comedy')`        | `'["drama", "comedy"]'`        |
-  | `date`        | `1974-10-07`           | `'1974-10-07'`         | `DATE '1974-10-07'`                       | `'1974-10-07'`                 |
-  | `time`        | `19:35:00`             | `'19:35:00'`           | `INTERVAL '0 19:35:00' DAY TO SECOND (0)` | `'19:35:00'`                   |
-  | `timestamptz` | `2020-05-22T19:35:00Z` | as written             | `TIMESTAMP '2020-05-22 19:35:00 +00:00'`  | `'2020-05-22 19:35:00 +00:00'` |
-  | `boolean`     | `true`                 | `'TRUE'`               | `'TRUE'`                                  | `1`                            |
+  | kind          | in the CSV             | pg                     | oracle                                    | mssql                          | sqlite                         |
+  | ------------- | ---------------------- | ---------------------- | ----------------------------------------- | ------------------------------ | ------------------------------ |
+  | `array`       | `drama,comedy`         | `'{"drama","comedy"}'` | `string_array2('drama', 'comedy')`        | `'["drama", "comedy"]'`        | `'["drama", "comedy"]'`        |
+  | `date`        | `1974-10-07`           | `'1974-10-07'`         | `DATE '1974-10-07'`                       | `'1974-10-07'`                 | `'1974-10-07'`                 |
+  | `time`        | `19:35:00`             | `'19:35:00'`           | `INTERVAL '0 19:35:00' DAY TO SECOND (0)` | `'19:35:00'`                   | `'19:35:00'`                   |
+  | `timestamptz` | `2020-05-22T19:35:00Z` | as written             | `TIMESTAMP '2020-05-22 19:35:00 +00:00'`  | `'2020-05-22 19:35:00 +00:00'` | `'2020-05-22 19:35:00 +00:00'` |
+  | `boolean`     | `true`                 | `'TRUE'`               | `'TRUE'`                                  | `1`                            | `1`                            |
 
   An array's elements are separated by commas and quoted like any other CSV field, so an element containing a comma is
   written `"a,b"`. Oracle builds an array by calling its collection type, so the constructor name is read out of the
@@ -55,3 +56,5 @@ only runs its init scripts on a first start, so an existing container will not p
 - `mutation` has no rows at all. It only creates a sequence.
 - `qualified-names` exists for Postgres only, because it tests schema-qualified names (`CREATE SCHEMA qualified;`).
   One dialect means no duplication to remove.
+
+`null-ordering`, `nullable-parent`, `qualified-names` and `union-order` have no `sqlite.sql`, so SQLite skips them.
