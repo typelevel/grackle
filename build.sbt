@@ -25,6 +25,7 @@ val oracleDriverVersion = "23.26.3.0.0"
 val postgresVersion = "42.7.13"
 val skunkVersion = "1.0.0"
 val sqliteDriverVersion = "3.53.2.0"
+val h2DriverVersion = "2.4.240"
 val shapeless2Version = "2.3.13"
 val shapeless3Version = "3.6.0"
 val sourcePosVersion = "1.2.0"
@@ -229,6 +230,7 @@ lazy val modules: List[CompositeProject] = List(
   doobieoracle,
   doobiemssql,
   doobiesqlite,
+  doobieh2,
   skunk,
   generic,
   docs,
@@ -420,6 +422,29 @@ lazy val doobiesqlite = project
     )
   )
 
+lazy val doobieh2 = project
+  .in(file("modules/doobie-h2"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(doobiecore % "test->test;compile->compile")
+  .settings(commonSettings)
+  .settings(
+    name := "grackle-doobie-h2",
+    Test / fork := true,
+    Test / parallelExecution := false,
+    // H2 has no docker service: the test harness seeds a fresh in-memory database per suite from
+    // the generated scripts. Pass the directory as a system property (fork'd tests don't share the
+    // build's working directory).
+    Test / javaOptions += s"-Dgrackle.h2.testdata=${(ThisBuild / baseDirectory).value / "target" / "testdata" / "h2"}",
+    // The container-backed backends build the scripts on the way to starting their container; this
+    // one has no container, so it builds them itself.
+    Test / testOptions += Tests.Setup(_ => GenTestData(buildRoot)),
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "doobie-h2" % doobieVersion,
+      "com.h2database" % "h2" % h2DriverVersion
+    )
+  )
+
 lazy val skunk = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Full)
   .in(file("modules/skunk"))
@@ -568,6 +593,7 @@ lazy val unidocs = project
       doobieoracle,
       doobiemssql,
       doobiesqlite,
+      doobieh2,
       skunk.jvm,
       generic.jvm
     )

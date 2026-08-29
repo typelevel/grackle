@@ -33,7 +33,7 @@ import sbt.io.IO
  */
 object GenTestData {
 
-  private val Dialects = List(Postgres, Oracle, SqlServer, Sqlite)
+  private val Dialects = List(Postgres, Oracle, SqlServer, Sqlite, H2)
 
   def apply(baseDir: File): Unit = {
     val datasets = IO.listFiles(baseDir / "testdata").filter(_.isDirectory)
