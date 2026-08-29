@@ -221,6 +221,104 @@ final class InputValuesSuite extends CatsEffectSuite {
     assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
   }
 
+  test("an Int literal coerces to a Float") {
+    val query = """
+      query {
+        floatField(arg: 123) {
+          subfield
+        }
+      }
+    """
+
+    val expected =
+      UntypedSelect(
+        "floatField",
+        None,
+        List(Binding("arg", FloatValue(123.0))),
+        Nil,
+        UntypedSelect("subfield", None, Nil, Nil, Empty)
+      )
+
+    val compiled = InputValuesMapping.compiler.compile(query, None)
+    assertEquals(compiled.map(_.query), Result.Success(expected))
+  }
+
+  test("an Int literal coerces to a Float inside a list") {
+    val query = """
+      query {
+        floatListField(arg: [1, 2.5]) {
+          subfield
+        }
+      }
+    """
+
+    val expected =
+      UntypedSelect(
+        "floatListField",
+        None,
+        List(Binding("arg", ListValue(List(FloatValue(1.0), FloatValue(2.5))))),
+        Nil,
+        UntypedSelect("subfield", None, Nil, Nil, Empty)
+      )
+
+    val compiled = InputValuesMapping.compiler.compile(query, None)
+    assertEquals(compiled.map(_.query), Result.Success(expected))
+  }
+
+  test("an Int default coerces to a Float") {
+    val query = """
+      query {
+        defaultedFloatField {
+          subfield
+        }
+      }
+    """
+
+    val expected =
+      UntypedSelect(
+        "defaultedFloatField",
+        None,
+        List(Binding("arg", FloatValue(5.0))),
+        Nil,
+        UntypedSelect("subfield", None, Nil, Nil, Empty)
+      )
+
+    val compiled = InputValuesMapping.compiler.compile(query, None)
+    assertEquals(compiled.map(_.query), Result.Success(expected))
+  }
+
+  test("a Float literal at an Int location is rejected") {
+    val query = """
+      query {
+        field(arg: 1.5) {
+          subfield
+        }
+      }
+    """
+
+    val expected =
+      Problem("Expected Int found '1.5' for 'arg' in field 'field' of type 'Query'")
+
+    val compiled = InputValuesMapping.compiler.compile(query, None)
+    assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
+  }
+
+  test("a String literal at a Float location is rejected") {
+    val query = """
+      query {
+        floatField(arg: "foo") {
+          subfield
+        }
+      }
+    """
+
+    val expected =
+      Problem("Expected Float found '\"foo\"' for 'arg' in field 'floatField' of type 'Query'")
+
+    val compiled = InputValuesMapping.compiler.compile(query, None)
+    assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
+  }
+
   test("single variable value coerces to a list of size one") {
     val query = """
       query ($arg: [String]!) {
@@ -509,6 +607,9 @@ object InputValuesMapping extends TestMapping {
     schema"""
       type Query {
         field(arg: Int): Result!
+        floatField(arg: Float): Result!
+        floatListField(arg: [Float]): Result!
+        defaultedFloatField(arg: Float = 5): Result!
         listField(arg: [String!]!): Result!
         nullableListField(arg: [String]): Result!
         defaultedListField(arg: [String] = "foo"): Result!
