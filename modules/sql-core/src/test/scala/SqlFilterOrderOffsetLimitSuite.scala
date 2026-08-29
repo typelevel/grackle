@@ -1039,6 +1039,35 @@ trait SqlFilterOrderOffsetLimitSuite extends CatsEffectSuite {
     assertWeaklyEqualIO(res, expected)
   }
 
+  // Unlike "root offset" above, no child lists are selected, so the offset isn't pushed into a
+  // planner-wrapped subquery but stays on the top-level select - the only query shape that
+  // reaches rendering with an offset and no limit, exercising normalizeOffsetLimit at the root.
+  test("root offset with no nested lists") {
+    val query = """
+      query {
+        root(offset: 1) {
+          id
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "root" : [
+            {
+              "id" : "r1"
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected)
+  }
+
   test("order on one side") {
     val query = """
       query {
