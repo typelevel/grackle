@@ -57,5 +57,5 @@ only runs its init scripts on a first start, so an existing container will not p
 - `qualified-names` exists for Postgres only, because it tests schema-qualified names (`CREATE SCHEMA qualified;`).
   One dialect means no duplication to remove.
 
-`qualified-names` and `union-order` have neither a `sqlite.sql` nor an `h2.sql`, so those two skip them. Both put
-their tables in a schema, and SQLite has nothing to create one with.
+`qualified-names` and `union-order` have no `sqlite.sql`, so SQLite skips them. Both put their tables in a schema,
+and SQLite has nothing to create one with.
