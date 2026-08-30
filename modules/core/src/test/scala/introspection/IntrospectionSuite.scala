@@ -1201,6 +1201,54 @@ final class IntrospectionSuite extends CatsEffectSuite {
     assertIO(res, expected)
   }
 
+  test("schema description query") {
+    val query = """
+      {
+        __schema {
+          description
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "__schema" : {
+            "description" : "A schema which introspection can describe"
+          }
+        }
+      }
+    """
+
+    val res = DescribedMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("schema description query yields null without a description") {
+    val query = """
+      {
+        __schema {
+          description
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "__schema" : {
+            "description" : null
+          }
+        }
+      }
+    """
+
+    val res = TestMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
   test("standard introspection query") {
     val query = """
                   |query IntrospectionQuery {
@@ -2178,6 +2226,31 @@ object BareDeprecationMapping extends ValueMapping[IO] {
         fieldMappings = List(
           ValueField("id", _.id),
           ValueField("name", _.name)
+        )
+      )
+    )
+}
+
+object DescribedMapping extends ValueMapping[IO] {
+  val schema =
+    schema"""
+      "A schema which introspection can describe"
+      schema {
+        query: Query
+      }
+      type Query {
+        foo: Int
+      }
+    """
+
+  val QueryType = schema.queryType
+
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings = List(
+          ValueField.fromValue("foo", 0)
         )
       )
     )

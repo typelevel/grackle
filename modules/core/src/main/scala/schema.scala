@@ -175,6 +175,11 @@ trait Schema {
     else extendSchemaType(schemaExtensions, baseSchemaType)
 
   /**
+   * The description of this `Schema`, if any
+   */
+  def description: Option[String] = schemaType.description
+
+  /**
    * The type of queries defined by this `Schema`
    */
   def queryType: NamedType = schemaType.field("query").flatMap(_.nonNull.asNamed).get
@@ -1775,13 +1780,13 @@ object SchemaParser {
 
     // explicit Schema type, if any
     def mkSchemaType(schema: Schema, doc: Document): Result[Option[NamedType]] = {
-      def build(dirs: List[Directive], ops: List[Field]): NamedType = {
+      def build(desc: Option[String], dirs: List[Directive], ops: List[Field]): NamedType = {
         val query = ops
           .find(_.name == "query")
           .getOrElse(Field("query", None, Nil, defaultQueryType, Nil))
         ObjectType(
           name = "Schema",
-          description = None,
+          description = desc,
           fields = query :: List(
             ops.find(_.name == "mutation"),
             ops.find(_.name == "subscription")).flatten,
@@ -1795,11 +1800,11 @@ object SchemaParser {
       val defns = doc.collect { case schema: SchemaDefinition => schema }
       defns match {
         case Nil => None.success
-        case SchemaDefinition(rootOpTpes, dirs0) :: Nil =>
+        case SchemaDefinition(desc, rootOpTpes, dirs0) :: Nil =>
           for {
             ops <- rootOpTpes.traverse(mkRootOperation(schema))
             dirs <- dirs0.traverse(Directive.fromAst)
-          } yield Some(build(dirs, ops))
+          } yield Some(build(desc, dirs, ops))
 
         case _ => Result.failure("At most one schema definition permitted")
       }
@@ -2350,11 +2355,13 @@ object SchemaValidator {
 object SchemaRenderer {
   def renderSchema(schema: Schema): String = {
     val schemaDefn = {
+      val desc = schema.baseSchemaType.description
       val dirs0 = schema.baseSchemaType.directives
       if (schema.queryType.name == "Query" &&
         schema.mutationType.forall(_.name == "Mutation") &&
         schema.subscriptionType.forall(_.name == "Subscription") &&
-        dirs0.isEmpty) ""
+        dirs0.isEmpty &&
+        desc.forall(_.isEmpty)) ""
       else {
         val fields =
           schema.baseSchemaType match {
@@ -2363,7 +2370,7 @@ object SchemaRenderer {
           }
 
         val dirs = renderDirectives(dirs0)
-        s"schema$dirs {\n${renderMembers(fields)(renderField)}\n}\n"
+        s"${renderDescription(desc)}schema$dirs {\n${renderMembers(fields)(renderField)}\n}\n"
       }
     }
 

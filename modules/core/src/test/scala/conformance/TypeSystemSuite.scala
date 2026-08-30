@@ -34,7 +34,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   // 3.2 Type System Descriptions
   // https://spec.graphql.org/September2025/#sec-Descriptions
 
-  validSchema("every definition of a schema can carry a description".fail)("""
+  validSchema("every definition of a schema can carry a description")("""
     '''
     A simple GraphQL schema which is well described.
     '''
@@ -141,7 +141,7 @@ final class TypeSystemSuite extends ConformanceSuite {
     }
   """)
 
-  validSchema("a schema definition can carry a description".fail)("""
+  validSchema("a schema definition can carry a description")("""
     '''
     Example schema
     '''

@@ -52,7 +52,7 @@ final class LanguageSuite extends ConformanceSuite {
   // 2.2 Descriptions
   // https://spec.graphql.org/September2025/#sec-Descriptions
 
-  parses("an operation, a variable and a fragment can carry a description".fail)("""
+  parses("an operation, a variable and a fragment can carry a description")("""
     '''
     Request the current status of a time machine and its operator.
     You can also check the status for a particular year.
@@ -85,7 +85,7 @@ final class LanguageSuite extends ConformanceSuite {
   // 2.4 Operations
   // https://spec.graphql.org/September2025/#sec-Language.Operations
 
-  parses("a mutation operation can carry a description".fail)("""
+  parses("a mutation operation can carry a description")("""
     '''
     Mark story 12345 as "liked"
     and return the updated number of likes on the story
@@ -253,7 +253,7 @@ final class LanguageSuite extends ConformanceSuite {
     }
   """)
 
-  parses("a fragment factors out a repeated selection set".fail)("""
+  parses("a fragment factors out a repeated selection set")("""
     query withFragments {
       user(id: 4) {
         friends(first: 10) {
@@ -420,7 +420,7 @@ final class LanguageSuite extends ConformanceSuite {
   // 2.11 Variables
   // https://spec.graphql.org/September2025/#sec-Language.Variables
 
-  parses("a variable definition can carry a description".fail)("""
+  parses("a variable definition can carry a description")("""
     query getZuckProfile(
       "The size of the profile picture to fetch."
       $devicePicSize: Int
@@ -433,14 +433,14 @@ final class LanguageSuite extends ConformanceSuite {
     }
   """)
 
-  // The specification states the variable values `{"devicePicSize": 60}` for the example above.
-  // This test case supplies those values. It drops the description of the variable definition,
-  // because the parser rejects it, which the test case above records.
   yields(
     "a request supplies a value for the variable of an operation",
     Site,
     json"""{"devicePicSize": 60}""")("""
-    query getZuckProfile($devicePicSize: Int) {
+    query getZuckProfile(
+      "The size of the profile picture to fetch."
+      $devicePicSize: Int
+    ) {
       user(id: 4) {
         id
         name

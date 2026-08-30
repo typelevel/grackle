@@ -35,6 +35,7 @@ object QueryMinimizer {
     def minimizeDocument(doc: Document): String = {
       import OperationDefinition._
       import OperationType._
+      import SchemaRenderer.renderDescription
       import Selection._
       import Value._
 
@@ -57,7 +58,8 @@ object QueryMinimizer {
         }
 
       def renderOperation(op: Operation): String =
-        renderOperationType(op.operationType) +
+        renderDescription(op.description) +
+          renderOperationType(op.operationType) +
           op.name.map(nme => s" ${nme.value}").getOrElse("") +
           renderVariableDefns(op.variables) +
           renderDirectives(op.directives) +
@@ -81,8 +83,8 @@ object QueryMinimizer {
           case _ =>
             vars
               .map {
-                case VariableDefinition(name, tpe, default, dirs) =>
-                  s"$$${name.value}:${tpe.name}${default.map(v => s"=${renderValue(v)}").getOrElse("")}${renderDirectives(dirs)}"
+                case VariableDefinition(name, tpe, default, dirs, desc) =>
+                  s"${renderDescription(desc)}$$${name.value}:${tpe.name}${default.map(v => s"=${renderValue(v)}").getOrElse("")}${renderDirectives(dirs)}"
               }
               .mkString("(", ",", ")")
         }
@@ -126,7 +128,7 @@ object QueryMinimizer {
         s"on ${tpe.name}"
 
       def renderFragmentDefinition(frag: FragmentDefinition): String =
-        s"fragment ${frag.name.value} ${renderTypeCondition(frag.typeCondition)}${renderDirectives(frag.directives)}${renderSelectionSet(frag.selectionSet)}"
+        s"${renderDescription(frag.description)}fragment ${frag.name.value} ${renderTypeCondition(frag.typeCondition)}${renderDirectives(frag.directives)}${renderSelectionSet(frag.selectionSet)}"
 
       def renderFragmentSpread(spread: FragmentSpread): String =
         s"...${spread.name.value}${renderDirectives(spread.directives)}"
