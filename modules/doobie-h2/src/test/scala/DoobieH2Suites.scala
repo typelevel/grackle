@@ -55,6 +55,10 @@ final class CompositeKeySuite extends DoobieH2DatabaseSuite with SqlCompositeKey
   lazy val mapping = new DoobieH2TestMapping(transactor) with SqlCompositeKeyMapping[IO]
 }
 
+final class ErrorKeysSuite extends DoobieH2DatabaseSuite with SqlErrorKeysSuite {
+  lazy val mapping = new DoobieH2TestMapping(transactor) with SqlCompositeKeyMapping[IO]
+}
+
 final class CursorJsonSuite extends DoobieH2DatabaseSuite with SqlCursorJsonSuite {
   lazy val mapping = new DoobieH2TestMapping(transactor) with SqlCursorJsonMapping[IO]
 }
@@ -194,6 +198,14 @@ final class MutationSuite extends DoobieH2DatabaseSuite with SqlMutationSuite {
     }
 }
 
+final class NullableParentSuite extends DoobieH2DatabaseSuite with SqlNullableParentSuite {
+  lazy val mapping = new DoobieH2TestMapping(transactor) with SqlNullableParentMapping[IO]
+}
+
+final class NullOrderingSuite extends DoobieH2DatabaseSuite with SqlNullOrderingSuite {
+  lazy val mapping = new DoobieH2TestMapping(transactor) with SqlNullOrderingMapping[IO]
+}
+
 final class NestedEffectsSuite extends DoobieH2DatabaseSuite with SqlNestedEffectsSuite {
   def mapping: IO[(CurrencyService[IO], Mapping[IO])] =
     for {
@@ -223,6 +235,14 @@ final class ProjectionSuite extends DoobieH2DatabaseSuite with SqlProjectionSuit
   lazy val mapping = new DoobieH2TestMapping(transactor) with SqlProjectionMapping[IO]
 }
 
+final class QualifiedNamesSuite extends DoobieH2DatabaseSuite with SqlQualifiedNamesSuite {
+  lazy val mapping = new DoobieH2TestMapping(transactor) with SqlQualifiedNamesMapping[IO]
+}
+
+final class TableNameSuite extends DoobieH2DatabaseSuite with SqlTableNameSuite {
+  lazy val mapping = new DoobieH2TestMapping(transactor) with SqlQualifiedNamesMapping[IO]
+}
+
 final class RecursiveInterfacesSuite
     extends DoobieH2DatabaseSuite
     with SqlRecursiveInterfacesSuite {
@@ -239,6 +259,10 @@ final class SiblingListsSuite extends DoobieH2DatabaseSuite with SqlSiblingLists
 
 final class TreeSuite extends DoobieH2DatabaseSuite with SqlTreeSuite {
   lazy val mapping = new DoobieH2TestMapping(transactor) with SqlTreeMapping[IO]
+}
+
+final class UnionOrderSuite extends DoobieH2DatabaseSuite with SqlUnionOrderSuite {
+  lazy val mapping = new DoobieH2TestMapping(transactor) with SqlUnionOrderMapping[IO]
 }
 
 final class UnionsSuite extends DoobieH2DatabaseSuite with SqlUnionSuite {
