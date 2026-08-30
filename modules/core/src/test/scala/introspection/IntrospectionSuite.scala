@@ -1047,6 +1047,67 @@ final class IntrospectionSuite extends CatsEffectSuite {
     assertIO(res, expected)
   }
 
+  test("bare @deprecated query") {
+    val query = """
+      {
+        __type(name: "User") {
+          fields(includeDeprecated: true) {
+            name
+            isDeprecated
+            deprecationReason
+          }
+        }
+        queryType: __type(name: "Query") {
+          fields(includeDeprecated: true) {
+            args(includeDeprecated: true) {
+              name
+              isDeprecated
+              deprecationReason
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "__type" : {
+            "fields" : [
+              {
+                "name" : "id",
+                "isDeprecated" : false,
+                "deprecationReason" : null
+              },
+              {
+                "name" : "name",
+                "isDeprecated" : true,
+                "deprecationReason" : "No longer supported"
+              }
+            ]
+          },
+          "queryType" : {
+            "fields" : [
+              {
+                "args" : [
+                  {
+                    "name" : "dep",
+                    "isDeprecated" : true,
+                    "deprecationReason" : "No longer supported"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    """
+
+    val res = BareDeprecationMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
   test("simple schema query") {
     val query = """
       {
@@ -2082,6 +2143,41 @@ object InputMapping extends ValueMapping[IO] {
           ValueField("id", _.id),
           ValueField("name", _.name),
           ValueField("age", _.age)
+        )
+      )
+    )
+}
+
+object BareDeprecationMapping extends ValueMapping[IO] {
+  import SmallData._
+
+  val schema =
+    schema"""
+      type Query {
+        users(dep: Int @deprecated): [User!]!
+      }
+      type User {
+        id: String
+        name: String @deprecated
+      }
+    """
+
+  val QueryType = schema.queryType
+  val UserType = schema.ref("User")
+
+  val typeMappings =
+    List(
+      ValueObjectMapping[Unit](
+        tpe = QueryType,
+        fieldMappings = List(
+          ValueField("users", _ => users)
+        )
+      ),
+      ValueObjectMapping[User](
+        tpe = UserType,
+        fieldMappings = List(
+          ValueField("id", _.id),
+          ValueField("name", _.name)
         )
       )
     )

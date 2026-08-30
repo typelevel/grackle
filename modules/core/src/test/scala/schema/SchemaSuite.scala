@@ -18,7 +18,7 @@ package schema
 import cats.data.NonEmptyChain
 import munit.CatsEffectSuite
 
-import grackle.{Result, ScalarType, Schema}
+import grackle.{DirectiveDef, EnumType, Result, ScalarType, Schema}
 import grackle.syntax._
 
 final class SchemaSuite extends CatsEffectSuite {
@@ -859,6 +859,53 @@ final class SchemaSuite extends CatsEffectSuite {
             "oneOf input object type ExampleInput may not have non-nullable field(s): 'foo', 'baz'"))
       case unexpected => fail(s"This was unexpected: $unexpected")
     }
+  }
+
+  test("bare @deprecated yields the default reason") {
+    val schema = schema"""
+      type Query {
+        old(id: Int @deprecated): Int @deprecated
+      }
+
+      enum Status {
+        GONE @deprecated
+      }
+    """
+
+    val defaultReason = Some(DirectiveDef.DefaultDeprecationReason)
+
+    val field = schema.queryType.fieldInfo("old").get
+    assertEquals(field.isDeprecated, true)
+    assertEquals(field.deprecationReason, defaultReason)
+
+    val arg = field.args.find(_.name == "id").get
+    assertEquals(arg.deprecationReason, defaultReason)
+
+    val status = schema.definition("Status").collect { case e: EnumType => e }.get
+    assertEquals(status.valueDefinition("GONE").get.deprecationReason, defaultReason)
+  }
+
+  test("@deprecated with an explicit reason yields that reason") {
+    val schema = schema"""
+      type Query {
+        old: Int @deprecated(reason: "Use new instead")
+      }
+    """
+
+    val field = schema.queryType.fieldInfo("old").get
+    assertEquals(field.deprecationReason, Some("Use new instead"))
+  }
+
+  test("a field without @deprecated has no deprecation reason") {
+    val schema = schema"""
+      type Query {
+        current: Int
+      }
+    """
+
+    val field = schema.queryType.fieldInfo("current").get
+    assertEquals(field.isDeprecated, false)
+    assertEquals(field.deprecationReason, None)
   }
 
   test("operations on undefined types") {
