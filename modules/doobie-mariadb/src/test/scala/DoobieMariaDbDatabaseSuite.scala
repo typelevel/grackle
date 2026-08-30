@@ -1,0 +1,99 @@
+// Copyright (c) 2016-2025 Association of Universities for Research in Astronomy, Inc. (AURA)
+// Copyright (c) 2016-2025 Grackle Contributors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package grackle.doobie.mariadb.test
+
+import java.sql.{Time, Timestamp}
+import java.time.{LocalDate, LocalTime, OffsetDateTime, ZoneId}
+import java.util.UUID
+
+import scala.util.Try
+
+import cats.effect.{IO, Resource, Sync}
+import cats.syntax.all._
+import io.circe.{Decoder => CDecoder, Encoder => CEncoder, Json}
+import io.circe.parser.parse
+import io.circe.syntax._
+import munit.catseffect._
+import org.typelevel.doobie.{Meta, Transactor}
+import org.typelevel.doobie.enumerated.JdbcType
+import org.typelevel.doobie.util.meta.MetaConstructors.Basic
+
+import grackle.doobie.DoobieMonitor
+import grackle.doobie.mariadb.DoobieMariaDbMapping
+import grackle.doobie.test.DoobieDatabaseSuite
+import grackle.sql.test._
+
+trait DoobieMariaDbDatabaseSuite extends DoobieDatabaseSuite {
+  abstract class DoobieMariaDbTestMapping[F[_]: Sync](
+      transactor: Transactor[F],
+      monitor: DoobieMonitor[F] = DoobieMonitor.noopMonitor[IO])
+      extends DoobieMariaDbMapping[F](transactor, monitor)
+      with DoobieTestMapping[F]
+      with SqlTestMapping[F] {
+    def mkTestCodec[T](meta: Meta[T]): TestCodec[T] = (meta, false)
+
+    val uuid: TestCodec[UUID] =
+      mkTestCodec(Meta[String].tiemap(s =>
+        Try(UUID.fromString(s)).toEither.leftMap(_.getMessage))(_.toString))
+
+    val localTime: TestCodec[LocalTime] =
+      mkTestCodec(Meta[Time].timap(t => LocalTime.ofNanoOfDay(t.toLocalTime.toNanoOfDay))(lt =>
+        Time.valueOf(lt)))
+
+    val localDate: TestCodec[LocalDate] =
+      (Basic.oneObject(JdbcType.Date, None, classOf[LocalDate]), false)
+
+    // DATETIME(6) columns hold UTC instants (fixtures pre-converted); decode as UTC.
+    val offsetDateTime: TestCodec[OffsetDateTime] =
+      mkTestCodec(
+        Meta[Timestamp].timap(t => OffsetDateTime.ofInstant(t.toInstant, ZoneId.of("UTC")))(o =>
+          Timestamp.from(o.toInstant)))
+
+    val nvarchar: TestCodec[String] = mkTestCodec(Meta[String])
+
+    // JSON columns read/write cleanly as strings through the connector.
+    val jsonb: TestCodec[Json] =
+      mkTestCodec(Meta[String].tiemap(s => parse(s).leftMap(_.getMessage))(_.noSpaces))
+
+    // No native arrays - JSON-encode into JSON columns, same codec shape as MSSQL/SQLite.
+    override def list[T: CDecoder: CEncoder](c: TestCodec[T]): TestCodec[List[T]] = {
+      def put(ts: List[T]): String = ts.asJson.noSpaces
+      def get(s: String): Either[String, List[T]] =
+        parse(s).map(_.as[List[T]].toOption.get).leftMap(_.getMessage)
+
+      mkTestCodec(Meta[String].tiemap(get)(put))
+    }
+  }
+
+  def transactorResource: Resource[IO, Transactor[IO]] =
+    Resource.pure(
+      Transactor.fromDriverManager[IO](
+        "org.mariadb.jdbc.Driver",
+        // connectionTimeZone tells the driver to read and write DATETIME as UTC, which is
+        // what the fixtures hold, whatever zone the JVM runs in.
+        "jdbc:mariadb://localhost:3307/test?connectionTimeZone=UTC",
+        "test",
+        "test",
+        None
+      )
+    )
+
+  val transactorFixture: IOFixture[Transactor[IO]] =
+    ResourceSuiteLocalFixture("doobiemariadb", transactorResource)
+  override def munitFixtures: Seq[IOFixture[_]] = Seq(transactorFixture)
+
+  def transactor: Transactor[IO] = transactorFixture()
+}
