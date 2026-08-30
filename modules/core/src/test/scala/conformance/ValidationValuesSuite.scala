@@ -48,9 +48,7 @@ final class ValidationValuesSuite extends ValidationSuite {
     }
   """)
 
-  // Grackle rejects the Int literal `123` at a `Float` location. Section 3.5.2, Float, requires
-  // that coercion.
-  validQuery("an Int literal at a Float location".fail)("""
+  validQuery("an Int literal at a Float location")("""
     query driver {
       arguments { ...coercedIntIntoFloatArg }
     }

@@ -1187,6 +1187,8 @@ object Value {
         value.success
       case (FloatType, Some(value: FloatValue)) =>
         value.success
+      case (FloatType, Some(IntValue(i))) =>
+        FloatValue(i.toDouble).success
       case (StringType, Some(value: StringValue)) =>
         value.success
       case (BooleanType, Some(value: BooleanValue)) =>
