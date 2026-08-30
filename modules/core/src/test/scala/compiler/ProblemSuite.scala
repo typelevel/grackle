@@ -33,11 +33,11 @@ final class ProblemSuite extends CatsEffectSuite {
           "locations" : [
             {
               "line" : 1,
-              "col" : 2
+              "column" : 2
             },
             {
               "line" : 5,
-              "col" : 6
+              "column" : 6
             }
           ],
           "path" : [
@@ -58,11 +58,11 @@ final class ProblemSuite extends CatsEffectSuite {
           "locations" : [
             {
               "line" : 1,
-              "col" : 2
+              "column" : 2
             },
             {
               "line" : 5,
-              "col" : 6
+              "column" : 6
             }
           ]
         }

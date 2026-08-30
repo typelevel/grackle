@@ -64,10 +64,10 @@ object Problem {
           "locations" ->
             p.locations
               .map {
-                case (line, col) =>
+                case (line, column) =>
                   Json.obj(
                     "line" -> line.asJson,
-                    "col" -> col.asJson
+                    "column" -> column.asJson
                   )
               }
               .asJson
