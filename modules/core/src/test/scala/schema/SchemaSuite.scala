@@ -334,10 +334,174 @@ final class SchemaSuite extends CatsEffectSuite {
         assertEquals(
           ps.map(_.message),
           NonEmptyChain(
-            "Field 'name' of type 'Human' has has an argument list that does not conform to that specified by implemented interface 'Character'"
+            "Field 'name' of type 'Human' has an argument list that does not conform to that specified by implemented interface 'Character'"
           )
         )
       case unexpected => fail(s"This was unexpected: ${unexpected.getClass.getSimpleName}")
+    }
+  }
+
+  test(
+    "schema validation: object implementing interface field with additional nullable argument") {
+    val schema = Schema(
+      """
+        type Query {
+          foo: Int
+        }
+
+        interface Character {
+          name(foo: Int!): String!
+        }
+
+        type Human implements Character {
+          name(foo: Int!, extra: String): String!
+        }
+      """
+    )
+
+    schema match {
+      case Result.Success(s) =>
+        assertEquals(s.types.map(_.name), List("Query", "Character", "Human"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
+  test(
+    "schema validation: object implementing interface field with additional defaulted argument") {
+    val schema = Schema(
+      """
+        type Query {
+          foo: Int
+        }
+
+        interface Character {
+          name(foo: Int!): String!
+        }
+
+        type Human implements Character {
+          name(foo: Int!, extra: Int! = 3): String!
+        }
+      """
+    )
+
+    schema match {
+      case Result.Success(s) =>
+        assertEquals(s.types.map(_.name), List("Query", "Character", "Human"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
+  test(
+    "schema validation: object implementing interface field with arguments in a different order") {
+    val schema = Schema(
+      """
+        type Query {
+          foo: Int
+        }
+
+        interface Character {
+          name(foo: Int!, bar: String): String!
+        }
+
+        type Human implements Character {
+          name(bar: String, foo: Int!): String!
+        }
+      """
+    )
+
+    schema match {
+      case Result.Success(s) =>
+        assertEquals(s.types.map(_.name), List("Query", "Character", "Human"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
+  test(
+    "schema validation: object implementing interface field with additional required argument") {
+    val schema = Schema(
+      """
+        type Query {
+          foo: Int
+        }
+
+        interface Character {
+          name(foo: Int!): String!
+        }
+
+        type Human implements Character {
+          name(foo: Int!, extra: String!): String!
+        }
+      """
+    )
+
+    schema match {
+      case Result.Failure(ps) =>
+        assertEquals(
+          ps.map(_.message),
+          NonEmptyChain(
+            "Field 'name' of type 'Human' has a required argument 'extra' which is not defined by implemented interface 'Character'"
+          )
+        )
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
+  test("schema validation: object implementing interface field with a renamed argument") {
+    val schema = Schema(
+      """
+        type Query {
+          foo: Int
+        }
+
+        interface Character {
+          name(foo: Int!): String!
+        }
+
+        type Human implements Character {
+          name(bar: Int!): String!
+        }
+      """
+    )
+
+    schema match {
+      case Result.Failure(ps) =>
+        assertEquals(
+          ps.map(_.message),
+          NonEmptyChain(
+            "Field 'name' of type 'Human' has an argument list that does not conform to that specified by implemented interface 'Character'",
+            "Field 'name' of type 'Human' has a required argument 'bar' which is not defined by implemented interface 'Character'"
+          )
+        )
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
+  test("schema validation: object implementing interface field missing an interface argument") {
+    val schema = Schema(
+      """
+        type Query {
+          foo: Int
+        }
+
+        interface Character {
+          name(foo: Int!): String!
+        }
+
+        type Human implements Character {
+          name: String!
+        }
+      """
+    )
+
+    schema match {
+      case Result.Failure(ps) =>
+        assertEquals(
+          ps.map(_.message),
+          NonEmptyChain(
+            "Field 'name' of type 'Human' has an argument list that does not conform to that specified by implemented interface 'Character'"
+          )
+        )
+      case unexpected => fail(s"This was unexpected: $unexpected")
     }
   }
 

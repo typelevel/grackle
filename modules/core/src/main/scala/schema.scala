@@ -2194,6 +2194,10 @@ object SchemaValidator {
   }
 
   def validateImplementations(schema: Schema): List[Problem] = {
+    // https://spec.graphql.org/October2021/#sec-Required-Arguments
+    def isRequired(arg: InputValue): Boolean =
+      !arg.tpe.isNullable && arg.defaultValue.isEmpty
+
     def validateImplementor(impl: TypeWithFields): List[Problem] = {
       import impl.{name, fields, interfaces}
 
@@ -2247,18 +2251,31 @@ object SchemaValidator {
                         s"Field '${implField.name}' of type '$name' has type '${renderType(implTpe)}', however implemented interface '${iface.name}' requires it to be a subtype of '${renderType(ifTpe)}'"))
 
                   val argsMatch =
-                    implField.args.corresponds(ifField.args) {
-                      case (arg0, arg1) =>
-                        arg0.name == arg1.name && arg0.tpe == arg1.tpe
+                    ifField.args.forall { ifArg =>
+                      implField
+                        .args
+                        .exists(implArg =>
+                          implArg.name == ifArg.name && implArg.tpe == ifArg.tpe)
                     }
 
                   val ap =
                     if (argsMatch) Nil
                     else
                       List(Problem(
-                        s"Field '${implField.name}' of type '$name' has has an argument list that does not conform to that specified by implemented interface '${iface.name}'"))
+                        s"Field '${implField.name}' of type '$name' has an argument list that does not conform to that specified by implemented interface '${iface.name}'"))
 
-                  rp ++ ap
+                  // Additional arguments on the implementing field must not be required
+                  // https://spec.graphql.org/October2021/#IsValidImplementation()
+                  val ep =
+                    implField.args.collect {
+                      case implArg
+                          if isRequired(implArg) &&
+                            !ifField.args.exists(_.name == implArg.name) =>
+                        Problem(
+                          s"Field '${implField.name}' of type '$name' has a required argument '${implArg.name}' which is not defined by implemented interface '${iface.name}'")
+                    }
+
+                  rp ++ ap ++ ep
                 }
                 .getOrElse(List(Problem(
                   s"Field '${ifField.name}' from interface '${iface.name}' is not defined by implementing type '$name'")))
