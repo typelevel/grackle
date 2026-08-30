@@ -55,6 +55,10 @@ final class CompositeKeySuite extends DoobieH2DatabaseSuite with SqlCompositeKey
   lazy val mapping = new DoobieH2TestMapping(transactor) with SqlCompositeKeyMapping[IO]
 }
 
+final class ErrorKeysSuite extends DoobieH2DatabaseSuite with SqlErrorKeysSuite {
+  lazy val mapping = new DoobieH2TestMapping(transactor) with SqlCompositeKeyMapping[IO]
+}
+
 final class CursorJsonSuite extends DoobieH2DatabaseSuite with SqlCursorJsonSuite {
   lazy val mapping = new DoobieH2TestMapping(transactor) with SqlCursorJsonMapping[IO]
 }
@@ -192,6 +196,14 @@ final class MutationSuite extends DoobieH2DatabaseSuite with SqlMutationSuite {
         } yield id).transact(transactor)
       }
     }
+}
+
+final class NullableParentSuite extends DoobieH2DatabaseSuite with SqlNullableParentSuite {
+  lazy val mapping = new DoobieH2TestMapping(transactor) with SqlNullableParentMapping[IO]
+}
+
+final class NullOrderingSuite extends DoobieH2DatabaseSuite with SqlNullOrderingSuite {
+  lazy val mapping = new DoobieH2TestMapping(transactor) with SqlNullOrderingMapping[IO]
 }
 
 final class NestedEffectsSuite extends DoobieH2DatabaseSuite with SqlNestedEffectsSuite {
