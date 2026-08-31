@@ -103,7 +103,7 @@ object QueryParser {
      * GraphQL errors and warnings are accumulated in the result.
      */
     def parseOperation(op: Operation): Result[UntypedOperation] = {
-      val Operation(opType, name, vds, dirs0, sels) = op
+      val Operation(opType, name, vds, dirs0, sels, _) = op
       for {
         vs <- parseVariableDefinitions(vds)
         q <- parseSelections(sels)
@@ -125,7 +125,7 @@ object QueryParser {
      */
     def parseVariableDefinitions(vds: List[VariableDefinition]): Result[List[UntypedVarDef]] =
       vds.traverse {
-        case VariableDefinition(Name(nme), tpe, dv0, dirs0) =>
+        case VariableDefinition(Name(nme), tpe, dv0, dirs0, _) =>
           for {
             dv <- dv0.traverse(Value.fromAst)
             dirs <- parseDirectives(dirs0)

@@ -48,7 +48,8 @@ object Ast {
         name: Option[Name],
         variables: List[VariableDefinition],
         directives: List[Directive],
-        selectionSet: List[Selection]
+        selectionSet: List[Selection],
+        description: Option[String] = None
     ) extends OperationDefinition
 
   }
@@ -85,14 +86,16 @@ object Ast {
       name: Name,
       typeCondition: Type,
       directives: List[Directive],
-      selectionSet: List[Selection]
+      selectionSet: List[Selection],
+      description: Option[String] = None
   ) extends ExecutableDefinition
 
   case class VariableDefinition(
       name: Name,
       tpe: Type,
       defaultValue: Option[Value],
-      directives: List[Directive]
+      directives: List[Directive],
+      description: Option[String] = None
   )
 
   sealed trait Value
@@ -116,6 +119,7 @@ object Ast {
   }
 
   case class SchemaDefinition(
+      description: Option[String],
       rootOperationTypes: List[RootOperationTypeDefinition],
       directives: List[Directive]
   ) extends TypeSystemDefinition

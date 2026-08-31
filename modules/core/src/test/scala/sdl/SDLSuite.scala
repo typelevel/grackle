@@ -41,11 +41,34 @@ final class SDLSuite extends CatsEffectSuite {
     val expected =
       List(
         SchemaDefinition(
+          None,
           List(
             RootOperationTypeDefinition(Query, Named(Name("MyQuery")), Nil),
             RootOperationTypeDefinition(Mutation, Named(Name("MyMutation")), Nil),
             RootOperationTypeDefinition(Subscription, Named(Name("MySubscription")), Nil)
           ),
+          Nil
+        )
+      )
+
+    val res = parser.parseText(schema)
+
+    assertEquals(res, expected.success)
+  }
+
+  test("parse schema definition with description") {
+    val schema = """
+      "A described schema"
+      schema {
+        query: MyQuery
+      }
+    """
+
+    val expected =
+      List(
+        SchemaDefinition(
+          Some("A described schema"),
+          List(RootOperationTypeDefinition(Query, Named(Name("MyQuery")), Nil)),
           Nil
         )
       )
@@ -508,6 +531,34 @@ final class SDLSuite extends CatsEffectSuite {
     val ser = res.map(_.toString)
 
     assertEquals(ser, schema.success)
+  }
+
+  test("deserialize schema with a schema description") {
+    val schema =
+      """|"The schema"
+         |schema {
+         |  query: Query
+         |}
+         |type Query {
+         |  foo: Int
+         |}""".stripMargin
+
+    val res = schemaParser.parseText(schema)
+
+    assertEquals(res.map(_.description), Some("The schema").success)
+    assertEquals(res.map(_.toString), schema.success)
+  }
+
+  test("a schema without a schema description has none") {
+    val schema =
+      """|type Query {
+         |  foo: Int
+         |}""".stripMargin
+
+    val res = schemaParser.parseText(schema)
+
+    assertEquals(res.map(_.description), Option.empty[String].success)
+    assertEquals(res.map(_.toString), schema.success)
   }
 
   test("deserialize schema with described directive arguments") {

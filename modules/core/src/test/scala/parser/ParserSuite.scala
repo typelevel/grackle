@@ -709,7 +709,7 @@ final class ParserSuite extends CatsEffectSuite {
 
     def assertParse(input: String, expected: Value) =
       parser.parseText(s"query { foo(bar: $input) }").toOption match {
-        case Some(List(Operation(_, _, _, _, List(Field(_, _, List((_, v)), _, _))))) =>
+        case Some(List(Operation(_, _, _, _, List(Field(_, _, List((_, v)), _, _)), _))) =>
           assertEquals(v, expected)
         case _ => assert(false)
       }
@@ -1057,6 +1057,88 @@ final class ParserSuite extends CatsEffectSuite {
             Nil)))
 
     assertEquals(parser.parseText(query), Result(List(expected)))
+  }
+
+  test("anonymous operation with block string description") {
+    val query = "\"\"\"Like a story\"\"\" mutation { likeStory }"
+
+    val expected =
+      Operation(
+        Mutation,
+        None,
+        Nil,
+        Nil,
+        List(Field(None, Name("likeStory"), Nil, Nil, Nil)),
+        Some("Like a story"))
+
+    assertEquals(parser.parseText(query), Result(List(expected)))
+  }
+
+  test("operation and variable definition with descriptions") {
+    val query = """
+      "Fetch x"
+      query Foo(
+        "the id to fetch"
+        $id: Int
+      ) {
+        x
+      }
+    """
+
+    val expected =
+      Operation(
+        Query,
+        Some(Name("Foo")),
+        List(
+          VariableDefinition(
+            Name("id"),
+            Named(Name("Int")),
+            None,
+            Nil,
+            Some("the id to fetch"))),
+        Nil,
+        List(Field(None, Name("x"), Nil, Nil, Nil)),
+        Some("Fetch x")
+      )
+
+    assertEquals(parser.parseText(query), Result(List(expected)))
+  }
+
+  test("fragment definition with description") {
+    val query = """
+      query { x { ...frag } }
+      "shared fields"
+      fragment frag on X { name }
+    """
+
+    val expected =
+      List(
+        Operation(
+          Query,
+          None,
+          Nil,
+          Nil,
+          List(Field(None, Name("x"), Nil, Nil, List(FragmentSpread(Name("frag"), Nil))))),
+        FragmentDefinition(
+          Name("frag"),
+          Named(Name("X")),
+          Nil,
+          List(Field(None, Name("name"), Nil, Nil, Nil)),
+          Some("shared fields"))
+      )
+
+    assertEquals(parser.parseText(query), Result(expected))
+  }
+
+  test("query shorthand cannot carry a description") {
+    assert(parser.parseText("\"desc\" { x }").hasValue == false)
+  }
+
+  test("description before a type definition still parses") {
+    val expected =
+      ScalarTypeDefinition(Name("Foo"), Some("A scalar"), Nil)
+
+    assertEquals(parser.parseText("\"A scalar\" scalar Foo"), Result(List(expected)))
   }
 
   def mkParser(

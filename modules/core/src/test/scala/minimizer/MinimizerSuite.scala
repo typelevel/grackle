@@ -663,4 +663,38 @@ final class MinimizerSuite extends CatsEffectSuite {
 
     run(query, expected)
   }
+
+  test("minimize descriptions") {
+    val query = """
+      "Fetch a character"
+      query Character(
+        "the id to fetch"
+        $id: Int
+      ) {
+        character(id: $id) {
+          ...Name
+        }
+      }
+      "the name fields"
+      fragment Name on Character {
+        name
+      }
+    """
+
+    val expected =
+      """|"Fetch a character"
+         |query Character("the id to fetch"
+         |$id:Int){character(id:$id){...Name}},"the name fields"
+         |fragment Name on Character{name}""".stripMargin
+
+    run(query, expected)
+  }
+
+  test("minimize block string description") {
+    val query = "\"\"\"\nA \"character\".\n\nWith a \\ backslash.\n\"\"\" query Foo { x }"
+
+    val expected = "\"\"\"\nA \"character\".\n\nWith a \\ backslash.\n\"\"\"\nquery Foo{x}"
+
+    run(query, expected)
+  }
 }

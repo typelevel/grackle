@@ -30,6 +30,7 @@ object Introspection {
         }
 
         type __Schema {
+          description: String
           types: [__Type!]!
           queryType: __Type!
           mutationType: __Type
@@ -203,6 +204,7 @@ object Introspection {
           ValueField("__type", _ => allTypes.map(_.nullable))
         ),
         ValueObjectMapping(__SchemaType).on[Schema](
+          ValueField("description", _.description),
           ValueField("types", _ => allTypes.map(_.nullable)),
           ValueField("queryType", _.queryType.dealias.nullable),
           ValueField("mutationType", _.mutationType.map(_.dealias.nullable)),
