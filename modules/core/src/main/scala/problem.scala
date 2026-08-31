@@ -25,9 +25,17 @@ import io.circe.syntax._
 final case class Problem(
     message: String,
     locations: List[(Int, Int)] = Nil,
-    path: List[String] = Nil,
+    path: List[Problem.PathSegment] = Nil,
     extensions: Option[JsonObject] = None
 ) {
+
+  /**
+   * Yields this problem with `path` as its response path, if it has none. A path set deeper in
+   * the response is more precise, so it wins.
+   */
+  def atPath(path: List[Problem.PathSegment]): Problem =
+    if (this.path.isEmpty) copy(path = path) else this
+
   override def toString = {
 
     lazy val pathText: String =
@@ -55,6 +63,33 @@ final case class Problem(
 }
 
 object Problem {
+
+  /**
+   * A segment of a response path: a field name, or an index into a list.
+   *
+   * @see
+   *   https://spec.graphql.org/September2025/#sec-Response-Position
+   */
+  sealed trait PathSegment
+
+  object PathSegment {
+
+    final case class Name(name: String) extends PathSegment {
+      override def toString: String = name
+    }
+
+    final case class Index(index: Int) extends PathSegment {
+      assert(index >= 0, s"Index must be non-negative: $index")
+      override def toString: String = index.toString
+    }
+
+    implicit val PathSegmentEncoder: Encoder[PathSegment] = {
+      case Name(name) => name.asJson
+      case Index(index) => index.asJson
+    }
+
+    implicit val eqPathSegment: Eq[PathSegment] = Eq.fromUniversalEquals
+  }
 
   implicit val ProblemEncoder: Encoder[Problem] = { p =>
     val locationsField: List[(String, Json)] =

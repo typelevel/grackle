@@ -27,7 +27,7 @@ import io.circe.Json
 
 import grackle.Cursor.ListTransformCursor
 import grackle.Query._
-import grackle.QueryInterpreter.ProtoJson
+import grackle.QueryInterpreter.{ProtoJson, ResponsePosition}
 import grackle.QueryInterpreter.ProtoJson._
 import grackle.syntax._
 
@@ -49,10 +49,14 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
       else
         Stream.eval(runOneShot(query, rootTpe, rootCursor))
 
+    // The `data` entry is nullable, so a null which reaches the root lands there.
     (for {
       pvalue <- ResultT(mergedResults)
       value <- ResultT(Stream.eval(QueryInterpreter.complete[F](pvalue)))
-    } yield value).value
+    } yield value).value.map {
+      case Result.Failure(ps) => Result.Warning(ps, Json.Null)
+      case other => other
+    }
   }
 
   /**
@@ -154,14 +158,11 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
       for {
         pr <- pureResults
         er <- effectfulResults
-      } yield ((pr ++ er) match {
+      } yield (pr ++ er) match {
         case Nil => Result(ProtoJson.fromJson(Json.Null))
         case List(r) => r
         case hd :: tl =>
           tl.foldLeft(hd) { case (acc, elem) => acc |+| elem }
-      }) match {
-        case Result.Failure(errs) => Result.Warning(errs, ProtoJson.fromJson(Json.Null))
-        case other => other
       }
     }
   }
@@ -192,24 +193,51 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
   }
 
   /**
+   * Marks `value` when it stands at a non-null response position of type `tpe`.
+   */
+  private def atPosition(value: ProtoJson, tpe: Type): ProtoJson =
+    if (tpe.isNullable) value else ProtoJson.nonNull(value)
+
+  /**
+   * Handles a failure of the field `name` at the position `pos` as a field error: the problems
+   * carry the path of `pos`, and a nullable field completes as null.
+   *
+   * @see
+   *   https://spec.graphql.org/September2025/#sec-Handling-Field-Errors
+   */
+  private def fieldError(tpe: Type, pos: ResponsePosition, name: String)(
+      res: Result[List[(String, ProtoJson)]]): Result[List[(String, ProtoJson)]] =
+    res.atPath(pos.path) match {
+      case Result.Failure(ps) if tpe.isNullable =>
+        Result.Warning(ps, List((name, ProtoJson.fromJson(Json.Null))))
+      case other => other
+    }
+
+  /**
    * Interpret `query` against `cursor`, yielding a collection of fields.
    *
    * If the query is valid, the field subqueries will all be valid fields of the enclosing type
    * `tpe` and the resulting fields may be used to build a Json object of type `tpe`. If the
    * query is invalid errors will be returned on the left hand side of the result.
+   *
+   * `path` is the response position of the enclosing object.
    */
-  def runFields(query: Query, tpe: Type, cursor: Cursor): Result[List[(String, ProtoJson)]] =
+  def runFields(
+      query: Query,
+      tpe: Type,
+      cursor: Cursor,
+      path: ResponsePosition = ResponsePosition.root): Result[List[(String, ProtoJson)]] =
     if (!cursorCompatible(tpe, cursor.tpe))
       Result.internalError(s"Mismatched query and cursor type in runFields: $tpe ${cursor.tpe}")
     else {
       query match {
         case g: Group if groupWithTypeCase(g) =>
           ungroup(g)
-            .flatTraverse(query => runFields(query, tpe, cursor))
+            .flatTraverse(query => runFields(query, tpe, cursor, path))
             .map(fs => mergeFields(fs).toList)
 
         case Group(siblings) =>
-          siblings.flatTraverse(query => runFields(query, tpe, cursor))
+          siblings.flatTraverse(query => runFields(query, tpe, cursor, path))
 
         case Introspect(schema, s @ Select("__typename", _, Empty)) if tpe.isNamed =>
           val fail =
@@ -245,36 +273,48 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             .map { rc =>
               for {
                 c <- rc
-                fields <- runFields(sel, tpe, c)
+                fields <- runFields(sel, tpe, c, path)
               } yield fields
             }
             .getOrElse(List((sel.resultName, ProtoJson.fromJson(Json.Null))).success)
 
-        case sel @ Select(_, _, Count(Select(countName, _, _))) =>
+        case sel @ Select(fieldName, _, Count(Select(countName, _, _))) =>
           def size(c: Cursor): Result[Int] =
             if (c.isList) c.asList(Iterator).map(_.size)
             else 1.success
 
-          for {
-            c0 <- cursor.field(countName, None)
-            count <-
-              if (c0.isNullable) c0.asNullable.flatMap(_.map(size).getOrElse(0.success))
-              else size(c0)
-          } yield List((sel.resultName, ProtoJson.fromJson(Json.fromInt(count))))
+          val fieldTpe = tpe.field(fieldName).getOrElse(ScalarType.AttributeType)
+          val fieldPos = path.field(sel.resultName)
+          fieldError(fieldTpe, fieldPos, sel.resultName) {
+            for {
+              c0 <- cursor.field(countName, None)
+              count <-
+                if (c0.isNullable) c0.asNullable.flatMap(_.map(size).getOrElse(0.success))
+                else size(c0)
+            } yield List((sel.resultName, ProtoJson.fromJson(Json.fromInt(count))))
+          }
 
-        case sel @ Select(_, _, Effect(handler, cont)) =>
-          for {
-            value <- ProtoJson
-              .effect(mapping, handler.asInstanceOf[EffectHandler[F]], cont, cursor)
-              .success
-          } yield List((sel.resultName, value))
+        case sel @ Select(fieldName, _, Effect(handler, cont)) =>
+          val fieldTpe = tpe.field(fieldName).getOrElse(ScalarType.AttributeType)
+          val fieldPos = path.field(sel.resultName)
+          val value =
+            ProtoJson.effect(
+              mapping,
+              handler.asInstanceOf[EffectHandler[F]],
+              cont,
+              cursor,
+              fieldPos)
+          List((sel.resultName, atPosition(value, fieldTpe))).success
 
         case sel @ Select(fieldName, resultName, child) =>
           val fieldTpe = tpe.field(fieldName).getOrElse(ScalarType.AttributeType)
-          for {
-            c <- cursor.field(fieldName, resultName)
-            value <- runValue(child, fieldTpe, c)
-          } yield List((sel.resultName, value))
+          val fieldPos = path.field(sel.resultName)
+          fieldError(fieldTpe, fieldPos, sel.resultName) {
+            for {
+              c <- cursor.field(fieldName, resultName)
+              value <- runValue(child, fieldTpe, c, fieldPos)
+            } yield List((sel.resultName, atPosition(value, fieldTpe)))
+          }
 
         case Narrow(tp1, child) =>
           cursor.narrowsTo(tp1).flatMap { n =>
@@ -282,24 +322,29 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             else
               for {
                 c <- cursor.narrow(tp1)
-                fields <- runFields(child, tp1, c)
+                fields <- runFields(child, tp1, c, path)
               } yield fields
           }
 
         case c @ Component(_, _, cont) =>
-          for {
-            componentName <- resultName(cont).toResultOrError(
-              "Join continuation has unexpected shape")
-            value <- runValue(c, tpe, cursor)
-          } yield List((componentName, ProtoJson.select(value, componentName)))
+          rootName(cont).toResultOrError("Join continuation has unexpected shape").flatMap {
+            case (fieldName, alias) =>
+              val componentName = alias.getOrElse(fieldName)
+              val fieldTpe = tpe.field(fieldName).getOrElse(ScalarType.AttributeType)
+              val fieldPos = path.field(componentName)
+              runValue(c, tpe, cursor, fieldPos).map { value =>
+                List(
+                  (componentName, atPosition(ProtoJson.select(value, componentName), fieldTpe)))
+              }
+          }
 
         case Environment(childEnv: Env, child: Query) =>
-          runFields(child, tpe, cursor.withEnv(childEnv))
+          runFields(child, tpe, cursor.withEnv(childEnv), path)
 
         case TransformCursor(f, child) =>
           for {
             ct <- f(cursor)
-            fields <- runFields(child, tpe, ct)
+            fields <- runFields(child, tpe, ct, path)
           } yield fields
 
         case _ =>
@@ -312,7 +357,8 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
       tpe: Type,
       parent: Cursor,
       unique: Boolean,
-      nullable: Boolean): Result[ProtoJson] = {
+      nullable: Boolean,
+      path: ResponsePosition = ResponsePosition.root): Result[ProtoJson] = {
     val (query0, f) =
       query match {
         case TransformCursor(f, child) => (child, Some(f))
@@ -363,19 +409,34 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
     def mkResult(child: Query, ic: Iterator[Cursor]): Result[ProtoJson] = {
       val builder = Vector.newBuilder[ProtoJson]
       var problems = Chain.empty[Problem]
+      var index = 0
       builder.sizeHint(ic.knownSize)
+
+      // A unique list yields one value, which stands at the position of the list itself.
+      def elemPosition(i: Int): ResponsePosition = if (unique) path else path.index(i)
+      def markElem(v: ProtoJson): ProtoJson = if (unique) v else atPosition(v, tpe)
+
       while (ic.hasNext) {
         val c = ic.next()
         if (!cursorCompatible(tpe, c.tpe))
           return Result.internalError(
             s"Mismatched query and cursor type in runList: $tpe ${c.tpe}")
 
-        runValue(child, tpe, c) match {
-          case err @ Result.InternalError(_) => return err
-          case fail @ Result.Failure(_) => return fail
-          case Result.Success(v) => builder.addOne(v)
+        val elemPos = elemPosition(index)
+        index += 1
+
+        runValue(child, tpe, c, elemPos) match {
+          case err: Result.InternalError => return err
+          // A nullable element completes as null, so the other elements survive.
+          case Result.Failure(ps) if !unique && tpe.isNullable =>
+            val elemPath = elemPos.path
+            builder.addOne(ProtoJson.fromJson(Json.Null))
+            problems = problems.concat(ps.map(_.atPath(elemPath)).toChain)
+          case fail: Result.Failure => return fail
+          case Result.Success(v) =>
+            builder.addOne(markElem(v))
           case Result.Warning(ps, v) =>
-            builder.addOne(v)
+            builder.addOne(markElem(v))
             problems = problems.concat(ps.toChain)
         }
       }
@@ -409,23 +470,32 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
    * Interpret `query` against `cursor` with expected type `tpe`.
    *
    * If the query is invalid errors will be returned on the left hand side of the result.
+   *
+   * `path` is the response position of the value.
    */
-  def runValue(query: Query, tpe: Type, cursor: Cursor): Result[ProtoJson] = {
+  def runValue(
+      query: Query,
+      tpe: Type,
+      cursor: Cursor,
+      path: ResponsePosition = ResponsePosition.root): Result[ProtoJson] = {
     if (!cursorCompatible(tpe, cursor.tpe))
       Result.internalError(s"Mismatched query and cursor type in runValue: $tpe ${cursor.tpe}")
     else {
       (query, tpe.dealias) match {
         case (Environment(childEnv: Env, child: Query), tpe) =>
-          runValue(child, tpe, cursor.withEnv(childEnv))
+          runValue(child, tpe, cursor.withEnv(childEnv), path)
 
         case (Component(_, _, _), ListType(tpe)) =>
           cursor.asList(Iterator) match {
             case Result.Success(ic) =>
               val builder = Vector.newBuilder[ProtoJson]
+              var index = 0
               builder.sizeHint(ic.knownSize)
               while (ic.hasNext) {
                 val c = ic.next()
-                runValue(query, tpe, c) match {
+                val elemPos = path.index(index)
+                index += 1
+                runValue(query, tpe, c, elemPos) match {
                   case Result.Success(v) => builder.addOne(v)
                   case notRight => return notRight
                 }
@@ -442,13 +512,13 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
               for {
                 childName <- resultName(child).toResultOrError(
                   "Join child has unexpected shape")
-                elems <- conts.traverse {
-                  case cont =>
+                elems <- conts.zipWithIndex.traverse {
+                  case (cont, index) =>
                     for {
                       componentName <- resultName(cont).toResultOrError(
                         "Join continuation has unexpected shape")
                     } yield ProtoJson.select(
-                      ProtoJson.component(mapping, cont, cursor),
+                      ProtoJson.component(mapping, cont, cursor, path.index(index)),
                       componentName
                     )
                 }
@@ -460,19 +530,21 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
               for {
                 renamedCont <- alignResultName(child, cont).toResultOrError(
                   "Join continuation has unexpected shape")
-              } yield ProtoJson.component(mapping, renamedCont, cursor)
+              } yield ProtoJson.component(mapping, renamedCont, cursor, path)
           }
 
         case (Unique(child), _) =>
-          cursor.preunique.flatMap(c => runList(child, tpe.nonNull, c, true, tpe.isNullable))
+          cursor
+            .preunique
+            .flatMap(c => runList(child, tpe.nonNull, c, true, tpe.isNullable, path))
 
         case (_, ListType(tpe)) =>
-          runList(query, tpe, cursor, false, false)
+          runList(query, tpe, cursor, false, false, path)
 
         case (TransformCursor(f, child), _) =>
           for {
             ct <- f(cursor)
-            value <- runValue(child, tpe, ct)
+            value <- runValue(child, tpe, ct, path)
           } yield value
 
         case (_, NullableType(tpe)) =>
@@ -482,7 +554,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             .map { rc =>
               for {
                 c <- rc
-                value <- runValue(query, tpe, c)
+                value <- runValue(query, tpe, c, path)
               } yield value
             }
             .getOrElse(ProtoJson.fromJson(Json.Null).success)
@@ -491,7 +563,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
           cursor.asLeaf.map(ProtoJson.fromJson)
 
         case (_, _: ObjectType | _: InterfaceType | _: UnionType) =>
-          runFields(query, tpe, cursor).map(ProtoJson.fromDisjointFields)
+          runFields(query, tpe, cursor, path).map(ProtoJson.fromDisjointFields)
 
         case _ =>
           Result.internalError(s"Stuck at type $tpe for ${query.render}")
@@ -503,12 +575,51 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
 object QueryInterpreter {
 
   /**
+   * The position of a value in the response.
+   *
+   * `segments` holds the path from the root of the response, in reverse order.
+   *
+   * @see
+   *   https://spec.graphql.org/September2025/#sec-Response-Position
+   */
+  final case class ResponsePosition(segments: List[Problem.PathSegment]) {
+
+    /**
+     * The position of the field `name` inside this position.
+     */
+    def field(name: String): ResponsePosition =
+      ResponsePosition(Problem.PathSegment.Name(name) :: segments)
+
+    /**
+     * The position of the list entry `index` inside this position.
+     */
+    def index(index: Int): ResponsePosition =
+      ResponsePosition(Problem.PathSegment.Index(index) :: segments)
+
+    /**
+     * The response path of this position, from the root.
+     */
+    def path: List[Problem.PathSegment] = segments.reverse
+  }
+
+  object ResponsePosition {
+
+    /**
+     * The position of the `data` entry.
+     */
+    val root: ResponsePosition = ResponsePosition(Nil)
+  }
+
+  /**
    * Policy determining how errors arising from batches of deferred effects (effect handlers and
    * delegated components) are combined during result completion.
    *
    * When batches from multiple mappings are completed together, accumulation only applies if
    * every contributing mapping opts in: any `FailFast` mapping makes the whole completion fail
    * fast, since fail fast is a promise not to run further effects after a failure.
+   *
+   * Either way a failed batch is a field error: it completes as null and the response keeps its
+   * `data` entry. Neither policy applies to internal errors, which abort the completion.
    */
   sealed trait EffectErrorPolicy
 
@@ -516,11 +627,15 @@ object QueryInterpreter {
 
     /**
      * Stop at the first failed effect batch; subsequent batches' effects are not run.
+     *
+     * The failed batch and the batches which do not run all complete as null.
      */
     case object FailFast extends EffectErrorPolicy
 
     /**
      * Run every effect batch and accumulate errors from all of them, in document order.
+     *
+     * Each failed batch completes as null.
      */
     case object Accumulate extends EffectErrorPolicy
 
@@ -546,7 +661,8 @@ object QueryInterpreter {
         mapping: Mapping[F],
         handler: Option[EffectHandler[F]],
         query: Query,
-        cursor: Cursor)
+        cursor: Cursor,
+        position: ResponsePosition)
         extends DeferredJson
     // A partially constructed object which has at least one deferred subtree.
     private[QueryInterpreter] case class ProtoObject(fields: Seq[(String, ProtoJson)])
@@ -554,6 +670,11 @@ object QueryInterpreter {
     private[QueryInterpreter] case class ProtoArray(elems: Seq[ProtoJson])
     // A result which will yield a selection from its child
     private[QueryInterpreter] case class ProtoSelect(elem: ProtoJson, fieldName: String)
+    // A subtree at a non-null response position. A null from below propagates past it, to the
+    // nearest enclosing nullable position.
+    private[QueryInterpreter] case class ProtoNonNull(elem: ProtoJson)
+    // A null which propagates from the position at which it stands.
+    private[QueryInterpreter] case class ProtoNull()
 
     implicit val monoidInstance: Monoid[ProtoJson] =
       new Monoid[ProtoJson] {
@@ -566,17 +687,36 @@ object QueryInterpreter {
      * Delegate `query` to the interpreter `interpreter`. When evaluated by that interpreter the
      * query will have expected type `rootTpe`.
      */
-    def component[F[_]](mapping: Mapping[F], query: Query, cursor: Cursor): ProtoJson =
-      wrap(EffectJson(mapping, None, query, cursor))
+    def component[F[_]](
+        mapping: Mapping[F],
+        query: Query,
+        cursor: Cursor,
+        position: ResponsePosition = ResponsePosition.root): ProtoJson =
+      wrap(EffectJson(mapping, None, query, cursor, position))
 
     def effect[F[_]](
         mapping: Mapping[F],
         handler: EffectHandler[F],
         query: Query,
-        cursor: Cursor): ProtoJson =
-      wrap(EffectJson(mapping, Some(handler), query, cursor))
+        cursor: Cursor,
+        position: ResponsePosition = ResponsePosition.root): ProtoJson =
+      wrap(EffectJson(mapping, Some(handler), query, cursor, position))
 
     def fromJson(value: Json): ProtoJson = wrap(value)
+
+    /**
+     * Marks `pj` as a value at a non-null response position. A complete Json value holds no
+     * null which propagates, so it needs no mark.
+     */
+    def nonNull(pj: ProtoJson): ProtoJson =
+      if (pj.isInstanceOf[Json]) pj else wrap(ProtoNonNull(pj))
+
+    /**
+     * A null which propagates to the nearest enclosing nullable position.
+     *
+     * A failed value completes as such a null. A Json null stops at its own position instead.
+     */
+    val propagatingNull: ProtoJson = wrap(ProtoNull())
 
     /**
      * Combine possibly partial fields to create a possibly partial object.
@@ -629,22 +769,38 @@ object QueryInterpreter {
      * Yields `true` if the argument contains any component or staged subtrees, false otherwise.
      */
     def isDeferred(p: ProtoJson): Boolean =
-      p.isInstanceOf[DeferredJson]
+      p match {
+        case _: DeferredJson => true
+        case ProtoNonNull(elem) => isDeferred(elem)
+        case _ => false
+      }
 
     /**
      * Recursively merge a list of ProtoJson values.
      */
     def mergeProtoJson(elems: Seq[ProtoJson]): ProtoJson = {
-      elems match {
-        case Seq(elem) => elem
-        case Seq(_: ProtoObject, _*) => mergeProtoObjects(elems)
-        case Seq(j: Json, _*) if j.isObject => mergeProtoObjects(elems)
-        case Seq(_: ProtoArray, _*) => mergeProtoArrays(elems)
-        case Seq(j: Json, _*) if j.isArray => mergeProtoArrays(elems)
-        case Seq(hd, _*) => hd
-        case _ => wrap(Json.Null)
-      }
+      // The merge matches on the shape of a value, so the non-null marks come off first and go
+      // back on the merged value.
+      val marked = elems.exists(_.isInstanceOf[ProtoNonNull])
+      val stripped = if (marked) elems.map(stripNonNull) else elems
+      val merged =
+        stripped match {
+          case Seq(elem) => elem
+          case Seq(_: ProtoObject, _*) => mergeProtoObjects(stripped)
+          case Seq(j: Json, _*) if j.isObject => mergeProtoObjects(stripped)
+          case Seq(_: ProtoArray, _*) => mergeProtoArrays(stripped)
+          case Seq(j: Json, _*) if j.isArray => mergeProtoArrays(stripped)
+          case Seq(hd, _*) => hd
+          case _ => wrap(Json.Null)
+        }
+      if (marked) nonNull(merged) else merged
     }
+
+    private def stripNonNull(pj: ProtoJson): ProtoJson =
+      pj match {
+        case ProtoNonNull(elem) => elem
+        case other => other
+      }
 
     /**
      * Recursively merge a list of ProtoJson objects.
@@ -717,9 +873,10 @@ object QueryInterpreter {
       mergeProtoJson(objs.asInstanceOf[List[ProtoJson]]).asInstanceOf[Json]
 
     // Combine a list of ProtoJson results, collecting all errors on the left and preserving
-    // the order and number of elements by inserting Json Nulls for Lefts.
+    // the order and number of elements by inserting nulls for the failures. A failed element
+    // has no value, so its null propagates to the nearest enclosing nullable position.
     def combineResults(ress: List[Result[ProtoJson]]): Result[List[ProtoJson]] =
-      Result.combineAllWithDefault(ress, ProtoJson.fromJson(Json.Null))
+      Result.combineAllWithDefault(ress, propagatingNull)
 
     private def wrap(j: AnyRef): ProtoJson = j.asInstanceOf[ProtoJson]
   }
@@ -751,9 +908,26 @@ object QueryInterpreter {
    * Complete results are substituted back into the corresponding enclosing Json.
    *
    * Errors are aggregated across all the results and are accumulated on the `Left` of the
-   * result.
+   * result:
+   *   - A failed effect batch is a field error. Its problems become warnings and its positions
+   *     complete as null, so sibling data survives and the response keeps its `data` entry.
+   *   - A null at a non-null position propagates to the nearest enclosing nullable position.
+   *   - An internal error aborts the completion.
    */
-  def completeAll[F[_]: Monad](pjs: List[ProtoJson]): F[Result[List[Json]]] = {
+  def completeAll[F[_]: Monad](pjs: List[ProtoJson]): F[Result[List[Json]]] =
+    completeAllOrNull[F](pjs).map(_.map(_.map(_.getOrElse(Json.Null))))
+
+  // A null which stops at a nullable position.
+  private val SomeNull: Option[Json] = Some(Json.Null)
+
+  /**
+   * Complete a collection of possibly deferred results, as `completeAll`.
+   *
+   * A result is `None` when a null propagates past the root of that result. The `data` entry is
+   * nullable, so `completeAll` turns such a result into a Json null.
+   */
+  private def completeAllOrNull[F[_]: Monad](
+      pjs: List[ProtoJson]): F[Result[List[Option[Json]]]] = {
     // Yields deferred fields in document order.
     def gatherDeferred(pj: ProtoJson): List[DeferredJson] = {
       @tailrec
@@ -763,10 +937,12 @@ object QueryInterpreter {
           case Some((hd, tl)) =>
             (hd: @unchecked) match {
               case _: Json => loop(tl, acc)
+              case _: ProtoNull => loop(tl, acc)
               case d: DeferredJson => loop(tl, acc :+ d)
               case ProtoObject(fields) => loop(Chain.fromSeq(fields.map(_._2)) ++ tl, acc)
               case ProtoArray(elems) => loop(Chain.fromSeq(elems) ++ tl, acc)
               case ProtoSelect(elem, _) => loop(elem +: tl, acc)
+              case ProtoNonNull(elem) => loop(elem +: tl, acc)
             }
         }
 
@@ -776,20 +952,30 @@ object QueryInterpreter {
       }
     }
 
-    def scatterResults(pj: ProtoJson, subst: mutable.Map[DeferredJson, Json]): Json = {
-      def loop(pj: ProtoJson): Json =
+    def scatterResults(
+        pj: ProtoJson,
+        subst: mutable.Map[DeferredJson, Option[Json]]): Option[Json] = {
+      // Yields None when a null propagates past `pj`: a position below it completed as null,
+      // and no position in between is nullable.
+      def loop(pj: ProtoJson): Option[Json] =
         (pj: @unchecked) match {
-          case p: Json => p
+          case p: Json => Some(p)
+          case _: ProtoNull => None
           case d: DeferredJson => subst(d)
+          case ProtoNonNull(elem) => loop(elem)
           case ProtoObject(fields) =>
-            val fields0 = fields.map { case (label, pvalue) => (label, loop(pvalue)) }
-            Json.fromFields(fields0)
+            fields
+              .traverse { case (label, pvalue) => position(pvalue).tupleLeft(label) }
+              .map(Json.fromFields)
           case ProtoArray(elems) =>
-            val elems0 = elems.map(loop)
-            Json.fromValues(elems0)
+            elems.traverse(position).map(Json.fromValues)
           case ProtoSelect(elem, fieldName) =>
-            loop(elem).asObject.flatMap(_(fieldName)).getOrElse(Json.Null)
+            loop(elem).map(_.asObject.flatMap(_(fieldName)).getOrElse(Json.Null))
         }
+
+      // A position without a non-null mark stops the propagation with a null.
+      def position(pj: ProtoJson): Option[Json] =
+        if (pj.isInstanceOf[ProtoNonNull]) loop(pj) else loop(pj).orElse(SomeNull)
 
       loop(pj)
     }
@@ -806,7 +992,7 @@ object QueryInterpreter {
     def runBatch(
         mapping: Mapping[F],
         handler: Option[EffectHandler[F]],
-        batch: List[EffectJson[F]]): F[Result[List[(EffectJson[F], Json)]]] = {
+        batch: List[EffectJson[F]]): F[Result[List[(EffectJson[F], Option[Json])]]] = {
       val queries = batch.map(e => (e.query, e.cursor))
       (for {
         pnext <-
@@ -825,44 +1011,84 @@ object QueryInterpreter {
                           .toResultOrError("Continuation query has the wrong shape")
                     }
                     .pure[F])
-                res <- ResultT(combineResults((conts, cs).parMapN {
-                  case (query, cursor) =>
-                    mapping.interpreter.runValue(query, cursor.tpe, cursor)
-                }).pure[F])
+                res <- ResultT.fromResult[F, List[ProtoJson]](
+                  combineResults((batch, conts, cs).parMapN { (e, query, cursor) =>
+                    mapping
+                      .interpreter
+                      .runValue(query, cursor.tpe, cursor, e.position)
+                      .atPath(e.position.path)
+                  }))
               } yield res
           }
-        next <- ResultT(completeAll[F](pnext))
+        next <- ResultT(completeAllOrNull[F](pnext))
       } yield batch.zip(next)).value
     }
 
     val policy = deferred.map(_.mapping).distinct.foldMap(_.effectErrorPolicy)
 
-    val batchedResults =
+    type Batch = ((Mapping[F], Option[EffectHandler[F]]), List[EffectJson[F]])
+    type Completed = List[(EffectJson[F], Option[Json])]
+
+    // Completes every deferred position of a batch as null. Failed and unrun batches are nulled
+    // rather than dropped, so that the substitution in `scatterResults` stays total.
+    def nullBatch(batch: List[EffectJson[F]]): Completed =
+      batch.tupleRight(None)
+
+    // Handles a failed batch as a field error: its problems become warnings and its positions
+    // complete as null. A batch which covers exactly one position carries the path of that position.
+    def batchFieldError(
+        batch: List[EffectJson[F]],
+        ps: NonEmptyChain[Problem]): Result[Completed] = {
+      val ps0 =
+        batch match {
+          case List(e) =>
+            val path = e.position.path
+            ps.map(_.atPath(path))
+          case _ => ps
+        }
+      Result.Warning(ps0, nullBatch(batch))
+    }
+
+    // The completions of every batch, in document order.
+    val runBatches: F[List[Result[Completed]]] =
       policy match {
         case EffectErrorPolicy.FailFast =>
-          // Monadic sequencing via `ResultT.flatMap` short-circuits at the first failed
-          // batch; subsequent batches' effects are not run. (`ResultT.traverse` would not
-          // do: its `Applicative` combines the underlying `F` actions with `map2`, running
-          // every batch's effects regardless of failures.)
-          batchedEffects
-            .foldLeft(ResultT(List.empty[List[(EffectJson[F], Json)]].success.pure[F])) {
-              case (acc, ((mapping, handler), batch)) =>
-                acc.flatMap(results =>
-                  ResultT(runBatch(mapping, handler, batch)).map(_ :: results))
+          def loop(
+              pending: Chain[Batch],
+              acc: Chain[Result[Completed]]): F[Chain[Result[Completed]]] =
+            pending.uncons match {
+              case None => acc.pure[F]
+              case Some((((mapping, handler), batch), tl)) =>
+                runBatch(mapping, handler, batch).flatMap {
+                  case Result.Failure(ps) =>
+                    // Stop here. This batch and the batches which do not run all complete as
+                    // null.
+                    val unrun = tl.map { case (_, b) => nullBatch(b).success }
+                    ((acc :+ batchFieldError(batch, ps)) ++ unrun).pure[F]
+                  case res if res.hasValue => loop(tl, acc :+ res)
+                  // An internal error is not a field error. It aborts the completion.
+                  case err => (acc :+ err).pure[F]
+                }
             }
-            .map(_.reverse)
-            .value
+          loop(Chain.fromSeq(batchedEffects), Chain.empty).map(_.toList)
         case EffectErrorPolicy.Accumulate =>
-          // Run every batch independently, then combine the per-batch `Result`s with an
-          // accumulating combinator so that failures from *all* batches are preserved.
-          batchedEffects
-            .traverse { case ((mapping, handler), batch) => runBatch(mapping, handler, batch) }
-            .map(_.parSequence)
+          // Run every batch, so that the problems of *all* of them are preserved.
+          batchedEffects.traverse {
+            case ((mapping, handler), batch) =>
+              runBatch(mapping, handler, batch).map {
+                case Result.Failure(ps) => batchFieldError(batch, ps)
+                case other => other
+              }
+          }
       }
+
+    // No batch is left as a `Failure`, so this accumulates the problems of all batches and
+    // propagates any internal error.
+    val batchedResults = runBatches.map(_.parSequence)
 
     batchedResults.map(_.map { results =>
       val subst = {
-        val m = new java.util.IdentityHashMap[DeferredJson, Json]
+        val m = new java.util.IdentityHashMap[DeferredJson, Option[Json]]
         Monoid.combineAll(results).foreach { case (d, j) => m.put(d, j) }
         m.asScala
       }

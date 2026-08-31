@@ -107,6 +107,18 @@ sealed trait Result[+T] {
       case _ => None
     }
 
+  /**
+   * Yields this result with `path` as the response path of each problem which has none.
+   */
+  def atPath(path: List[Problem.PathSegment]): Result[T] =
+    if (path.isEmpty) this
+    else
+      this match {
+        case Result.Failure(ps) => Result.Failure(ps.map(_.atPath(path)))
+        case Result.Warning(ps, value) => Result.Warning(ps.map(_.atPath(path)), value)
+        case other => other
+      }
+
   def withProblems(problems: NonEmptyChain[Problem]): Result[T] =
     this match {
       case Result.Success(value) => Result.Warning(problems, value)

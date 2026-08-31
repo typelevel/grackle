@@ -48,9 +48,10 @@ final class CirceEffectHandlerErrorSuite extends CatsEffectSuite {
     val expected = json"""
       {
         "errors" : [
-          { "message": "value: hi" },
-          { "message": "value: 42" }
-        ]
+          { "message": "value: hi", "path": ["s"] },
+          { "message": "value: 42", "path": ["n"] }
+        ],
+        "data" : null
       }
     """
 
@@ -61,8 +62,9 @@ final class CirceEffectHandlerErrorSuite extends CatsEffectSuite {
     val expected = json"""
       {
         "errors" : [
-          { "message": "value: hi" }
-        ]
+          { "message": "value: hi", "path": ["s"] }
+        ],
+        "data" : null
       }
     """
 
@@ -82,7 +84,8 @@ final class CirceEffectHandlerErrorSuite extends CatsEffectSuite {
         "errors" : [
           { "message": "value: s" },
           { "message": "value: n" }
-        ]
+        ],
+        "data" : null
       }
     """
 
@@ -95,6 +98,30 @@ final class CirceEffectHandlerErrorSuite extends CatsEffectSuite {
       } yield (res, eff)
 
     assertIO(prg, (expected, 2))
+  }
+
+  test("circe effect handler failure is a field error, sibling data is retained") {
+    val query = """
+      query {
+        ping,
+        viaEffect
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          { "message": "boom", "path": ["viaEffect"] }
+        ],
+        "data" : {
+          "ping" : "pong",
+          "viaEffect" : null
+        }
+      }
+    """
+
+    val map = new TestCirceEffectHandlerSiblingMapping[IO]
+    assertIO(map.compileAndRun(query), expected)
   }
 
   test("circe nested effect handler errors are accumulated in document order") {
@@ -118,11 +145,61 @@ final class CirceEffectHandlerErrorSuite extends CatsEffectSuite {
           { "message": "nested: a/y" },
           { "message": "nested: b/x" },
           { "message": "nested: b/y" }
-        ]
+        ],
+        "data" : null
       }
     """
 
     val map = new TestCirceNestedEffectHandlerErrorMapping[IO]
+    assertIO(map.compileAndRun(query), expected)
+  }
+
+  test("a failed continuation of a succeeding effect handler nulls its own position") {
+    val query = """
+      query {
+        ping
+        viaEffect {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          { "message": "boom", "path": ["viaEffect", "name"] }
+        ],
+        "data" : null
+      }
+    """
+
+    val map = new TestCirceFailingContinuationMapping[IO]
+    assertIO(map.compileAndRun(query), expected)
+  }
+
+  test("a null from a nested effect handler stops at the nearest nullable position") {
+    val query = """
+      query {
+        ping
+        child {
+          viaEffect
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          { "message": "boom", "path": ["child", "viaEffect"] }
+        ],
+        "data" : {
+          "ping" : "pong",
+          "child" : null
+        }
+      }
+    """
+
+    val map = new TestCirceNestedNonNullEffectMapping[IO]
     assertIO(map.compileAndRun(query), expected)
   }
 
