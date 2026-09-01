@@ -1786,19 +1786,33 @@ object QueryCompiler {
   }
 
   /**
-   * A compiler phase which estimates the size of a query and applies width and depth limits.
+   * A compiler phase which rejects queries exceeding a given depth or width.
+   *
+   * Depth is the number of nested selection levels in the query, and width the total number of
+   * leaf fields selected, in both cases after resolving fragment spreads. Queries exceeding
+   * either limit fail compilation.
+   *
+   * Enable by adding an instance to a mapping's `compilerPhases`,
+   *
+   * {{{
+   * override val compilerPhases = super.compilerPhases :+ new QuerySizeValidator(5, 5)
+   * }}}
+   *
+   * Note that width does not account for list sizes: a field yielding many elements contributes
+   * to width just once. Guarding against expensive list expansions requires a cost model beyond
+   * this phase.
    */
   class QuerySizeValidator(maxDepth: Int, maxWidth: Int) extends Phase {
     override def transform(query: Query): Elab[Query] =
       Elab.fragments.flatMap { frags =>
         querySize(query, frags) match {
+          case (depth, width) if depth > maxDepth && width > maxWidth =>
+            Elab.failure(
+              s"Query is too complex: width/depth is $width/$depth leaves/levels, maximum is $maxWidth/$maxDepth")
           case (depth, _) if depth > maxDepth =>
             Elab.failure(s"Query is too deep: depth is $depth levels, maximum is $maxDepth")
           case (_, width) if width > maxWidth =>
             Elab.failure(s"Query is too wide: width is $width leaves, maximum is $maxWidth")
-          case (depth, width) if depth > maxDepth && width > maxWidth =>
-            Elab.failure(
-              s"Query is too complex: width/depth is $width/$depth leaves/levels, maximum is $maxWidth/$maxDepth")
           case (_, _) => Elab.pure(query)
         }
       }
