@@ -243,7 +243,8 @@ class QuerySizeSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = Problem("Query is too complex: width/depth is 7/8 leaves/levels, maximum is 5/5")
+    val expected =
+      Problem("Query is too complex: width/depth is 7/8 leaves/levels, maximum is 5/5")
 
     val res = StarWarsMapping.compiler.compile(query)
     assertEquals(res, Result.Failure(NonEmptyChain(expected)))

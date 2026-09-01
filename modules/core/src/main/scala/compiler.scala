@@ -1583,9 +1583,9 @@ object QueryCompiler {
   /**
    * A compiler phase which rejects queries exceeding a given depth or width.
    *
-   * Depth is the number of nested selection levels in the query, and width the
-   * total number of leaf fields selected, in both cases after resolving
-   * fragment spreads. Queries exceeding either limit fail compilation.
+   * Depth is the number of nested selection levels in the query, and width the total number of
+   * leaf fields selected, in both cases after resolving fragment spreads. Queries exceeding
+   * either limit fail compilation.
    *
    * Enable by adding an instance to a mapping's `compilerPhases`,
    *
@@ -1593,9 +1593,9 @@ object QueryCompiler {
    * override val compilerPhases = super.compilerPhases :+ new QuerySizeValidator(5, 5)
    * }}}
    *
-   * Note that width does not account for list sizes: a field yielding many
-   * elements contributes to width just once. Guarding against expensive list
-   * expansions requires a cost model beyond this phase.
+   * Note that width does not account for list sizes: a field yielding many elements contributes
+   * to width just once. Guarding against expensive list expansions requires a cost model beyond
+   * this phase.
    */
   class QuerySizeValidator(maxDepth: Int, maxWidth: Int) extends Phase {
     override def transform(query: Query): Elab[Query] =
