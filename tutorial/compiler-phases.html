@@ -6,7 +6,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="generator" content="Typelevel Laika + Helium Theme" />
-  <title>Introduction</title>
+  <title>Compiler Phases</title>
   
   <meta name="author" content="Miles Sabin"/>
   
@@ -101,10 +101,10 @@
   <ul class="nav-list">
     <li class="level1 nav-leaf"><a href="../">Grackle</a></li>
     <li class="level1 nav-header">Tutorial</li>
-    <li class="level2 active nav-leaf"><a href="#">Introduction</a></li>
+    <li class="level2 nav-leaf"><a href="intro.html">Introduction</a></li>
     <li class="level2 nav-leaf"><a href="in-memory-model.html">In-memory Model</a></li>
     <li class="level2 nav-leaf"><a href="db-backed-model.html">DB Backed Model</a></li>
-    <li class="level2 nav-leaf"><a href="compiler-phases.html">Compiler Phases</a></li>
+    <li class="level2 active nav-leaf"><a href="#">Compiler Phases</a></li>
     <li class="level1 nav-header">How-to Guides</li>
     <li class="level2 nav-leaf"><a href="../howto/interfaces-across-tables.html">Interfaces across multiple tables</a></li>
     <li class="level1 nav-leaf"><a href="../CONTRIBUTING.html">Contributing</a></li>
@@ -116,9 +116,11 @@
 
       
 <nav id="page-nav">
-  <p class="header"><a href="#">Introduction</a></p>
+  <p class="header"><a href="#">Compiler Phases</a></p>
 
   <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="#limiting-query-size-with-querysizevalidator">Limiting query size with QuerySizeValidator</a></li>
+    <li class="level1 nav-leaf"><a href="#limitations">Limitations</a></li>
   </ul>
 
   <p class="footer"></p>
@@ -127,12 +129,71 @@
 
       <main class="content">
 
-        <h1 id="introduction" class="title">Introduction</h1>
-        <p>This section contains instructions and examples to get you started. It&#39;s written in tutorial style, intended to be read start to finish.</p>
-        <ul>
-          <li><a href="in-memory-model.html">In-memory model</a></li>
-          <li><a href="in-memory-model.html">DB Backed model</a></li>
-        </ul>
+        <h1 id="compiler-phases" class="title">Compiler Phases</h1>
+        <p>Grackle compiles GraphQL queries into terms of a query algebra before interpreting them against a mapping. The
+        compiler runs a sequence of <em>phases</em>, each of which transforms the query algebra term, bringing it step by step into
+        a form which can be executed directly by the query interpreter.</p>
+        <p>Several phases are built in and always run, among them the elaborators which substitute variables, apply <code>@skip</code> and
+        <code>@include</code> directives, inline fragments, and rewrite field selections according to the rules of a mapping&#39;s
+        <code>SelectElaborator</code>. In addition, mappings can install custom phases by overriding <code>compilerPhases</code>,</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">override</span><span> </span><span class="keyword">def</span><span> </span><span class="declaration-name">compilerPhases</span><span>: </span><span class="type-name">List</span><span>[</span><span class="type-name">QueryCompiler</span><span>.</span><span class="type-name">Phase</span><span>] =
+  </span><span class="keyword">super</span><span>.</span><span class="identifier">compilerPhases</span><span> :+ </span><span class="keyword">new</span><span> </span><span class="type-name">MyCustomPhase</span></code></pre>
+        <p>A phase implements the <code>Phase</code> trait from <code>QueryCompiler</code>,</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">trait</span><span> </span><span class="type-name">Phase</span><span> {
+  </span><span class="keyword">def</span><span> </span><span class="declaration-name">transform</span><span>(</span><span class="identifier">query</span><span>: </span><span class="type-name">Query</span><span>): </span><span class="type-name">Elab</span><span>[</span><span class="type-name">Query</span><span>]
+}</span></code></pre>
+        <p><code>transform</code> receives the query algebra term produced by the preceding phase and yields a transformed term, or fails,
+        in the <code>Elab</code> monad. <code>Elab</code> gives phases access to the schema, the current context and the query&#39;s fragment
+        definitions, and allows compilation to be aborted with one or more GraphQL errors via <code>Elab.failure</code>. A phase which
+        fails prevents the query from executing at all — the client receives an error response with no data.</p>
+        <p>This makes phases a natural place to enforce global policies on incoming queries. Grackle provides one such policy
+        phase out of the box: <code>QuerySizeValidator</code>.</p>
+        
+        <h2 id="limiting-query-size-with-querysizevalidator" class="section"><a class="anchor-link left" href="#limiting-query-size-with-querysizevalidator"><i class="icofont-laika link">&#xef71;</i></a>Limiting query size with QuerySizeValidator</h2>
+        <p>A GraphQL server which accepts arbitrary queries from untrusted clients needs protection against queries which are
+        too expensive to execute — deeply nested or extremely broad queries can otherwise consume unbounded resources. The
+        <code>QuerySizeValidator</code> phase rejects queries exceeding a configurable maximum depth or width before they reach the
+        interpreter,</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">override</span><span> </span><span class="keyword">def</span><span> </span><span class="declaration-name">compilerPhases</span><span>: </span><span class="type-name">List</span><span>[</span><span class="type-name">QueryCompiler</span><span>.</span><span class="type-name">Phase</span><span>] =
+  </span><span class="keyword">super</span><span>.</span><span class="identifier">compilerPhases</span><span> :+ </span><span class="keyword">new</span><span> </span><span class="type-name">QuerySizeValidator</span><span>(</span><span class="identifier">maxDepth</span><span> = </span><span class="number-literal">5</span><span>, </span><span class="identifier">maxWidth</span><span> = </span><span class="number-literal">5</span><span>)</span></code></pre>
+        <p><em>Depth</em> is the number of nested selection levels in the query, and <em>width</em> is the total number of leaf fields
+        selected. Both are computed after fragment spreads have been resolved, so a query cannot evade the limits by
+        factoring its selections into fragments.</p>
+        <p>For example, with the Star Wars model from the previous chapter and the limits above, the query,</p>
+        <pre><code class="nohighlight"><span>query {
+  character(</span><span class="attribute-name">id</span><span>: </span><span class="string-literal">&quot;1000&quot;</span><span>) {
+    friends {
+      friends {
+        friends {
+          friends {
+            friends {
+              friends {
+                name
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}</span></code></pre>
+        <p>is rejected with,</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span>{
+  </span><span class="attribute-name">&quot;errors&quot;</span><span> : [
+    {
+      </span><span class="attribute-name">&quot;message&quot;</span><span> : </span><span class="string-literal">&quot;Query is too deep: depth is 8 levels, maximum is 5&quot;</span><span>
+    }
+  ]
+}</span></code></pre>
+        <p>and a query selecting too many leaf fields is similarly rejected with a <code>&quot;Query is too wide&quot;</code> error. A query
+        exceeding both limits at once is reported as <code>&quot;Query is too complex&quot;</code>.</p>
+        
+        <h2 id="limitations" class="section"><a class="anchor-link left" href="#limitations"><i class="icofont-laika link">&#xef71;</i></a>Limitations</h2>
+        <p>Depth and width are syntactic measures: they are computed from the query text alone and know nothing about the size
+        of the underlying data. In particular, width does not account for list sizes — a field yielding a thousand elements
+        contributes to the width just once. <code>QuerySizeValidator</code> is therefore a coarse first line of defence rather than a
+        complete cost model. Guarding against expensive list expansions requires taking field cardinalities and arguments
+        into account, which can be implemented as a custom phase following the same pattern.</p>
 
         
 <hr class="footer-rule"/>
