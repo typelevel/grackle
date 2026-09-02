@@ -17,6 +17,7 @@ val kindProjectorVersion = "0.13.4"
 val literallyVersion = "1.2.0"
 val logbackVersion = "1.6.3"
 val log4catsVersion = "2.8.0"
+val mariadbDriverVersion = "3.5.9"
 val mssqlDriverVersion = "13.4.0.jre11"
 val munitVersion = "1.3.5"
 val munitCatsEffectVersion = "2.2.0"
@@ -130,6 +131,8 @@ lazy val mssqlUp = taskKey[Unit]("Start SQL Server")
 lazy val mssqlStop = taskKey[Unit]("Stop SQL Server")
 lazy val mysqlUp = taskKey[Unit]("Start MySQL")
 lazy val mysqlStop = taskKey[Unit]("Stop MySQL")
+lazy val mariadbUp = taskKey[Unit]("Start MariaDB")
+lazy val mariadbStop = taskKey[Unit]("Stop MariaDB")
 
 ThisBuild / genTestData := GenTestData(buildRoot)
 ThisBuild / checkTestData := {
@@ -154,6 +157,8 @@ ThisBuild / mssqlUp := dockerUp("mssql")
 ThisBuild / mssqlStop := dockerStop("mssql")
 ThisBuild / mysqlUp := dockerUp("mysql")
 ThisBuild / mysqlStop := dockerStop("mysql")
+ThisBuild / mariadbUp := dockerUp("mariadb")
+ThisBuild / mariadbStop := dockerStop("mariadb")
 
 // The compose file is named relatively, so docker is already run from the build root; the
 // generated init scripts are written relative to the same place.
@@ -235,6 +240,7 @@ lazy val modules: List[CompositeProject] = List(
   doobieoracle,
   doobiemssql,
   doobiemysql,
+  doobiemariadb,
   doobiesqlite,
   doobieh2,
   skunk,
@@ -408,6 +414,22 @@ lazy val doobiemysql = project
     Test / testOptions += Tests.Setup(_ => dockerUp("mysql")),
     libraryDependencies ++= Seq(
       "com.mysql" % "mysql-connector-j" % mysqlDriverVersion
+    )
+  )
+
+lazy val doobiemariadb = project
+  .in(file("modules/doobie-mariadb"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(doobiecore % "test->test;compile->compile")
+  .settings(commonSettings)
+  .settings(
+    name := "grackle-doobie-mariadb",
+    Test / fork := true,
+    Test / parallelExecution := false,
+    Test / testOptions += Tests.Setup(_ => dockerUp("mariadb")),
+    libraryDependencies ++= Seq(
+      "org.mariadb.jdbc" % "mariadb-java-client" % mariadbDriverVersion
     )
   )
 
@@ -615,6 +637,7 @@ lazy val unidocs = project
       doobieoracle,
       doobiemssql,
       doobiemysql,
+      doobiemariadb,
       doobiesqlite,
       doobieh2,
       skunk.jvm,

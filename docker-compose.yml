@@ -82,3 +82,27 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+
+  mariadb:
+    # The official image's `lts` tag always tracks MariaDB's current long-term-support
+    # release, so no version number needs to be pinned or re-pinned later. Override to test a
+    # specific version, e.g. `MARIADB_VERSION=11.4 sbt doobiemariadb/test`.
+    image: mariadb:${MARIADB_VERSION:-lts}
+    ports:
+      - "3307:3306"
+    environment:
+      - MARIADB_DATABASE=test
+      - MARIADB_USER=test
+      - MARIADB_PASSWORD=test
+      - MARIADB_ROOT_PASSWORD=test
+    volumes:
+      # Reuses the scripts generated for MySQL, verified by inspection to be plain standard
+      # SQL (CREATE TABLE/INSERT, nothing MySQL-8-exclusive). If a real incompatibility ever
+      # turns up, add a MariaDb dialect and a mariadb.sql to the datasets that need one,
+      # rather than forking all of them.
+      - ./target/testdata/mysql/:/docker-entrypoint-initdb.d/
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h127.0.0.1 -utest -ptest --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
