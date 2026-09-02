@@ -52,3 +52,33 @@ services:
       retries: 10
       start_period: 5s
       start_interval: 5s
+
+  mysql:
+    # Defaults to the current LTS. The backend's documented floor is MySQL 8.0.14 (the first
+    # release with LATERAL); override to re-verify it, e.g.
+    # `MYSQL_VERSION=8.0.14 sbt doobiemysql/test` - green on 8.0.14, 8.0.46 and 8.4.
+    image: mysql:${MYSQL_VERSION:-8.4}
+    # initdb.d loads fixtures through the mysql CLI whose handshake may request latin1; force
+    # utf8mb4 for every session so fixture content can never be double-encoded.
+    # (--skip-character-set-client-handshake, the older way to pin this server-side, was
+    # removed in MySQL 8.3+; entrypoint.sh pins the client default instead - see its header
+    # comment for why that can't just be a bind-mounted conf.d file.)
+    command: ["--character-set-server=utf8mb4"]
+    entrypoint: ["/bin/bash", "/container-entrypoint-initdb.d/entrypoint.sh"]
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_DATABASE=test
+      - MYSQL_USER=test
+      - MYSQL_PASSWORD=test
+      - MYSQL_ROOT_PASSWORD=test
+    volumes:
+      - ./target/testdata/mysql/:/docker-entrypoint-initdb.d/
+      - ./modules/doobie-mysql/src/test/resources/scripts/:/container-entrypoint-initdb.d/
+    healthcheck:
+      # mysqladmin ping answers during the image's temporary init server phase too; a real
+      # TCP query against the test schema only succeeds once init (and initdb.d) finished.
+      test: ["CMD-SHELL", "mysql -h127.0.0.1 -utest -ptest -e 'SELECT 1' test"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
