@@ -222,7 +222,8 @@ final class EnvironmentSuite extends CatsEffectSuite {
       {
         "errors" : [
           {
-            "message" : "Missing argument"
+            "message" : "Missing argument",
+            "path" : [ "nested", "url" ]
           }
         ],
         "data" : null

@@ -21,12 +21,13 @@ import io.circe.syntax._
 import munit.CatsEffectSuite
 
 import grackle.Problem
+import grackle.Problem.PathSegment.{Index, Name}
 
 final class ProblemSuite extends CatsEffectSuite {
 
   test("encoding (full)") {
     assertEquals(
-      Problem("foo", List(1 -> 2, 5 -> 6), List("bar", "baz")).asJson,
+      Problem("foo", List(1 -> 2, 5 -> 6), List(Name("bar"), Name("baz"))).asJson,
       json"""
         {
           "message" : "foo",
@@ -72,7 +73,7 @@ final class ProblemSuite extends CatsEffectSuite {
 
   test("encoding (no locations)") {
     assertEquals(
-      Problem("foo", Nil, List("bar", "baz")).asJson,
+      Problem("foo", Nil, List(Name("bar"), Name("baz"))).asJson,
       json"""
         {
           "message" : "foo",
@@ -82,6 +83,29 @@ final class ProblemSuite extends CatsEffectSuite {
           ]
         }
       """
+    )
+  }
+
+  test("encoding (list index in path)") {
+    assertEquals(
+      Problem("foo", Nil, List(Name("bar"), Index(1), Name("baz"))).asJson,
+      json"""
+        {
+          "message" : "foo",
+          "path" : [
+            "bar",
+            1,
+            "baz"
+          ]
+        }
+      """
+    )
+  }
+
+  test("toString (list index in path)") {
+    assertEquals(
+      Problem("foo", Nil, List(Name("bar"), Index(1), Name("baz"))).toString,
+      "foo (at bar/1/baz)"
     )
   }
 
@@ -98,7 +122,7 @@ final class ProblemSuite extends CatsEffectSuite {
 
   test("toString (full)") {
     assertEquals(
-      Problem("foo", List(1 -> 2, 5 -> 6), List("bar", "baz")).toString,
+      Problem("foo", List(1 -> 2, 5 -> 6), List(Name("bar"), Name("baz"))).toString,
       "foo (at bar/baz: 1..2, 5..6)"
     )
   }
@@ -112,7 +136,7 @@ final class ProblemSuite extends CatsEffectSuite {
 
   test("toString (no locations)") {
     assertEquals(
-      Problem("foo", Nil, List("bar", "baz")).toString,
+      Problem("foo", Nil, List(Name("bar"), Name("baz"))).toString,
       "foo (at bar/baz)"
     )
   }
