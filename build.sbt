@@ -230,6 +230,15 @@ lazy val nativeSettings = Seq(
   )
 )
 
+lazy val dbTestSettings = Seq(
+  Test / fork := true,
+  Test / parallelExecution := false,
+  // Several JDBC drivers (mssql-jdbc and mariadb-java-client at least) bind and read zone-free
+  // java.sql.Timestamp values using the ambient JVM zone, so datetime tests fail unless the
+  // timezone is fixed.
+  Test / javaOptions += "-Duser.timezone=UTC"
+)
+
 lazy val modules: List[CompositeProject] = List(
   core,
   circe,
@@ -335,10 +344,9 @@ lazy val doobiecore = project
   .disablePlugins(RevolverPlugin)
   .dependsOn(sqlcore.jvm % "test->test;compile->compile", circe.jvm)
   .settings(commonSettings)
+  .settings(dbTestSettings)
   .settings(
     name := "grackle-doobie-core",
-    Test / fork := true,
-    Test / parallelExecution := false,
     libraryDependencies ++= Seq(
       "org.typelevel" %% "doobie-core" % doobieVersion,
       "org.typelevel" %% "log4cats-core" % log4catsVersion,
@@ -354,10 +362,9 @@ lazy val doobiepg = project
     doobiecore % "test->test;compile->compile",
     sqlpg.jvm % "test->test;compile->compile")
   .settings(commonSettings)
+  .settings(dbTestSettings)
   .settings(
     name := "grackle-doobie-pg",
-    Test / fork := true,
-    Test / parallelExecution := false,
     Test / testOptions += Tests.Setup(_ => dockerUp("postgres")),
     libraryDependencies ++= Seq(
       "org.typelevel" %% "doobie-postgres-circe" % doobieVersion,
@@ -372,10 +379,9 @@ lazy val doobieoracle = project
   .disablePlugins(RevolverPlugin)
   .dependsOn(doobiecore % "test->test;compile->compile")
   .settings(commonSettings)
+  .settings(dbTestSettings)
   .settings(
     name := "grackle-doobie-oracle",
-    Test / fork := true,
-    Test / parallelExecution := false,
     Test / testOptions += Tests.Setup(_ => dockerUp("oracle")),
     libraryDependencies ++= Seq(
       "com.oracle.database.jdbc" % "ojdbc8" % oracleDriverVersion
@@ -388,13 +394,9 @@ lazy val doobiemssql = project
   .disablePlugins(RevolverPlugin)
   .dependsOn(doobiecore % "test->test;compile->compile")
   .settings(commonSettings)
+  .settings(dbTestSettings)
   .settings(
     name := "grackle-doobie-mssql",
-    Test / fork := true,
-    Test / parallelExecution := false,
-    // mssql-jdbc binds a zone-naive java.sql.Timestamp using the ambient JVM zone, so MSSQL
-    // datetime tests fail off-UTC unless pinned.
-    Test / javaOptions += "-Duser.timezone=UTC",
     Test / testOptions += Tests.Setup(_ => dockerUp("mssql")),
     libraryDependencies ++= Seq(
       "com.microsoft.sqlserver" % "mssql-jdbc" % mssqlDriverVersion
@@ -407,10 +409,9 @@ lazy val doobiemysql = project
   .disablePlugins(RevolverPlugin)
   .dependsOn(doobiecore % "test->test;compile->compile")
   .settings(commonSettings)
+  .settings(dbTestSettings)
   .settings(
     name := "grackle-doobie-mysql",
-    Test / fork := true,
-    Test / parallelExecution := false,
     Test / testOptions += Tests.Setup(_ => dockerUp("mysql")),
     libraryDependencies ++= Seq(
       "com.mysql" % "mysql-connector-j" % mysqlDriverVersion
@@ -423,10 +424,9 @@ lazy val doobiemariadb = project
   .disablePlugins(RevolverPlugin)
   .dependsOn(doobiecore % "test->test;compile->compile")
   .settings(commonSettings)
+  .settings(dbTestSettings)
   .settings(
     name := "grackle-doobie-mariadb",
-    Test / fork := true,
-    Test / parallelExecution := false,
     Test / testOptions += Tests.Setup(_ => dockerUp("mariadb")),
     libraryDependencies ++= Seq(
       "org.mariadb.jdbc" % "mariadb-java-client" % mariadbDriverVersion
@@ -439,10 +439,9 @@ lazy val doobiesqlite = project
   .disablePlugins(RevolverPlugin)
   .dependsOn(doobiecore % "test->test;compile->compile")
   .settings(commonSettings)
+  .settings(dbTestSettings)
   .settings(
     name := "grackle-doobie-sqlite",
-    Test / fork := true,
-    Test / parallelExecution := false,
     // SQLite has no docker service: unlike Oracle/MSSQL, whose containers auto-run the scripts
     // mounted from target/testdata/<db>/, the test harness loads and executes them itself against
     // a fresh temp database file per suite. Pass the directory as a system property (fork'd tests
@@ -472,10 +471,9 @@ lazy val doobieh2 = project
   .disablePlugins(RevolverPlugin)
   .dependsOn(doobiecore % "test->test;compile->compile")
   .settings(commonSettings)
+  .settings(dbTestSettings)
   .settings(
     name := "grackle-doobie-h2",
-    Test / fork := true,
-    Test / parallelExecution := false,
     // H2 has no docker service: the test harness seeds a fresh in-memory database per suite from
     // the generated scripts. Pass the directory as a system property (fork'd tests don't share the
     // build's working directory).
@@ -498,6 +496,7 @@ lazy val skunk = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .settings(commonSettings)
   .settings(
     name := "grackle-skunk",
+    // The JS and Native test runs don't get this from dbTestSettings, which is JVM-only.
     Test / parallelExecution := false,
     libraryDependencies ++= Seq(
       "org.tpolecat" %%% "skunk-core" % skunkVersion,
@@ -505,8 +504,8 @@ lazy val skunk = crossProject(JVMPlatform, JSPlatform, NativePlatform)
       "org.typelevel" %% "log4cats-core" % log4catsVersion
     )
   )
+  .jvmSettings(dbTestSettings)
   .jvmSettings(
-    Test / fork := true,
     Test / testOptions += Tests.Setup(_ => dockerUp("postgres")),
     libraryDependencies ++= Seq(
       "ch.qos.logback" % "logback-classic" % logbackVersion % "test"
