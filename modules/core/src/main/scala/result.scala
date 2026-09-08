@@ -112,12 +112,35 @@ sealed trait Result[+T] {
    */
   def atPath(path: List[Problem.PathSegment]): Result[T] =
     if (path.isEmpty) this
-    else
-      this match {
-        case Result.Failure(ps) => Result.Failure(ps.map(_.atPath(path)))
-        case Result.Warning(ps, value) => Result.Warning(ps.map(_.atPath(path)), value)
-        case other => other
-      }
+    else mapProblems(_.atPath(path))
+
+  /**
+   * Yields this result with `locations` as the source locations of each problem which has none.
+   */
+  def atLocations(locations: List[(Int, Int)]): Result[T] =
+    if (locations.isEmpty) this
+    else mapProblems(_.atLocations(locations))
+
+  /**
+   * Yields this result with `path` as the response path and `location` as the source location
+   * of each problem which has neither.
+   */
+  def at(path: List[Problem.PathSegment], location: Option[(Int, Int)]): Result[T] =
+    if (path.isEmpty && location.isEmpty) this
+    else {
+      val locations = location.toList
+      mapProblems(_.atPath(path).atLocations(locations))
+    }
+
+  /**
+   * Yields this result with `f` applied to each of its problems.
+   */
+  private def mapProblems(f: Problem => Problem): Result[T] =
+    this match {
+      case Result.Failure(ps) => Result.Failure(ps.map(f))
+      case Result.Warning(ps, value) => Result.Warning(ps.map(f), value)
+      case other => other
+    }
 
   def withProblems(problems: NonEmptyChain[Problem]): Result[T] =
     this match {

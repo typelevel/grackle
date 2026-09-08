@@ -575,8 +575,9 @@ final class InputValuesSuite extends CatsEffectSuite {
     """
 
     assertEquals(
-      InputValuesMapping.compiler.compile(supplied, None).map(_.query),
-      InputValuesMapping.compiler.compile(defaulted, None).map(_.query))
+      InputValuesMapping.compiler.compile(supplied, None),
+      InputValuesMapping.compiler.compile(defaulted, None)
+    )
   }
 
   test("single value default of an input object field coerces to a list") {

@@ -209,9 +209,10 @@ Grackle's query algebra consists of the following elements,
 case class UntypedSelect(
   name: String, alias: Option[String],
   args: List[Binding], directives: List[Directive],
-  child: Query
+  child: Query,
+  location: Option[(Int, Int)] = None
 )
-case class Select(name: String, alias: Option[String], child: Query)
+case class Select(name: String, alias: Option[String], child: Query, location: Option[(Int, Int)] = None)
 case class Group(queries: List[Query])
 case class Unique(child: Query)
 case class Filter(pred: Predicate, child: Query)

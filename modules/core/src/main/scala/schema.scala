@@ -1542,7 +1542,7 @@ object Directive {
     def queryWarnings(query: Query): List[Problem] = {
       def loop(query: Query): List[Problem] =
         query match {
-          case UntypedSelect(_, _, _, dirs, child) =>
+          case UntypedSelect(_, _, _, dirs, child, _) =>
             validateDirectives(schema, Ast.DirectiveLocation.FIELD, dirs, vars) ++ loop(child)
           case UntypedFragmentSpread(_, dirs) =>
             validateDirectives(schema, Ast.DirectiveLocation.FRAGMENT_SPREAD, dirs, vars)
@@ -1552,7 +1552,7 @@ object Directive {
               Ast.DirectiveLocation.INLINE_FRAGMENT,
               dirs,
               vars) ++ loop(child)
-          case Select(_, _, child) => loop(child)
+          case Select(_, _, child, _) => loop(child)
           case Group(children) => children.flatMap(loop)
           case Narrow(_, child) => loop(child)
           case Unique(child) => loop(child)

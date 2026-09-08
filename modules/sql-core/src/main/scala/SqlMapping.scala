@@ -898,18 +898,18 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         // Preserve OrderBy
         case o: OrderBy => o.copy(child = loop(o.child, context))
 
-        case s @ Select(fieldName, _, Count(_)) =>
+        case s @ Select(fieldName, _, Count(_), _) =>
           if (context.tpe.underlying.hasField(fieldName)) s.copy(child = Empty)
           else Empty
 
-        case s @ Select(fieldName, resultName, _) =>
+        case s @ Select(fieldName, resultName, _, _) =>
           val fieldContext = context
             .forField(fieldName, resultName)
             .getOrElse(
               throw new SqlMappingException(s"No field '$fieldName' of type ${context.tpe}"))
           s.copy(child = loop(s.child, fieldContext))
 
-        case s @ UntypedSelect(fieldName, resultName, _, _, _) =>
+        case s @ UntypedSelect(fieldName, resultName, _, _, _, _) =>
           val fieldContext = context
             .forField(fieldName, resultName)
             .getOrElse(
@@ -3837,7 +3837,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           def unapply(q: Query): Option[(Query, List[Narrow])] = {
             def isPolySelect(q: Query): Boolean =
               q match {
-                case Select(fieldName, _, _) =>
+                case Select(fieldName, _, _, _) =>
                   typeMappings.fieldIsPolymorphic(context, fieldName)
                 case _ => false
               }
@@ -3849,7 +3849,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               }
 
             val ungrouped = ungroup(q).flatMap {
-              case sel @ Select(fieldName, _, _) if isPolySelect(sel) =>
+              case sel @ Select(fieldName, _, _, _) if isPolySelect(sel) =>
                 typeMappings.rawFieldMapping(context, fieldName) match {
                   case Some(TypeMappings.PolymorphicFieldMapping(cands)) =>
                     cands.map { case (pred, _) => Narrow(schema.uncheckedRef(pred.tpe), sel) }
@@ -3974,12 +3974,12 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         object NonSubobjectSelect {
           def unapply(q: Query): Option[String] =
             q match {
-              case Select(fieldName, _, child)
+              case Select(fieldName, _, child, _)
                   if child == Empty || isJsonb(context, fieldName) || !isLocallyMapped(
                     context,
                     q) =>
                 Some(fieldName)
-              case Select(fieldName, _, Effect(_, _)) =>
+              case Select(fieldName, _, Effect(_, _), _) =>
                 Some(fieldName)
               case _ =>
                 None
@@ -3987,10 +3987,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         }
 
         q match {
-          case Select(fieldName, _, Count(child)) =>
+          case Select(fieldName, _, Count(child), _) =>
             def childContext(q: Query): Result[Context] =
               q match {
-                case Select(fieldName, resultName, _) =>
+                case Select(fieldName, resultName, _, _) =>
                   context.forField(fieldName, resultName)
                 case FilterOrderByOffsetLimit(_, _, _, _, child) =>
                   childContext(child)
@@ -4088,7 +4088,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             }
 
           // Non-leaf non-Json element: compile subobject queries
-          case s @ Select(fieldName, resultName, child) =>
+          case s @ Select(fieldName, resultName, child, _) =>
             context.forField(fieldName, resultName).flatMap { fieldContext =>
               if (schema.isRootType(context.tpe)) loop(child, fieldContext, Nil, false)
               else {
@@ -4127,7 +4127,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               def loop(query: Query): Boolean =
                 query match {
                   case Empty => true
-                  case Select(_, _, Empty) => true
+                  case Select(_, _, Empty, _) => true
                   case Group(children) => children.forall(loop)
                   case _ => false
                 }

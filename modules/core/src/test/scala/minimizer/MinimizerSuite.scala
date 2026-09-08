@@ -16,6 +16,7 @@
 package minimizer
 
 import munit.CatsEffectSuite
+import utils.QueryLocations._
 
 import grackle.{GraphQLParser, QueryMinimizer, Result}
 
@@ -35,7 +36,8 @@ final class MinimizerSuite extends CatsEffectSuite {
     val Some(parsed0) = parser.parseText(query).toOption: @unchecked
     val Some(parsed1) = parser.parseText(minimized).toOption: @unchecked
 
-    assertEquals(parsed0, parsed1)
+    // Minimize changes text, so compare without locations
+    assertEquals(stripLocations(parsed0), stripLocations(parsed1))
   }
 
   test("minimize simple query") {

@@ -42,6 +42,8 @@ final class FieldErrorSuite extends CatsEffectSuite {
     }
   """
 
+  private val nameLocation = json"""[{ "line": 6, "column": 9 }]"""
+
   /**
    * The response for `query`, with `data` as its data entry.
    *
@@ -54,6 +56,7 @@ final class FieldErrorSuite extends CatsEffectSuite {
         "errors": [
           {
             "message": $message,
+            "locations": $nameLocation,
             "path": ["items", 1, "name"]
           }
         ],
@@ -109,6 +112,7 @@ final class FieldErrorSuite extends CatsEffectSuite {
         "errors": [
           {
             "message": $message,
+            "locations": [{ "line": 4, "column": 11 }],
             "path": ["items", 1, "name"]
           }
         ],
@@ -138,6 +142,7 @@ final class FieldErrorSuite extends CatsEffectSuite {
         "errors": [
           {
             "message": $message,
+            "locations": [{ "line": 4, "column": 9 }],
             "path": ["tagCount"]
           }
         ],
@@ -169,6 +174,7 @@ final class FieldErrorSuite extends CatsEffectSuite {
         "errors": [
           {
             "message": $message,
+            "locations": [{ "line": 5, "column": 9 }],
             "path": ["delegated", "name"]
           }
         ],
@@ -189,6 +195,23 @@ final class FieldErrorSuite extends CatsEffectSuite {
 
   test("a null from a non-null delegated field bubbles up to the data entry") {
     assertIO(NonNullDelegate.compileAndRun(delegateQuery), delegateExpected(Json.Null))
+  }
+
+  test("an error carries the source location of the field which raised it") {
+    val located = """query {
+  items {
+    name
+  }
+}"""
+
+    val expected = json"""[{ "line": 3, "column": 5 }]"""
+
+    assertIO(
+      NullableName
+        .compileAndRun(located)
+        .map(_.hcursor.downField("errors").downN(0).downField("locations").focus),
+      Some(expected)
+    )
   }
 
   test("a response path uses the alias of the position") {

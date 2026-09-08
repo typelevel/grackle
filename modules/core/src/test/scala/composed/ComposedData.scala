@@ -193,7 +193,7 @@ object ComposedMapping extends ComposedMapping[IO] {
 
   def countryCurrencyJoin(q: Query, c: Cursor): Result[Query] =
     (c.focus, q) match {
-      case (c: CountryData.Country, Select("currency", _, child)) =>
+      case (c: CountryData.Country, Select("currency", _, child, _)) =>
         Select(
           "fx",
           Unique(Filter(Eql(CurrencyType / "code", Const(c.currencyCode)), child))).success

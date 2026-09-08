@@ -77,26 +77,21 @@ final class ResponseSuite extends ConformanceSuite {
   // 7.1.6 Errors
   // https://spec.graphql.org/September2025/#sec-Request-Error-Result
 
-  // Grackle discards the whole `data` entry when a field raises an error, and it attaches
-  // neither `path` nor `locations` to the error. The response is
-  // `{"errors": [{"message": "..."}], "data": null}`.
   /**
    * The request of section 7.1.6, which the specification runs against two schemas.
    */
-  private val heroFriendsDoc = """
-    query ($episode: Episode!) {
-      hero(episode: $episode) {
-        name
-        heroFriends: friends {
-          id
-          name
-        }
-      }
+  private val heroFriendsDoc = """query ($episode: Episode!) {
+  hero(episode: $episode) {
+    name
+    heroFriends: friends {
+      id
+      name
     }
-  """
+  }
+}"""
 
   yields(
-    "an error carries the response path of the position which raised it".fail,
+    "an error carries the response path of the position which raised it",
     ResponseMappings.NullableName,
     json"""{"episode": "NEWHOPE"}""")(heroFriendsDoc)(json"""
     {
@@ -132,7 +127,7 @@ final class ResponseSuite extends ConformanceSuite {
   // The same request against a schema whose `name` field is non-null. The null bubbles up to the
   // nearest nullable position, which is the entry of the `heroFriends` list.
   yields(
-    "a null from an error bubbles up to the nearest nullable position".fail,
+    "a null from an error bubbles up to the nearest nullable position",
     ResponseMappings.NonNullName,
     json"""{"episode": "NEWHOPE"}""")(heroFriendsDoc)(json"""
     {

@@ -17,10 +17,10 @@ package grackle
 
 import scala.util.matching.Regex
 
-import cats.implicits._
+import cats.implicits.*
 import cats.parse.{Parser, Parser0}
-import cats.parse.Numbers._
-import cats.parse.Parser._
+import cats.parse.Numbers.*
+import cats.parse.Parser.*
 import cats.parse.Rfc5234.{cr, crlf, digit, hexdig, lf}
 
 trait GraphQLParser {
@@ -332,9 +332,19 @@ object GraphQLParser {
       }
 
     def Field(n: Int): Parser[Ast.Selection.Field] =
-      (Alias.backtrack.?.with1 ~ Name ~ Arguments.? ~ Directives ~ SelectionSetN(n).?).map {
-        case ((((alias, name), args), dirs), sel) =>
-          Ast.Selection.Field(alias, name, args.orEmpty, dirs, sel.orEmpty)
+      (caret.with1 ~
+        (Alias.backtrack.?.with1 ~ Name ~ Arguments.? ~ Directives ~ SelectionSetN(n).?)).map {
+        case (pos, ((((alias, name), args), dirs), sel)) =>
+          Ast
+            .Selection
+            .Field(
+              alias,
+              name,
+              args.orEmpty,
+              dirs,
+              sel.orEmpty,
+              // The caret counts lines and columns from zero, the specification from one.
+              Some((pos.line + 1, pos.col + 1)))
       }
 
     def InlineFragment(n: Int): Parser[Ast.Selection.InlineFragment] =

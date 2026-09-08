@@ -20,6 +20,7 @@ import cats.implicits._
 import io.circe.Json
 import io.circe.literal._
 import munit.CatsEffectSuite
+import utils.QueryLocations._
 
 import grackle._
 import grackle.PathTerm.UniquePath
@@ -90,35 +91,37 @@ final class FieldMergeSuite extends CatsEffectSuite {
             Eql(UniquePath(List("id")), Const("1")),
             Group(
               List(
-                Select("name", None, Empty),
-                Select("profilePic", None, Empty),
-                Select("id", None, Empty),
-                Select("name", Some("foo"), Empty),
-                Select("name", Some("bar"), Empty),
+                Select("name", None, Empty, loc(4, 11)),
+                Select("profilePic", None, Empty, loc(5, 11)),
+                Select("id", None, Empty, loc(7, 11)),
+                Select("name", Some("foo"), Empty, loc(8, 11)),
+                Select("name", Some("bar"), Empty, loc(10, 11)),
                 Select(
                   "friends",
                   None,
                   Group(
                     List(
-                      Select("name", None, Empty),
-                      Select("profilePic", None, Empty),
-                      Select("id", None, Empty)
-                    ))
+                      Select("name", None, Empty, loc(13, 13)),
+                      Select("profilePic", None, Empty, loc(17, 13)),
+                      Select("id", None, Empty, loc(21, 13))
+                    )),
+                  loc(12, 11)
                 ),
                 Select(
                   "friends",
                   Some("baz"),
-                  Group(
-                    List(
-                      Select("name", None, Empty),
-                      Select("name", Some("quux"), Empty),
-                      Select("profilePic", None, Empty),
-                      Select("id", None, Empty)
-                    ))
+                  Group(List(
+                    Select("name", None, Empty, loc(25, 13)),
+                    Select("name", Some("quux"), Empty, loc(26, 13)),
+                    Select("profilePic", None, Empty, loc(31, 13)),
+                    Select("id", None, Empty, loc(35, 13))
+                  )),
+                  loc(24, 11)
                 )
               ))
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -191,11 +194,12 @@ final class FieldMergeSuite extends CatsEffectSuite {
             Eql(UniquePath(List("id")), Const("1")),
             Group(
               List(
-                Select("name", Some("profilePic"), Empty),
-                Select("profilePic", Some("name"), Empty)
+                Select("name", Some("profilePic"), Empty, loc(4, 11)),
+                Select("profilePic", Some("name"), Empty, loc(5, 11))
               ))
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -233,7 +237,7 @@ final class FieldMergeSuite extends CatsEffectSuite {
 
     val compiled = FieldMergeMapping.compiler.compile(query)
 
-    assertEquals(compiled.map(_.query), Result.failure(expected))
+    assertEquals(compiled, Result.failure(expected))
   }
 
   test("unmergeable alias (2)") {
@@ -251,7 +255,7 @@ final class FieldMergeSuite extends CatsEffectSuite {
 
     val compiled = FieldMergeMapping.compiler.compile(query)
 
-    assertEquals(compiled.map(_.query), Result.failure(expected))
+    assertEquals(compiled, Result.failure(expected))
   }
 
   test("fields with arguments (1)") {
@@ -275,11 +279,12 @@ final class FieldMergeSuite extends CatsEffectSuite {
             Eql(UniquePath(List("id")), Const("1")),
             Group(
               List(
-                Select("name", None, Empty),
-                Select("profilePic", None, Empty)
+                Select("name", None, Empty, loc(4, 11)),
+                Select("profilePic", None, Empty, loc(7, 11))
               ))
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -319,7 +324,7 @@ final class FieldMergeSuite extends CatsEffectSuite {
 
     val compiled = FieldMergeMapping.compiler.compile(query)
 
-    assertEquals(compiled.map(_.query), Result.failure(expected))
+    assertEquals(compiled, Result.failure(expected))
   }
 
   test("fields with arguments (3)") {
@@ -343,20 +348,20 @@ final class FieldMergeSuite extends CatsEffectSuite {
             Unique(
               Filter(
                 Eql(UniquePath(List("id")), Const("1")),
-                Select("name", None, Empty)
+                Select("name", None, Empty, loc(4, 11))
               )
-            )
-          ),
+            ),
+            loc(3, 9)),
           Select(
             "user",
             Some("foo"),
             Unique(
               Filter(
                 Eql(UniquePath(List("id")), Const("1")),
-                Select("profilePic", None, Empty)
+                Select("profilePic", None, Empty, loc(7, 11))
               )
-            )
-          )
+            ),
+            loc(6, 9))
         ))
 
     val expectedResult = json"""
@@ -402,20 +407,20 @@ final class FieldMergeSuite extends CatsEffectSuite {
             Unique(
               Filter(
                 Eql(UniquePath(List("id")), Const("1")),
-                Select("name", None, Empty)
+                Select("name", None, Empty, loc(4, 11))
               )
-            )
-          ),
+            ),
+            loc(3, 9)),
           Select(
             "user",
             Some("foo"),
             Unique(
               Filter(
                 Eql(UniquePath(List("id")), Const("2")),
-                Select("profilePic", None, Empty)
+                Select("profilePic", None, Empty, loc(7, 11))
               )
-            )
-          )
+            ),
+            loc(6, 9))
         ))
 
     val expectedResult = json"""
@@ -461,11 +466,12 @@ final class FieldMergeSuite extends CatsEffectSuite {
             Eql(UniquePath(List("id")), Const("1")),
             Group(
               List(
-                Select("name", None, Empty),
-                Select("profilePic", None, Empty)
+                Select("name", None, Empty, loc(4, 11)),
+                Select("profilePic", None, Empty, loc(7, 11))
               ))
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -508,7 +514,7 @@ final class FieldMergeSuite extends CatsEffectSuite {
       .compiler
       .compile(query, untypedVars = Some(json"""{ "id1": "1", "id2": "2" }"""))
 
-    assertEquals(compiled.map(_.query), Result.failure(expected))
+    assertEquals(compiled, Result.failure(expected))
   }
 
   test("fields with arguments (7)") {
@@ -529,7 +535,7 @@ final class FieldMergeSuite extends CatsEffectSuite {
     val compiled =
       FieldMergeMapping.compiler.compile(query, untypedVars = Some(json"""{ "id1": "1" }"""))
 
-    assertEquals(compiled.map(_.query), Result.failure(expected))
+    assertEquals(compiled, Result.failure(expected))
   }
 
   test("fields with skip (1)") {
@@ -553,14 +559,10 @@ final class FieldMergeSuite extends CatsEffectSuite {
         Unique(
           Filter(
             Eql(UniquePath(List("id")), Const("1")),
-            Select(
-              "friends",
-              None,
-              Select("name", None, Empty)
-            )
+            Select("friends", None, Select("name", None, Empty, loc(5, 13)), loc(4, 11))
           )
-        )
-      )
+        ),
+        loc(3, 9))
 
     val expectedResult = json"""
       {
@@ -609,14 +611,10 @@ final class FieldMergeSuite extends CatsEffectSuite {
         Unique(
           Filter(
             Eql(UniquePath(List("id")), Const("1")),
-            Select(
-              "friends",
-              None,
-              Select("name", None, Empty)
-            )
+            Select("friends", None, Select("name", None, Empty, loc(5, 13)), loc(4, 11))
           )
-        )
-      )
+        ),
+        loc(3, 9))
 
     val expectedResult = json"""
       {
@@ -665,14 +663,10 @@ final class FieldMergeSuite extends CatsEffectSuite {
         Unique(
           Filter(
             Eql(UniquePath(List("id")), Const("1")),
-            Select(
-              "friends",
-              None,
-              Select("name", None, Empty)
-            )
+            Select("friends", None, Select("name", None, Empty, loc(5, 13)), loc(4, 11))
           )
-        )
-      )
+        ),
+        loc(3, 9))
 
     val expectedResult = json"""
       {
@@ -721,7 +715,7 @@ final class FieldMergeSuite extends CatsEffectSuite {
 
     val compiled = FieldMergeMapping.compiler.compile(query)
 
-    assertEquals(compiled.map(_.query), Result.failure(expected))
+    assertEquals(compiled, Result.failure(expected))
   }
 
   test("fields with skip (5)") {
@@ -750,12 +744,13 @@ final class FieldMergeSuite extends CatsEffectSuite {
               None,
               Group(
                 List(
-                  Select("name", None, Empty),
-                  Select("profilePic", None, Empty)
-                ))
-            )
+                  Select("name", None, Empty, loc(5, 13)),
+                  Select("profilePic", None, Empty, loc(8, 13))
+                )),
+              loc(4, 11))
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -814,12 +809,18 @@ final class FieldMergeSuite extends CatsEffectSuite {
               None,
               Group(
                 List(
-                  Narrow(FieldMergeMapping.UserType, Select("name", Some("label"), Empty)),
-                  Narrow(FieldMergeMapping.PageType, Select("title", Some("label"), Empty))
-                ))
+                  Narrow(
+                    FieldMergeMapping.UserType,
+                    Select("name", Some("label"), Empty, loc(6, 15))),
+                  Narrow(
+                    FieldMergeMapping.PageType,
+                    Select("title", Some("label"), Empty, loc(9, 15)))
+                )),
+              loc(4, 11)
             )
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -864,7 +865,7 @@ final class FieldMergeSuite extends CatsEffectSuite {
 
     val compiled = FieldMergeMapping.compiler.compile(query)
 
-    assertEquals(compiled.map(_.query), Result.failure(expected))
+    assertEquals(compiled, Result.failure(expected))
   }
 
   test("fields with variants (3)") {
@@ -904,21 +905,23 @@ final class FieldMergeSuite extends CatsEffectSuite {
                     Select(
                       "friends",
                       Some("likers"),
-                      Select("name", None, Empty)
-                    )
+                      Select("name", None, Empty, loc(7, 17)),
+                      loc(6, 15))
                   ),
                   Narrow(
                     FieldMergeMapping.PageType,
                     Select(
                       "likers",
                       None,
-                      Select("name", None, Empty)
-                    )
+                      Select("name", None, Empty, loc(12, 17)),
+                      loc(11, 15))
                   )
-                ))
+                )),
+              loc(4, 11)
             )
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -971,7 +974,7 @@ final class FieldMergeSuite extends CatsEffectSuite {
 
     val compiled = FieldMergeMapping.compiler.compile(query)
 
-    assertEquals(compiled.map(_.query), Result.failure(expected))
+    assertEquals(compiled, Result.failure(expected))
   }
 
   test("fields with variants (5)") {
@@ -1001,7 +1004,7 @@ final class FieldMergeSuite extends CatsEffectSuite {
 
     val compiled = FieldMergeMapping.compiler.compile(query)
 
-    assertEquals(compiled.map(_.query), Result.failure(expected))
+    assertEquals(compiled, Result.failure(expected))
   }
 
   test("fields with variants (6)") {
@@ -1027,7 +1030,7 @@ final class FieldMergeSuite extends CatsEffectSuite {
 
     val compiled = FieldMergeMapping.compiler.compile(query)
 
-    assertEquals(compiled.map(_.query), Result.failure(expected))
+    assertEquals(compiled, Result.failure(expected))
   }
 
   test("fields with variants (7)") {
@@ -1050,12 +1053,12 @@ final class FieldMergeSuite extends CatsEffectSuite {
           List(
             Narrow(
               FieldMergeMapping.UserType,
-              Select("name", None, Empty)
+              Select("name", None, Empty, loc(5, 13))
             ),
-            Select("id", None, Empty)
+            Select("id", None, Empty, loc(7, 11))
           )
-        )
-      )
+        ),
+        loc(3, 9))
 
     val expectedResult = json"""
       {
@@ -1110,10 +1113,10 @@ final class FieldMergeSuite extends CatsEffectSuite {
         Unique(
           Filter(
             Eql(UniquePath(List("id")), Const("1")),
-            Select("name", None, Empty)
+            Select("name", None, Empty, loc(4, 11))
           )
-        )
-      )
+        ),
+        loc(3, 9))
 
     val expectedResult = json"""
       {
@@ -1151,10 +1154,10 @@ final class FieldMergeSuite extends CatsEffectSuite {
         Unique(
           Filter(
             Eql(UniquePath(List("id")), Const("1")),
-            Select("name", None, Empty)
+            Select("name", None, Empty, loc(4, 11))
           )
-        )
-      )
+        ),
+        loc(3, 9))
 
     val expectedResult = json"""
       {
@@ -1192,10 +1195,10 @@ final class FieldMergeSuite extends CatsEffectSuite {
         Unique(
           Filter(
             Eql(UniquePath(List("id")), Const("1")),
-            Select("name", None, Empty)
+            Select("name", None, Empty, loc(4, 11))
           )
-        )
-      )
+        ),
+        loc(3, 9))
 
     val expectedResult = json"""
       {
@@ -1241,11 +1244,12 @@ final class FieldMergeSuite extends CatsEffectSuite {
             Eql(UniquePath(List("id")), Const("1")),
             Group(
               List(
-                Select("name", None, Empty),
-                Select("profilePic", None, Empty)
+                Select("name", None, Empty, loc(5, 13)),
+                Select("profilePic", None, Empty, loc(10, 13))
               ))
           )
-        )
+        ),
+        loc(4, 11)
       )
 
     val expectedResult = json"""
@@ -1293,11 +1297,12 @@ final class FieldMergeSuite extends CatsEffectSuite {
             Eql(UniquePath(List("id")), Const("1")),
             Group(
               List(
-                Select("name", None, Empty),
-                Select("profilePic", None, Empty)
+                Select("name", None, Empty, loc(5, 13)),
+                Select("profilePic", None, Empty, loc(10, 13))
               ))
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -1354,13 +1359,15 @@ final class FieldMergeSuite extends CatsEffectSuite {
                 FieldMergeMapping.UserType,
                 Group(
                   List(
-                    Select("name", None, Empty),
-                    Select("profilePic", None, Empty)
+                    Select("name", None, Empty, loc(6, 15)),
+                    Select("profilePic", None, Empty, loc(13, 15))
                   ))
-              )
+              ),
+              loc(4, 11)
             )
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -1410,7 +1417,7 @@ final class FieldMergeSuite extends CatsEffectSuite {
 
     val compiled = FieldMergeMapping.compiler.compile(query)
 
-    assertEquals(compiled.map(_.query), Result.failure(expected))
+    assertEquals(compiled, Result.failure(expected))
   }
 
   test("inline fragments (5)") {
@@ -1453,20 +1460,22 @@ final class FieldMergeSuite extends CatsEffectSuite {
               None,
               Group(
                 List(
-                  Narrow(FieldMergeMapping.UserType, Select("name", None, Empty)),
-                  Narrow(FieldMergeMapping.ProfileType, Select("id", None, Empty)),
+                  Narrow(FieldMergeMapping.UserType, Select("name", None, Empty, loc(7, 17))),
+                  Narrow(FieldMergeMapping.ProfileType, Select("id", None, Empty, loc(10, 17))),
                   Narrow(
                     FieldMergeMapping.UserType,
                     Group(
                       List(
-                        Select("id", None, Empty),
-                        Select("name", None, Empty)
+                        Select("id", None, Empty, loc(19, 17)),
+                        Select("name", None, Empty, loc(20, 17))
                       ))
                   )
-                ))
+                )),
+              loc(5, 13)
             )
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -1535,15 +1544,17 @@ final class FieldMergeSuite extends CatsEffectSuite {
                     FieldMergeMapping.UserType,
                     Group(
                       List(
-                        Select("id", None, Empty),
-                        Select("name", None, Empty)
+                        Select("id", None, Empty, loc(7, 17)),
+                        Select("name", None, Empty, loc(8, 17))
                       ))
                   ),
-                  Narrow(FieldMergeMapping.ProfileType, Select("id", None, Empty))
-                ))
+                  Narrow(FieldMergeMapping.ProfileType, Select("id", None, Empty, loc(20, 17)))
+                )),
+              loc(5, 13)
             )
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -1589,7 +1600,7 @@ final class FieldMergeSuite extends CatsEffectSuite {
 
     val compiled = FieldMergeMapping.compiler.compile(query)
 
-    assertEquals(compiled.map(_.query), Result.failure(expected))
+    assertEquals(compiled, Result.failure(expected))
   }
 
   test("inline fragments (8)") {
@@ -1626,23 +1637,17 @@ final class FieldMergeSuite extends CatsEffectSuite {
               None,
               Group(
                 List(
-                  Select(
-                    "friends",
-                    None,
-                    Select("name", None, Empty)
-                  ),
+                  Select("friends", None, Select("name", None, Empty, loc(7, 17)), loc(6, 15)),
                   Narrow(
                     FieldMergeMapping.UserType,
-                    Select(
-                      "friends",
-                      None,
-                      Select("id", None, Empty)
-                    )
+                    Select("friends", None, Select("id", None, Empty, loc(13, 19)), loc(12, 17))
                   )
-                ))
+                )),
+              loc(4, 11)
             )
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -1715,19 +1720,17 @@ final class FieldMergeSuite extends CatsEffectSuite {
               None,
               Group(
                 List(
-                  Select("id", None, Empty),
+                  Select("id", None, Empty, loc(6, 15)),
                   Narrow(
                     FieldMergeMapping.UserType,
-                    Select(
-                      "friends",
-                      None,
-                      Select("name", None, Empty)
-                    )
+                    Select("friends", None, Select("name", None, Empty, loc(9, 19)), loc(8, 17))
                   )
-                ))
+                )),
+              loc(4, 11)
             )
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -1790,7 +1793,7 @@ final class FieldMergeSuite extends CatsEffectSuite {
 
     val compiled = FieldMergeMapping.compiler.compile(query)
 
-    assertEquals(compiled.map(_.query), Result.failure(expected))
+    assertEquals(compiled, Result.failure(expected))
   }
 
   test("merge across fragments") {
@@ -1826,16 +1829,17 @@ final class FieldMergeSuite extends CatsEffectSuite {
                   None,
                   Group(
                     List(
-                      Select("name", None, Empty),
-                      Select("profilePic", None, Empty)
+                      Select("name", None, Empty, loc(5, 13)),
+                      Select("profilePic", None, Empty, loc(13, 11))
                     )
-                  )
-                ),
-                Select("id", None, Empty)
+                  ),
+                  loc(4, 11)),
+                Select("id", None, Empty, loc(15, 9))
               )
             )
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -1899,18 +1903,15 @@ final class FieldMergeSuite extends CatsEffectSuite {
                 Eql(UniquePath(List("id")), Const("1")),
                 Group(
                   List(
-                    Select("name", None, Empty),
-                    Select("profilePic", None, Empty)
+                    Select("name", None, Empty, loc(4, 11)),
+                    Select("profilePic", None, Empty, loc(12, 11))
                   )
                 )
               )
-            )
+            ),
+            loc(3, 9)
           ),
-          Select(
-            "profiles",
-            None,
-            Select("id", None, Empty)
-          )
+          Select("profiles", None, Select("id", None, Empty, loc(16, 11)), loc(15, 9))
         )
       )
 

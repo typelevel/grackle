@@ -199,17 +199,19 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
     if (tpe.isNullable) value else ProtoJson.nonNull(value)
 
   /**
-   * Handles a failure of the field `name` at the position `pos` as a field error: the problems
-   * carry the path of `pos`, and a nullable field completes as null.
+   * Handles a failure of the selection `sel` at the position `pos` as a field error.
+   *
+   * A nullable position completes as null and keeps the rest of the response. A non-null
+   * position propagates the null to the nearest enclosing nullable position.
    *
    * @see
    *   https://spec.graphql.org/September2025/#sec-Handling-Field-Errors
    */
-  private def fieldError(tpe: Type, pos: ResponsePosition, name: String)(
+  private def fieldError(tpe: Type, pos: ResponsePosition, sel: Select)(
       res: Result[List[(String, ProtoJson)]]): Result[List[(String, ProtoJson)]] =
-    res.atPath(pos.path) match {
+    res.at(pos.path, sel.location) match {
       case Result.Failure(ps) if tpe.isNullable =>
-        Result.Warning(ps, List((name, ProtoJson.fromJson(Json.Null))))
+        Result.Warning(ps, List((sel.resultName, ProtoJson.fromJson(Json.Null))))
       case other => other
     }
 
@@ -239,7 +241,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
         case Group(siblings) =>
           siblings.flatTraverse(query => runFields(query, tpe, cursor, path))
 
-        case Introspect(schema, s @ Select("__typename", _, Empty)) if tpe.isNamed =>
+        case Introspect(schema, s @ Select("__typename", _, Empty, _)) if tpe.isNamed =>
           val fail =
             Result.failure(s"'__typename' cannot be applied to non-selectable type '$tpe'")
           def mkTypeNameFields(name: String) =
@@ -278,14 +280,14 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             }
             .getOrElse(List((sel.resultName, ProtoJson.fromJson(Json.Null))).success)
 
-        case sel @ Select(fieldName, _, Count(Select(countName, _, _))) =>
+        case sel @ Select(fieldName, _, Count(Select(countName, _, _, _)), _) =>
           def size(c: Cursor): Result[Int] =
             if (c.isList) c.asList(Iterator).map(_.size)
             else 1.success
 
           val fieldTpe = tpe.field(fieldName).getOrElse(ScalarType.AttributeType)
           val fieldPos = path.field(sel.resultName)
-          fieldError(fieldTpe, fieldPos, sel.resultName) {
+          fieldError(fieldTpe, fieldPos, sel) {
             for {
               c0 <- cursor.field(countName, None)
               count <-
@@ -294,7 +296,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
             } yield List((sel.resultName, ProtoJson.fromJson(Json.fromInt(count))))
           }
 
-        case sel @ Select(fieldName, _, Effect(handler, cont)) =>
+        case sel @ Select(fieldName, _, Effect(handler, cont), _) =>
           val fieldTpe = tpe.field(fieldName).getOrElse(ScalarType.AttributeType)
           val fieldPos = path.field(sel.resultName)
           val value =
@@ -303,13 +305,14 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
               handler.asInstanceOf[EffectHandler[F]],
               cont,
               cursor,
-              fieldPos)
+              fieldPos,
+              sel.location)
           List((sel.resultName, atPosition(value, fieldTpe))).success
 
-        case sel @ Select(fieldName, resultName, child) =>
+        case sel @ Select(fieldName, resultName, child, _) =>
           val fieldTpe = tpe.field(fieldName).getOrElse(ScalarType.AttributeType)
           val fieldPos = path.field(sel.resultName)
-          fieldError(fieldTpe, fieldPos, sel.resultName) {
+          fieldError(fieldTpe, fieldPos, sel) {
             for {
               c <- cursor.field(fieldName, resultName)
               value <- runValue(child, fieldTpe, c, fieldPos)
@@ -662,7 +665,8 @@ object QueryInterpreter {
         handler: Option[EffectHandler[F]],
         query: Query,
         cursor: Cursor,
-        position: ResponsePosition)
+        position: ResponsePosition,
+        location: Option[(Int, Int)])
         extends DeferredJson
     // A partially constructed object which has at least one deferred subtree.
     private[QueryInterpreter] case class ProtoObject(fields: Seq[(String, ProtoJson)])
@@ -692,15 +696,16 @@ object QueryInterpreter {
         query: Query,
         cursor: Cursor,
         position: ResponsePosition = ResponsePosition.root): ProtoJson =
-      wrap(EffectJson(mapping, None, query, cursor, position))
+      wrap(EffectJson(mapping, None, query, cursor, position, None))
 
     def effect[F[_]](
         mapping: Mapping[F],
         handler: EffectHandler[F],
         query: Query,
         cursor: Cursor,
-        position: ResponsePosition = ResponsePosition.root): ProtoJson =
-      wrap(EffectJson(mapping, Some(handler), query, cursor, position))
+        position: ResponsePosition = ResponsePosition.root,
+        location: Option[(Int, Int)] = None): ProtoJson =
+      wrap(EffectJson(mapping, Some(handler), query, cursor, position, location))
 
     def fromJson(value: Json): ProtoJson = wrap(value)
 
@@ -1016,7 +1021,7 @@ object QueryInterpreter {
                     mapping
                       .interpreter
                       .runValue(query, cursor.tpe, cursor, e.position)
-                      .atPath(e.position.path)
+                      .at(e.position.path, e.location)
                   }))
               } yield res
           }
@@ -1035,7 +1040,9 @@ object QueryInterpreter {
       batch.tupleRight(None)
 
     // Handles a failed batch as a field error: its problems become warnings and its positions
-    // complete as null. A batch which covers exactly one position carries the path of that position.
+    // complete as null. A batch covers one or more response positions. When it covers exactly
+    // one, the failure belongs to that position and the problems carry its response path and its
+    // source location
     def batchFieldError(
         batch: List[EffectJson[F]],
         ps: NonEmptyChain[Problem]): Result[Completed] = {
@@ -1043,7 +1050,8 @@ object QueryInterpreter {
         batch match {
           case List(e) =>
             val path = e.position.path
-            ps.map(_.atPath(path))
+            val locations = e.location.toList
+            ps.map(_.atPath(path).atLocations(locations))
           case _ => ps
         }
       Result.Warning(ps0, nullBatch(batch))

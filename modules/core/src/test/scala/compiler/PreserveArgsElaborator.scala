@@ -25,7 +25,7 @@ object PreserveArgsElaborator extends SelectElaborator {
   def subst(query: Query, fieldName: String, preserved: Preserved): Query = {
     def loop(query: Query): Query =
       query match {
-        case Select(`fieldName`, alias, child) =>
+        case Select(`fieldName`, alias, child, _) =>
           UntypedSelect(
             fieldName,
             alias,
@@ -44,7 +44,7 @@ object PreserveArgsElaborator extends SelectElaborator {
 
   override def transform(query: Query): Elab[Query] = {
     query match {
-      case UntypedSelect(fieldName, _, _, _, _) =>
+      case UntypedSelect(fieldName, _, _, _, _, _) =>
         for {
           t <- super.transform(query)
           preserved <- Elab.envE[Preserved]("preserved")

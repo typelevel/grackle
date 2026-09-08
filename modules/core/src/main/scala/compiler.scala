@@ -156,7 +156,7 @@ object QueryParser {
      * GraphQL errors and warnings are accumulated in the result.
      */
     def parseSelection(sel: Selection): Result[Query] = sel match {
-      case Field(alias, name, args, directives, sels) =>
+      case Field(alias, name, args, directives, sels, location) =>
         for {
           args0 <- parseArgs(args)
           sels0 <- parseSelections(sels)
@@ -164,8 +164,8 @@ object QueryParser {
         } yield {
           val nme = name.value
           val alias0 = alias.map(_.value).flatMap(n => if (n == nme) None else Some(n))
-          if (sels.isEmpty) UntypedSelect(nme, alias0, args0, dirs, Empty)
-          else UntypedSelect(nme, alias0, args0, dirs, sels0)
+          val child = if (sels.isEmpty) Empty else sels0
+          UntypedSelect(nme, alias0, args0, dirs, child, location)
         }
 
       case FragmentSpread(Name(name), directives) =>
@@ -357,7 +357,7 @@ object VariableUsage {
 
       def loop(query: Query, tpe: Type): List[Problem] =
         query match {
-          case UntypedSelect(nme, _, args, dirs, child) =>
+          case UntypedSelect(nme, _, args, dirs, child, _) =>
             val dirProblems = checkDirectives(dirs)
             val named = tpe.underlyingNamed
             // An unknown field is reported by `SelectElaborator`.
@@ -881,14 +881,14 @@ object QueryCompiler {
       dirs.foldMap(dir => argRefs(dir.args))
 
     def loop(q: Query): (Set[String], Set[String]) = q match {
-      case UntypedSelect(_, _, args, dirs, child) =>
+      case UntypedSelect(_, _, args, dirs, child, _) =>
         (argRefs(args) ++ dirRefs(dirs), Set.empty[String]) |+| loop(child)
       case UntypedFragmentSpread(nme, dirs) =>
         (dirRefs(dirs), Set(nme))
       case UntypedInlineFragment(_, dirs, child) =>
         (dirRefs(dirs), Set.empty[String]) |+| loop(child)
       case Group(children) => children.foldMap(loop)
-      case Select(_, _, child) => loop(child)
+      case Select(_, _, child, _) => loop(child)
       case Narrow(_, child) => loop(child)
       case Unique(child) => loop(child)
       case Filter(_, child) => loop(child)
@@ -1195,10 +1195,10 @@ object QueryCompiler {
      */
     def transform(query: Query): Elab[Query] =
       query match {
-        case s @ UntypedSelect(fieldName, alias, _, _, child) =>
+        case s @ UntypedSelect(fieldName, alias, _, _, child, _) =>
           transformSelect(fieldName, alias, child).map(ec => s.copy(child = ec))
 
-        case s @ Select(fieldName, alias, child) =>
+        case s @ Select(fieldName, alias, child, _) =>
           transformSelect(fieldName, alias, child).map(ec => s.copy(child = ec))
 
         case n @ Narrow(subtpe, child) =>
@@ -1350,6 +1350,7 @@ object QueryCompiler {
               _,
               _,
               _,
+              _,
               _) =>
           (fieldName, level) match {
             case ("__typename", Disabled) =>
@@ -1387,7 +1388,7 @@ object QueryCompiler {
   object VariablesSkipAndFragmentElaborator extends Phase {
     override def transform(query: Query): Elab[Query] =
       query match {
-        case sel @ UntypedSelect(fieldName, alias, args, dirs, child) =>
+        case sel @ UntypedSelect(fieldName, alias, args, dirs, child, _) =>
           isSkipped(dirs).ifM(
             Elab.pure(Empty),
             for {
@@ -1534,7 +1535,7 @@ object QueryCompiler {
   trait SelectElaborator extends Phase {
     override def transform(query: Query): Elab[Query] =
       query match {
-        case sel @ UntypedSelect(fieldName, resultName, args, dirs, child) =>
+        case sel @ UntypedSelect(fieldName, resultName, args, dirs, child, _) =>
           for {
             c <- Elab.context
             s <- Elab.schema
@@ -1561,7 +1562,7 @@ object QueryCompiler {
             _ <- Elab.pop
             e2 <- elab(ec)
           } yield {
-            val e1 = Select(sel.name, sel.alias, e2)
+            val e1 = Select(sel.name, sel.alias, e2, sel.location)
             val e0 =
               if (attrs.isEmpty) e1
               else mergeQueries(e1 :: attrs.map { case (nme, child) => Select(nme, child) })
@@ -1700,7 +1701,7 @@ object QueryCompiler {
       extends Phase {
     override def transform(query: Query): Elab[Query] =
       query match {
-        case s @ Select(fieldName, resultName, child) =>
+        case s @ Select(fieldName, resultName, child, _) =>
           for {
             c <- Elab.context
             obj <- Elab.liftR(
@@ -1758,7 +1759,7 @@ object QueryCompiler {
       extends Phase {
     override def transform(query: Query): Elab[Query] =
       query match {
-        case s @ Select(fieldName, resultName, child) =>
+        case s @ Select(fieldName, resultName, child, location) =>
           for {
             c <- Elab.context
             childCtx = c.forFieldOrAttribute(fieldName, resultName)
@@ -1767,7 +1768,7 @@ object QueryCompiler {
             _ <- Elab.pop
           } yield effects(c, fieldName) match {
             case Some(handler) =>
-              Select(fieldName, resultName, Effect(handler, s.copy(child = ec)))
+              Select(fieldName, resultName, Effect(handler, s.copy(child = ec)), location)
             case None =>
               s.copy(child = ec)
           }
@@ -1827,11 +1828,11 @@ object QueryCompiler {
       @tailrec
       def loop(q: Query, depth: Int, width: Int): (Int, Int) =
         q match {
-          case UntypedSelect(_, _, _, _, Empty) => (depth + 1, width + 1)
-          case Select(_, _, Empty) => (depth + 1, width + 1)
+          case UntypedSelect(_, _, _, _, Empty, _) => (depth + 1, width + 1)
+          case Select(_, _, Empty, _) => (depth + 1, width + 1)
           case Count(_) => (depth + 1, width + 1)
-          case UntypedSelect(_, _, _, _, child) => loop(child, depth + 1, width)
-          case Select(_, _, child) => loop(child, depth + 1, width)
+          case UntypedSelect(_, _, _, _, child, _) => loop(child, depth + 1, width)
+          case Select(_, _, child, _) => loop(child, depth + 1, width)
           case g: Group => handleGroup(g, depth, width)
           case Component(_, _, child) => loop(child, depth, width)
           case Effect(_, child) => loop(child, depth, width)

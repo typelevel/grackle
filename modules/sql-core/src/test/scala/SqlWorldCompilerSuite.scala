@@ -88,8 +88,12 @@ trait SqlWorldCompilerSuite extends CatsEffectSuite {
             SqlStatsMonitor.SqlStats(
               Select(
                 "country",
+                None,
                 Unique(
-                  Filter(Eql(schema.ref("Country") / "code", Const("GBR")), Select("name")))),
+                  Filter(
+                    Eql(schema.ref("Country") / "code", Const("GBR")),
+                    Select("name", None, Empty, Some((4, 13))))),
+                Some((3, 11))),
               simpleRestrictedQuerySql,
               List(encodeArg("GBR")),
               1,
@@ -148,7 +152,11 @@ trait SqlWorldCompilerSuite extends CatsEffectSuite {
             SqlStatsMonitor.SqlStats(
               Select(
                 "cities",
-                Filter(Like(schema.ref("City") / "name", "Linh%", true), Select("name"))),
+                None,
+                Filter(
+                  Like(schema.ref("City") / "name", "Linh%", true),
+                  Select("name", None, Empty, Some((4, 13)))),
+                Some((3, 11))),
               simpleFilteredQuerySql,
               List(encodeArg(filterArg)),
               3,

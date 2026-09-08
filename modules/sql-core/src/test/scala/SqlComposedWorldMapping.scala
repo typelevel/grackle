@@ -116,7 +116,7 @@ class CurrencyMapping[F[_]: Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[F
 
     val expandedQueries =
       queries.map {
-        case (Select("currencies", _, child), c @ Code(code)) =>
+        case (Select("currencies", _, child, _), c @ Code(code)) =>
           (SimpleCurrencyQuery(List(code), child), c)
         case other => other
       }
@@ -179,7 +179,7 @@ class CurrencyMapping[F[_]: Sync](dataRef: Ref[F, CurrencyData], countRef: Ref[F
 
     def unapply(sel: Query): Option[(String, Query)] =
       sel match {
-        case Environment(env, Select("currencies", None, child)) =>
+        case Environment(env, Select("currencies", None, child, _)) =>
           env.get[List[String]]("countryCodes").flatMap(_.headOption).map((_, child))
         case _ => None
       }

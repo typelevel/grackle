@@ -66,7 +66,8 @@ object Ast {
         name: Name,
         arguments: List[(Name, Value)],
         directives: List[Directive],
-        selectionSet: List[Selection]
+        selectionSet: List[Selection],
+        location: Option[(Int, Int)] = None
     ) extends Selection
 
     case class FragmentSpread(
