@@ -19,7 +19,7 @@ import scala.collection.Factory
 import scala.collection.mutable.{Map => MMap}
 import scala.reflect.ClassTag
 
-import cats.{ApplicativeError, Id, MonadThrow}
+import cats.{ApplicativeError, Eval, MonadThrow}
 import cats.data.{Chain, NonEmptyList, StateT}
 import cats.implicits._
 import fs2.{Compiler, Stream}
@@ -566,7 +566,7 @@ abstract class Mapping[F[_]] {
           _ <- mappings.traverse_(refChecks)
         } yield ()
 
-      res.runS(initialState).problems.reverse
+      res.runS(initialState).value.problems.reverse
     }
   }
 
@@ -800,7 +800,8 @@ abstract class Mapping[F[_]] {
 
     val empty: TypeMappings = unchecked(Nil)
 
-    private type MappingValidator[T] = StateT[Id, MappingValidator.State, T]
+    // Eval for stack safety: the validator's recursion depth grows with the number of type mappings.
+    private type MappingValidator[T] = StateT[Eval, MappingValidator.State, T]
     private object MappingValidator {
       type MV[T] = MappingValidator[T]
       def unit: MV[Unit] = StateT.pure(())
