@@ -22,8 +22,8 @@ import munit.CatsEffectSuite
 import grackle.{Schema, ValidationFailure}
 
 /**
- * JVM only: needs a thread with a fixed, small stack so the result does not depend on the
- * stack size the test runner happens to give us.
+ * JVM only: needs a thread with a fixed, small stack so the result does not depend on the stack
+ * size the test runner happens to give us.
  */
 final class ValidatorStackSafetySuite extends CatsEffectSuite {
   test("validation is stack safe for large mappings") {
@@ -47,11 +47,12 @@ final class ValidatorStackSafetySuite extends CatsEffectSuite {
           ObjectMapping(schema.ref("Query"))(
             names.map(nm => CursorField[String](nm.toLowerCase, _ => ???, Nil)): _*
           ) ::
-          names.toList.map(nm =>
-            ObjectMapping(schema.ref(nm))(
-              CursorField[String]("bar", _ => ???, Nil)
-            )
-          )
+            names
+              .toList
+              .map(nm =>
+                ObjectMapping(schema.ref(nm))(
+                  CursorField[String]("bar", _ => ???, Nil)
+                ))
         )
     }
 
@@ -61,7 +62,10 @@ final class ValidatorStackSafetySuite extends CatsEffectSuite {
   private def onSmallStack(validate: => List[ValidationFailure]): IO[List[ValidationFailure]] =
     IO.async_ { cb =>
       // A StackOverflowError is fatal, so catch Throwable or the callback never fires.
-      val run: Runnable = () => cb(try Right(validate) catch { case t: Throwable => Left(t) })
+      val run: Runnable = () =>
+        cb(
+          try Right(validate)
+          catch { case t: Throwable => Left(t) })
       val t = new Thread(null, run, "validator", 256L * 1024)
       t.setDaemon(true)
       t.start()
