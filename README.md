@@ -36,6 +36,9 @@ and [imbus AG](https://www.imbus.de/) over the last five years.
 ## Getting Started
 
 - See the [tutorial](https://typelevel.org/grackle) and accompanying [demo](https://github.com/typelevel/grackle/tree/main/demo/src/main).
+- New to Grackle's mapping model? Start with [Mapping Concepts](https://typelevel.org/grackle/mappings.html) for a guided tour of
+  `ValueMapping`, `GenericMapping`, `CirceMapping`, `SqlMapping`, `ComposedMapping` and friends,
+  and how to pick the right one for your data source.
 - Online Scaladoc is available [here](https://javadoc.io/doc/org.typelevel/grackle-core_2.13).
 - Ask us anything the in **#grackle** channel on the Typelevel [discord server][grackle-dev].
 
@@ -43,25 +46,31 @@ To add Grackle to your project you should add the following to your `build.sbt`,
 
 ```scala
 // Required: Scala 2.13/3.3+
-libraryDependencies += "org.typelevel" %% "grackle-core" % "0.26.0"
+libraryDependencies += "org.typelevel" %% "grackle-core" % "0.30.0"
 
 // Optional: support for in-memory Json backend using circe
-libraryDependencies += "org.typelevel" %% "grackle-circe" % "0.26.0"
+libraryDependencies += "org.typelevel" %% "grackle-circe" % "0.30.0"
 
 // Optional: support for in-memory generic Scala backend using shapeless
-libraryDependencies += "org.typelevel" %% "grackle-generic" % "0.26.0"
+libraryDependencies += "org.typelevel" %% "grackle-generic" % "0.30.0"
 
 // Optional: support for Postgres backend via Doobie (JVM only)
-libraryDependencies += "org.typelevel" %% "grackle-doobie-pg" % "0.26.0"
+libraryDependencies += "org.typelevel" %% "grackle-doobie-pg" % "0.30.0"
 
 // Optional: support for Postgres backend via Skunk
-libraryDependencies += "org.typelevel" %% "grackle-skunk" % "0.26.0"
+libraryDependencies += "org.typelevel" %% "grackle-skunk" % "0.30.0"
 
 // Optional: support for Oracle backend via Doobie (JVM only)
-libraryDependencies += "org.typelevel" %% "grackle-doobie-oracle" % "0.26.0"
+libraryDependencies += "org.typelevel" %% "grackle-doobie-oracle" % "0.30.0"
 
 // Optional: support for SQL Server backend via Doobie (JVM only)
-libraryDependencies += "org.typelevel" %% "grackle-doobie-mssql" % "0.26.0"
+libraryDependencies += "org.typelevel" %% "grackle-doobie-mssql" % "0.30.0"
+
+// Optional: support for H2 backend via Doobie (JVM only)
+libraryDependencies += "org.typelevel" %% "grackle-doobie-h2" % "0.30.0"
+
+// Optional: support for SQLite backend via Doobie (JVM only)
+libraryDependencies += "org.typelevel" %% "grackle-doobie-sqlite" % "0.30.0"
 ```
 
 ## Running tests for database backed mappings
