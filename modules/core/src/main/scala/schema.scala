@@ -2450,9 +2450,7 @@ object SchemaRenderer {
     val args =
       if (args0.isEmpty) ""
       else
-        args0
-          .map { case Binding(nme, v) => s"$nme: ${renderValue(v)}" }
-          .mkString("(", ", ", ")")
+        args0.map(_.render).mkString("(", ", ", ")")
     s"@$name$args"
   }
 
@@ -2580,15 +2578,38 @@ object SchemaRenderer {
   def renderValue(value: Value): String = value match {
     case IntValue(i) => i.toString
     case FloatValue(f) => f.toString
-    case StringValue(s) => s""""$s""""
+    case StringValue(s) => renderString(s)
     case BooleanValue(b) => b.toString
-    case IDValue(i) => s""""$i""""
+    case IDValue(i) => renderString(i)
     case EnumValue(e) => e
     case ListValue(elems) => elems.map(renderValue).mkString("[", ", ", "]")
     case ObjectValue(fields) =>
       fields
-        .map { case (name, value) => s"$name : ${renderValue(value)}" }
+        .map { case (name, value) => s"$name: ${renderValue(value)}" }
         .mkString("{", ", ", "}")
-    case _ => "null"
+    case VariableRef(name) => s"$$$name"
+    case NullValue => "null"
+    case AbsentValue => "null"
+  }
+
+  /**
+   * Renders a string as a GraphQL quoted string
+   */
+  def renderString(str: String): String = {
+    val sb = new StringBuilder(str.length + 2)
+    sb.append('"')
+    str.foreach {
+      case '"' => sb.append("\\\"")
+      case '\\' => sb.append("\\\\")
+      case '\b' => sb.append("\\b")
+      case '\f' => sb.append("\\f")
+      case '\n' => sb.append("\\n")
+      case '\r' => sb.append("\\r")
+      case '\t' => sb.append("\\t")
+      case c if c.isControl => sb.append(f"\\u${c.toInt}%04x")
+      case c => sb.append(c)
+    }
+    sb.append('"')
+    sb.toString
   }
 }

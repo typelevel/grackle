@@ -669,6 +669,45 @@ final class SDLSuite extends CatsEffectSuite {
   }
 
   /**
+   * String values with might escape string quotes
+   */
+  val trickyStrings: List[(String, String)] =
+    List(
+      "quotes" -> "he said \"hi\"",
+      "backslash" -> "a backslash \\",
+      "triple quotes" -> s"a ${TQ} b",
+      "newline" -> "first\nsecond",
+      "carriage return" -> "first\rsecond",
+      "tab" -> "first\tsecond",
+      "control character" -> ("first" + 1.toChar + "second")
+    )
+
+  trickyStrings.foreach {
+    case (label, str) =>
+      test(s"string default value round trips: $label") {
+        val rendered = SchemaRenderer.renderValue(grackle.Value.StringValue(str))
+
+        val schema =
+          s"""|type Query {
+              |  foo(bar: String! = $rendered): Int
+              |}""".stripMargin
+
+        assertEquals(
+          schemaParser
+            .parseText(schema)
+            .map(
+              _.definition("Query")
+                .collect { case o: grackle.ObjectType => o }
+                .flatMap(_.fields.find(_.name == "foo"))
+                .flatMap(_.args.find(_.name == "bar"))
+                .flatMap(_.defaultValue)),
+          Some(grackle.Value.StringValue(str)).success,
+          clue = s"rendered as: ${escape(rendered)}"
+        )
+      }
+  }
+
+  /**
    * Renders control characters visibly, so that failure clues are legible.
    */
   private def escape(s: String): String =

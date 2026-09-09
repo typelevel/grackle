@@ -35,7 +35,7 @@ object QueryMinimizer {
     def minimizeDocument(doc: Document): String = {
       import OperationDefinition._
       import OperationType._
-      import SchemaRenderer.renderDescription
+      import SchemaRenderer.{renderDescription, renderString}
       import Selection._
       import Value._
 
@@ -141,7 +141,7 @@ object QueryMinimizer {
           case Variable(name) => s"$$${name.value}"
           case IntValue(value) => value.toString
           case FloatValue(value) => value.toString
-          case StringValue(value) => s""""$value""""
+          case StringValue(value) => renderString(value)
           case BooleanValue(value) => value.toString
           case NullValue => "null"
           case EnumValue(name) => name.value
