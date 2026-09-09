@@ -690,6 +690,16 @@ final class MinimizerSuite extends CatsEffectSuite {
     run(query, expected)
   }
 
+  test("minimize string arguments which need escapes") {
+    val query =
+      """query { character(name: "he said \"hi\"", tag: "a \\ and a \n and a \t") { id } }"""
+
+    val expected =
+      """query{character(name:"he said \"hi\"",tag:"a \\ and a \n and a \t"){id}}"""
+
+    run(query, expected)
+  }
+
   test("minimize block string description") {
     val query = "\"\"\"\nA \"character\".\n\nWith a \\ backslash.\n\"\"\" query Foo { x }"
 

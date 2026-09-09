@@ -270,7 +270,7 @@ object Query {
   }
 
   case class Binding(name: String, value: Value) {
-    def render: String = s"$name: $value"
+    def render: String = s"$name: ${SchemaRenderer.renderValue(value)}"
   }
 
   type UntypedVarDefs = List[UntypedVarDef]
