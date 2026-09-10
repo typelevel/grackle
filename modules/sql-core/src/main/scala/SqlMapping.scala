@@ -3734,30 +3734,14 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
        */
       def joinsSameSubquery(other: SqlJoin): Boolean =
         parent.isSameOwner(other.parent) && on == other.on && inner == other.inner &&
-          ((child, other.child) match {
-            case (
-                  SubqueryRef(c0, n0, s0: SqlSelect, l0, r0),
-                  SubqueryRef(c1, n1, s1: SqlSelect, l1, r1)) =>
-              c0 == c1 && n0 == n1 && l0 == l1 && r0 == r1 &&
-              s0.context == s1.context && s0.withs == s1.withs && s0.table == s1.table &&
-              s0.joins == s1.joins && s0.wheres == s1.wheres && s0.orders == s1.orders &&
-              s0.offset == s1.offset && s0.limit == s1.limit && s0.distinct == s1.distinct &&
-              s0.oneToOne == s1.oneToOne && s0.predicate == s1.predicate
-            case _ => false
-          })
+          SqlJoin.sameShape(child, other.child)
 
       /**
        * This join with its nested select also exposing the columns of `other`'s, which must
        * satisfy `joinsSameSubquery`
        */
       def mergeSubquery(other: SqlJoin): SqlJoin =
-        (child, other.child) match {
-          case (
-                sq0 @ SubqueryRef(_, _, s0: SqlSelect, _, _),
-                SubqueryRef(_, _, s1: SqlSelect, _, _)) =>
-            copy(child = sq0.copy(subquery = s0.copy(cols = (s0.cols ++ s1.cols).distinct)))
-          case _ => this
-        }
+        copy(child = SqlJoin.mergeCols(child, other.child))
 
       /**
        * Replace references to `from` with `to`
@@ -3855,9 +3839,50 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       def merge(joins: List[SqlJoin]): List[SqlJoin] =
         joins.foldLeft(List.empty[SqlJoin]) { (acc, join) =>
           acc.indexWhere(_.joinsSameSubquery(join)) match {
-            case -1 => if (acc.contains(join)) acc else acc :+ join
+            case -1 => acc :+ join
             case i => acc.updated(i, acc(i).mergeSubquery(join))
           }
+        }
+
+      /**
+       * Are `a` and `b` the same table expression, allowing the selects of nested subqueries to
+       * differ in the columns they expose? A correlated `OUTER APPLY` wraps its select in
+       * another (see `Laterality.Apply.correlate`), so this recurses through the table of each
+       * level.
+       */
+      private def sameShape(a: TableExpr, b: TableExpr): Boolean =
+        (a, b) match {
+          case (SubqueryRef(c0, n0, s0, l0, r0), SubqueryRef(c1, n1, s1, l1, r1)) =>
+            c0 == c1 && n0 == n1 && l0 == l1 && r0 == r1 && sameShape(s0, s1)
+          case _ => a == b
+        }
+
+      private def sameShape(a: SqlQuery, b: SqlQuery): Boolean =
+        (a, b) match {
+          case (a: SqlSelect, b: SqlSelect) =>
+            a.context == b.context && a.withs == b.withs && sameShape(a.table, b.table) &&
+            a.joins == b.joins && a.wheres == b.wheres && a.orders == b.orders &&
+            a.offset == b.offset && a.limit == b.limit && a.distinct == b.distinct &&
+            a.oneToOne == b.oneToOne && a.predicate == b.predicate
+          case _ => a == b
+        }
+
+      /**
+       * `a` with its nested selects also exposing the columns of `b`'s, at every level; `a` and
+       * `b` must satisfy `sameShape`.
+       */
+      private def mergeCols(a: TableExpr, b: TableExpr): TableExpr =
+        (a, b) match {
+          case (a: SubqueryRef, b: SubqueryRef) =>
+            a.copy(subquery = mergeCols(a.subquery, b.subquery))
+          case _ => a
+        }
+
+      private def mergeCols(a: SqlQuery, b: SqlQuery): SqlQuery =
+        (a, b) match {
+          case (a: SqlSelect, b: SqlSelect) =>
+            a.copy(table = mergeCols(a.table, b.table), cols = (a.cols ++ b.cols).distinct)
+          case _ => a
         }
     }
   }
