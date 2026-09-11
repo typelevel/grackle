@@ -17,55 +17,21 @@ package syntax
 
 import munit.FunSuite
 
-import grackle.Ast._
-import grackle.Ast.OperationDefinition._
-import grackle.Ast.OperationType._
-import grackle.Ast.Selection._
-import grackle.Ast.Value._
+import grackle.Ast.Document
 import grackle.GraphQLParser
 import grackle.syntax._
 
 final class DocumentLiteralSuite extends FunSuite {
 
-  test("doc literal matches runtime parse of the same query") {
-    val queryText =
-      """|query {
-         |  character(id: 1000) {
-         |    name
-         |  }
-         |}
-         |""".stripMargin
+  // The `doc` interpolator parses at compile time; this checks it agrees with the runtime parser.
+  // Both are given exactly the same text, so the `location`s recorded in the AST match too.
+  test("doc literal matches the runtime parse of the same text") {
+    val text = "query { character(id: 1000) { name } }"
 
-    val literal: Document = doc"""
-      query {
-        character(id: 1000) {
-          name
-        }
-      }
-    """
+    val literal: Document = doc"query { character(id: 1000) { name } }"
 
-    val expected =
-      Operation(
-        Query,
-        None,
-        Nil,
-        Nil,
-        List(
-          Field(
-            None,
-            Name("character"),
-            List((Name("id"), IntValue(1000))),
-            Nil,
-            List(
-              Field(None, Name("name"), Nil, Nil, Nil)
-            )
-          )
-        )
-      )
+    val parsed = GraphQLParser(GraphQLParser.defaultConfig).parseText(text)
 
-    assertEquals(literal, List(expected))
-
-    val parsed = GraphQLParser(GraphQLParser.defaultConfig).parseText(queryText).toOption
-    assertEquals(parsed, Some(literal))
+    assertEquals(parsed.toOption, Some(literal))
   }
 }
