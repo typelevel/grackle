@@ -21,10 +21,8 @@ import java.util.UUID
 import cats.effect.{IO, Resource, Sync}
 import io.circe.{Decoder => CDecoder, Encoder => CEncoder, Json}
 import munit.catseffect.IOFixture
-import org.typelevel.otel4s.metrics.Meter
-import org.typelevel.otel4s.metrics.Meter.Implicits.noop as metricsNoop
-import org.typelevel.otel4s.trace.Tracer
-import org.typelevel.otel4s.trace.Tracer.Implicits.noop
+import org.typelevel.otel4s.metrics.MeterProvider
+import org.typelevel.otel4s.trace.TracerProvider
 import skunk.{Codec => SCodec, Session}
 import skunk.circe.codec.{all => ccodec}
 import skunk.codec.{all => codec}
@@ -35,8 +33,8 @@ import grackle.sqlpg.test._
 
 trait SkunkDatabaseSuite extends SqlPgDatabaseSuite {
 
-  implicit val meter: Meter[IO] = metricsNoop[IO]
-  implicit val tracer: Tracer[IO] = noop[IO]
+  implicit val meterProvider: MeterProvider[IO] = MeterProvider.noop[IO]
+  implicit val tracerProvider: TracerProvider[IO] = TracerProvider.noop[IO]
 
   def poolResource: Resource[IO, Resource[IO, Session[IO]]] = {
     val connInfo = postgresConnectionInfo

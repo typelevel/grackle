@@ -80,7 +80,7 @@ class SubscriptionSuite extends SkunkDatabaseSuite {
 
         // Send some notifications through Postgres, which will trigger queries on the subscription.
         _ <- pool.use { s =>
-          val ch = s.channel(id"city_channel").contramap[Int](_.toString)
+          val ch = s.channel(ident"city_channel").contramap[Int](_.toString)
           List(101, 102, 103).traverse_(ch.notify)
         }
 

@@ -98,7 +98,7 @@ trait SubscriptionMapping[F[_]] extends SkunkMapping[F] {
           RootStream.computeChild("channel")((child, _, _) =>
             for {
               s <- fs2.Stream.resource(pool)
-              id <- s.channel(id"city_channel").listen(256).map(_.value.toInt)
+              id <- s.channel(ident"city_channel").listen(256).map(_.value.toInt)
             } yield Unique(Filter(Eql(CityType / "id", Const(id)), child)).success)
         )
       )
