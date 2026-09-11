@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package compiler
+package problem
 
 import io.circe.JsonObject
 import io.circe.literal._
