@@ -272,7 +272,8 @@ lazy val parser = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .settings(commonSettings)
   .settings(
     name := "grackle-parser",
-    // New in 0.31.0 (previous releases had no such artifact).
+    // New in 0.31.0 on every platform, so `nativeSettings` (which dates the native artifact to
+    // 0.26.1) doesn't apply here.
     tlVersionIntroduced := Map("2.13" -> "0.31.0", "3" -> "0.31.0"),
     libraryDependencies ++= Seq(
       "org.typelevel" %%% "cats-parse" % catsParseVersion,
@@ -281,8 +282,6 @@ lazy val parser = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     )
   )
   .jsSettings(scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.CommonJSModule)))
-  .nativeSettings(nativeSettings)
-  .nativeSettings(tlVersionIntroduced := Map("2.13" -> "0.31.0", "3" -> "0.31.0"))
 
 lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)

@@ -17,12 +17,12 @@ package syntax
 
 import munit.FunSuite
 
-import grackle.GraphQLParser
 import grackle.Ast._
 import grackle.Ast.OperationDefinition._
 import grackle.Ast.OperationType._
 import grackle.Ast.Selection._
 import grackle.Ast.Value._
+import grackle.GraphQLParser
 import grackle.syntax._
 
 final class DocumentLiteralSuite extends FunSuite {
