@@ -51,9 +51,9 @@ final class ParserSuite extends CatsEffectSuite {
             List((Name("id"), IntValue(1000))),
             Nil,
             List(
-              Field(None, Name("name"), Nil, Nil, Nil)
-            )
-          )
+              Field(None, Name("name"), Nil, Nil, Nil, Some((4, 11)))
+            ),
+            Some((3, 9)))
         )
       )
 
@@ -86,8 +86,9 @@ final class ParserSuite extends CatsEffectSuite {
             ),
             Nil,
             List(
-              Field(None, Name("quux"), Nil, Nil, Nil)
-            )
+              Field(None, Name("quux"), Nil, Nil, Nil, Some((4, 11)))
+            ),
+            Some((3, 9))
           )
         )
       )
@@ -124,8 +125,9 @@ final class ParserSuite extends CatsEffectSuite {
             ),
             Nil,
             List(
-              Field(None, Name("quux"), Nil, Nil, Nil)
-            )
+              Field(None, Name("quux"), Nil, Nil, Nil, Some((4, 11)))
+            ),
+            Some((3, 9))
           )
         )
       )
@@ -172,28 +174,29 @@ final class ParserSuite extends CatsEffectSuite {
                 Nil,
                 Nil,
                 List(
-                  Field(None, Name("name"), Nil, Nil, Nil)
-                )
-              ),
+                  Field(None, Name("name"), Nil, Nil, Nil, Some((5, 13)))
+                ),
+                Some((4, 11))),
               Field(
                 None,
                 Name("mutationType"),
                 Nil,
                 Nil,
                 List(
-                  Field(None, Name("name"), Nil, Nil, Nil)
-                )
-              ),
+                  Field(None, Name("name"), Nil, Nil, Nil, Some((8, 13)))
+                ),
+                Some((7, 11))),
               Field(
                 None,
                 Name("subscriptionType"),
                 Nil,
                 Nil,
                 List(
-                  Field(None, Name("name"), Nil, Nil, Nil)
-                )
-              )
-            )
+                  Field(None, Name("name"), Nil, Nil, Nil, Some((11, 13)))
+                ),
+                Some((10, 11)))
+            ),
+            Some((3, 9))
           )
         )
       )
@@ -228,26 +231,28 @@ final class ParserSuite extends CatsEffectSuite {
             List((Name("episode"), EnumValue(Name("NEWHOPE")))),
             Nil,
             List(
-              Field(None, Name("name"), Nil, Nil, Nil),
+              Field(None, Name("name"), Nil, Nil, Nil, Some((4, 11))),
               Field(
                 None,
                 Name("friends"),
                 Nil,
                 Nil,
                 List(
-                  Field(None, Name("name"), Nil, Nil, Nil),
+                  Field(None, Name("name"), Nil, Nil, Nil, Some((6, 13))),
                   Field(
                     None,
                     Name("friends"),
                     Nil,
                     Nil,
                     List(
-                      Field(None, Name("name"), Nil, Nil, Nil)
-                    )
-                  )
-                )
+                      Field(None, Name("name"), Nil, Nil, Nil, Some((8, 15)))
+                    ),
+                    Some((7, 13)))
+                ),
+                Some((5, 11))
               )
-            )
+            ),
+            Some((3, 9))
           )
         )
       )
@@ -279,21 +284,24 @@ final class ParserSuite extends CatsEffectSuite {
             List((Name("id"), IntValue(4))),
             Nil,
             List(
-              Field(None, Name("id"), Nil, Nil, Nil),
-              Field(None, Name("name"), Nil, Nil, Nil),
+              Field(None, Name("id"), Nil, Nil, Nil, Some((4, 11))),
+              Field(None, Name("name"), Nil, Nil, Nil, Some((5, 11))),
               Field(
                 Some(Name("smallPic")),
                 Name("profilePic"),
                 List((Name("size"), IntValue(64))),
                 Nil,
-                Nil),
+                Nil,
+                Some((6, 11))),
               Field(
                 Some(Name("bigPic")),
                 Name("profilePic"),
                 List((Name("size"), IntValue(1024))),
                 Nil,
-                Nil)
-            )
+                Nil,
+                Some((7, 11)))
+            ),
+            Some((3, 9))
           )
         )
       )
@@ -324,15 +332,17 @@ final class ParserSuite extends CatsEffectSuite {
             Name("character"),
             List((Name("id"), StringValue("1000"))),
             Nil,
-            List(Field(None, Name("name"), Nil, Nil, Nil))),
+            List(Field(None, Name("name"), Nil, Nil, Nil, Some((4, 11)))),
+            Some((3, 9))),
           Field(
             Some(Name("darth")),
             Name("character"),
             List((Name("id"), StringValue("1001"))),
             Nil,
             List(
-              Field(None, Name("name"), Nil, Nil, Nil)
-            )
+              Field(None, Name("name"), Nil, Nil, Nil, Some((7, 11)))
+            ),
+            Some((6, 9))
           )
         )
       )
@@ -367,15 +377,17 @@ final class ParserSuite extends CatsEffectSuite {
             List((Name("id"), IntValue(4))),
             Nil,
             List(
-              Field(None, Name("id"), Nil, Nil, Nil),
-              Field(None, Name("name"), Nil, Nil, Nil),
+              Field(None, Name("id"), Nil, Nil, Nil, Some((4, 11))),
+              Field(None, Name("name"), Nil, Nil, Nil, Some((5, 11))),
               Field(
                 None,
                 Name("profilePic"),
                 List((Name("size"), Variable(Name("devicePicSize")))),
                 Nil,
-                Nil)
-            )
+                Nil,
+                Some((6, 11)))
+            ),
+            Some((3, 9))
           )
         )
       )
@@ -415,15 +427,17 @@ final class ParserSuite extends CatsEffectSuite {
             List((Name("id"), IntValue(4))),
             Nil,
             List(
-              Field(None, Name("id"), Nil, Nil, Nil),
-              Field(None, Name("name"), Nil, Nil, Nil),
+              Field(None, Name("id"), Nil, Nil, Nil, Some((4, 11))),
+              Field(None, Name("name"), Nil, Nil, Nil, Some((5, 11))),
               Field(
                 None,
                 Name("profilePic"),
                 List((Name("size"), Variable(Name("devicePicSize")))),
                 Nil,
-                Nil)
-            )
+                Nil,
+                Some((6, 11)))
+            ),
+            Some((3, 9))
           )
         )
       )
@@ -463,15 +477,17 @@ final class ParserSuite extends CatsEffectSuite {
             List((Name("id"), IntValue(4))),
             Nil,
             List(
-              Field(None, Name("id"), Nil, Nil, Nil),
-              Field(None, Name("name"), Nil, Nil, Nil),
+              Field(None, Name("id"), Nil, Nil, Nil, Some((4, 11))),
+              Field(None, Name("name"), Nil, Nil, Nil, Some((5, 11))),
               Field(
                 None,
                 Name("profilePic"),
                 List((Name("size"), Variable(Name("devicePicSize")))),
                 Nil,
-                Nil)
-            )
+                Nil,
+                Some((6, 11)))
+            ),
+            Some((3, 9))
           )
         )
       )
@@ -522,28 +538,29 @@ final class ParserSuite extends CatsEffectSuite {
                 Nil,
                 Nil,
                 List(
-                  Field(None, Name("name"), Nil, Nil, Nil)
-                )
-              ),
+                  Field(None, Name("name"), Nil, Nil, Nil, Some((6, 13)))
+                ),
+                Some((5, 11))),
               Field(
                 None,
                 Name("mutationType"),
                 Nil,
                 Nil,
                 List(
-                  Field(None, Name("name"), Nil, Nil, Nil)
-                )
-              ),
+                  Field(None, Name("name"), Nil, Nil, Nil, Some((9, 13)))
+                ),
+                Some((8, 11))),
               Field(
                 None,
                 Name("subscriptionType"),
                 Nil,
                 Nil,
                 List(
-                  Field(None, Name("name"), Nil, Nil, Nil)
-                )
-              )
-            )
+                  Field(None, Name("name"), Nil, Nil, Nil, Some((14, 13)))
+                ),
+                Some((13, 11)))
+            ),
+            Some((4, 9))
           )
         )
       )
@@ -596,10 +613,11 @@ final class ParserSuite extends CatsEffectSuite {
                   Some(Named(Name("Character"))),
                   Nil,
                   List(
-                    Field(None, Name("age"), Nil, Nil, Nil)
+                    Field(None, Name("age"), Nil, Nil, Nil, Some((6, 13)))
                   )
                 )
-              )
+              ),
+              Some((3, 9))
             )
           )
         ),
@@ -608,7 +626,7 @@ final class ParserSuite extends CatsEffectSuite {
           Named(Name("Character")),
           Nil,
           List(
-            Field(None, Name("name"), Nil, Nil, Nil)
+            Field(None, Name("name"), Nil, Nil, Nil, Some((12, 9)))
           )
         )
       )
@@ -645,14 +663,15 @@ final class ParserSuite extends CatsEffectSuite {
             List((Name("id"), IntValue(1000))),
             Nil,
             List(
-              Field(None, Name("name"), Nil, Nil, Nil),
+              Field(None, Name("name"), Nil, Nil, Nil, Some((4, 11))),
               InlineFragment(
                 None,
                 List(
                   Directive(Name("include"), List((Name("if"), Variable(Name("expanded")))))),
-                List(Field(None, Name("age"), List(), List(), List()))
+                List(Field(None, Name("age"), List(), List(), List(), Some((6, 13))))
               )
-            )
+            ),
+            Some((3, 9))
           )
         )
       )
@@ -688,13 +707,14 @@ final class ParserSuite extends CatsEffectSuite {
             List((Name("id"), IntValue(1000))),
             Nil,
             List(
-              Field(None, Name("name"), Nil, Nil, Nil),
+              Field(None, Name("name"), Nil, Nil, Nil, Some((4, 11))),
               InlineFragment(
                 None,
                 List(Directive(Name("dir"), Nil)),
-                List(Field(None, Name("age"), List(), List(), List()))
+                List(Field(None, Name("age"), List(), List(), List(), Some((6, 13))))
               )
-            )
+            ),
+            Some((3, 9))
           )
         )
       )
@@ -709,7 +729,7 @@ final class ParserSuite extends CatsEffectSuite {
 
     def assertParse(input: String, expected: Value) =
       parser.parseText(s"query { foo(bar: $input) }").toOption match {
-        case Some(List(Operation(_, _, _, _, List(Field(_, _, List((_, v)), _, _)), _))) =>
+        case Some(List(Operation(_, _, _, _, List(Field(_, _, List((_, v)), _, _, _)), _))) =>
           assertEquals(v, expected)
         case _ => assert(false)
       }
@@ -972,12 +992,18 @@ final class ParserSuite extends CatsEffectSuite {
   }
 
   test("comment at end of file without a line terminator") {
-    val expected =
-      List(Operation(Query, None, Nil, Nil, List(Field(None, Name("x"), Nil, Nil, Nil))))
+    def expected(location: (Int, Int)) =
+      List(
+        Operation(
+          Query,
+          None,
+          Nil,
+          Nil,
+          List(Field(None, Name("x"), Nil, Nil, Nil, Some(location)))))
 
-    assertEquals(parser.parseText("query { x } # done"), Result(expected))
-    assertEquals(parser.parseText("query { x } #"), Result(expected))
-    assertEquals(parser.parseText("query { # inner\n x } # a\n# b"), Result(expected))
+    assertEquals(parser.parseText("query { x } # done"), Result(expected((1, 9))))
+    assertEquals(parser.parseText("query { x } #"), Result(expected((1, 9))))
+    assertEquals(parser.parseText("query { # inner\n x } # a\n# b"), Result(expected((2, 2))))
   }
 
   test("fragment name that starts with 'on'") {
@@ -994,12 +1020,18 @@ final class ParserSuite extends CatsEffectSuite {
           Nil,
           Nil,
           List(
-            Field(None, Name("x"), Nil, Nil, List(FragmentSpread(Name("onlyFriends"), Nil))))),
+            Field(
+              None,
+              Name("x"),
+              Nil,
+              Nil,
+              List(FragmentSpread(Name("onlyFriends"), Nil)),
+              Some((2, 15))))),
         FragmentDefinition(
           Name("onlyFriends"),
           Named(Name("X")),
           Nil,
-          List(Field(None, Name("name"), Nil, Nil, Nil)))
+          List(Field(None, Name("name"), Nil, Nil, Nil, Some((3, 35)))))
       )
 
     assertEquals(parser.parseText(query), Result(expected))
@@ -1028,7 +1060,8 @@ final class ParserSuite extends CatsEffectSuite {
               (Name("c"), EnumValue(Name("nullable")))
             ),
             Nil,
-            Nil
+            Nil,
+            Some((1, 9))
           ))
       )
 
@@ -1054,7 +1087,9 @@ final class ParserSuite extends CatsEffectSuite {
               (Name("c"), NullValue)
             ),
             Nil,
-            Nil)))
+            Nil,
+            Some((1, 9))))
+      )
 
     assertEquals(parser.parseText(query), Result(List(expected)))
   }
@@ -1068,7 +1103,7 @@ final class ParserSuite extends CatsEffectSuite {
         None,
         Nil,
         Nil,
-        List(Field(None, Name("likeStory"), Nil, Nil, Nil)),
+        List(Field(None, Name("likeStory"), Nil, Nil, Nil, Some((1, 31)))),
         Some("Like a story"))
 
     assertEquals(parser.parseText(query), Result(List(expected)))
@@ -1097,7 +1132,7 @@ final class ParserSuite extends CatsEffectSuite {
             Nil,
             Some("the id to fetch"))),
         Nil,
-        List(Field(None, Name("x"), Nil, Nil, Nil)),
+        List(Field(None, Name("x"), Nil, Nil, Nil, Some((7, 9)))),
         Some("Fetch x")
       )
 
@@ -1118,12 +1153,19 @@ final class ParserSuite extends CatsEffectSuite {
           None,
           Nil,
           Nil,
-          List(Field(None, Name("x"), Nil, Nil, List(FragmentSpread(Name("frag"), Nil))))),
+          List(
+            Field(
+              None,
+              Name("x"),
+              Nil,
+              Nil,
+              List(FragmentSpread(Name("frag"), Nil)),
+              Some((2, 15))))),
         FragmentDefinition(
           Name("frag"),
           Named(Name("X")),
           Nil,
-          List(Field(None, Name("name"), Nil, Nil, Nil)),
+          List(Field(None, Name("name"), Nil, Nil, Nil, Some((4, 28)))),
           Some("shared fields"))
       )
 

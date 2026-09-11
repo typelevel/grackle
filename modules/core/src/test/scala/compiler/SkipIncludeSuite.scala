@@ -17,6 +17,7 @@ package compiler
 
 import io.circe.literal._
 import munit.CatsEffectSuite
+import utils.QueryLocations._
 
 import grackle._
 import grackle.Query._
@@ -51,8 +52,8 @@ final class SkipIncludeSuite extends CatsEffectSuite {
     val expected =
       Group(
         List(
-          Select("field", Some("b"), Select("subfieldB")),
-          Select("field", Some("c"), Select("subfieldA"))
+          Select("field", Some("b"), Select("subfieldB", None, Empty, loc(7, 11)), loc(6, 9)),
+          Select("field", Some("c"), Select("subfieldA", None, Empty, loc(10, 11)), loc(9, 9))
         ))
 
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
@@ -93,26 +94,26 @@ final class SkipIncludeSuite extends CatsEffectSuite {
     val expected =
       Group(
         List(
-          Select("field", Some("a")),
+          Select("field", Some("a"), Empty, loc(3, 9)),
           Select(
             "field",
             Some("b"),
             Group(
               List(
-                Select("subfieldA"),
-                Select("subfieldB")
-              ))
-          ),
+                Select("subfieldA", None, Empty, loc(18, 9)),
+                Select("subfieldB", None, Empty, loc(19, 9))
+              )),
+            loc(6, 9)),
           Select(
             "field",
             Some("c"),
             Group(
               List(
-                Select("subfieldA"),
-                Select("subfieldB")
-              ))
-          ),
-          Select("field", Some("d"))
+                Select("subfieldA", None, Empty, loc(18, 9)),
+                Select("subfieldB", None, Empty, loc(19, 9))
+              )),
+            loc(9, 9)),
+          Select("field", Some("d"), Empty, loc(12, 9))
         ))
 
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
@@ -146,12 +147,13 @@ final class SkipIncludeSuite extends CatsEffectSuite {
     val expected =
       Select(
         "field",
+        None,
         Group(
           List(
-            Select("subfieldB", Some("b")),
-            Select("subfieldA", Some("c"))
-          ))
-      )
+            Select("subfieldB", Some("b"), Empty, loc(10, 9)),
+            Select("subfieldA", Some("c"), Empty, loc(11, 9))
+          )),
+        loc(3, 9))
 
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
 
@@ -198,26 +200,26 @@ final class SkipIncludeSuite extends CatsEffectSuite {
     val expected =
       Group(
         List(
-          Select("field", Some("a")),
+          Select("field", Some("a"), Empty, loc(3, 9)),
           Select(
             "field",
             Some("b"),
             Group(
               List(
-                Select("subfieldA"),
-                Select("subfieldB")
-              ))
-          ),
+                Select("subfieldA", None, Empty, loc(11, 13)),
+                Select("subfieldB", None, Empty, loc(12, 13))
+              )),
+            loc(9, 9)),
           Select(
             "field",
             Some("c"),
             Group(
               List(
-                Select("subfieldA"),
-                Select("subfieldB")
-              ))
-          ),
-          Select("field", Some("d"))
+                Select("subfieldA", None, Empty, loc(17, 13)),
+                Select("subfieldB", None, Empty, loc(18, 13))
+              )),
+            loc(15, 9)),
+          Select("field", Some("d"), Empty, loc(21, 9))
         ))
 
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
@@ -249,12 +251,13 @@ final class SkipIncludeSuite extends CatsEffectSuite {
     val expected =
       Select(
         "field",
+        None,
         Group(
           List(
-            Select("subfieldB", Some("b")),
-            Select("subfieldA", Some("c"))
-          ))
-      )
+            Select("subfieldB", Some("b"), Empty, loc(6, 13)),
+            Select("subfieldA", Some("c"), Empty, loc(7, 13))
+          )),
+        loc(3, 9))
 
     val compiled = SkipIncludeMapping.compiler.compile(query, untypedVars = Some(variables))
 
@@ -271,7 +274,8 @@ final class SkipIncludeSuite extends CatsEffectSuite {
       }
     """
 
-    val expected = Select("field", Some("a"), Select("subfieldA"))
+    val expected =
+      Select("field", Some("a"), Select("subfieldA", None, Empty, loc(3, 56)), loc(3, 9))
 
     val compiled = SkipIncludeMapping.compiler.compile(query)
 
@@ -287,9 +291,7 @@ final class SkipIncludeSuite extends CatsEffectSuite {
 
     val compiled = SkipIncludeMapping.compiler.compile(query)
 
-    assertEquals(
-      compiled.map(_.query),
-      Result.failure("Directive 'skip' may not occur more than once"))
+    assertEquals(compiled, Result.failure("Directive 'skip' may not occur more than once"))
   }
 
   test("repeated include on the same selection is rejected") {
@@ -301,9 +303,7 @@ final class SkipIncludeSuite extends CatsEffectSuite {
 
     val compiled = SkipIncludeMapping.compiler.compile(query)
 
-    assertEquals(
-      compiled.map(_.query),
-      Result.failure("Directive 'include' may not occur more than once"))
+    assertEquals(compiled, Result.failure("Directive 'include' may not occur more than once"))
   }
 }
 

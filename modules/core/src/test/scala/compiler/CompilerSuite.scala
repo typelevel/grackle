@@ -19,6 +19,7 @@ import cats.data.NonEmptyChain
 import cats.effect.IO
 import cats.implicits._
 import munit.CatsEffectSuite
+import utils.QueryLocations._
 
 import grackle._
 import grackle.Predicate._
@@ -48,8 +49,8 @@ final class CompilerSuite extends CatsEffectSuite {
         None,
         List(Binding("id", StringValue("1000"))),
         Nil,
-        UntypedSelect("name", None, Nil, Nil, Empty)
-      )
+        UntypedSelect("name", None, Nil, Nil, Empty, loc(4, 11)),
+        loc(3, 9))
 
     val res = queryParser.parseText(query).map(_._1)
     assertEquals(res, Result.Success(List(UntypedQuery(None, expected, Nil, Nil))))
@@ -77,8 +78,9 @@ final class CompilerSuite extends CatsEffectSuite {
           None,
           Nil,
           Nil,
-          UntypedSelect("name", None, Nil, Nil, Empty)
-        )
+          UntypedSelect("name", None, Nil, Nil, Empty, loc(5, 13)),
+          loc(4, 11)),
+        loc(3, 9)
       )
 
     val res = queryParser.parseText(query).map(_._1)
@@ -100,8 +102,8 @@ final class CompilerSuite extends CatsEffectSuite {
         None,
         List(Binding("id", StringValue("1000"))),
         Nil,
-        UntypedSelect("name", None, Nil, Nil, Empty)
-      )
+        UntypedSelect("name", None, Nil, Nil, Empty, loc(4, 11)),
+        loc(3, 9))
 
     val res = queryParser.parseText(query).map(_._1)
     assertEquals(res, Result.Success(List(UntypedSubscription(None, expected, Nil, Nil))))
@@ -125,14 +127,15 @@ final class CompilerSuite extends CatsEffectSuite {
         None,
         List(Binding("id", StringValue("1000"))),
         Nil,
-        UntypedSelect("name", None, Nil, Nil, Empty) ~
+        UntypedSelect("name", None, Nil, Nil, Empty, loc(4, 11)) ~
           UntypedSelect(
             "friends",
             None,
             Nil,
             Nil,
-            UntypedSelect("name", None, Nil, Nil, Empty)
-          )
+            UntypedSelect("name", None, Nil, Nil, Empty, loc(6, 13)),
+            loc(5, 11)),
+        loc(3, 9)
       )
 
     val res = queryParser.parseText(query).map(_._1)
@@ -160,21 +163,23 @@ final class CompilerSuite extends CatsEffectSuite {
         None,
         List(Binding("episode", EnumValue("NEWHOPE"))),
         Nil,
-        UntypedSelect("name", None, Nil, Nil, Empty) ~
+        UntypedSelect("name", None, Nil, Nil, Empty, loc(4, 11)) ~
           UntypedSelect(
             "friends",
             None,
             Nil,
             Nil,
-            UntypedSelect("name", None, Nil, Nil, Empty) ~
+            UntypedSelect("name", None, Nil, Nil, Empty, loc(6, 13)) ~
               UntypedSelect(
                 "friends",
                 None,
                 Nil,
                 Nil,
-                UntypedSelect("name", None, Nil, Nil, Empty)
-              )
-          )
+                UntypedSelect("name", None, Nil, Nil, Empty, loc(8, 15)),
+                loc(7, 13)),
+            loc(5, 11)
+          ),
+        loc(3, 9)
       )
 
     val res = queryParser.parseText(query).map(_._1)
@@ -201,21 +206,24 @@ final class CompilerSuite extends CatsEffectSuite {
         Nil,
         Group(
           List(
-            UntypedSelect("id", None, Nil, Nil, Empty),
-            UntypedSelect("name", None, Nil, Nil, Empty),
+            UntypedSelect("id", None, Nil, Nil, Empty, loc(4, 11)),
+            UntypedSelect("name", None, Nil, Nil, Empty, loc(5, 11)),
             UntypedSelect(
               "profilePic",
               Some("smallPic"),
               List(Binding("size", IntValue(64))),
               Nil,
-              Empty),
+              Empty,
+              loc(6, 11)),
             UntypedSelect(
               "profilePic",
               Some("bigPic"),
               List(Binding("size", IntValue(1024))),
               Nil,
-              Empty)
-          ))
+              Empty,
+              loc(7, 11))
+          )),
+        loc(3, 9)
       )
 
     val res = queryParser.parseText(query).map(_._1)
@@ -250,19 +258,23 @@ final class CompilerSuite extends CatsEffectSuite {
           None,
           Nil,
           Nil,
-          UntypedSelect("name", None, Nil, Nil, Empty)) ~
+          UntypedSelect("name", None, Nil, Nil, Empty, loc(5, 13)),
+          loc(4, 11)) ~
           UntypedSelect(
             "mutationType",
             None,
             Nil,
             Nil,
-            UntypedSelect("name", None, Nil, Nil, Empty)) ~
+            UntypedSelect("name", None, Nil, Nil, Empty, loc(8, 13)),
+            loc(7, 11)) ~
           UntypedSelect(
             "subscriptionType",
             None,
             Nil,
             Nil,
-            UntypedSelect("name", None, Nil, Nil, Empty))
+            UntypedSelect("name", None, Nil, Nil, Empty, loc(11, 13)),
+            loc(10, 11)),
+        loc(3, 9)
       )
 
     val res = queryParser.parseText(query).map(_._1)
@@ -290,13 +302,11 @@ final class CompilerSuite extends CatsEffectSuite {
         Unique(
           Filter(
             Eql(AtomicMapping.CharacterType / "id", Const("1000")),
-            Select("name") ~
-              Select(
-                "friends",
-                Select("name")
-              )
+            Select("name", None, Empty, loc(4, 11)) ~
+              Select("friends", None, Select("name", None, Empty, loc(6, 13)), loc(5, 11))
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val res = AtomicMapping.compiler.compile(query)
@@ -412,29 +422,37 @@ final class CompilerSuite extends CatsEffectSuite {
         TrivialJoin,
         Select(
           "componenta",
-          Select("fielda1") ~
+          None,
+          Select("fielda1", None, Empty, loc(4, 11)) ~
             Select(
               "fielda2",
+              None,
               Component(
                 ComponentB,
                 TrivialJoin,
                 Select(
                   "componentb",
-                  Select("fieldb1") ~
+                  None,
+                  Select("fieldb1", None, Empty, loc(7, 15)) ~
                     Select(
                       "fieldb2",
+                      None,
                       Component(
                         ComponentC,
                         TrivialJoin,
                         Select(
                           "componentc",
-                          Select("fieldc1")
-                        )
-                      )
-                    )
+                          None,
+                          Select("fieldc1", None, Empty, loc(10, 19)),
+                          loc(9, 17))
+                      ),
+                      loc(8, 15)),
+                  loc(6, 13)
                 )
-              )
-            )
+              ),
+              loc(5, 11)
+            ),
+          loc(3, 9)
         )
       )
 

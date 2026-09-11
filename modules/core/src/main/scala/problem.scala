@@ -36,18 +36,22 @@ final case class Problem(
   def atPath(path: List[Problem.PathSegment]): Problem =
     if (this.path.isEmpty) copy(path = path) else this
 
+  /**
+   * Yields this problem with `locations` as its source locations, if it carries none.
+   *
+   * A problem which a deeper position raised already holds the location of that position, so an
+   * enclosing position leaves it in place.
+   */
+  def atLocations(locations: List[(Int, Int)]): Problem =
+    if (this.locations.isEmpty) copy(locations = locations) else this
+
   override def toString = {
 
     lazy val pathText: String =
       path.mkString("/")
 
     lazy val locationsText: String =
-      locations
-        .map {
-          case (a, b) =>
-            if (a == b) a.toString else s"$a..$b"
-        }
-        .mkString(", ")
+      locations.map { case (line, column) => s"$line:$column" }.mkString(", ")
 
     val s = (path.nonEmpty, locations.nonEmpty) match {
       case (true, true) => s"$message (at $pathText: $locationsText)"

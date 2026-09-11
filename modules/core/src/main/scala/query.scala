@@ -48,8 +48,16 @@ object Query {
 
   /**
    * Select field `name` possibly aliased, and continue with `child`
+   *
+   * `location` holds the line and the column of the selection in the text of the request, if
+   * the parser recorded them. Both count from one.
    */
-  case class Select(name: String, alias: Option[String], child: Query) extends Query {
+  case class Select(
+      name: String,
+      alias: Option[String],
+      child: Query,
+      location: Option[(Int, Int)] = None)
+      extends Query {
     def resultName: String = alias.getOrElse(name)
 
     def render = {
@@ -78,7 +86,8 @@ object Query {
       alias: Option[String],
       args: List[Binding],
       directives: List[Directive],
-      child: Query)
+      child: Query,
+      location: Option[(Int, Int)] = None)
       extends Query {
     def resultName: String = alias.getOrElse(name)
 
@@ -311,8 +320,8 @@ object Query {
   def rootName(q: Query): Option[(String, Option[String])] = {
     def loop(q: Query): Option[(String, Option[String])] =
       q match {
-        case UntypedSelect(name, alias, _, _, _) => Some((name, alias))
-        case Select(name, alias, _) => Some((name, alias))
+        case UntypedSelect(name, alias, _, _, _, _) => Some((name, alias))
+        case Select(name, alias, _, _) => Some((name, alias))
         case Environment(_, child) => loop(child)
         case TransformCursor(_, child) => loop(child)
         case _ => None
@@ -327,8 +336,8 @@ object Query {
   def resultName(q: Query): Option[String] = {
     def loop(q: Query): Option[String] =
       q match {
-        case UntypedSelect(name, alias, _, _, _) => Some(alias.getOrElse(name))
-        case Select(name, alias, _) => Some(alias.getOrElse(name))
+        case UntypedSelect(name, alias, _, _, _, _) => Some(alias.getOrElse(name))
+        case Select(name, alias, _, _) => Some(alias.getOrElse(name))
         case Environment(_, child) => loop(child)
         case TransformCursor(_, child) => loop(child)
         case _ => None
@@ -379,8 +388,8 @@ object Query {
   def children(q: Query): List[Query] = {
     def loop(q: Query): List[Query] =
       q match {
-        case UntypedSelect(_, _, _, _, child) => ungroup(child)
-        case Select(_, _, child) => ungroup(child)
+        case UntypedSelect(_, _, _, _, child, _) => ungroup(child)
+        case Select(_, _, child, _) => ungroup(child)
         case Environment(_, child) => loop(child)
         case TransformCursor(_, child) => loop(child)
         case _ => Nil
@@ -395,8 +404,8 @@ object Query {
   def extractChild(query: Query): Option[Query] = {
     def loop(q: Query): Option[Query] =
       q match {
-        case UntypedSelect(_, _, _, _, child) => Some(child)
-        case Select(_, _, child) => Some(child)
+        case UntypedSelect(_, _, _, _, child, _) => Some(child)
+        case Select(_, _, child, _) => Some(child)
         case Environment(_, child) => loop(child)
         case TransformCursor(_, child) => loop(child)
         case _ => None
@@ -426,8 +435,8 @@ object Query {
   def hasField(query: Query, fieldName: String): Boolean = {
     def loop(q: Query): Boolean =
       ungroup(q).exists {
-        case UntypedSelect(`fieldName`, _, _, _, _) => true
-        case Select(`fieldName`, _, _) => true
+        case UntypedSelect(`fieldName`, _, _, _, _, _) => true
+        case Select(`fieldName`, _, _, _) => true
         case Environment(_, child) => loop(child)
         case TransformCursor(_, child) => loop(child)
         case _ => false
@@ -441,8 +450,8 @@ object Query {
   def fieldAlias(query: Query, fieldName: String): Option[String] = {
     def loop(q: Query): Option[String] =
       ungroup(q).collectFirstSome {
-        case UntypedSelect(`fieldName`, alias, _, _, _) => alias
-        case Select(`fieldName`, alias, _) => alias
+        case UntypedSelect(`fieldName`, alias, _, _, _, _) => alias
+        case Select(`fieldName`, alias, _, _) => alias
         case Environment(_, child) => loop(child)
         case TransformCursor(_, child) => loop(child)
         case _ => None

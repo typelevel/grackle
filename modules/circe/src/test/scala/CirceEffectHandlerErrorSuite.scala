@@ -48,8 +48,8 @@ final class CirceEffectHandlerErrorSuite extends CatsEffectSuite {
     val expected = json"""
       {
         "errors" : [
-          { "message": "value: hi", "path": ["s"] },
-          { "message": "value: 42", "path": ["n"] }
+          { "message": "value: hi", "locations": [{ "line": 3, "column": 9 }], "path": ["s"] },
+          { "message": "value: 42", "locations": [{ "line": 4, "column": 9 }], "path": ["n"] }
         ],
         "data" : null
       }
@@ -62,7 +62,7 @@ final class CirceEffectHandlerErrorSuite extends CatsEffectSuite {
     val expected = json"""
       {
         "errors" : [
-          { "message": "value: hi", "path": ["s"] }
+          { "message": "value: hi", "locations": [{ "line": 3, "column": 9 }], "path": ["s"] }
         ],
         "data" : null
       }
@@ -111,7 +111,7 @@ final class CirceEffectHandlerErrorSuite extends CatsEffectSuite {
     val expected = json"""
       {
         "errors" : [
-          { "message": "boom", "path": ["viaEffect"] }
+          { "message": "boom", "locations": [{ "line": 4, "column": 9 }], "path": ["viaEffect"] }
         ],
         "data" : {
           "ping" : "pong",
@@ -167,7 +167,7 @@ final class CirceEffectHandlerErrorSuite extends CatsEffectSuite {
     val expected = json"""
       {
         "errors" : [
-          { "message": "boom", "path": ["viaEffect", "name"] }
+          { "message": "boom", "locations": [{ "line": 5, "column": 11 }], "path": ["viaEffect", "name"] }
         ],
         "data" : null
       }
@@ -190,7 +190,7 @@ final class CirceEffectHandlerErrorSuite extends CatsEffectSuite {
     val expected = json"""
       {
         "errors" : [
-          { "message": "boom", "path": ["child", "viaEffect"] }
+          { "message": "boom", "locations": [{ "line": 5, "column": 11 }], "path": ["child", "viaEffect"] }
         ],
         "data" : {
           "ping" : "pong",

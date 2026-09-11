@@ -20,6 +20,7 @@ import cats.implicits._
 import io.circe.Json
 import io.circe.literal._
 import munit.CatsEffectSuite
+import utils.QueryLocations._
 
 import grackle._
 import grackle.Predicate._
@@ -62,6 +63,7 @@ final class FragmentSuite extends CatsEffectSuite {
     val expected =
       Select(
         "user",
+        None,
         Unique(
           Filter(
             Eql(FragmentMapping.UserType / "id", Const("1")),
@@ -69,25 +71,30 @@ final class FragmentSuite extends CatsEffectSuite {
               List(
                 Select(
                   "friends",
+                  None,
                   Group(
                     List(
-                      Select("id"),
-                      Select("name"),
-                      Select("profilePic")
-                    ))
+                      Select("id", None, Empty, loc(14, 9)),
+                      Select("name", None, Empty, loc(15, 9)),
+                      Select("profilePic", None, Empty, loc(16, 9))
+                    )),
+                  loc(4, 11)
                 ),
                 Select(
                   "mutualFriends",
+                  None,
                   Group(
                     List(
-                      Select("id"),
-                      Select("name"),
-                      Select("profilePic")
-                    ))
+                      Select("id", None, Empty, loc(14, 9)),
+                      Select("name", None, Empty, loc(15, 9)),
+                      Select("profilePic", None, Empty, loc(16, 9))
+                    )),
+                  loc(7, 11)
                 )
               ))
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -159,6 +166,7 @@ final class FragmentSuite extends CatsEffectSuite {
     val expected =
       Select(
         "user",
+        None,
         Unique(
           Filter(
             Eql(FragmentMapping.UserType / "id", Const("1")),
@@ -166,25 +174,30 @@ final class FragmentSuite extends CatsEffectSuite {
               List(
                 Select(
                   "friends",
+                  None,
                   Group(
                     List(
-                      Select("id"),
-                      Select("name"),
-                      Select("profilePic")
-                    ))
+                      Select("id", None, Empty, loc(14, 9)),
+                      Select("name", None, Empty, loc(15, 9)),
+                      Select("profilePic", None, Empty, loc(20, 9))
+                    )),
+                  loc(4, 11)
                 ),
                 Select(
                   "mutualFriends",
+                  None,
                   Group(
                     List(
-                      Select("id"),
-                      Select("name"),
-                      Select("profilePic")
-                    ))
+                      Select("id", None, Empty, loc(14, 9)),
+                      Select("name", None, Empty, loc(15, 9)),
+                      Select("profilePic", None, Empty, loc(20, 9))
+                    )),
+                  loc(7, 11)
                 )
               ))
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -260,6 +273,7 @@ final class FragmentSuite extends CatsEffectSuite {
     val expected =
       Select(
         "user",
+        None,
         Unique(
           Filter(
             Eql(FragmentMapping.UserType / "id", Const("1")),
@@ -267,25 +281,30 @@ final class FragmentSuite extends CatsEffectSuite {
               List(
                 Select(
                   "friends",
+                  None,
                   Group(
                     List(
-                      Select("id"),
-                      Select("name"),
-                      Select("profilePic")
-                    ))
+                      Select("id", None, Empty, loc(14, 9)),
+                      Select("name", None, Empty, loc(19, 9)),
+                      Select("profilePic", None, Empty, loc(24, 9))
+                    )),
+                  loc(4, 11)
                 ),
                 Select(
                   "mutualFriends",
+                  None,
                   Group(
                     List(
-                      Select("id"),
-                      Select("name"),
-                      Select("profilePic")
-                    ))
+                      Select("id", None, Empty, loc(14, 9)),
+                      Select("name", None, Empty, loc(19, 9)),
+                      Select("profilePic", None, Empty, loc(24, 9))
+                    )),
+                  loc(7, 11)
                 )
               ))
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -356,13 +375,15 @@ final class FragmentSuite extends CatsEffectSuite {
     val expected =
       Select(
         "profiles",
+        None,
         Group(
           List(
-            Select("id"),
-            Introspect(FragmentMapping.schema, Select("__typename")),
-            Narrow(User, Select("name")),
-            Narrow(Page, Select("title"))
-          ))
+            Select("id", None, Empty, loc(4, 11)),
+            Introspect(FragmentMapping.schema, Select("__typename", None, Empty, loc(5, 11))),
+            Narrow(User, Select("name", None, Empty, loc(12, 9))),
+            Narrow(Page, Select("title", None, Empty, loc(16, 9)))
+          )),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -429,12 +450,14 @@ final class FragmentSuite extends CatsEffectSuite {
     val expected =
       Select(
         "profiles",
+        None,
         Group(
           List(
-            Select("id"),
-            Narrow(User, Select("name")),
-            Narrow(Page, Select("title"))
-          ))
+            Select("id", None, Empty, loc(4, 11)),
+            Narrow(User, Select("name", None, Empty, loc(6, 13))),
+            Narrow(Page, Select("title", None, Empty, loc(9, 13)))
+          )),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -513,31 +536,38 @@ final class FragmentSuite extends CatsEffectSuite {
         List(
           Select(
             "user",
+            None,
             Unique(
               Filter(
                 Eql(FragmentMapping.UserType / "id", Const("1")),
                 Select(
                   "favourite",
-                  Group(List(
-                    Introspect(FragmentMapping.schema, Select("__typename")),
-                    Narrow(
-                      User,
-                      Group(List(
-                        Select("id"),
-                        Select("name")
-                      ))
-                    ),
-                    Narrow(
-                      Page,
-                      Group(List(
-                        Select("id"),
-                        Select("title")
-                      ))
-                    )
-                  ))
+                  None,
+                  Group(
+                    List(
+                      Introspect(
+                        FragmentMapping.schema,
+                        Select("__typename", None, Empty, loc(5, 13))),
+                      Narrow(
+                        User,
+                        Group(List(
+                          Select("id", None, Empty, loc(20, 9)),
+                          Select("name", None, Empty, loc(21, 9))
+                        ))
+                      ),
+                      Narrow(
+                        Page,
+                        Group(List(
+                          Select("id", None, Empty, loc(25, 9)),
+                          Select("title", None, Empty, loc(26, 9))
+                        ))
+                      )
+                    )),
+                  loc(4, 11)
                 )
               )
-            )
+            ),
+            loc(3, 9)
           ),
           Select(
             "user",
@@ -547,26 +577,32 @@ final class FragmentSuite extends CatsEffectSuite {
                 Eql(FragmentMapping.PageType / "id", Const("2")),
                 Select(
                   "favourite",
-                  Group(List(
-                    Introspect(FragmentMapping.schema, Select("__typename")),
-                    Narrow(
-                      User,
-                      Group(List(
-                        Select("id"),
-                        Select("name")
-                      ))
-                    ),
-                    Narrow(
-                      Page,
-                      Group(List(
-                        Select("id"),
-                        Select("title")
-                      ))
-                    )
-                  ))
+                  None,
+                  Group(
+                    List(
+                      Introspect(
+                        FragmentMapping.schema,
+                        Select("__typename", None, Empty, loc(12, 13))),
+                      Narrow(
+                        User,
+                        Group(List(
+                          Select("id", None, Empty, loc(20, 9)),
+                          Select("name", None, Empty, loc(21, 9))
+                        ))
+                      ),
+                      Narrow(
+                        Page,
+                        Group(List(
+                          Select("id", None, Empty, loc(25, 9)),
+                          Select("title", None, Empty, loc(26, 9))
+                        ))
+                      )
+                    )),
+                  loc(11, 11)
                 )
               )
-            )
+            ),
+            loc(10, 9)
           )
         ))
 
@@ -642,27 +678,31 @@ final class FragmentSuite extends CatsEffectSuite {
               None,
               Group(
                 List(
-                  Introspect(FragmentMapping.schema, Select("__typename", None, Empty)),
+                  Introspect(
+                    FragmentMapping.schema,
+                    Select("__typename", None, Empty, loc(5, 13))),
                   Narrow(
                     User,
                     Group(
                       List(
-                        Select("id", None, Empty),
-                        Select("name", None, Empty)
+                        Select("id", None, Empty, loc(12, 9)),
+                        Select("name", None, Empty, loc(13, 9))
                       ))
                   ),
                   Narrow(
                     Page,
                     Group(
                       List(
-                        Select("id", None, Empty),
-                        Select("title", None, Empty)
+                        Select("id", None, Empty, loc(17, 9)),
+                        Select("title", None, Empty, loc(18, 9))
                       ))
                   )
-                ))
+                )),
+              loc(4, 11)
             )
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""
@@ -706,15 +746,14 @@ final class FragmentSuite extends CatsEffectSuite {
     val expected =
       Select(
         "user",
+        None,
         Unique(
           Filter(
             Eql(FragmentMapping.UserType / "id", Const("1")),
-            Select(
-              "friends",
-              Select("id")
-            )
+            Select("friends", None, Select("id", None, Empty, loc(11, 9)), loc(4, 11))
           )
-        )
+        ),
+        loc(3, 9)
       )
 
     val expectedResult = json"""

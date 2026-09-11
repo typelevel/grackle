@@ -179,7 +179,7 @@ object ComposedListMapping extends ComposedMapping[IO] {
 
   def collectionItemJoin(q: Query, c: Cursor): Result[Query] =
     (c.focus, q) match {
-      case (c: CollectionData.Collection, Select("items", _, child)) =>
+      case (c: CollectionData.Collection, Select("items", _, child, _)) =>
         Group(c
           .itemIds
           .map(id =>

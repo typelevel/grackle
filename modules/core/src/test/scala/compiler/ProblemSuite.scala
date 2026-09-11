@@ -123,14 +123,14 @@ final class ProblemSuite extends CatsEffectSuite {
   test("toString (full)") {
     assertEquals(
       Problem("foo", List(1 -> 2, 5 -> 6), List(Name("bar"), Name("baz"))).toString,
-      "foo (at bar/baz: 1..2, 5..6)"
+      "foo (at bar/baz: 1:2, 5:6)"
     )
   }
 
   test("toString (no path)") {
     assertEquals(
       Problem("foo", List(1 -> 2, 5 -> 6), Nil).toString,
-      "foo (at 1..2, 5..6)"
+      "foo (at 1:2, 5:6)"
     )
   }
 

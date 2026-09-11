@@ -186,7 +186,7 @@ object QueryDirectivesMapping extends ValueMapping[IO] {
   object upperCaseElaborator extends Phase {
     override def transform(query: Query): Elab[Query] =
       query match {
-        case UntypedSelect(nme, alias, _, directives, _)
+        case UntypedSelect(nme, alias, _, directives, _, _)
             if directives.exists(_.name == "upperCase") =>
           for {
             c <- Elab.context

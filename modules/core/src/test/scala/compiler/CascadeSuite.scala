@@ -20,6 +20,7 @@ import scala.PartialFunction.condOpt
 import cats.effect.IO
 import io.circe.literal._
 import munit.CatsEffectSuite
+import utils.QueryLocations._
 
 import grackle._
 import grackle.Query._
@@ -49,17 +50,21 @@ final class CascadeSuite extends CatsEffectSuite {
             "filter" -> CascadeMapping.CascadedFilter(Some("foo"), None, Some(23), Some(10)))),
         Select(
           "foo",
+          None,
           Select(
             "cascaded",
+            None,
             Group(
               List(
-                Select("foo"),
-                Select("bar"),
-                Select("fooBar"),
-                Select("limit")
+                Select("foo", None, Empty, loc(5, 13)),
+                Select("bar", None, Empty, loc(6, 13)),
+                Select("fooBar", None, Empty, loc(7, 13)),
+                Select("limit", None, Empty, loc(8, 13))
               )
-            )
-          )
+            ),
+            loc(4, 11)
+          ),
+          loc(3, 9)
         )
       )
 

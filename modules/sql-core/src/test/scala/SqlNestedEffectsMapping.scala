@@ -277,7 +277,7 @@ trait SqlNestedEffectsMapping[F[_]] extends SqlTestMapping[F] {
       }
 
       runGrouped(queries) {
-        case (Select(_, _, child), cursors, indices) =>
+        case (Select(_, _, child, _), cursors, indices) =>
           val codes = cursors
             .flatMap(_.fieldAs[Json]("countryCode").toOption.flatMap(_.asString).toList)
             .map(toCode)
