@@ -242,4 +242,84 @@ trait SqlNullableParentSuite extends CatsEffectSuite {
 
     assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
   }
+
+  test("a filter through a nullable parent on a non-null field beneath it") {
+    val query = """
+      query {
+        as(cName: "cat-1") {
+          name
+          b {
+            name
+            c {
+              name
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "as" : [
+            {
+              "name" : "a-with-good-b",
+              "b" : {
+                "name" : "b-with-c",
+                "c" : {
+                  "name" : "cat-1"
+                }
+              }
+            }
+          ]
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
+
+  test("a filter through a list on a non-null field beneath it") {
+    val query = """
+      query {
+        ds(fName: "fish-2") {
+          name
+          es {
+            name
+            f {
+              name
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "ds" : [
+            {
+              "name" : "d-with-es",
+              "es" : [
+                {
+                  "name" : "e-with-f",
+                  "f" : {
+                    "name" : "fish-1"
+                  }
+                },
+                {
+                  "name" : "e-with-another-f",
+                  "f" : {
+                    "name" : "fish-2"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
 }
