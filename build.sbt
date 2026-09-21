@@ -240,6 +240,7 @@ lazy val dbTestSettings = Seq(
 )
 
 lazy val modules: List[CompositeProject] = List(
+  parser,
   core,
   circe,
   sqlcore,
@@ -263,17 +264,36 @@ lazy val modules: List[CompositeProject] = List(
 
 lazy val root = tlCrossRootProject.aggregate(modules: _*).disablePlugins(RevolverPlugin)
 
+lazy val parser = crossProject(JVMPlatform, JSPlatform, NativePlatform)
+  .crossType(CrossType.Pure)
+  .in(file("modules/parser"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .settings(commonSettings)
+  .settings(
+    name := "grackle-parser",
+    // New in 0.31.0 on every platform, so `nativeSettings` (which dates the native artifact to
+    // 0.26.1) doesn't apply here.
+    tlVersionIntroduced := Map("2.13" -> "0.31.0", "3" -> "0.31.0"),
+    libraryDependencies ++= Seq(
+      "org.typelevel" %%% "cats-parse" % catsParseVersion,
+      "org.typelevel" %%% "cats-core" % catsVersion,
+      "io.circe" %%% "circe-core" % circeVersion
+    )
+  )
+  .jsSettings(scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.CommonJSModule)))
+
 lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
   .in(file("modules/core"))
   .enablePlugins(AutomateHeaderPlugin)
   .disablePlugins(RevolverPlugin)
+  .dependsOn(parser)
   .settings(commonSettings)
   .settings(
     name := "grackle-core",
     libraryDependencies ++=
       Seq(
-        "org.typelevel" %%% "cats-parse" % catsParseVersion,
         "org.typelevel" %%% "cats-core" % catsVersion,
         "org.typelevel" %%% "literally" % literallyVersion,
         "io.circe" %%% "circe-core" % circeVersion,
@@ -627,6 +647,7 @@ lazy val unidocs = project
     name := "grackle-docs",
     coverageEnabled := false,
     ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(
+      parser.jvm,
       core.jvm,
       circe.jvm,
       sqlcore.jvm,

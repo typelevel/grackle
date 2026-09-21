@@ -24,13 +24,12 @@ import grackle.Ast.OperationType._
 import grackle.Ast.Selection._
 import grackle.Ast.Type.Named
 import grackle.Ast.Value._
-import grackle.syntax._
 
 final class ParserSuite extends CatsEffectSuite {
   val parser = mkParser()
 
   test("simple query") {
-    val query = doc"""
+    val query = """
       query {
         character(id: 1000) {
           name
@@ -57,7 +56,10 @@ final class ParserSuite extends CatsEffectSuite {
         )
       )
 
-    assertEquals(query, List(expected))
+    parser.parseText(query).toOption match {
+      case Some(xs) => assertEquals(xs, List(expected))
+      case _ => assert(false)
+    }
   }
 
   test("multiple parameters (commas)") {
