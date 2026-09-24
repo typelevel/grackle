@@ -404,7 +404,7 @@ trait ResultInstances extends ResultInstances0 {
             case Result.Warning(ps, a) =>
               ff match {
                 case err @ Result.InternalError(_) => err
-                case fail @ Result.Failure(_) => fail
+                case Result.Failure(ps0) => Result.Failure(ps0 ++ ps)
                 case Result.Success(f) => Result.Warning(ps, f(a))
                 case Result.Warning(ps0, f) => Result.Warning(ps0 ++ ps, f(a))
               }
