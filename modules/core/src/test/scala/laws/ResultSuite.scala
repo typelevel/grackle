@@ -20,6 +20,7 @@ import cats.data.NonEmptyChain
 import cats.kernel.laws.discipline.{EqTests, SemigroupTests}
 import cats.laws.discipline.{ApplicativeTests, MonadErrorTests, ParallelTests, TraverseTests}
 import cats.laws.discipline.arbitrary._
+import cats.syntax.parallel._
 import munit.DisciplineSuite
 import org.scalacheck.{Arbitrary, Cogen, Gen}
 import org.scalacheck.Arbitrary.{arbitrary => getArbitrary}
@@ -71,4 +72,17 @@ class ResultSuite extends DisciplineSuite {
   checkAll("Eq[Result[Int]]", EqTests[Result[Int]].eqv)
 
   checkAll("Applicative[ResultT] @ Int", ApplicativeTests[Result].applicative[Int, Int, Int])
+
+  // A `Warning` carries problems as well as a value, so combining one with a `Failure` must
+  // retain both sets whichever side the warning is on.
+  test("Parallel accumulates a warning's problems on either side of a failure") {
+    val warning: Result[Int] = Result.Warning(NonEmptyChain(Problem("w")), 1)
+    val failure: Result[Int] = Result.Failure(NonEmptyChain(Problem("f")))
+
+    def messages(r: Result[(Int, Int)]): List[String] =
+      r.toProblems.toList.map(_.message)
+
+    assertEquals(messages((warning, failure).parTupled), List("w", "f"))
+    assertEquals(messages((failure, warning).parTupled), List("f", "w"))
+  }
 }
