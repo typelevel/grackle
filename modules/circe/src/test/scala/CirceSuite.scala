@@ -15,8 +15,13 @@
 
 package grackle.circetests
 
+import io.circe.Json
 import io.circe.literal._
 import munit.CatsEffectSuite
+
+import grackle.{Env, Path, Predicate}
+import grackle.PathTerm.UniquePath
+import grackle.Predicate.{Const, Eql}
 
 final class CirceSuite extends CatsEffectSuite {
   test("scalars") {
@@ -338,5 +343,154 @@ final class CirceSuite extends CatsEffectSuite {
     val res = TestCirceMapping.compileAndRun(query)
 
     assertIO(res, expected)
+  }
+
+  test("booleans and numbers are coerced to String") {
+    val query = """
+      query {
+        int
+        float
+        bool
+        string
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "int" : "42",
+          "float" : "1.5",
+          "bool" : "true",
+          "string" : "foo"
+        }
+      }
+    """
+
+    val res = TestCirceScalarCoercionMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("lists and objects are not coerced to String") {
+    val query = """
+      query {
+        array
+        object
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Cannot coerce JSON Array value '[1]' to type String",
+            "locations" : [ { "line" : 3, "column" : 9 } ],
+            "path" : [ "array" ]
+          },
+          {
+            "message" : "Cannot coerce JSON Object value '{\"a\":1}' to type String",
+            "locations" : [ { "line" : 4, "column" : 9 } ],
+            "path" : [ "object" ]
+          }
+        ],
+        "data" : {
+          "array" : null,
+          "object" : null
+        }
+      }
+    """
+
+    val res = TestCirceScalarCoercionMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("large Int values and strings are coerced to Int, Float, Boolean and ID") {
+    val query = """
+      query {
+        bigInt
+        intFromString
+        floatFromString
+        boolFromString
+        idFromInt
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "bigInt" : 3000000000,
+          "intFromString" : 42,
+          "floatFromString" : 1.5,
+          "boolFromString" : true,
+          "idFromInt" : "23"
+        }
+      }
+    """
+
+    val res = TestCirceScalarCoercionMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("values that do not coerce to Int, Float or Boolean are errors") {
+    val query = """
+      query {
+        badInt
+        badFloat
+        badBool
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Cannot coerce JSON String value '\"foo\"' to type Int",
+            "locations" : [ { "line" : 3, "column" : 9 } ],
+            "path" : [ "badInt" ]
+          },
+          {
+            "message" : "Cannot coerce JSON Boolean value 'true' to type Float",
+            "locations" : [ { "line" : 4, "column" : 9 } ],
+            "path" : [ "badFloat" ]
+          },
+          {
+            "message" : "Cannot coerce JSON Number value '1' to type Boolean",
+            "locations" : [ { "line" : 5, "column" : 9 } ],
+            "path" : [ "badBool" ]
+          }
+        ],
+        "data" : {
+          "badInt" : null,
+          "badFloat" : null,
+          "badBool" : null
+        }
+      }
+    """
+
+    val res = TestCirceScalarCoercionMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("filters compare coerced values") {
+    import TestCirceScalarCoercionMapping._
+
+    val cursor =
+      circeCursor(
+        Path.from(QueryType),
+        Env.empty,
+        json"""{ "bigInt": 3000000000, "intFromString": "42", "idFromInt": 23, "boolFromString": "true" }"""
+      )
+
+    def eql(field: String, value: Json): Predicate =
+      Eql(UniquePath[Json](List(field)), Const(value))
+
+    assertEquals(eql("bigInt", Json.fromLong(3000000000L))(cursor).toOption, Some(true))
+    assertEquals(eql("intFromString", Json.fromInt(42))(cursor).toOption, Some(true))
+    assertEquals(eql("intFromString", Json.fromString("42"))(cursor).toOption, Some(false))
+    assertEquals(eql("idFromInt", Json.fromString("23"))(cursor).toOption, Some(true))
+    assertEquals(eql("boolFromString", Json.True)(cursor).toOption, Some(true))
   }
 }
