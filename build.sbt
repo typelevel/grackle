@@ -279,7 +279,8 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
         "io.circe" %%% "circe-core" % circeVersion,
         "org.tpolecat" %%% "typename" % typenameVersion,
         "org.tpolecat" %%% "sourcepos" % sourcePosVersion,
-        "co.fs2" %%% "fs2-core" % fs2Version
+        "co.fs2" %%% "fs2-core" % fs2Version,
+        "org.typelevel" %%% "cats-effect-testkit" % catsEffectVersion % "test"
       )
   )
   .jsSettings(

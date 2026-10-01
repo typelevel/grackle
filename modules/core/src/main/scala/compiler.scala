@@ -434,6 +434,21 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
   import IntrospectionLevel._
 
   /**
+   * Compiles the GraphQL document `text` as far as the variable values allow.
+   *
+   * Depends on the document text and on the schema only. It does not depend on the variable
+   * values, on the `Env`, on the operation name, or on the introspection level, so a caller can
+   * cache it under the document text. See `CachingQueryCompiler`.
+   *
+   * GraphQL errors and warnings are accumulated in the result.
+   */
+  def prepare(text: String): Result[PreparedDocument] =
+    parser.parseText(text).map {
+      case (ops, frags) =>
+        new PreparedDocument(this, ops.map(op => prepareOperation(op, frags)), frags)
+    }
+
+  /**
    * Compiles the GraphQL query `text` to a query algebra term which can be directly executed.
    *
    * GraphQL errors and warnings are accumulated in the result.
@@ -445,35 +460,46 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
       introspectionLevel: IntrospectionLevel = Full,
       reportUnused: Boolean = true,
       env: Env = Env.empty): Result[Operation] =
-    parser.parseText(text).flatMap {
-      case (ops, frags) =>
-        for {
-          _ <- Result.fromProblems(validateVariablesAndFragments(ops, frags, reportUnused))
-          _ <- Result.fromProblems(validateFieldMergeability(ops, frags))
-          ops0 <- ops.traverse(op =>
-            compileOperation(op, untypedVars, frags, introspectionLevel, env)
-              .map(op0 => (op.name, op0)))
-          res <- (ops0, name) match {
-            case (List((_, op)), None) =>
+    prepare(text).flatMap(
+      compilePrepared(_, name, untypedVars, introspectionLevel, reportUnused, env))
+
+  /**
+   * Compiles a prepared document to a query algebra term which can be directly executed.
+   */
+  def compilePrepared(
+      prepared: PreparedDocument,
+      name: Option[String] = None,
+      untypedVars: Option[Json] = None,
+      introspectionLevel: IntrospectionLevel = Full,
+      reportUnused: Boolean = true,
+      env: Env = Env.empty): Result[Operation] =
+    for {
+      _ <- Result.fromProblems(prepared.varAndFragProblems(reportUnused))
+      _ <- Result.fromProblems(prepared.mergeProblems)
+      ops0 <- prepared
+        .ops
+        .traverse(op =>
+          compileOperation(op, untypedVars, introspectionLevel, env).tupleLeft(op.name))
+      res <- (ops0, name) match {
+        case (List((_, op)), None) =>
+          op.success
+        case (Nil, _) =>
+          Result.failure("At least one operation required")
+        case (_, None) =>
+          Result.failure("Operation name required to select unique operation")
+        case (ops, _) if ops.lengthCompare(1) > 0 && ops.exists(_._1.isEmpty) =>
+          Result.failure("Query shorthand cannot be combined with multiple operations")
+        case (ops, on @ Some(name)) =>
+          ops.filter(_._1 == on) match {
+            case List((_, op)) =>
               op.success
-            case (Nil, _) =>
-              Result.failure("At least one operation required")
-            case (_, None) =>
-              Result.failure("Operation name required to select unique operation")
-            case (ops, _) if ops.lengthCompare(1) > 0 && ops.exists(_._1.isEmpty) =>
-              Result.failure("Query shorthand cannot be combined with multiple operations")
-            case (ops, on @ Some(name)) =>
-              ops.filter(_._1 == on) match {
-                case List((_, op)) =>
-                  op.success
-                case Nil =>
-                  Result.failure(s"No operation named '$name'")
-                case _ =>
-                  Result.failure(s"Multiple operations named '$name'")
-              }
+            case Nil =>
+              Result.failure(s"No operation named '$name'")
+            case _ =>
+              Result.failure(s"Multiple operations named '$name'")
           }
-        } yield res
-    }
+      }
+    } yield res
 
   /**
    * Compiles the provided operation AST to a query algebra term which can be directly executed.
@@ -485,17 +511,31 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
       untypedVars: Option[Json],
       frags: List[UntypedFragment],
       introspectionLevel: IntrospectionLevel = Full,
-      env: Env = Env.empty): Result[Operation] = {
+      env: Env = Env.empty): Result[Operation] =
+    compileOperation(prepareOperation(op, frags), untypedVars, introspectionLevel, env)
+
+  /**
+   * Completes a prepared operation to a query algebra term which can be directly executed.
+   *
+   * GraphQL errors and warnings are accumulated in the result.
+   */
+  private def compileOperation(
+      prepared: PreparedOperation,
+      untypedVars: Option[Json],
+      introspectionLevel: IntrospectionLevel,
+      env: Env): Result[Operation] = {
+    val op = prepared.op
+    val frags = prepared.frags
     val allPhases =
       IntrospectionElaborator(
         introspectionLevel).toList ++ (VariablesSkipAndFragmentElaborator :: MergeFields :: phases)
 
     for {
-      varDefs <- compileVarDefs(op.variables)
+      varDefs <- prepared.varDefs
       vars <- compileVars(varDefs, untypedVars)
       _ <- Directive.validateDirectivesForQuery(schema, op, frags, vars)
-      rootTpe <- op.rootTpe(schema)
-      _ <- VariableUsage.validateVariableUsages(schema, rootTpe, op, frags, varDefs)
+      rootTpe <- prepared.rootTpe
+      _ <- prepared.usages
       res <- (
         for {
           query <- allPhases.foldLeftM(op.query) { (acc, phase) =>
@@ -508,7 +548,7 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
           schema,
           Context(rootTpe),
           vars,
-          frags.map(f => (f.name, f)).toMap,
+          prepared.fragMap,
           op.query,
           env,
           List.empty,
@@ -517,6 +557,11 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
       )
     } yield res
   }
+
+  private def prepareOperation(
+      op: UntypedOperation,
+      frags: List[UntypedFragment]): PreparedOperation =
+    new PreparedOperation(this, schema, op, frags)
 
   /**
    * Compiles variable definition ASTs to variable definitions for the target schema.
