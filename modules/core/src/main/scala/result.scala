@@ -281,10 +281,10 @@ object Result extends ResultInstances {
     fromEither(ea.leftMap(Problem(_)))
 
   def fromProblems(problems: Seq[Problem]): Result[Unit] =
-    NonEmptyChain.fromSeq(problems).map(Result.Failure(_)).getOrElse(Result.unit)
+    fromProblems(Chain.fromSeq(problems))
 
   def fromProblems(problems: Chain[Problem]): Result[Unit] =
-    NonEmptyChain.fromChain(problems).map(Result.Failure(_)).getOrElse(Result.unit)
+    NonEmptyChain.fromChain(problems).fold(Result.unit)(Result.Failure(_))
 
   def catchNonFatal[T](body: => T): Result[T] =
     try {
@@ -312,10 +312,7 @@ object Result extends ResultInstances {
       case Left(err) => Result.internalError(err)
       case Right((ps, ts)) =>
         val ts0 = ts.reverse
-        NonEmptyChain
-          .fromChain(ps)
-          .map(ps0 => Result.Warning(ps0, ts0))
-          .getOrElse(Result.Success(ts0))
+        NonEmptyChain.fromChain(ps).fold(Result.success(ts0))(ps0 => Result.Warning(ps0, ts0))
     }
   }
 }

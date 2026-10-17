@@ -1387,6 +1387,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
    * Does the supplied field correspond to a single, possibly structured, value?
    */
   def isSingular(context: Context, fieldName: String, query: Query): Boolean = {
+    @tailrec
     def loop(query: Query): Boolean =
       query match {
         case Limit(n, _) => n <= 1
@@ -4034,6 +4035,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             case _ => false
           }
 
+        @tailrec
         def unembed(context: Context): Context = {
           if (context.path.sizeCompare(1) <= 0) context
           else {
@@ -4111,6 +4113,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
         q match {
           case Select(fieldName, _, Count(child), _) =>
+            @tailrec
             def childContext(q: Query): Result[Context] =
               q match {
                 case Select(fieldName, resultName, _, _) =>

@@ -55,6 +55,56 @@ final class QueryDirectivesSuite extends CatsEffectSuite {
     assertIO(res, expected)
   }
 
+  test("query with cursor transforming directive on __typename at the root") {
+    val query = """
+      query {
+        __typename @upperCase
+        user {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Cursor transforms cannot be applied to '__typename'"
+          }
+        ]
+      }
+    """
+
+    val res = QueryDirectivesMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("query with cursor transforming directive on nested __typename") {
+    val query = """
+      query {
+        user {
+          __typename @upperCase
+          name @upperCase
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Cursor transforms cannot be applied to '__typename'"
+          }
+        ]
+      }
+    """
+
+    val res = QueryDirectivesMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
   test("query with directive (1)") {
     val query = """
       query {
