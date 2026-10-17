@@ -20,7 +20,7 @@ import scala.collection.Factory
 import cats.MonadThrow
 import cats.implicits._
 import fs2.Stream
-import io.circe.{Encoder, Json}
+import io.circe.{Encoder, Json, JsonNumber}
 import org.tpolecat.sourcepos.SourcePos
 
 import grackle._
@@ -55,6 +55,37 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
         implicit pos: SourcePos,
         enc: Encoder[A]): RootStream =
       computeJson(fieldName)((p, e) => effect(p, e).map(_.map(enc(_))))
+  }
+
+  // Coerces the value to a built-in scalar type, or None if it does not coerce
+  private def coerceBuiltin(tpe: Type, value: Json): Option[Json] = {
+    def numberFromString: Option[JsonNumber] = value.asString.flatMap(JsonNumber.fromString)
+
+    // No built-in scalar coerces from an object, array or null
+    if (value.isObject || value.isArray || value.isNull) None
+    else
+      tpe match {
+        // Strings "true" and "false" coerce to Boolean
+        case BooleanType =>
+          if (value.isBoolean) Some(value)
+          else value.asString.flatMap(_.toBooleanOption).map(Json.fromBoolean)
+        // Booleans and numbers coerce to their JSON text, e.g. "true" or "42"
+        case StringType =>
+          if (value.isString) Some(value)
+          else Some(Json.fromString(value.noSpaces))
+        // ID can come from String or Int, but coerces to String
+        case IDType =>
+          if (value.isString) Some(value)
+          else value.asNumber.flatMap(_.toBigInt).map(i => Json.fromString(i.toString))
+        // Strings such as "42" coerce to Int
+        case IntType =>
+          value.asNumber.orElse(numberFromString).flatMap(_.toLong).map(Json.fromLong)
+        // Strings such as "1.5" coerce to Float
+        case FloatType =>
+          if (value.isNumber) Some(value)
+          else numberFromString.map(Json.fromJsonNumber)
+        case _ => None
+      }
   }
 
   def circeCursor(path: Path, env: Env, value: Json): Cursor =
@@ -95,6 +126,17 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
       implicit val pos: SourcePos
   ) extends CirceFieldMapping
 
+  object CirceCursor {
+    // Coerce built-in scalars up-front, so predicates and `asLeaf` see the same value.
+    // Values that do not coerce stay unchanged. The `asLeaf` method reports them as errors.
+    def apply(context: Context, focus: Json, parent: Option[Cursor], env: Env): CirceCursor =
+      new CirceCursor(
+        context,
+        coerceBuiltin(context.tpe.dealias, focus).getOrElse(focus),
+        parent,
+        env)
+  }
+
   case class CirceCursor(
       context: Context,
       focus: Json,
@@ -117,14 +159,9 @@ trait CirceMappingLike[F[_]] extends Mapping[F] {
 
     def asLeaf: Result[Json] =
       tpe.dealias match {
-        case BooleanType if focus.isBoolean => focus.success
-        case StringType | IDType if focus.isString => focus.success
-        case IntType if focus.isNumber =>
-          focus
-            .asNumber
-            .flatMap(_.toLong.map(Json.fromLong))
-            .toResultOrError(s"Expected Int found ${focus.noSpaces}")
-        case FloatType if focus.isNumber => focus.success
+        case t: ScalarType if t.isBuiltIn =>
+          coerceBuiltin(t, focus).toResult(
+            s"Cannot coerce JSON ${focus.name} value '${focus.noSpaces}' to type ${t.name}")
         case e: EnumType if focus.isString =>
           if (focus.asString.exists(e.hasValue)) focus.success
           else Result.internalError(s"Expected Enum ${e.name}, found ${focus.noSpaces}")

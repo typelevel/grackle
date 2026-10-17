@@ -127,3 +127,50 @@ object TestCirceMapping extends CirceMapping[IO] {
       Elab.transformChild(_ => Count(Select("children")))
   }
 }
+
+object TestCirceScalarCoercionMapping extends CirceMapping[IO] {
+  val schema =
+    schema"""
+      type Query {
+        int: String!
+        float: String!
+        bool: String!
+        string: String!
+        array: String
+        object: String
+        bigInt: Int!
+        intFromString: Int!
+        floatFromString: Float!
+        boolFromString: Boolean!
+        idFromInt: ID!
+        badInt: Int
+        badFloat: Float
+        badBool: Boolean
+      }
+    """
+
+  val QueryType = schema.ref("Query")
+
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings = List(
+          CirceField("int", Json.fromInt(42)),
+          CirceField("float", Json.fromDoubleOrNull(1.5)),
+          CirceField("bool", Json.True),
+          CirceField("string", Json.fromString("foo")),
+          CirceField("array", Json.arr(Json.fromInt(1))),
+          CirceField("object", Json.obj("a" -> Json.fromInt(1))),
+          CirceField("bigInt", Json.fromLong(3000000000L)),
+          CirceField("intFromString", Json.fromString("42")),
+          CirceField("floatFromString", Json.fromString("1.5")),
+          CirceField("boolFromString", Json.fromString("true")),
+          CirceField("idFromInt", Json.fromInt(23)),
+          CirceField("badInt", Json.fromString("foo")),
+          CirceField("badFloat", Json.True),
+          CirceField("badBool", Json.fromInt(1))
+        )
+      )
+    )
+}
