@@ -318,6 +318,7 @@ object Query {
    * otherwise.
    */
   def rootName(q: Query): Option[(String, Option[String])] = {
+    @tailrec
     def loop(q: Query): Option[(String, Option[String])] =
       q match {
         case UntypedSelect(name, alias, _, _, _, _) => Some((name, alias))
@@ -330,10 +331,17 @@ object Query {
   }
 
   /**
+   * Whether `q` selects `__typename`, possibly wrapped in an `Environment` or
+   * `TransformCursor`.
+   */
+  def isTypename(q: Query): Boolean = rootName(q).exists(_._1 == "__typename")
+
+  /**
    * Computes the possibly aliased result name of the supplied query if it is unique, `None`
    * otherwise.
    */
   def resultName(q: Query): Option[String] = {
+    @tailrec
     def loop(q: Query): Option[String] =
       q match {
         case UntypedSelect(name, alias, _, _, _, _) => Some(alias.getOrElse(name))
@@ -386,6 +394,7 @@ object Query {
    * Yields the top-level field selections of the supplied query.
    */
   def children(q: Query): List[Query] = {
+    @tailrec
     def loop(q: Query): List[Query] =
       q match {
         case UntypedSelect(_, _, _, _, child, _) => ungroup(child)
@@ -402,6 +411,7 @@ object Query {
    * otherwise.
    */
   def extractChild(query: Query): Option[Query] = {
+    @tailrec
     def loop(q: Query): Option[Query] =
       q match {
         case UntypedSelect(_, _, _, _, child, _) => Some(child)
