@@ -2065,10 +2065,16 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
     /**
      * Yields a copy of the given `Predicate` with all occurences of `from` replaced by `to`
      */
-    def substWhereTables(from: TableExpr, to: TableExpr, pred: Predicate): Predicate = {
+    def substWhereTables(from: TableExpr, to: TableExpr, pred: Predicate): Predicate =
+      mapWhereColumns(pred)(_.subst(from, to))
+
+    /**
+     * Yields a copy of the given `Predicate` with `f` applied to every column it refers to
+     */
+    def mapWhereColumns(pred: Predicate)(f: SqlColumn => SqlColumn): Predicate = {
       def loop[T](term: T): T =
         (term match {
-          case SqlColumnTerm(col) => SqlColumnTerm(col.subst(from, to))
+          case SqlColumnTerm(col) => SqlColumnTerm(f(col))
           case _: PathTerm => term
           case Const(_) => term
           case And(x, y) => And(loop(x), loop(y))
@@ -2820,13 +2826,50 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
         val (oss, orderJoins) =
           orderBy.map { case (oss, joins) => (oss, joins) }.getOrElse((Nil, Nil))
+
+        // A filter or order path which crosses a nested select that `SqlSelect.nest` could not
+        // flatten (see `mergePreservesRows`) has its columns owned by tables inside that
+        // subquery, whose names are not in scope here. The subquery projects those columns,
+        // so they are referenced through it instead. The two contextualisers below shadow the
+        // outer ones so that every use in this method picks this up.
+        val pathSubqueries: List[SubqueryRef] =
+          (filterJoins ++ orderJoins).map(_.child).collect { case sq: SubqueryRef => sq }
+
+        def viaPathSubquery(col: SqlColumn): SqlColumn =
+          pathSubqueries
+            .find(sq => !col.owner.isSameOwner(sq) && sq.owns(col))
+            .fold(col)(sq => col.derive(sq))
+
+        def contextualiseWhereTerms(
+            context: Context,
+            owner: ColumnOwner,
+            pred: Predicate): Result[Predicate] =
+          SqlQuery
+            .contextualiseWhereTerms(context, owner, pred)
+            .map(mapWhereColumns(_)(viaPathSubquery))
+
+        def contextualiseOrderTerms[T](
+            context: Context,
+            owner: ColumnOwner,
+            os: OrderSelection[T]): Result[OrderSelection[T]] =
+          SqlQuery.contextualiseOrderTerms(context, owner, os).map { os0 =>
+            os0.term match {
+              case SqlColumnTerm(col) =>
+                os0.subst(SqlColumnTerm(viaPathSubquery(col)).asInstanceOf[Term[T]])
+              case _ => os0
+            }
+          }
+
         val orderColsR =
           oss.traverse { os =>
             columnForSqlTerm(context, os.term).map { col =>
-              orderJoins
-                .collectFirstSome(_.findNamedOwner(col))
-                .map(owner => col.in(owner))
-                .getOrElse(col.in(table))
+              val viaSubquery = viaPathSubquery(col)
+              if (viaSubquery ne col) viaSubquery
+              else
+                orderJoins
+                  .collectFirstSome(_.findNamedOwner(col))
+                  .map(owner => col.in(owner))
+                  .getOrElse(col.in(table))
             }
           }
         orderColsR.flatMap { orderCols =>
@@ -2869,7 +2912,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                         withs = withs,
                         table = table,
                         cols = (partitionCol :: exposeCols ++ cols ++ orderCols).distinct,
-                        joins = (filterJoins ++ orderJoins ++ joins).distinct,
+                        joins = SqlJoin.merge(filterJoins ++ orderJoins ++ joins),
                         wheres = (pred1 ++ nonNullKeys ++ wheres).distinct,
                         orders = Nil,
                         offset = None,
@@ -2999,7 +3042,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                           withs = Nil,
                           table = baseRef,
                           cols = (partitionCol :: exposeCols ++ predCols).distinct,
-                          joins = (filterJoins ++ orderJoins).distinct,
+                          joins = SqlJoin.merge(filterJoins ++ orderJoins),
                           wheres = (pred1 ++ nonNullKeys).distinct,
                           orders = Nil,
                           offset = None,
@@ -3170,7 +3213,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                               table = baseRef,
                               cols =
                                 (partitionCol :: distPartitionCol :: exposeCols ++ predCols).distinct,
-                              joins = (filterJoins ++ orderJoins).distinct,
+                              joins = SqlJoin.merge(filterJoins ++ orderJoins),
                               wheres = (pred1 ++ nonNullKeys).distinct,
                               orders = Nil,
                               offset = None,
@@ -3253,7 +3296,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                         withs = withs,
                         table = table,
                         cols = cols,
-                        joins = (filterJoins ++ orderJoins ++ joins).distinct,
+                        joins = SqlJoin.merge(filterJoins ++ orderJoins ++ joins),
                         wheres = (pred1 ++ nonNullKeys ++ wheres).distinct,
                         orders = orders,
                         offset = offset0,
@@ -3290,7 +3333,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                           withs = Nil,
                           table = baseRef,
                           cols = predCols,
-                          joins = (filterJoins ++ orderJoins).distinct,
+                          joins = SqlJoin.merge(filterJoins ++ orderJoins),
                           wheres = (pred1 ++ nonNullKeys).distinct,
                           orders = orders,
                           offset = offset0,
@@ -3326,7 +3369,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                               table = baseRef,
                               cols = predCols ++ distOrderCols.map(col =>
                                 distinctOrderColumn(baseRef, col, predCols, distOrders)),
-                              joins = (filterJoins ++ orderJoins).distinct,
+                              joins = SqlJoin.merge(filterJoins ++ orderJoins),
                               wheres = (pred1 ++ nonNullKeys).distinct,
                               orders = distOrders,
                               offset = None,
@@ -3686,6 +3729,21 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       override def isSameOwner(other: ColumnOwner): Boolean = other eq this
 
       /**
+       * Does `other` attach the same nested select as this join, differing at most in the
+       * columns that select exposes?
+       */
+      def joinsSameSubquery(other: SqlJoin): Boolean =
+        parent.isSameOwner(other.parent) && on == other.on && inner == other.inner &&
+          SqlJoin.sameShape(child, other.child)
+
+      /**
+       * This join with its nested select also exposing the columns of `other`'s, which must
+       * satisfy `joinsSameSubquery`
+       */
+      def mergeSubquery(other: SqlJoin): SqlJoin =
+        copy(child = SqlJoin.mergeCols(child, other.child))
+
+      /**
        * Replace references to `from` with `to`
        */
       def subst(from: TableExpr, to: TableExpr): SqlJoin = {
@@ -3771,6 +3829,61 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         }
         loop(joins, parent :: Nil)
       }
+
+      /**
+       * Deduplicates `joins`, additionally collapsing joins to the same nested select which
+       * differ only in the columns that select exposes. A filter or order path and the data
+       * selection each nest the same field independently, and where `SqlSelect.nest` could not
+       * flatten the result they arrive as two subqueries under one synthetic alias.
+       */
+      def merge(joins: List[SqlJoin]): List[SqlJoin] =
+        joins.foldLeft(List.empty[SqlJoin]) { (acc, join) =>
+          acc.indexWhere(_.joinsSameSubquery(join)) match {
+            case -1 => acc :+ join
+            case i => acc.updated(i, acc(i).mergeSubquery(join))
+          }
+        }
+
+      /**
+       * Are `a` and `b` the same table expression, allowing the selects of nested subqueries to
+       * differ in the columns they expose? A correlated `OUTER APPLY` wraps its select in
+       * another (see `Laterality.Apply.correlate`), so this recurses through the table of each
+       * level.
+       */
+      private def sameShape(a: TableExpr, b: TableExpr): Boolean =
+        (a, b) match {
+          case (SubqueryRef(c0, n0, s0, l0, r0), SubqueryRef(c1, n1, s1, l1, r1)) =>
+            c0 == c1 && n0 == n1 && l0 == l1 && r0 == r1 && sameShape(s0, s1)
+          case _ => a == b
+        }
+
+      private def sameShape(a: SqlQuery, b: SqlQuery): Boolean =
+        (a, b) match {
+          case (a: SqlSelect, b: SqlSelect) =>
+            a.context == b.context && a.withs == b.withs && sameShape(a.table, b.table) &&
+            a.joins == b.joins && a.wheres == b.wheres && a.orders == b.orders &&
+            a.offset == b.offset && a.limit == b.limit && a.distinct == b.distinct &&
+            a.oneToOne == b.oneToOne && a.predicate == b.predicate
+          case _ => a == b
+        }
+
+      /**
+       * `a` with its nested selects also exposing the columns of `b`'s, at every level; `a` and
+       * `b` must satisfy `sameShape`.
+       */
+      private def mergeCols(a: TableExpr, b: TableExpr): TableExpr =
+        (a, b) match {
+          case (a: SubqueryRef, b: SubqueryRef) =>
+            a.copy(subquery = mergeCols(a.subquery, b.subquery))
+          case _ => a
+        }
+
+      private def mergeCols(a: SqlQuery, b: SqlQuery): SqlQuery =
+        (a, b) match {
+          case (a: SqlSelect, b: SqlSelect) =>
+            a.copy(table = mergeCols(a.table, b.table), cols = (a.cols ++ b.cols).distinct)
+          case _ => a
+        }
     }
   }
 

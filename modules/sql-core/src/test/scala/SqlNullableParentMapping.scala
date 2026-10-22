@@ -15,6 +15,11 @@
 
 package grackle.sql.test
 
+import grackle._
+import grackle.Predicate.{Const, Eql}
+import grackle.Query.{Binding, Filter}
+import grackle.QueryCompiler.{Elab, SelectElaborator}
+import grackle.Value.{AbsentValue, NullValue, StringValue}
 import grackle.syntax._
 
 trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
@@ -57,8 +62,8 @@ trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
   val schema =
     schema"""
       type Query {
-        as: [A!]!
-        ds: [D!]!
+        as(cName: String): [A!]!
+        ds(fName: String): [D!]!
       }
       type A {
         name: String!
@@ -134,4 +139,21 @@ trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
         SqlField("name", fTable.name)
       )
     )
+
+  // Filters on a path whose first join is LEFT (`b` is nullable, `es` is a list) and whose next
+  // join is INNER (`c` and `f` are non-null). `SqlSelect.nest` does not flatten such a nested
+  // select, so the predicate must reach its columns through the subquery.
+  def mkFilter(child: Query, path: Path, name: Value): Result[Query] =
+    name match {
+      case AbsentValue | NullValue => child.success
+      case StringValue(s) => Filter(Eql(path, Const(s)), child).success
+      case other => Result.failure(s"Expected a name, found $other")
+    }
+
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "as", List(Binding("cName", cName))) =>
+      Elab.transformChild(child => mkFilter(child, AType / "b" / "c" / "name", cName))
+    case (QueryType, "ds", List(Binding("fName", fName))) =>
+      Elab.transformChild(child => mkFilter(child, DType / "es" / "f" / "name", fName))
+  }
 }
