@@ -26,6 +26,7 @@ import org.tpolecat.typename.{typeName, TypeName}
 import grackle.Predicate._
 import grackle.Query._
 import grackle.QueryCompiler._
+import grackle.QueryParser.ParsedDocument
 import grackle.ScalarType._
 import grackle.UntypedOperation._
 import grackle.Value._
@@ -41,17 +42,23 @@ trait QueryParser {
    *
    * GraphQL errors and warnings are accumulated in the result.
    */
-  def parseText(text: String): Result[(List[UntypedOperation], List[UntypedFragment])]
+  def parseText(text: String): Result[ParsedDocument]
 
   /**
    * Parse a document AST to query algebra operations and fragments.
    *
    * GraphQL errors and warnings are accumulated in the result.
    */
-  def parseDocument(doc: Ast.Document): Result[(List[UntypedOperation], List[UntypedFragment])]
+  def parseDocument(doc: Ast.Document): Result[ParsedDocument]
 }
 
 object QueryParser {
+
+  /**
+   * The query algebra operations and fragments of a parsed GraphQL document.
+   */
+  type ParsedDocument = (List[UntypedOperation], List[UntypedFragment])
+
   def apply(parser: GraphQLParser): QueryParser =
     new Impl(parser)
 
@@ -65,7 +72,7 @@ object QueryParser {
      *
      * GraphQL errors and warnings are accumulated in the result.
      */
-    def parseText(text: String): Result[(List[UntypedOperation], List[UntypedFragment])] =
+    def parseText(text: String): Result[ParsedDocument] =
       for {
         doc <- parser.parseText(text)
         res <- parseDocument(doc)
@@ -77,8 +84,7 @@ object QueryParser {
      *
      * GraphQL errors and warnings are accumulated in the result.
      */
-    def parseDocument(
-        doc: Document): Result[(List[UntypedOperation], List[UntypedFragment])] = {
+    def parseDocument(doc: Document): Result[ParsedDocument] = {
       val ops0 = doc.collect { case op: OperationDefinition => op }
       val fragments0 = doc.collect { case frag: FragmentDefinition => frag }
 
@@ -430,7 +436,7 @@ object VariableUsage {
  * transformation phases in sequence, yielding a query algebra term which can be directly
  * interpreted.
  */
-class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
+class QueryCompiler(val parser: QueryParser, schema: Schema, phases: List[Phase]) {
   import IntrospectionLevel._
 
   /**
@@ -445,35 +451,50 @@ class QueryCompiler(parser: QueryParser, schema: Schema, phases: List[Phase]) {
       introspectionLevel: IntrospectionLevel = Full,
       reportUnused: Boolean = true,
       env: Env = Env.empty): Result[Operation] =
-    parser.parseText(text).flatMap {
-      case (ops, frags) =>
-        for {
-          _ <- Result.fromProblems(validateVariablesAndFragments(ops, frags, reportUnused))
-          _ <- Result.fromProblems(validateFieldMergeability(ops, frags))
-          ops0 <- ops.traverse(op =>
-            compileOperation(op, untypedVars, frags, introspectionLevel, env)
-              .map(op0 => (op.name, op0)))
-          res <- (ops0, name) match {
-            case (List((_, op)), None) =>
+    parser
+      .parseText(text)
+      .flatMap(compileParsed(_, name, untypedVars, introspectionLevel, reportUnused, env))
+
+  /**
+   * Compiles a parsed GraphQL document to a query algebra term that can be directly executed.
+   *
+   * GraphQL errors and warnings are accumulated in the result.
+   */
+  def compileParsed(
+      doc: ParsedDocument,
+      name: Option[String] = None,
+      untypedVars: Option[Json] = None,
+      introspectionLevel: IntrospectionLevel = Full,
+      reportUnused: Boolean = true,
+      env: Env = Env.empty): Result[Operation] = {
+    val (ops, frags) = doc
+    for {
+      _ <- Result.fromProblems(validateVariablesAndFragments(ops, frags, reportUnused))
+      _ <- Result.fromProblems(validateFieldMergeability(ops, frags))
+      ops0 <- ops.traverse(op =>
+        compileOperation(op, untypedVars, frags, introspectionLevel, env).map(op0 =>
+          (op.name, op0)))
+      res <- (ops0, name) match {
+        case (List((_, op)), None) =>
+          op.success
+        case (Nil, _) =>
+          Result.failure("At least one operation required")
+        case (_, None) =>
+          Result.failure("Operation name required to select unique operation")
+        case (ops, _) if ops.lengthCompare(1) > 0 && ops.exists(_._1.isEmpty) =>
+          Result.failure("Query shorthand cannot be combined with multiple operations")
+        case (ops, on @ Some(name)) =>
+          ops.filter(_._1 == on) match {
+            case List((_, op)) =>
               op.success
-            case (Nil, _) =>
-              Result.failure("At least one operation required")
-            case (_, None) =>
-              Result.failure("Operation name required to select unique operation")
-            case (ops, _) if ops.lengthCompare(1) > 0 && ops.exists(_._1.isEmpty) =>
-              Result.failure("Query shorthand cannot be combined with multiple operations")
-            case (ops, on @ Some(name)) =>
-              ops.filter(_._1 == on) match {
-                case List((_, op)) =>
-                  op.success
-                case Nil =>
-                  Result.failure(s"No operation named '$name'")
-                case _ =>
-                  Result.failure(s"Multiple operations named '$name'")
-              }
+            case Nil =>
+              Result.failure(s"No operation named '$name'")
+            case _ =>
+              Result.failure(s"Multiple operations named '$name'")
           }
-        } yield res
-    }
+      }
+    } yield res
+  }
 
   /**
    * Compiles the provided operation AST to a query algebra term which can be directly executed.
