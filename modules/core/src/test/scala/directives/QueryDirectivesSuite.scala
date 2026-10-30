@@ -55,6 +55,35 @@ final class QueryDirectivesSuite extends CatsEffectSuite {
     assertIO(res, expected)
   }
 
+  test("query with cursor transforming directive on __typename") {
+    val query = """
+      query {
+        __typename @upperCase
+        user {
+          __typename @upperCase
+          name @upperCase
+        }
+      }
+    """
+
+    // The cursor transform rewrites field values, not the type name
+    val expected = json"""
+      {
+        "data" : {
+          "__typename" : "Query",
+          "user" : {
+            "__typename" : "User",
+            "name" : "MARY"
+          }
+        }
+      }
+    """
+
+    val res = QueryDirectivesMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
   test("query with directive (1)") {
     val query = """
       query {
