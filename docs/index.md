@@ -30,6 +30,9 @@ and [imbus AG](https://www.imbus.de/) over the last five years.
 ## Getting Started
 
 - See the [tutorial](https://typelevel.org/grackle) and accompanying [demo](https://github.com/typelevel/grackle/tree/main/demo/src/main).
+- New to Grackle's mapping model? Start with [Mapping Concepts](https://typelevel.org/grackle/mappings.html) for a guided tour of
+  `ValueMapping`, `GenericMapping`, `CirceMapping`, `SqlMapping`, `ComposedMapping` and friends,
+  and how to pick the right one for your data source.
 - Online Scaladoc is available [here](https://javadoc.io/doc/org.typelevel/grackle-core_2.13).
 - Ask us anything the in **#grackle** channel on the Typelevel [discord server][grackle-dev].
 
@@ -56,6 +59,12 @@ libraryDependencies += "org.typelevel" %% "grackle-doobie-oracle" % "@VERSION@"
 
 // Optional: support for SQL Server backend via Doobie (JVM only)
 libraryDependencies += "org.typelevel" %% "grackle-doobie-mssql" % "@VERSION@"
+
+// Optional: support for H2 backend via Doobie (JVM only)
+libraryDependencies += "org.typelevel" %% "grackle-doobie-h2" % "@VERSION@"
+
+// Optional: support for SQLite backend via Doobie (JVM only)
+libraryDependencies += "org.typelevel" %% "grackle-doobie-sqlite" % "@VERSION@"
 ```
 
 ## Running tests for database backed mappings
