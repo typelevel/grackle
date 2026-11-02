@@ -118,10 +118,18 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
       val pureResults: F[List[Result[ProtoJson]]] =
         if (pureQueries.isEmpty) Nil.pure[F].widen
         else {
-          val (introQueries, nonIntroQueries) = pureQueries.partitionMap {
+          val (allIntroQueries, nonIntroQueries) = pureQueries.partitionMap {
             case PureQuery(i: Introspect) => Left(i)
             case PureQuery(other) => Right(other)
           }
+
+          // Like introspection, root `__typename` needs no root cursor, which may run a query
+          val (typenameQueries, introQueries) =
+            allIntroQueries.partition(i => isTypename(i.child))
+
+          val typenameResults: List[Result[ProtoJson]] =
+            if (typenameQueries.isEmpty) Nil
+            else List(runValue(Group(typenameQueries), rootTpe, rootCursor))
 
           val introResults: List[Result[ProtoJson]] =
             introQueries.flatMap {
@@ -140,7 +148,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
               case qs => runRootValue(Group(qs), rootTpe, rootCursor).map(List(_))
             }
 
-          nonIntroResults.map(_ ++ introResults)
+          nonIntroResults.map(typenameResults ++ _ ++ introResults)
         }
 
       val effectfulResults: F[List[Result[ProtoJson]]] =
@@ -240,6 +248,10 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
 
         case Group(siblings) =>
           siblings.flatTraverse(query => runFields(query, tpe, cursor, path))
+
+        // Move wrappers from earlier phases outside `Introspect`
+        case Introspect(schema, child @ (_: Group | _: Environment | _: TransformCursor)) =>
+          runFields(mapFields(child)(Introspect(schema, _)), tpe, cursor, path)
 
         case Introspect(schema, s @ Select("__typename", _, Empty, _)) if tpe.isNamed =>
           val fail =

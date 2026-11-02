@@ -21,6 +21,7 @@ import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
+import grackle.Query._
 import grackle.QueryCompiler.IntrospectionLevel._
 import grackle.syntax._
 
@@ -1762,6 +1763,102 @@ final class IntrospectionSuite extends CatsEffectSuite {
     assertIO(res, expected)
   }
 
+  test("typename query at the root") {
+    val query = """
+      {
+        __typename
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "__typename" : "QueryRoot"
+        }
+      }
+    """
+
+    val mapping = new RenamedRootMapping
+    val res = mapping.compileAndRun(query).map(json => (json, mapping.rootCursorFieldNames.get))
+
+    // Only `__typename`, so the mapping's root cursor should not be built
+    assertIO(res, (expected, Nil))
+  }
+
+  test("typename query at the root with other root fields") {
+    val query = """
+      {
+        __typename
+        foo
+        __schema {
+          queryType {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "__typename" : "QueryRoot",
+          "foo" : 0,
+          "__schema" : {
+            "queryType" : {
+              "name" : "QueryRoot"
+            }
+          }
+        }
+      }
+    """
+
+    val mapping = new RenamedRootMapping
+    val res = mapping.compileAndRun(query).map(json => (json, mapping.rootCursorFieldNames.get))
+
+    // The mapping's root cursor should only be asked for `foo`
+    assertIO(res, (expected, List("foo")))
+  }
+
+  test("typename query at the mutation root") {
+    val query = """
+      mutation {
+        __typename
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "__typename" : "MutationRoot"
+        }
+      }
+    """
+
+    val res = (new RenamedRootMapping).compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("aliased typename query at the root") {
+    val query = """
+      {
+        t: __typename
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "t" : "QueryRoot"
+        }
+      }
+    """
+
+    val res = (new RenamedRootMapping).compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
   test("typename query with narrowing") {
     val query = """
       {
@@ -2255,3 +2352,84 @@ object DescribedMapping extends ValueMapping[IO] {
       )
     )
 }
+
+class RenamedRootMapping extends ValueMapping[IO] {
+  val schema =
+    schema"""
+      schema {
+        query: QueryRoot
+        mutation: MutationRoot
+      }
+      type QueryRoot {
+        foo: Int!
+      }
+      type MutationRoot {
+        baz: Int!
+      }
+    """
+
+  val QueryType = schema.queryType
+  val MutationType = schema.ref("MutationRoot")
+
+  // The names of the root fields passed to `defaultRootCursor`, in call order
+  val rootCursorFieldNames = new java.util.concurrent.atomic.AtomicReference(List.empty[String])
+
+  override def defaultRootCursor(
+      query: Query,
+      tpe: Type,
+      parentCursor: Option[Cursor]): IO[Result[(Query, Cursor)]] =
+    IO(rootCursorFieldNames.updateAndGet(_ ++ ungroup(query).map(q =>
+      rootName(q).fold(q.render)(_._1)))) *>
+      super.defaultRootCursor(query, tpe, parentCursor)
+
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings = List(
+          ValueField.fromValue("foo", 0)
+        )
+      ),
+      ObjectMapping(
+        tpe = MutationType,
+        fieldMappings = List(
+          RootEffect.computeCursor("baz")((p, e) => IO.pure(Result(valueCursor(p, e, 1))))
+        )
+      )
+    )
+}
+
+class TypenameShapesMapping extends ValueMapping[IO] {
+  val schema =
+    schema"""
+      type Query {
+        foo: Int!
+        bar: Bar!
+      }
+      type Bar {
+        baz: Int!
+      }
+    """
+
+  val QueryType = schema.queryType
+  val BarType = schema.ref("Bar")
+
+  val typeMappings =
+    List(
+      ObjectMapping(
+        tpe = QueryType,
+        fieldMappings = List(
+          ValueField.fromValue("foo", 0),
+          ValueField.fromValue("bar", ())
+        )
+      ),
+      ObjectMapping(
+        tpe = BarType,
+        fieldMappings = List(
+          ValueField.fromValue("baz", 1)
+        )
+      )
+    )
+}
+
+object TypenameShapesMapping extends TypenameShapesMapping
