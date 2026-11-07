@@ -922,6 +922,110 @@ final class ParserSuite extends CatsEffectSuite {
     assertEquals(resFail, Result.failure(expectedFail))
   }
 
+  test("deep fragment expansion") {
+    // operation, F, f, G: four levels
+    def mkQuery(fields: String): String =
+      s"query Q{...F} fragment F on Query{f{...G}} fragment G on T{$fields}"
+
+    val limitedParser = mkParser(maxSelectionDepth = 4)
+
+    val queryOk = mkQuery("g")
+    val queryFail = mkQuery("g{h}")
+
+    val resOk = limitedParser.parseText(queryOk)
+    assert(resOk.hasValue)
+
+    val resFail = limitedParser.parseText(queryFail)
+    assertEquals(
+      resFail,
+      Result.failure[Document](
+        "Operation 'Q', with fragment spreads expanded, exceeds the maximum selection depth of 4"))
+  }
+
+  test("deep fragment expansion of an unused fragment") {
+    val query = "query Q{a} fragment F on Query{f{...G}} fragment G on T{g{h}}"
+
+    val res = mkParser(maxSelectionDepth = 3).parseText(query)
+    assertEquals(
+      res,
+      Result.failure[Document](
+        "Fragment 'F', with fragment spreads expanded, exceeds the maximum selection depth of 3"))
+  }
+
+  test("large fragment expansion") {
+    // f, ...F, then a, ...G, g for each spread of G
+    def mkQuery(n: Int): String =
+      "query Q{f{...F}} fragment F on T{" + (1 to n)
+        .map(i => s"a$i:a{...G}")
+        .mkString(" ") + "} fragment G on T{g}"
+
+    val limitedParser = mkParser(maxSelectionSize = 8)
+
+    val resOk = limitedParser.parseText(mkQuery(2))
+    assert(resOk.hasValue)
+
+    val resFail = limitedParser.parseText(mkQuery(3))
+    assertEquals(
+      resFail,
+      Result.failure[Document](
+        "Operation 'Q', with fragment spreads expanded, exceeds the maximum selection size of 8"))
+  }
+
+  test("large query") {
+    val limitedParser = mkParser(maxSelectionSize = 4)
+
+    val resOk = limitedParser.parseText("query{a{b c d}}")
+    assert(resOk.hasValue)
+
+    val resFail = limitedParser.parseText("query{a{b c d e}}")
+    assertEquals(
+      resFail,
+      Result.failure[Document](
+        "Anonymous operation, with fragment spreads expanded, exceeds the maximum selection size of 4"))
+  }
+
+  test("fragment cycles are left to compiler validation") {
+    val query = "query Q{...F} fragment F on Query{...G} fragment G on Query{...F}"
+
+    assert(parser.parseText(query).hasValue)
+  }
+
+  test("fragment expansion at the default depth limit") {
+    // Each link in the chain contributes two levels: the fragment's selection set and the field's
+    assert(parser.parseText(chainedFragmentsQuery(49)).hasValue)
+    assertEquals(
+      parser.parseText(chainedFragmentsQuery(50)),
+      Result.failure[Document](
+        "Operation 'Q', with fragment spreads expanded, exceeds the maximum selection depth of 100")
+    )
+  }
+
+  test("long fragment chains are rejected without overflowing the stack") {
+    val expectedDepthFailure =
+      "with fragment spreads expanded, exceeds the maximum selection depth of 100"
+
+    assertEquals(
+      parser.parseText(chainedFragmentsQuery(10000)),
+      Result.failure[Document](s"Operation 'Q', $expectedDepthFailure"))
+
+    assertEquals(
+      parser.parseText(spreadOnlyFragmentsQuery(10000)),
+      Result.failure[Document](s"Operation 'Q', $expectedDepthFailure"))
+
+    assertEquals(
+      parser.parseText("query Q{a} " + chainedFragments(10000)),
+      Result.failure[Document](s"Fragment 'G1', $expectedDepthFailure"))
+  }
+
+  test("fragment expansion at the default size limit") {
+    assert(parser.parseText(doublingFragmentsQuery(12)).hasValue)
+    assertEquals(
+      parser.parseText(doublingFragmentsQuery(40)),
+      Result.failure[Document](
+        "Operation 'Q', with fragment spreads expanded, exceeds the maximum selection size of 100000")
+    )
+  }
+
   test("deep list value") {
     def mkQuery(depth: Int): String =
       "query{f(l: " + ("[" * depth) + "0" + ("]" * depth) + "){f}}"
@@ -1183,9 +1287,32 @@ final class ParserSuite extends CatsEffectSuite {
     assertEquals(parser.parseText("\"A scalar\" scalar Foo"), Result(List(expected)))
   }
 
+  // F -> G1 -> ... -> Gn, each fragment selecting a field which spreads the next
+  def chainedFragmentsQuery(n: Int): String =
+    "query Q{...F} fragment F on Query{f{...G1}} " + chainedFragments(n)
+
+  def chainedFragments(n: Int): String =
+    (1 until n)
+      .map(i => s"fragment G$i on T{f{...G${i + 1}}} ")
+      .mkString + s"fragment G$n on T{g}"
+
+  // G1 -> ... -> Gn, each fragment spreading the next directly
+  def spreadOnlyFragmentsQuery(n: Int): String =
+    "query Q{...G1} " + (1 until n).map(i => s"fragment G$i on Query{...G${i + 1}} ").mkString +
+      s"fragment G$n on Query{g}"
+
+  // Each fragment spreads the next twice, so the expansion doubles with each fragment
+  def doublingFragmentsQuery(n: Int): String =
+    "query Q{f{...G1}} " +
+      (1 until n)
+        .map(i => s"fragment G$i on T{a:f{...G${i + 1}} b:f{...G${i + 1}}} ")
+        .mkString +
+      s"fragment G$n on T{g}"
+
   def mkParser(
       maxSelectionDepth: Int = GraphQLParser.defaultConfig.maxSelectionDepth,
       maxSelectionWidth: Int = GraphQLParser.defaultConfig.maxSelectionWidth,
+      maxSelectionSize: Int = GraphQLParser.defaultConfig.maxSelectionSize,
       maxInputValueDepth: Int = GraphQLParser.defaultConfig.maxInputValueDepth,
       maxListTypeDepth: Int = GraphQLParser.defaultConfig.maxListTypeDepth
   ): GraphQLParser =
@@ -1193,6 +1320,7 @@ final class ParserSuite extends CatsEffectSuite {
       GraphQLParser.Config(
         maxSelectionDepth = maxSelectionDepth,
         maxSelectionWidth = maxSelectionWidth,
+        maxSelectionSize = maxSelectionSize,
         maxInputValueDepth = maxInputValueDepth,
         maxListTypeDepth = maxListTypeDepth,
         terseError = false

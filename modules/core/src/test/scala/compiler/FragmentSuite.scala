@@ -1410,6 +1410,74 @@ final class FragmentSuite extends CatsEffectSuite {
 
     assertIO(res, expected)
   }
+
+  test("deeply nested fragment expansion") {
+    val query =
+      "query Q { user(id: 1) { ...G1 } }\n" +
+        (1 until 10000)
+          .map(i => s"fragment G$i on User { friends { ...G${i + 1} } }\n")
+          .mkString +
+        "fragment G10000 on User { id }\n"
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Operation 'Q', with fragment spreads expanded, exceeds the maximum selection depth of 100"
+          }
+        ]
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("deeply nested fragment spreads") {
+    val query =
+      "query Q { ...G1 }\n" +
+        (1 until 10000).map(i => s"fragment G$i on Query { ...G${i + 1} }\n").mkString +
+        "fragment G10000 on Query { user(id: 1) { id } }\n"
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Operation 'Q', with fragment spreads expanded, exceeds the maximum selection depth of 100"
+          }
+        ]
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("exponential fragment expansion") {
+    val query =
+      "query Q { user(id: 1) { ...G1 } }\n" +
+        (1 until 40)
+          .map(i =>
+            s"fragment G$i on User { a: friends { ...G${i + 1} } b: friends { ...G${i + 1} } }\n")
+          .mkString +
+        "fragment G40 on User { id }\n"
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Operation 'Q', with fragment spreads expanded, exceeds the maximum selection size of 100000"
+          }
+        ]
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
 }
 
 object FragmentData {
