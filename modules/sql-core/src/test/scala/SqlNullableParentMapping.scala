@@ -63,7 +63,7 @@ trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
     schema"""
       type Query {
         as(cName: String, order: String, limit: Int): [A!]!
-        ds(fName: String, order: String, limit: Int): [D!]!
+        ds(fName: String, limit: Int): [D!]!
       }
       type A {
         name: String!
@@ -78,7 +78,7 @@ trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
       }
       type D {
         name: String!
-        es(fName: String, limit: Int): [E!]!
+        es(fName: String, otherFName: String, order: String, limit: Int): [E!]!
       }
       type E {
         name: String!
@@ -170,8 +170,8 @@ trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
 
   val aOrders: Map[String, Path] =
     Map("mid" -> AType / "b" / "name", "deep" -> AType / "b" / "c" / "name")
-  val dOrders: Map[String, Path] =
-    Map("mid" -> DType / "es" / "name", "deep" -> DType / "es" / "f" / "name")
+  val eOrders: Map[String, Path] =
+    Map("f" -> EType / "f" / "name", "otherD" -> EType / "otherD" / "name")
 
   override val selectElaborator = SelectElaborator {
     case (
@@ -185,23 +185,29 @@ trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
           c2 <- mkLimit(c1, limit)
         } yield c2
       }
-    case (
-          QueryType,
-          "ds",
-          List(Binding("fName", fName), Binding("order", order), Binding("limit", limit))) =>
+    case (QueryType, "ds", List(Binding("fName", fName), Binding("limit", limit))) =>
       Elab.transformChild { child =>
         for {
           c0 <- mkFilter(child, DType / "es" / "f" / "name", fName)
-          c1 <- mkOrder(c0, dOrders, order)
-          c2 <- mkLimit(c1, limit)
-        } yield c2
+          c1 <- mkLimit(c0, limit)
+        } yield c1
       }
-    case (DType, "es", List(Binding("fName", fName), Binding("limit", limit))) =>
+    case (
+          DType,
+          "es",
+          List(
+            Binding("fName", fName),
+            Binding("otherFName", otherFName),
+            Binding("order", order),
+            Binding("limit", limit))) =>
+      // `otherFName` filters through a list (`otherD.es`), so the filter is not one-to-one.
       Elab.transformChild { child =>
         for {
           c0 <- mkFilter(child, EType / "f" / "name", fName)
-          c1 <- mkLimit(c0, limit)
-        } yield c1
+          c1 <- mkFilter(c0, EType / "otherD" / "es" / "f" / "name", otherFName)
+          c2 <- mkOrder(c1, eOrders, order)
+          c3 <- mkLimit(c2, limit)
+        } yield c3
       }
   }
 }

@@ -2308,10 +2308,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         from: TableExpr,
         to: TableExpr,
         os: OrderSelection[T]): OrderSelection[T] =
-      os.term match {
-        case SqlColumnTerm(col) => os.subst(SqlColumnTerm(col.subst(from, to)))
-        case _ => os
-      }
+      mapOrderColumn(os)(_.subst(from, to))
 
     /**
      * Render the given `OrderSelections` as a `Fragment`
@@ -2837,20 +2834,23 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           orderBy.map { case (oss, joins) => (oss, joins) }.getOrElse((Nil, Nil))
 
         // Columns inside a nested select that `SqlSelect.nest` could not flatten are out of scope
-        // here. Reference them through the joined subquery that projects them. Columns owned by
-        // the FROM clause, or outside it (correlated references), are left alone.
-        def viaFrom(table0: TableExpr, joins0: List[SqlJoin])(col: SqlColumn): SqlColumn = {
-          val inFrom =
-            table0.isSameOwner(col.owner) || joins0.exists(_.child.isSameOwner(col.owner))
-          if (inFrom) col
+        // here. `viaSubquery` gives the column of the joined subquery that projects such a
+        // column. It gives `None` for a column owned by the FROM clause, and for one that no
+        // joined subquery projects (for example, a correlated reference).
+        def inFrom(table0: TableExpr, joins0: List[SqlJoin])(col: SqlColumn): Boolean =
+          table0.isSameOwner(col.owner) || joins0.exists(_.child.isSameOwner(col.owner))
+
+        def viaSubquery(table0: TableExpr, joins0: List[SqlJoin])(
+            col: SqlColumn): Option[SqlColumn] =
+          if (inFrom(table0, joins0)(col)) None
           else
-            joins0
-              .collectFirst {
-                case SqlJoin(_, sq: SubqueryRef, _, _) if sq.subquery.cols.contains(col) =>
-                  col.derive(sq)
-              }
-              .getOrElse(col)
-        }
+            joins0.collectFirst {
+              case SqlJoin(_, sq: SubqueryRef, _, _) if sq.subquery.cols.contains(col) =>
+                col.derive(sq)
+            }
+
+        def viaFrom(table0: TableExpr, joins0: List[SqlJoin])(col: SqlColumn): SqlColumn =
+          viaSubquery(table0, joins0)(col).getOrElse(col)
 
         def contextualiseWheres(
             table0: TableExpr,
@@ -2872,23 +2872,27 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               .map(mapOrderColumn(_)(viaFrom(table0, joins0)))
           }
 
-        // Order columns as selected by a query over `table` with `joins0`
-        def orderColsFor(joins0: List[SqlJoin]): Result[List[SqlColumn]] =
-          oss.traverse { os =>
-            columnForSqlTerm(context, os.term).map { col =>
-              val col0 = viaFrom(table, joins0)(col)
-              if (col0 ne col) col0
-              else if (joins0.exists(_.child.isSameOwner(col.owner))) col
-              else col.in(table)
-            }
-          }
-
         // Merged here so predicates and orders see the union of columns that nested selects project
         val allJoins = SqlJoin.merge(filterJoins ++ orderJoins ++ joins)
         // Joins for a predicate select over the keys only
-        val predJoins = SqlJoin.merge(filterJoins ++ orderJoins)
+        lazy val predJoins = SqlJoin.merge(filterJoins ++ orderJoins)
 
-        val orderColsR = orderColsFor(allJoins)
+        // Order columns as selected by a query over `table` with `allJoins`
+        val orderColsR: Result[List[SqlColumn]] =
+          oss.traverse { os =>
+            columnForSqlTerm(context, os.term).flatMap { col =>
+              viaSubquery(table, allJoins)(col) match {
+                case Some(col0) => col0.success
+                case None if allJoins.exists(_.child.isSameOwner(col.owner)) => col.success
+                case None
+                    if !table.isSameOwner(col.owner) &&
+                      allJoins.exists(_.findNamedOwner(col).isDefined) =>
+                  Result.internalError(
+                    s"Order column ${col.column} is not projected by a joined subquery")
+                case None => col.in(table).success
+              }
+            }
+          }
 
         orderColsR.flatMap { orderCols =>
           val initialKeyOrder = orderCols.take(keyCols.size).diff(keyCols).isEmpty
@@ -3359,14 +3363,19 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                             col.derive(baseRef).toTerm,
                             true,
                             nullsHigh)) ++ nonKeyOrders
-                        val distOrderCols = orderCols.diff(keyCols).map(_.derive(baseRef))
+                        val distOrderCols =
+                          oss0
+                            .map(_.term)
+                            .collect { case SqlColumnTerm(col) => col }
+                            .diff(keyCols)
+                            .map(col =>
+                              (col, distinctOrderColumn(baseRef, col, predCols, distOrders)))
 
                         val distQuery = SqlSelect(
                           context = context,
                           withs = Nil,
                           table = baseRef,
-                          cols = predCols ++ distOrderCols.map(col =>
-                            distinctOrderColumn(baseRef, col, predCols, distOrders)),
+                          cols = predCols ++ distOrderCols.map(_._2),
                           joins = predJoins,
                           wheres = (pred1 ++ nonNullKeys).distinct,
                           orders = distOrders,
@@ -3382,28 +3391,32 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                           SubqueryRef(context, distName, distQuery, Laterality.NotLateral)
 
                         val predCols0 = keyCols.map(_.derive(distSub))
-                        contextualiseOrders(distSub, Nil, oss).flatMap { outerOss0 =>
-                          val orders = outerOss0 ++ keyCols
-                            .diff(orderCols)
-                            .map(col =>
-                              OrderSelection(col.derive(distSub).toTerm, true, nullsHigh))
-                          val predQuery = SqlSelect(
-                            context = context,
-                            withs = Nil,
-                            table = distSub,
-                            cols = predCols0,
-                            joins = Nil,
-                            wheres = Nil,
-                            orders = orders,
-                            offset = offset0,
-                            limit = limit0,
-                            distinct = Nil,
-                            oneToOne = true,
-                            predicate = true
-                          )
+                        val outerOss0 = oss0.map(mapOrderColumn(_) { col =>
+                          distOrderCols
+                            .collectFirst { case (c, projected) if c == col => projected }
+                            .getOrElse(col)
+                            .derive(distSub)
+                        })
+                        val orders = outerOss0 ++ keyCols
+                          .diff(orderCols)
+                          .map(col =>
+                            OrderSelection(col.derive(distSub).toTerm, true, nullsHigh))
+                        val predQuery = SqlSelect(
+                          context = context,
+                          withs = Nil,
+                          table = distSub,
+                          cols = predCols0,
+                          joins = Nil,
+                          wheres = Nil,
+                          orders = orders,
+                          offset = offset0,
+                          limit = limit0,
+                          distinct = Nil,
+                          oneToOne = true,
+                          predicate = true
+                        )
 
-                          mkPredSubquery(base0, predQuery).success
-                        }
+                        mkPredSubquery(base0, predQuery).success
                       }
                   }
                 }
@@ -3842,7 +3855,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
        * Are `a` and `b` equal, ignoring the columns of nested selects? Selects that agree on
        * everything but `cols` yield the same rows, so one subquery projecting both column sets
        * can replace both. Not `equals`, which `distinct` and `SqlSelect` assertions need to
-       * include columns. Recurses because `Laterality.Apply.correlate` wraps selects in selects.
+       * include columns. Recurses because `Laterality.Apply.correlate` wraps selects in
+       * selects. A DISTINCT select must be equal: some dialects render `distinct` as a plain
+       * `DISTINCT` over every projected column, so extra columns can change its rows.
        */
       private def sameShape(a: TableExpr, b: TableExpr): Boolean =
         (a, b) match {
@@ -3853,6 +3868,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
       private def sameShape(a: SqlQuery, b: SqlQuery): Boolean =
         (a, b) match {
+          case (a: SqlSelect, b: SqlSelect) if a.isDistinct || b.isDistinct => a == b
           case (a: SqlSelect, b: SqlSelect) =>
             a.context == b.context && a.withs == b.withs && sameShape(a.table, b.table) &&
             a.joins == b.joins && a.wheres == b.wheres && a.orders == b.orders &&
