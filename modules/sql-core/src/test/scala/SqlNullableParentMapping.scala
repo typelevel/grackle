@@ -15,6 +15,11 @@
 
 package grackle.sql.test
 
+import grackle._
+import grackle.Predicate.{Const, Eql}
+import grackle.Query.{Binding, Filter, Limit, OrderBy, OrderSelection, OrderSelections}
+import grackle.QueryCompiler.{Elab, SelectElaborator}
+import grackle.Value.{AbsentValue, IntValue, NullValue, StringValue}
 import grackle.syntax._
 
 trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
@@ -57,8 +62,8 @@ trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
   val schema =
     schema"""
       type Query {
-        as: [A!]!
-        ds: [D!]!
+        as(cName: String, order: String, limit: Int): [A!]!
+        ds(fName: String, limit: Int): [D!]!
       }
       type A {
         name: String!
@@ -73,7 +78,7 @@ trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
       }
       type D {
         name: String!
-        es: [E!]!
+        es(fName: String, otherFName: String, order: String, limit: Int): [E!]!
       }
       type E {
         name: String!
@@ -134,4 +139,75 @@ trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
         SqlField("name", fTable.name)
       )
     )
+
+  // Paths with a LEFT join (`b`, `es`) followed by an INNER join (`c`, `f`). `SqlSelect.nest`
+  // cannot flatten these, so predicates and orders must go through the subquery. The `b.name`
+  // order is flattened, to cover both cases together.
+  def mkFilter(child: Query, path: Path, name: Value): Result[Query] =
+    name match {
+      case AbsentValue | NullValue => child.success
+      case StringValue(s) => Filter(Eql(path, Const(s)), child).success
+      case other => Result.failure(s"Expected a name, found $other")
+    }
+
+  def mkOrder(child: Query, paths: Map[String, Path], order: Value): Result[Query] =
+    order match {
+      case AbsentValue | NullValue => child.success
+      case StringValue(s) =>
+        paths
+          .get(s)
+          .map(path => OrderBy(OrderSelections(List(OrderSelection[String](path))), child))
+          .toResultOrError(s"Unknown order '$s'")
+      case other => Result.failure(s"Expected an order, found $other")
+    }
+
+  def mkLimit(child: Query, limit: Value): Result[Query] =
+    limit match {
+      case AbsentValue | NullValue => child.success
+      case IntValue(n) => Limit(n, child).success
+      case other => Result.failure(s"Expected a limit, found $other")
+    }
+
+  val aOrders: Map[String, Path] =
+    Map("mid" -> AType / "b" / "name", "deep" -> AType / "b" / "c" / "name")
+  val eOrders: Map[String, Path] =
+    Map("f" -> EType / "f" / "name", "otherD" -> EType / "otherD" / "name")
+
+  override val selectElaborator = SelectElaborator {
+    case (
+          QueryType,
+          "as",
+          List(Binding("cName", cName), Binding("order", order), Binding("limit", limit))) =>
+      Elab.transformChild { child =>
+        for {
+          c0 <- mkFilter(child, AType / "b" / "c" / "name", cName)
+          c1 <- mkOrder(c0, aOrders, order)
+          c2 <- mkLimit(c1, limit)
+        } yield c2
+      }
+    case (QueryType, "ds", List(Binding("fName", fName), Binding("limit", limit))) =>
+      Elab.transformChild { child =>
+        for {
+          c0 <- mkFilter(child, DType / "es" / "f" / "name", fName)
+          c1 <- mkLimit(c0, limit)
+        } yield c1
+      }
+    case (
+          DType,
+          "es",
+          List(
+            Binding("fName", fName),
+            Binding("otherFName", otherFName),
+            Binding("order", order),
+            Binding("limit", limit))) =>
+      // `otherFName` filters through a list (`otherD.es`), so the filter is not one-to-one.
+      Elab.transformChild { child =>
+        for {
+          c0 <- mkFilter(child, EType / "f" / "name", fName)
+          c1 <- mkFilter(c0, EType / "otherD" / "es" / "f" / "name", otherFName)
+          c2 <- mkOrder(c1, eOrders, order)
+          c3 <- mkLimit(c2, limit)
+        } yield c3
+      }
+  }
 }

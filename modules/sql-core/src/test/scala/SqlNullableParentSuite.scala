@@ -242,4 +242,325 @@ trait SqlNullableParentSuite extends CatsEffectSuite {
 
     assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
   }
+
+  test("a filter through a nullable parent on a non-null field beneath it") {
+    val query = """
+      query {
+        as(cName: "cat-1") {
+          name
+          b {
+            name
+            c {
+              name
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "as" : [
+            {
+              "name" : "a-with-good-b",
+              "b" : {
+                "name" : "b-with-c",
+                "c" : {
+                  "name" : "cat-1"
+                }
+              }
+            }
+          ]
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
+
+  test("a filter through a list on a non-null field beneath it") {
+    val query = """
+      query {
+        ds(fName: "fish-2") {
+          name
+          es {
+            name
+            f {
+              name
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "ds" : [
+            {
+              "name" : "d-with-es",
+              "es" : [
+                {
+                  "name" : "e-with-f",
+                  "f" : {
+                    "name" : "fish-1"
+                  }
+                },
+                {
+                  "name" : "e-with-another-f",
+                  "f" : {
+                    "name" : "fish-2"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
+
+  test("an order through a nullable parent on a non-null field beneath it") {
+    // `a-without-b` and `a-with-dangling-b` both order as null, so only the head is fixed.
+    val query = """
+      query {
+        as(order: "deep") {
+          name
+        }
+      }
+    """
+
+    mapping.compileAndRun(query).map { res =>
+      val names = res.hcursor.downField("data").downField("as").as[List[Map[String, String]]]
+      assertEquals(
+        names.map(_.map(_("name"))).map(ns => (ns.size, ns.head)),
+        Right((3, "a-with-good-b")))
+    }
+  }
+
+  test("a filter through a nullable parent combined with an order on the parent itself") {
+    // The filter nests `b` in a subquery, the order joins it directly. Read the order column
+    // from the table, not the subquery.
+    val query = """
+      query {
+        as(cName: "cat-1", order: "mid") {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "as" : [
+            {
+              "name" : "a-with-good-b"
+            }
+          ]
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
+
+  test("a filter and limit on a list through a non-null field beneath it") {
+    // The filter's join must be in the FROM clause of the windowed select for the limit.
+    val query = """
+      query {
+        ds {
+          name
+          es(fName: "fish-1", limit: 1) {
+            name
+            otherD {
+              es {
+                name
+              }
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "ds" : [
+            {
+              "name" : "d-without-es",
+              "es" : [
+              ]
+            },
+            {
+              "name" : "d-with-es",
+              "es" : [
+                {
+                  "name" : "e-with-f",
+                  "otherD" : {
+                    "es" : [
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
+
+  test("an order through a nullable parent with a limit") {
+    // Without a parent constraint, the limit is applied in a DISTINCT select over the keys.
+    // That select must order by `b.name`, not by the `name` of the base table.
+    val query = """
+      query {
+        as(order: "mid", limit: 1) {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "as" : [
+            {
+              "name" : "a-with-good-b"
+            }
+          ]
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
+
+  test("an order through a nullable parent on a non-null field beneath it with a limit") {
+    val query = """
+      query {
+        as(order: "deep", limit: 1) {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "as" : [
+            {
+              "name" : "a-with-good-b"
+            }
+          ]
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
+
+  test("a filter and limit through a list on a non-null field beneath it") {
+    val query = """
+      query {
+        ds(fName: "fish-2", limit: 1) {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "ds" : [
+            {
+              "name" : "d-with-es"
+            }
+          ]
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
+
+  test("a filter through a list on a limited list beneath a list") {
+    // The filter is not one-to-one, so the windowed select for the limit is built over the
+    // keys alone, with the filter's joins only.
+    val query = """
+      query {
+        ds {
+          name
+          es(otherFName: "fish-1", limit: 1) {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "ds" : [
+            {
+              "name" : "d-without-es",
+              "es" : [
+              ]
+            },
+            {
+              "name" : "d-with-es",
+              "es" : [
+                {
+                  "name" : "e-with-another-f"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
+
+  test("a filter through a list and an order on a limited list beneath a list") {
+    val query = """
+      query {
+        ds {
+          name
+          es(otherFName: "fish-1", order: "f", limit: 1) {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "ds" : [
+            {
+              "name" : "d-without-es",
+              "es" : [
+              ]
+            },
+            {
+              "name" : "d-with-es",
+              "es" : [
+                {
+                  "name" : "e-with-another-f"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
 }
