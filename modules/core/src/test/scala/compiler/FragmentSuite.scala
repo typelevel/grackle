@@ -1660,18 +1660,22 @@ final class FragmentSuite extends CatsEffectSuite {
     )
   }
 
-  test("fragment chain at the default depth limit") {
-    // Each link in the chain contributes a selection set and a fragment spread
+  test("fragment chain at the depth limit") {
+    // Each link in the chain contributes a selection set and a fragment spread. The limit is
+    // kept small because elaborating a long fragment chain can exhaust the smaller stack of
+    // Scala.js.
     def mkQuery(n: Int): String =
       "query Q { user(id: 1) { ...G1 } }\n" +
         (1 until n).map(i => s"fragment G$i on User { friends { ...G${i + 1} } }\n").mkString +
         s"fragment G$n on User { id }\n"
 
-    assert(FragmentMapping.compiler.compile(mkQuery(99)).hasValue)
+    val compiler = limitedCompiler(maxSelectionDepth = 20)
+
+    assert(compiler.compile(mkQuery(19)).hasValue)
     assertEquals(
-      problems(FragmentMapping.compiler.compile(mkQuery(100))),
+      problems(compiler.compile(mkQuery(20))),
       List(
-        "Operation 'Q', with fragment spreads expanded, exceeds the maximum selection depth of 100")
+        "Operation 'Q', with fragment spreads expanded, exceeds the maximum selection depth of 20")
     )
   }
 
