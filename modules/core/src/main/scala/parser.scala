@@ -24,6 +24,7 @@ import cats.parse.Parser.*
 import cats.parse.Rfc5234.{cr, crlf, digit, hexdig, lf}
 
 trait GraphQLParser {
+  def config: GraphQLParser.Config
   def parseText(text: String): Result[Ast.Document]
 }
 
@@ -59,16 +60,12 @@ object GraphQLParser {
   import CommentedText._
   import Literals._
 
-  private final class Impl(config: Config) extends GraphQLParser {
+  private final class Impl(val config: Config) extends GraphQLParser {
     import config._
 
     def parseText(text: String): Result[Ast.Document] = {
       val res = Document.parseAll(text)
-      (if (config.terseError) toResultTerseError(res) else toResult(res)).flatMap { doc =>
-        Result
-          .fromProblems(validateExpandedSelections(doc, maxSelectionDepth, maxSelectionSize))
-          .as(doc)
-      }
+      if (config.terseError) toResultTerseError(res) else toResult(res)
     }
 
     val nameInitial = ('A' to 'Z') ++ ('a' to 'z') ++ Seq('_')
@@ -636,119 +633,5 @@ object GraphQLParser {
 
     val booleanLiteral: Parser[Boolean] = string("true").as(true) | string("false").as(false)
 
-  }
-
-  /**
-   * Validates that, with fragment spreads expanded, the selection depth and size of each
-   * operation and each fragment of `doc` are within the supplied limits.
-   *
-   * Returns a list of problems encountered.
-   */
-  private def validateExpandedSelections(
-      doc: Ast.Document,
-      maxDepth: Int,
-      maxSize: Int): List[Problem] = {
-    import Ast.{FragmentDefinition, Name, Selection}
-    import Ast.OperationDefinition.{Operation, QueryShorthand}
-    import Selection.{Field, FragmentSpread, InlineFragment}
-
-    val frags: Map[String, FragmentDefinition] =
-      doc.collect { case frag: FragmentDefinition => (frag.name.value, frag) }.toMap
-
-    // Fragment name -> (depth relative to the enclosing selection set, size) of its expansion
-    type Memo = Map[String, (Int, Long)]
-
-    def checked(depth: Int, size: Long, memo: Memo): Either[String, (Int, Long, Memo)] =
-      if (depth > maxDepth) Left(s"exceeds the maximum selection depth of $maxDepth")
-      else if (size > maxSize) Left(s"exceeds the maximum selection size of $maxSize")
-      else Right((depth, size, memo))
-
-    // Returns the maximum absolute depth and the size of the expansion of the selection set
-    // `sels`, which is at absolute depth `depth`, or the reason a limit was exceeded.
-    def measureSet(
-        sels: List[Selection],
-        depth: Int,
-        path: Set[String],
-        memo: Memo): Either[String, (Int, Long, Memo)] =
-      sels.foldLeft(checked(depth, 0, memo)) {
-        case (acc, sel) =>
-          acc.flatMap {
-            case (d, size, memo0) =>
-              measureSelection(sel, depth, path, memo0).flatMap {
-                case (sd, ssize, memo1) => checked(d.max(sd), size + ssize, memo1)
-              }
-          }
-      }
-
-    // As `measureSet`, for a single selection in a selection set at absolute depth `depth`.
-    def measureSelection(
-        sel: Selection,
-        depth: Int,
-        path: Set[String],
-        memo: Memo): Either[String, (Int, Long, Memo)] =
-      sel match {
-        case Field(_, _, _, _, Nil, _) =>
-          checked(depth, 1, memo)
-        case Field(_, _, _, _, child, _) =>
-          measureNested(child, depth, path, memo)
-        case InlineFragment(_, _, child) =>
-          measureNested(child, depth, path, memo)
-        case FragmentSpread(Name(nme), _) =>
-          measureSpread(nme, depth, path, memo)
-      }
-
-    // As `measureSelection`, for a field or inline fragment with the selection set `child`.
-    def measureNested(
-        child: List[Selection],
-        depth: Int,
-        path: Set[String],
-        memo: Memo): Either[String, (Int, Long, Memo)] =
-      measureSet(child, depth + 1, path, memo).flatMap {
-        case (cd, csize, memo0) => checked(cd, csize + 1, memo0)
-      }
-
-    // As `measureSelection`, for a spread of the fragment named `nme`.
-    def measureSpread(
-        nme: String,
-        depth: Int,
-        path: Set[String],
-        memo: Memo): Either[String, (Int, Long, Memo)] =
-      (memo.get(nme), frags.get(nme)) match {
-        case (Some((rd, fsize)), _) =>
-          checked(depth + rd, fsize + 1, memo)
-        case (None, Some(frag)) if !path.contains(nme) =>
-          measureSet(frag.selectionSet, depth + 1, path + nme, memo).flatMap {
-            case (fd, fsize, memo0) =>
-              checked(fd, fsize + 1, memo0.updated(nme, (fd - depth, fsize)))
-          }
-        case _ =>
-          // An undefined fragment, or a cycle, reported elsewhere
-          checked(depth, 1, memo)
-      }
-
-    val roots: List[(String, Memo => Either[String, (Int, Long, Memo)])] =
-      doc.collect {
-        case QueryShorthand(sels) =>
-          ("Anonymous operation", measureSet(sels, 1, Set.empty, _))
-        case Operation(_, name, _, _, sels, _) =>
-          (
-            name.fold("Anonymous operation")(nme => s"Operation '${nme.value}'"),
-            measureSet(sels, 1, Set.empty, _))
-        case frag: FragmentDefinition =>
-          (s"Fragment '${frag.name.value}'", measureSpread(frag.name.value, 0, Set.empty, _))
-      }
-
-    roots
-      .foldLeft(Right(Map.empty): Either[Problem, Memo]) {
-        case (acc, (desc, measure)) =>
-          acc.flatMap { memo =>
-            measure(memo).bimap(
-              reason => Problem(s"$desc, with fragment spreads expanded, $reason"),
-              _._3)
-          }
-      }
-      .left
-      .toOption
-      .toList
   }
 }

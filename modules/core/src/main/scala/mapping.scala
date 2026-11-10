@@ -1435,7 +1435,7 @@ abstract class Mapping[F[_]] {
 
   lazy val compiler: QueryCompiler = {
     typeMappings.unsafeValidateIfChecked()
-    new QueryCompiler(queryParser, schema, compilerPhases)
+    new QueryCompiler(queryParser, schema, compilerPhases, graphQLParser.config)
   }
 
   val interpreter: QueryInterpreter[F] = new QueryInterpreter(this)

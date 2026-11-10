@@ -1327,11 +1327,24 @@ object Value {
             .traverse(iv => checkVarValue(iv, obj(iv.name), location).map(v => (iv.name, v)))
             .map(ObjectValue.apply)
       case (tpe, Some(value)) =>
-        Result.failure(s"Expected $tpe found '$value' for '${iv.name}' in $location")
+        Result.failure(
+          s"Expected $tpe found '${abbreviateJson(value)}' for '${iv.name}' in $location")
       case (tpe, None) =>
         Result.failure(s"Value of type $tpe required for '${iv.name}' in $location")
     }
   }
+
+  /**
+   * `json` printed compactly for an error message, truncated to `maxAbbreviatedLength`
+   * characters, so that the size of the message is bounded however large `json` is.
+   */
+  def abbreviateJson(json: Json): String = {
+    val printed = json.noSpaces
+    if (printed.length <= maxAbbreviatedLength) printed
+    else printed.take(maxAbbreviatedLength) + "..."
+  }
+
+  val maxAbbreviatedLength: Int = 100
 }
 
 /**
