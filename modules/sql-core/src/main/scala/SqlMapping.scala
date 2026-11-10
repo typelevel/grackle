@@ -2069,6 +2069,15 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       mapWhereColumns(pred)(_.subst(from, to))
 
     /**
+     * Yields a copy of the given `OrderSelection` with `f` applied to the column it refers to
+     */
+    def mapOrderColumn[T](os: OrderSelection[T])(f: SqlColumn => SqlColumn): OrderSelection[T] =
+      os.term match {
+        case SqlColumnTerm(col) => os.subst(SqlColumnTerm(f(col)).asInstanceOf[Term[T]])
+        case _ => os
+      }
+
+    /**
      * Yields a copy of the given `Predicate` with `f` applied to every column it refers to
      */
     def mapWhereColumns(pred: Predicate)(f: SqlColumn => SqlColumn): Predicate = {
@@ -2829,49 +2838,64 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
         // A filter or order path which crosses a nested select that `SqlSelect.nest` could not
         // flatten (see `mergePreservesRows`) has its columns owned by tables inside that
-        // subquery, whose names are not in scope here. The subquery projects those columns,
-        // so they are referenced through it instead. The two contextualisers below shadow the
-        // outer ones so that every use in this method picks this up.
-        val pathSubqueries: List[SubqueryRef] =
-          (filterJoins ++ orderJoins).map(_.child).collect { case sq: SubqueryRef => sq }
+        // subquery, whose names are not in scope in the select being built. Such a column is
+        // referenced through a joined subquery which projects it, if there is one. That test
+        // is made against the select's final, merged join list: the filter path and the data
+        // selection can nest the same field independently, and only their union (see
+        // `SqlJoin.merge`) projects every column a predicate or order needs. A column whose
+        // owner is itself in the FROM clause is left alone, as is one the FROM clause doesn't
+        // reach at all, such as a correlated reference to an enclosing query.
+        def viaFrom(table0: TableExpr, joins0: List[SqlJoin])(col: SqlColumn): SqlColumn = {
+          val inFrom =
+            table0.isSameOwner(col.owner) || joins0.exists(_.child.isSameOwner(col.owner))
+          if (inFrom) col
+          else
+            joins0
+              .collectFirst {
+                case SqlJoin(_, sq: SubqueryRef, _, _) if sq.subquery.cols.contains(col) =>
+                  col.derive(sq)
+              }
+              .getOrElse(col)
+        }
 
-        def viaPathSubquery(col: SqlColumn): SqlColumn =
-          pathSubqueries
-            .find(sq => !col.owner.isSameOwner(sq) && sq.owns(col))
-            .fold(col)(sq => col.derive(sq))
-
-        def contextualiseWhereTerms(
-            context: Context,
-            owner: ColumnOwner,
-            pred: Predicate): Result[Predicate] =
-          SqlQuery
-            .contextualiseWhereTerms(context, owner, pred)
-            .map(mapWhereColumns(_)(viaPathSubquery))
-
-        def contextualiseOrderTerms[T](
-            context: Context,
-            owner: ColumnOwner,
-            os: OrderSelection[T]): Result[OrderSelection[T]] =
-          SqlQuery.contextualiseOrderTerms(context, owner, os).map { os0 =>
-            os0.term match {
-              case SqlColumnTerm(col) =>
-                os0.subst(SqlColumnTerm(viaPathSubquery(col)).asInstanceOf[Term[T]])
-              case _ => os0
-            }
+        def contextualiseWheres(
+            table0: TableExpr,
+            joins0: List[SqlJoin],
+            preds: List[Predicate]): Result[List[Predicate]] =
+          preds.traverse { pred =>
+            SqlQuery
+              .contextualiseWhereTerms(context, table0, pred)
+              .map(mapWhereColumns(_)(viaFrom(table0, joins0)))
           }
 
-        val orderColsR =
+        def contextualiseOrders(
+            table0: TableExpr,
+            joins0: List[SqlJoin],
+            oss0: List[OrderSelection[_]]): Result[List[OrderSelection[_]]] =
+          oss0.traverse { os =>
+            SqlQuery
+              .contextualiseOrderTerms(context, table0, os)
+              .map(mapOrderColumn(_)(viaFrom(table0, joins0)))
+          }
+
+        // The order columns as selected by a query over `table` with `joins0`
+        def orderColsFor(joins0: List[SqlJoin]): Result[List[SqlColumn]] =
           oss.traverse { os =>
             columnForSqlTerm(context, os.term).map { col =>
-              val viaSubquery = viaPathSubquery(col)
-              if (viaSubquery ne col) viaSubquery
-              else
-                orderJoins
-                  .collectFirstSome(_.findNamedOwner(col))
-                  .map(owner => col.in(owner))
-                  .getOrElse(col.in(table))
+              val col0 = viaFrom(table, joins0)(col)
+              if (col0 ne col) col0
+              else if (joins0.exists(_.child.isSameOwner(col.owner))) col
+              else col.in(table)
             }
           }
+
+        // Every join a predicate or order can be resolved against in this select
+        val allJoins = SqlJoin.merge(filterJoins ++ orderJoins ++ joins)
+        // The joins of a predicate select over the keys alone
+        val predJoins = SqlJoin.merge(filterJoins ++ orderJoins)
+
+        val orderColsR = orderColsFor(allJoins)
+
         orderColsR.flatMap { orderCols =>
           val initialKeyOrder = orderCols.take(keyCols.size).diff(keyCols).isEmpty
 
@@ -2888,127 +2912,125 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
             if (oneToOne && predIsOneToOne && fastPathSafe) {
               // Case 1) one row is one object in this context
-              pred0.traverse(p => contextualiseWhereTerms(context, table, p)).flatMap { pred1 =>
-                oss.traverse(os => contextualiseOrderTerms(context, table, os)).flatMap {
-                  oss0 =>
-                    val orders = oss0 ++ keyCols
-                      .diff(orderCols)
-                      .map(col => OrderSelection(col.toTerm, true, nullsHigh))
-                    val nonNullKeys = keyCols.map(col => IsNull(col.toTerm, false))
+              contextualiseWheres(table, allJoins, pred0).flatMap { pred1 =>
+                contextualiseOrders(table, allJoins, oss).flatMap { oss0 =>
+                  val orders = oss0 ++ keyCols
+                    .diff(orderCols)
+                    .map(col => OrderSelection(col.toTerm, true, nullsHigh))
+                  val nonNullKeys = keyCols.map(col => IsNull(col.toTerm, false))
 
-                    // We could use row_number in this case
-                    val partitionCol =
-                      SqlColumn.PartitionColumn(table, "row_item", partitionBy, orders)
-                    val exposeCols = parentConstraints.lastOption.getOrElse(Nil).map {
-                      case (_, col) =>
-                        findNamedOwner(col)
-                          .map(owner => col.derive(owner))
-                          .getOrElse(col.derive(table))
-                    }
+                  // We could use row_number in this case
+                  val partitionCol =
+                    SqlColumn.PartitionColumn(table, "row_item", partitionBy, orders)
+                  val exposeCols = parentConstraints.lastOption.getOrElse(Nil).map {
+                    case (_, col) =>
+                      findNamedOwner(col)
+                        .map(owner => col.derive(owner))
+                        .getOrElse(col.derive(table))
+                  }
 
-                    val selWithRowItem =
-                      SqlSelect(
-                        context = context,
-                        withs = withs,
-                        table = table,
-                        cols = (partitionCol :: exposeCols ++ cols ++ orderCols).distinct,
-                        joins = SqlJoin.merge(filterJoins ++ orderJoins ++ joins),
-                        wheres = (pred1 ++ nonNullKeys ++ wheres).distinct,
-                        orders = Nil,
-                        offset = None,
-                        limit = None,
-                        distinct = distinct,
-                        oneToOne = true,
-                        predicate = true
-                      )
+                  val selWithRowItem =
+                    SqlSelect(
+                      context = context,
+                      withs = withs,
+                      table = table,
+                      cols = (partitionCol :: exposeCols ++ cols ++ orderCols).distinct,
+                      joins = allJoins,
+                      wheres = (pred1 ++ nonNullKeys ++ wheres).distinct,
+                      orders = Nil,
+                      offset = None,
+                      limit = None,
+                      distinct = distinct,
+                      oneToOne = true,
+                      predicate = true
+                    )
 
-                    val numberedName = syntheticName("_numbered")
-                    val subWithRowItem =
-                      SubqueryRef(context, numberedName, selWithRowItem, Laterality.NotLateral)
+                  val numberedName = syntheticName("_numbered")
+                  val subWithRowItem =
+                    SubqueryRef(context, numberedName, selWithRowItem, Laterality.NotLateral)
 
-                    val partitionTerm =
-                      partitionCol.derive(subWithRowItem).toTerm.asInstanceOf[Term[Int]]
-                    val windowPred = mkWindowPred(partitionTerm)
+                  val partitionTerm =
+                    partitionCol.derive(subWithRowItem).toTerm.asInstanceOf[Term[Int]]
+                  val windowPred = mkWindowPred(partitionTerm)
 
-                    val predQuery =
-                      SqlSelect(
-                        context = context,
-                        withs = Nil,
-                        table = subWithRowItem,
-                        cols = (cols ++ orderCols).distinct.map(_.derive(subWithRowItem)),
-                        joins = Nil,
-                        wheres = windowPred :: Nil,
-                        orders = Nil,
-                        offset = None,
-                        limit = None,
-                        distinct = Nil,
-                        oneToOne = true,
-                        predicate = true
-                      )
+                  val predQuery =
+                    SqlSelect(
+                      context = context,
+                      withs = Nil,
+                      table = subWithRowItem,
+                      cols = (cols ++ orderCols).distinct.map(_.derive(subWithRowItem)),
+                      joins = Nil,
+                      wheres = windowPred :: Nil,
+                      orders = Nil,
+                      offset = None,
+                      limit = None,
+                      distinct = Nil,
+                      oneToOne = true,
+                      predicate = true
+                    )
 
-                    predQuery.success
+                  predQuery.success
                 }
               }
             } else if ((orderBy.isEmpty || initialKeyOrder) && predIsOneToOne) {
               // Case 2a) No order, or key columns at the start of the order; simple predicate means we can elide a subquery
-              pred0.traverse(p => contextualiseWhereTerms(context, table, p)).flatMap { pred1 =>
-                oss.traverse(os => contextualiseOrderTerms(context, table, os)).flatMap {
-                  oss0 =>
-                    val orders = oss0 ++ keyCols
-                      .diff(orderCols)
-                      .map(col => OrderSelection(col.toTerm, true, nullsHigh))
-                    val nonNullKeys = keyCols.map(col => IsNull(col.toTerm, false))
+              contextualiseWheres(table, allJoins, pred0).flatMap { pred1 =>
+                contextualiseOrders(table, allJoins, oss).flatMap { oss0 =>
+                  val orders = oss0 ++ keyCols
+                    .diff(orderCols)
+                    .map(col => OrderSelection(col.toTerm, true, nullsHigh))
+                  val nonNullKeys = keyCols.map(col => IsNull(col.toTerm, false))
 
-                    val partitionCol =
-                      SqlColumn.PartitionColumn(table, "row_item", partitionBy, orders)
-                    val exposeCols = parentConstraints.lastOption.getOrElse(Nil).map {
-                      case (_, col) =>
-                        findNamedOwner(col)
-                          .map(owner => col.derive(owner))
-                          .getOrElse(col.derive(table))
-                    }
+                  val partitionCol =
+                    SqlColumn.PartitionColumn(table, "row_item", partitionBy, orders)
+                  val exposeCols = parentConstraints.lastOption.getOrElse(Nil).map {
+                    case (_, col) =>
+                      findNamedOwner(col)
+                        .map(owner => col.derive(owner))
+                        .getOrElse(col.derive(table))
+                  }
 
-                    val selWithRowItem =
-                      SqlSelect(
-                        context = context,
-                        withs = withs,
-                        table = table,
-                        cols = (partitionCol :: exposeCols ++ cols ++ orderCols).distinct,
-                        joins = joins,
-                        wheres = (pred1 ++ nonNullKeys ++ wheres).distinct,
-                        orders = Nil,
-                        offset = None,
-                        limit = None,
-                        distinct = distinct,
-                        oneToOne = oneToOne,
-                        predicate = true
-                      )
+                  val selWithRowItem =
+                    SqlSelect(
+                      context = context,
+                      withs = withs,
+                      table = table,
+                      cols = (partitionCol :: exposeCols ++ cols ++ orderCols).distinct,
+                      joins = allJoins,
+                      wheres = (pred1 ++ nonNullKeys ++ wheres).distinct,
+                      orders = Nil,
+                      offset = None,
+                      limit = None,
+                      distinct = distinct,
+                      oneToOne = oneToOne,
+                      predicate = true
+                    )
 
-                    val numberedName = syntheticName("_numbered")
-                    val subWithRowItem =
-                      SubqueryRef(context, numberedName, selWithRowItem, Laterality.NotLateral)
+                  val numberedName = syntheticName("_numbered")
+                  val subWithRowItem =
+                    SubqueryRef(context, numberedName, selWithRowItem, Laterality.NotLateral)
 
-                    val partitionTerm =
-                      partitionCol.derive(subWithRowItem).toTerm.asInstanceOf[Term[Int]]
-                    val windowPred = mkWindowPred(partitionTerm)
+                  val partitionTerm =
+                    partitionCol.derive(subWithRowItem).toTerm.asInstanceOf[Term[Int]]
+                  val windowPred = mkWindowPred(partitionTerm)
 
-                    val predQuery =
-                      SqlSelect(
-                        context = context,
-                        withs = Nil,
-                        table = subWithRowItem,
-                        cols = (cols ++ orderCols).distinct.map(_.derive(subWithRowItem)),
-                        joins = Nil,
-                        wheres = windowPred :: Nil,
-                        orders = Nil,
-                        offset = None,
-                        limit = None,
-                        distinct = Nil,
-                        oneToOne = oneToOne,
-                        predicate = true
-                      )
+                  val predQuery =
+                    SqlSelect(
+                      context = context,
+                      withs = Nil,
+                      table = subWithRowItem,
+                      cols = (cols ++ orderCols).distinct.map(_.derive(subWithRowItem)),
+                      joins = Nil,
+                      wheres = windowPred :: Nil,
+                      orders = Nil,
+                      offset = None,
+                      limit = None,
+                      distinct = Nil,
+                      oneToOne = oneToOne,
+                      predicate = true
+                    )
 
-                    predQuery.success
+                  predQuery.success
                 }
               }
             } else if (orderBy.isEmpty || initialKeyOrder) {
@@ -3016,18 +3038,179 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               val base0 = subqueryToWithQuery
               val baseRef = base0.table
 
-              pred0.traverse(p => contextualiseWhereTerms(context, baseRef, p)).flatMap {
-                pred1 =>
-                  oss.traverse(os => contextualiseOrderTerms(context, baseRef, os)).flatMap {
-                    oss0 =>
+              contextualiseWheres(baseRef, predJoins, pred0).flatMap { pred1 =>
+                contextualiseOrders(baseRef, predJoins, oss).flatMap { oss0 =>
+                  val orders = oss0 ++ keyCols
+                    .diff(orderCols)
+                    .map(col => OrderSelection(col.derive(baseRef).toTerm, true, nullsHigh))
+                  val predCols = keyCols.map(_.derive(baseRef))
+                  val nonNullKeys = predCols.map(col => IsNull(col.toTerm, false))
+
+                  val partitionCol =
+                    SqlColumn.PartitionColumn(table, "row_item", partitionBy, orders)
+                  val exposeCols = parentConstraints.lastOption.getOrElse(Nil).map {
+                    case (_, col) =>
+                      baseRef
+                        .findNamedOwner(col)
+                        .map(owner => col.derive(owner))
+                        .getOrElse(col.derive(baseRef))
+                  }
+
+                  val selWithRowItem =
+                    SqlSelect(
+                      context = context,
+                      withs = Nil,
+                      table = baseRef,
+                      cols = (partitionCol :: exposeCols ++ predCols).distinct,
+                      joins = predJoins,
+                      wheres = (pred1 ++ nonNullKeys).distinct,
+                      orders = Nil,
+                      offset = None,
+                      limit = None,
+                      distinct = Nil,
+                      oneToOne = true,
+                      predicate = true
+                    )
+
+                  val numberedName = syntheticName("_numbered")
+                  val subWithRowItem =
+                    SubqueryRef(context, numberedName, selWithRowItem, Laterality.NotLateral)
+
+                  val partitionTerm =
+                    partitionCol.derive(subWithRowItem).toTerm.asInstanceOf[Term[Int]]
+                  val windowPred = mkWindowPred(partitionTerm)
+
+                  val numberedPredCols = keyCols.map(_.derive(subWithRowItem))
+
+                  val predQuery =
+                    SqlSelect(
+                      context = context,
+                      withs = Nil,
+                      table = subWithRowItem,
+                      cols = numberedPredCols,
+                      joins = Nil,
+                      wheres = windowPred :: Nil,
+                      orders = Nil,
+                      offset = None,
+                      limit = None,
+                      distinct = Nil,
+                      oneToOne = true,
+                      predicate = true
+                    )
+
+                  mkPredSubquery(base0, predQuery).success
+                }
+              }
+            } else if (predIsOneToOne) {
+              // Case 3a) There is an order orthogonal to the key; simple predicate means we can elide a subquery
+              contextualiseWheres(table, allJoins, pred0).flatMap { pred1 =>
+                contextualiseOrders(table, allJoins, oss).flatMap { oss0 =>
+                  oss0
+                    .filterA(os => columnForSqlTerm(context, os.term).map(keyCols.contains))
+                    .flatMap { nonKeyOrders =>
+                      val orders = oss0 ++ keyCols
+                        .diff(orderCols)
+                        .map(col => OrderSelection(col.toTerm, true, nullsHigh))
+                      val nonNullKeys = keyCols.map(col => IsNull(col.toTerm, false))
+
+                      val distOrders = keyCols
+                        .map(col => OrderSelection(col.toTerm, true, nullsHigh)) ++ nonKeyOrders
+
+                      val partitionCol =
+                        SqlColumn.PartitionColumn(table, "row_item", partitionBy, orders)
+                      val distPartitionCol = SqlColumn.PartitionColumn(
+                        table,
+                        "row_item_dist",
+                        partitionBy ++ keyCols,
+                        distOrders)
+                      val exposeCols = parentConstraints.lastOption.getOrElse(Nil).map {
+                        case (_, col) =>
+                          findNamedOwner(col)
+                            .map(owner => col.derive(owner))
+                            .getOrElse(col.derive(table))
+                      }
+
+                      val selWithRowItem =
+                        SqlSelect(
+                          context = context,
+                          withs = withs,
+                          table = table,
+                          cols =
+                            (partitionCol :: distPartitionCol :: exposeCols ++ cols ++ orderCols).distinct,
+                          joins = allJoins,
+                          wheres = (pred1 ++ nonNullKeys ++ wheres).distinct,
+                          orders = Nil,
+                          offset = None,
+                          limit = None,
+                          distinct = distinct,
+                          oneToOne = oneToOne,
+                          predicate = true
+                        )
+
+                      val numberedName = syntheticName("_numbered")
+                      val subWithRowItem = SubqueryRef(
+                        context,
+                        numberedName,
+                        selWithRowItem,
+                        Laterality.NotLateral)
+
+                      val partitionTerm =
+                        partitionCol.derive(subWithRowItem).toTerm.asInstanceOf[Term[Int]]
+                      val distPartitionTerm =
+                        distPartitionCol.derive(subWithRowItem).toTerm.asInstanceOf[Term[Int]]
+                      val windowPred =
+                        And(mkWindowPred(partitionTerm), LtEql(distPartitionTerm, Const(1)))
+
+                      val predQuery =
+                        SqlSelect(
+                          context = context,
+                          withs = Nil,
+                          table = subWithRowItem,
+                          cols = (cols ++ orderCols).distinct.map(_.derive(subWithRowItem)),
+                          joins = Nil,
+                          wheres = windowPred :: Nil,
+                          orders = Nil,
+                          offset = None,
+                          limit = None,
+                          distinct = Nil,
+                          oneToOne = oneToOne,
+                          predicate = true
+                        )
+
+                      predQuery.success
+                    }
+                }
+              }
+            } else {
+              // Case 3b) There is an order orthogonal to the key
+              val base0 = subqueryToWithQuery
+              val baseRef = base0.table
+
+              contextualiseWheres(baseRef, predJoins, pred0).flatMap { pred1 =>
+                contextualiseOrders(baseRef, predJoins, oss).flatMap { oss0 =>
+                  oss0
+                    .filterA(os => columnForSqlTerm(context, os.term).map(keyCols.contains))
+                    .flatMap { nonKeyOrders =>
                       val orders = oss0 ++ keyCols
                         .diff(orderCols)
                         .map(col => OrderSelection(col.derive(baseRef).toTerm, true, nullsHigh))
                       val predCols = keyCols.map(_.derive(baseRef))
                       val nonNullKeys = predCols.map(col => IsNull(col.toTerm, false))
 
+                      val distOrders = keyCols.map(col =>
+                        OrderSelection(
+                          col.derive(baseRef).toTerm,
+                          true,
+                          nullsHigh)) ++ nonKeyOrders
+
                       val partitionCol =
                         SqlColumn.PartitionColumn(table, "row_item", partitionBy, orders)
+                      val distPartitionCol = SqlColumn.PartitionColumn(
+                        table,
+                        "row_item_dist",
+                        partitionBy ++ predCols,
+                        distOrders)
+
                       val exposeCols = parentConstraints.lastOption.getOrElse(Nil).map {
                         case (_, col) =>
                           baseRef
@@ -3041,8 +3224,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                           context = context,
                           withs = Nil,
                           table = baseRef,
-                          cols = (partitionCol :: exposeCols ++ predCols).distinct,
-                          joins = SqlJoin.merge(filterJoins ++ orderJoins),
+                          cols =
+                            (partitionCol :: distPartitionCol :: exposeCols ++ predCols).distinct,
+                          joins = predJoins,
                           wheres = (pred1 ++ nonNullKeys).distinct,
                           orders = Nil,
                           offset = None,
@@ -3061,7 +3245,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
                       val partitionTerm =
                         partitionCol.derive(subWithRowItem).toTerm.asInstanceOf[Term[Int]]
-                      val windowPred = mkWindowPred(partitionTerm)
+                      val distPartitionTerm =
+                        distPartitionCol.derive(subWithRowItem).toTerm.asInstanceOf[Term[Int]]
+                      val windowPred =
+                        And(mkWindowPred(partitionTerm), LtEql(distPartitionTerm, Const(1)))
 
                       val numberedPredCols = keyCols.map(_.derive(subWithRowItem))
 
@@ -3082,184 +3269,8 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                         )
 
                       mkPredSubquery(base0, predQuery).success
-                  }
-              }
-            } else if (predIsOneToOne) {
-              // Case 3a) There is an order orthogonal to the key; simple predicate means we can elide a subquery
-              pred0.traverse(p => contextualiseWhereTerms(context, table, p)).flatMap { pred1 =>
-                oss.traverse(os => contextualiseOrderTerms(context, table, os)).flatMap {
-                  oss0 =>
-                    oss0
-                      .filterA(os => columnForSqlTerm(context, os.term).map(keyCols.contains))
-                      .flatMap { nonKeyOrders =>
-                        val orders = oss0 ++ keyCols
-                          .diff(orderCols)
-                          .map(col => OrderSelection(col.toTerm, true, nullsHigh))
-                        val nonNullKeys = keyCols.map(col => IsNull(col.toTerm, false))
-
-                        val distOrders = keyCols.map(col =>
-                          OrderSelection(col.toTerm, true, nullsHigh)) ++ nonKeyOrders
-
-                        val partitionCol =
-                          SqlColumn.PartitionColumn(table, "row_item", partitionBy, orders)
-                        val distPartitionCol = SqlColumn.PartitionColumn(
-                          table,
-                          "row_item_dist",
-                          partitionBy ++ keyCols,
-                          distOrders)
-                        val exposeCols = parentConstraints.lastOption.getOrElse(Nil).map {
-                          case (_, col) =>
-                            findNamedOwner(col)
-                              .map(owner => col.derive(owner))
-                              .getOrElse(col.derive(table))
-                        }
-
-                        val selWithRowItem =
-                          SqlSelect(
-                            context = context,
-                            withs = withs,
-                            table = table,
-                            cols =
-                              (partitionCol :: distPartitionCol :: exposeCols ++ cols ++ orderCols).distinct,
-                            joins = joins,
-                            wheres = (pred1 ++ nonNullKeys ++ wheres).distinct,
-                            orders = Nil,
-                            offset = None,
-                            limit = None,
-                            distinct = distinct,
-                            oneToOne = oneToOne,
-                            predicate = true
-                          )
-
-                        val numberedName = syntheticName("_numbered")
-                        val subWithRowItem = SubqueryRef(
-                          context,
-                          numberedName,
-                          selWithRowItem,
-                          Laterality.NotLateral)
-
-                        val partitionTerm =
-                          partitionCol.derive(subWithRowItem).toTerm.asInstanceOf[Term[Int]]
-                        val distPartitionTerm =
-                          distPartitionCol.derive(subWithRowItem).toTerm.asInstanceOf[Term[Int]]
-                        val windowPred =
-                          And(mkWindowPred(partitionTerm), LtEql(distPartitionTerm, Const(1)))
-
-                        val predQuery =
-                          SqlSelect(
-                            context = context,
-                            withs = Nil,
-                            table = subWithRowItem,
-                            cols = (cols ++ orderCols).distinct.map(_.derive(subWithRowItem)),
-                            joins = Nil,
-                            wheres = windowPred :: Nil,
-                            orders = Nil,
-                            offset = None,
-                            limit = None,
-                            distinct = Nil,
-                            oneToOne = oneToOne,
-                            predicate = true
-                          )
-
-                        predQuery.success
-                      }
+                    }
                 }
-              }
-            } else {
-              // Case 3b) There is an order orthogonal to the key
-              val base0 = subqueryToWithQuery
-              val baseRef = base0.table
-
-              pred0.traverse(p => contextualiseWhereTerms(context, baseRef, p)).flatMap {
-                pred1 =>
-                  oss.traverse(os => contextualiseOrderTerms(context, baseRef, os)).flatMap {
-                    oss0 =>
-                      oss0
-                        .filterA(os => columnForSqlTerm(context, os.term).map(keyCols.contains))
-                        .flatMap { nonKeyOrders =>
-                          val orders = oss0 ++ keyCols
-                            .diff(orderCols)
-                            .map(col =>
-                              OrderSelection(col.derive(baseRef).toTerm, true, nullsHigh))
-                          val predCols = keyCols.map(_.derive(baseRef))
-                          val nonNullKeys = predCols.map(col => IsNull(col.toTerm, false))
-
-                          val distOrders = keyCols.map(col =>
-                            OrderSelection(
-                              col.derive(baseRef).toTerm,
-                              true,
-                              nullsHigh)) ++ nonKeyOrders
-
-                          val partitionCol =
-                            SqlColumn.PartitionColumn(table, "row_item", partitionBy, orders)
-                          val distPartitionCol = SqlColumn.PartitionColumn(
-                            table,
-                            "row_item_dist",
-                            partitionBy ++ predCols,
-                            distOrders)
-
-                          val exposeCols = parentConstraints.lastOption.getOrElse(Nil).map {
-                            case (_, col) =>
-                              baseRef
-                                .findNamedOwner(col)
-                                .map(owner => col.derive(owner))
-                                .getOrElse(col.derive(baseRef))
-                          }
-
-                          val selWithRowItem =
-                            SqlSelect(
-                              context = context,
-                              withs = Nil,
-                              table = baseRef,
-                              cols =
-                                (partitionCol :: distPartitionCol :: exposeCols ++ predCols).distinct,
-                              joins = SqlJoin.merge(filterJoins ++ orderJoins),
-                              wheres = (pred1 ++ nonNullKeys).distinct,
-                              orders = Nil,
-                              offset = None,
-                              limit = None,
-                              distinct = Nil,
-                              oneToOne = true,
-                              predicate = true
-                            )
-
-                          val numberedName = syntheticName("_numbered")
-                          val subWithRowItem = SubqueryRef(
-                            context,
-                            numberedName,
-                            selWithRowItem,
-                            Laterality.NotLateral)
-
-                          val partitionTerm =
-                            partitionCol.derive(subWithRowItem).toTerm.asInstanceOf[Term[Int]]
-                          val distPartitionTerm = distPartitionCol
-                            .derive(subWithRowItem)
-                            .toTerm
-                            .asInstanceOf[Term[Int]]
-                          val windowPred =
-                            And(mkWindowPred(partitionTerm), LtEql(distPartitionTerm, Const(1)))
-
-                          val numberedPredCols = keyCols.map(_.derive(subWithRowItem))
-
-                          val predQuery =
-                            SqlSelect(
-                              context = context,
-                              withs = Nil,
-                              table = subWithRowItem,
-                              cols = numberedPredCols,
-                              joins = Nil,
-                              wheres = windowPred :: Nil,
-                              orders = Nil,
-                              offset = None,
-                              limit = None,
-                              distinct = Nil,
-                              oneToOne = true,
-                              predicate = true
-                            )
-
-                          mkPredSubquery(base0, predQuery).success
-                        }
-                  }
               }
             }
           } else {
@@ -3273,40 +3284,39 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             if ((oneToOne && predIsOneToOne && fastPathSafe) || (offset0.isEmpty && limit0.isEmpty && filterJoins.isEmpty && orderJoins.isEmpty)) {
               // Case 1) one row is one object or query is simple enough to not require subqueries
 
-              pred0.traverse(p => contextualiseWhereTerms(context, table, p)).flatMap { pred1 =>
-                oss.traverse(os => contextualiseOrderTerms(context, table, os)).flatMap {
-                  oss0 =>
-                    val (nonNullKeys, keyOrder) =
-                      offset0
-                        .orElse(limit0)
-                        .map { _ =>
-                          val nonNullKeys0 = keyCols.map(col => IsNull(col.toTerm, false))
-                          val keyOrder0 = keyCols
-                            .diff(orderCols)
-                            .map(col => OrderSelection(col.toTerm, true, nullsHigh))
-                          (nonNullKeys0, keyOrder0)
-                        }
-                        .getOrElse((Nil, Nil))
+              contextualiseWheres(table, allJoins, pred0).flatMap { pred1 =>
+                contextualiseOrders(table, allJoins, oss).flatMap { oss0 =>
+                  val (nonNullKeys, keyOrder) =
+                    offset0
+                      .orElse(limit0)
+                      .map { _ =>
+                        val nonNullKeys0 = keyCols.map(col => IsNull(col.toTerm, false))
+                        val keyOrder0 = keyCols
+                          .diff(orderCols)
+                          .map(col => OrderSelection(col.toTerm, true, nullsHigh))
+                        (nonNullKeys0, keyOrder0)
+                      }
+                      .getOrElse((Nil, Nil))
 
-                    val orders = oss0 ++ keyOrder
+                  val orders = oss0 ++ keyOrder
 
-                    val predQuery =
-                      SqlSelect(
-                        context = context,
-                        withs = withs,
-                        table = table,
-                        cols = cols,
-                        joins = SqlJoin.merge(filterJoins ++ orderJoins ++ joins),
-                        wheres = (pred1 ++ nonNullKeys ++ wheres).distinct,
-                        orders = orders,
-                        offset = offset0,
-                        limit = limit0,
-                        distinct = distinct,
-                        oneToOne = true,
-                        predicate = true
-                      )
+                  val predQuery =
+                    SqlSelect(
+                      context = context,
+                      withs = withs,
+                      table = table,
+                      cols = cols,
+                      joins = allJoins,
+                      wheres = (pred1 ++ nonNullKeys ++ wheres).distinct,
+                      orders = orders,
+                      offset = offset0,
+                      limit = limit0,
+                      distinct = distinct,
+                      oneToOne = true,
+                      predicate = true
+                    )
 
-                    predQuery.success
+                  predQuery.success
                 }
               }
             } else {
@@ -3319,97 +3329,89 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               if (orderBy.isEmpty || initialKeyOrder) {
                 // Case 2) No order, or key columns at the start of the order
 
-                pred0.traverse(p => contextualiseWhereTerms(context, baseRef, p)).flatMap {
-                  pred1 =>
-                    oss.traverse(os => contextualiseOrderTerms(context, baseRef, os)).flatMap {
-                      oss0 =>
-                        val orders = oss0 ++ keyCols
-                          .diff(orderCols)
-                          .map(col =>
-                            OrderSelection(col.derive(baseRef).toTerm, true, nullsHigh))
+                contextualiseWheres(baseRef, predJoins, pred0).flatMap { pred1 =>
+                  contextualiseOrders(baseRef, predJoins, oss).flatMap { oss0 =>
+                    val orders = oss0 ++ keyCols
+                      .diff(orderCols)
+                      .map(col => OrderSelection(col.derive(baseRef).toTerm, true, nullsHigh))
 
-                        val predQuery = SqlSelect(
+                    val predQuery = SqlSelect(
+                      context = context,
+                      withs = Nil,
+                      table = baseRef,
+                      cols = predCols,
+                      joins = predJoins,
+                      wheres = (pred1 ++ nonNullKeys).distinct,
+                      orders = orders,
+                      offset = offset0,
+                      limit = limit0,
+                      distinct = predCols,
+                      oneToOne = true,
+                      predicate = true
+                    )
+
+                    mkPredSubquery(base0, predQuery).success
+                  }
+                }
+              } else {
+                // Case 3) There is an order orthogonal to the key
+                contextualiseWheres(baseRef, predJoins, pred0).flatMap { pred1 =>
+                  contextualiseOrders(baseRef, predJoins, oss).flatMap { oss0 =>
+                    oss0
+                      .filterA(os => columnForSqlTerm(context, os.term).map(keyCols.contains))
+                      .flatMap { nonKeyOrders =>
+                        val distOrders = keyCols.map(col =>
+                          OrderSelection(
+                            col.derive(baseRef).toTerm,
+                            true,
+                            nullsHigh)) ++ nonKeyOrders
+                        val distOrderCols = orderCols.diff(keyCols).map(_.derive(baseRef))
+
+                        val distQuery = SqlSelect(
                           context = context,
                           withs = Nil,
                           table = baseRef,
-                          cols = predCols,
-                          joins = SqlJoin.merge(filterJoins ++ orderJoins),
+                          cols = predCols ++ distOrderCols.map(col =>
+                            distinctOrderColumn(baseRef, col, predCols, distOrders)),
+                          joins = predJoins,
                           wheres = (pred1 ++ nonNullKeys).distinct,
-                          orders = orders,
-                          offset = offset0,
-                          limit = limit0,
+                          orders = distOrders,
+                          offset = None,
+                          limit = None,
                           distinct = predCols,
                           oneToOne = true,
                           predicate = true
                         )
 
-                        mkPredSubquery(base0, predQuery).success
-                    }
-                }
-              } else {
-                // Case 3) There is an order orthogonal to the key
-                pred0.traverse(p => contextualiseWhereTerms(context, baseRef, p)).flatMap {
-                  pred1 =>
-                    oss.traverse(os => contextualiseOrderTerms(context, baseRef, os)).flatMap {
-                      oss0 =>
-                        oss0
-                          .filterA(os =>
-                            columnForSqlTerm(context, os.term).map(keyCols.contains))
-                          .flatMap { nonKeyOrders =>
-                            val distOrders = keyCols.map(col =>
-                              OrderSelection(
-                                col.derive(baseRef).toTerm,
-                                true,
-                                nullsHigh)) ++ nonKeyOrders
-                            val distOrderCols = orderCols.diff(keyCols).map(_.derive(baseRef))
+                        val distName = "dist"
+                        val distSub =
+                          SubqueryRef(context, distName, distQuery, Laterality.NotLateral)
 
-                            val distQuery = SqlSelect(
-                              context = context,
-                              withs = Nil,
-                              table = baseRef,
-                              cols = predCols ++ distOrderCols.map(col =>
-                                distinctOrderColumn(baseRef, col, predCols, distOrders)),
-                              joins = SqlJoin.merge(filterJoins ++ orderJoins),
-                              wheres = (pred1 ++ nonNullKeys).distinct,
-                              orders = distOrders,
-                              offset = None,
-                              limit = None,
-                              distinct = predCols,
-                              oneToOne = true,
-                              predicate = true
-                            )
+                        val predCols0 = keyCols.map(_.derive(distSub))
+                        contextualiseOrders(distSub, Nil, oss).flatMap { outerOss0 =>
+                          val orders = outerOss0 ++ keyCols
+                            .diff(orderCols)
+                            .map(col =>
+                              OrderSelection(col.derive(distSub).toTerm, true, nullsHigh))
+                          val predQuery = SqlSelect(
+                            context = context,
+                            withs = Nil,
+                            table = distSub,
+                            cols = predCols0,
+                            joins = Nil,
+                            wheres = Nil,
+                            orders = orders,
+                            offset = offset0,
+                            limit = limit0,
+                            distinct = Nil,
+                            oneToOne = true,
+                            predicate = true
+                          )
 
-                            val distName = "dist"
-                            val distSub =
-                              SubqueryRef(context, distName, distQuery, Laterality.NotLateral)
-
-                            val predCols0 = keyCols.map(_.derive(distSub))
-                            oss
-                              .traverse(os => contextualiseOrderTerms(context, distSub, os))
-                              .flatMap { outerOss0 =>
-                                val orders = outerOss0 ++ keyCols
-                                  .diff(orderCols)
-                                  .map(col =>
-                                    OrderSelection(col.derive(distSub).toTerm, true, nullsHigh))
-                                val predQuery = SqlSelect(
-                                  context = context,
-                                  withs = Nil,
-                                  table = distSub,
-                                  cols = predCols0,
-                                  joins = Nil,
-                                  wheres = Nil,
-                                  orders = orders,
-                                  offset = offset0,
-                                  limit = limit0,
-                                  distinct = Nil,
-                                  oneToOne = true,
-                                  predicate = true
-                                )
-
-                                mkPredSubquery(base0, predQuery).success
-                              }
-                          }
-                    }
+                          mkPredSubquery(base0, predQuery).success
+                        }
+                      }
+                  }
                 }
               }
             }
@@ -3846,7 +3848,11 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
 
       /**
        * Are `a` and `b` the same table expression, allowing the selects of nested subqueries to
-       * differ in the columns they expose? A correlated `OUTER APPLY` wraps its select in
+       * differ in the columns they expose? Everything but `cols` is compared: two selects which
+       * agree on their FROM, WHERE, ORDER BY, DISTINCT and limits yield the same rows, so one
+       * subquery projecting the union of their columns can stand in for both. This is
+       * deliberately not `equals`, which `distinct` and the `SqlSelect` assertions rely on to
+       * mean "the same query", columns included. A correlated `OUTER APPLY` wraps its select in
        * another (see `Laterality.Apply.correlate`), so this recurses through the table of each
        * level.
        */

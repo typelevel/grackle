@@ -322,4 +322,96 @@ trait SqlNullableParentSuite extends CatsEffectSuite {
 
     assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
   }
+
+  test("an order through a nullable parent on a non-null field beneath it") {
+    // `a-without-b` and `a-with-dangling-b` both order as null, so only the head is fixed.
+    val query = """
+      query {
+        as(order: "deep") {
+          name
+        }
+      }
+    """
+
+    mapping.compileAndRun(query).map { res =>
+      val names = res.hcursor.downField("data").downField("as").as[List[Map[String, String]]]
+      assertEquals(
+        names.map(_.map(_("name"))).map(ns => (ns.size, ns.head)),
+        Right((3, "a-with-good-b")))
+    }
+  }
+
+  test("a filter through a nullable parent combined with an order on the parent itself") {
+    // The filter path nests `b` with `c` in a subquery, the order path joins `b` directly; the
+    // order column must be read from the table, not from the subquery.
+    val query = """
+      query {
+        as(cName: "cat-1", order: "mid") {
+          name
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "as" : [
+            {
+              "name" : "a-with-good-b"
+            }
+          ]
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
+
+  test("a filter and limit on a list through a non-null field beneath it") {
+    // The filter's join must be in the FROM clause of the windowed select built for the limit,
+    // alongside the list's own joins.
+    val query = """
+      query {
+        ds {
+          name
+          es(fName: "fish-1", limit: 1) {
+            name
+            otherD {
+              es {
+                name
+              }
+            }
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "ds" : [
+            {
+              "name" : "d-without-es",
+              "es" : [
+              ]
+            },
+            {
+              "name" : "d-with-es",
+              "es" : [
+                {
+                  "name" : "e-with-f",
+                  "otherD" : {
+                    "es" : [
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    assertWeaklyEqualIO(mapping.compileAndRun(query), expected)
+  }
 }

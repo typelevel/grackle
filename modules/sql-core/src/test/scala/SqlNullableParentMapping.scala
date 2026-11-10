@@ -17,9 +17,9 @@ package grackle.sql.test
 
 import grackle._
 import grackle.Predicate.{Const, Eql}
-import grackle.Query.{Binding, Filter}
+import grackle.Query.{Binding, Filter, Limit, OrderBy, OrderSelection, OrderSelections}
 import grackle.QueryCompiler.{Elab, SelectElaborator}
-import grackle.Value.{AbsentValue, NullValue, StringValue}
+import grackle.Value.{AbsentValue, IntValue, NullValue, StringValue}
 import grackle.syntax._
 
 trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
@@ -62,8 +62,8 @@ trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
   val schema =
     schema"""
       type Query {
-        as(cName: String): [A!]!
-        ds(fName: String): [D!]!
+        as(cName: String, order: String, limit: Int): [A!]!
+        ds(fName: String, order: String, limit: Int): [D!]!
       }
       type A {
         name: String!
@@ -78,7 +78,7 @@ trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
       }
       type D {
         name: String!
-        es: [E!]!
+        es(fName: String, limit: Int): [E!]!
       }
       type E {
         name: String!
@@ -140,9 +140,11 @@ trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
       )
     )
 
-  // Filters on a path whose first join is LEFT (`b` is nullable, `es` is a list) and whose next
-  // join is INNER (`c` and `f` are non-null). `SqlSelect.nest` does not flatten such a nested
-  // select, so the predicate must reach its columns through the subquery.
+  // Filters and orders on paths whose first join is LEFT (`b` is nullable, `es` is a list) and
+  // whose next join is INNER (`c` and `f` are non-null). `SqlSelect.nest` does not flatten such
+  // a nested select, so the predicate or order must reach its columns through the subquery.
+  // Orders on the LEFT hop alone (`b.name`) exercise a path which *is* flattened alongside one
+  // which isn't.
   def mkFilter(child: Query, path: Path, name: Value): Result[Query] =
     name match {
       case AbsentValue | NullValue => child.success
@@ -150,10 +152,58 @@ trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
       case other => Result.failure(s"Expected a name, found $other")
     }
 
+  def mkOrder(child: Query, paths: Map[String, Path], order: Value): Result[Query] =
+    order match {
+      case AbsentValue | NullValue => child.success
+      case StringValue(s) =>
+        paths
+          .get(s)
+          .map(path => OrderBy(OrderSelections(List(OrderSelection[String](path))), child))
+          .toResultOrError(s"Unknown order '$s'")
+      case other => Result.failure(s"Expected an order, found $other")
+    }
+
+  def mkLimit(child: Query, limit: Value): Result[Query] =
+    limit match {
+      case AbsentValue | NullValue => child.success
+      case IntValue(n) => Limit(n, child).success
+      case other => Result.failure(s"Expected a limit, found $other")
+    }
+
+  val aOrders: Map[String, Path] =
+    Map("mid" -> AType / "b" / "name", "deep" -> AType / "b" / "c" / "name")
+  val dOrders: Map[String, Path] =
+    Map("mid" -> DType / "es" / "name", "deep" -> DType / "es" / "f" / "name")
+
   override val selectElaborator = SelectElaborator {
-    case (QueryType, "as", List(Binding("cName", cName))) =>
-      Elab.transformChild(child => mkFilter(child, AType / "b" / "c" / "name", cName))
-    case (QueryType, "ds", List(Binding("fName", fName))) =>
-      Elab.transformChild(child => mkFilter(child, DType / "es" / "f" / "name", fName))
+    case (
+          QueryType,
+          "as",
+          List(Binding("cName", cName), Binding("order", order), Binding("limit", limit))) =>
+      Elab.transformChild { child =>
+        for {
+          c0 <- mkFilter(child, AType / "b" / "c" / "name", cName)
+          c1 <- mkOrder(c0, aOrders, order)
+          c2 <- mkLimit(c1, limit)
+        } yield c2
+      }
+    case (
+          QueryType,
+          "ds",
+          List(Binding("fName", fName), Binding("order", order), Binding("limit", limit))) =>
+      Elab.transformChild { child =>
+        for {
+          c0 <- mkFilter(child, DType / "es" / "f" / "name", fName)
+          c1 <- mkOrder(c0, dOrders, order)
+          c2 <- mkLimit(c1, limit)
+        } yield c2
+      }
+    case (DType, "es", List(Binding("fName", fName), Binding("limit", limit))) =>
+      Elab.transformChild { child =>
+        for {
+          c0 <- mkFilter(child, EType / "f" / "name", fName)
+          c1 <- mkLimit(c0, limit)
+        } yield c1
+      }
   }
 }
