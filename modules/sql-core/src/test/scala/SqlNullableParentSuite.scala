@@ -342,8 +342,8 @@ trait SqlNullableParentSuite extends CatsEffectSuite {
   }
 
   test("a filter through a nullable parent combined with an order on the parent itself") {
-    // The filter path nests `b` with `c` in a subquery, the order path joins `b` directly; the
-    // order column must be read from the table, not from the subquery.
+    // The filter nests `b` in a subquery, the order joins it directly. Read the order column
+    // from the table, not the subquery.
     val query = """
       query {
         as(cName: "cat-1", order: "mid") {
@@ -368,8 +368,7 @@ trait SqlNullableParentSuite extends CatsEffectSuite {
   }
 
   test("a filter and limit on a list through a non-null field beneath it") {
-    // The filter's join must be in the FROM clause of the windowed select built for the limit,
-    // alongside the list's own joins.
+    // The filter's join must be in the FROM clause of the windowed select for the limit.
     val query = """
       query {
         ds {

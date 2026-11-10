@@ -2836,15 +2836,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         val (oss, orderJoins) =
           orderBy.map { case (oss, joins) => (oss, joins) }.getOrElse((Nil, Nil))
 
-        // A filter or order path which crosses a nested select that `SqlSelect.nest` could not
-        // flatten (see `mergePreservesRows`) has its columns owned by tables inside that
-        // subquery, whose names are not in scope in the select being built. Such a column is
-        // referenced through a joined subquery which projects it, if there is one. That test
-        // is made against the select's final, merged join list: the filter path and the data
-        // selection can nest the same field independently, and only their union (see
-        // `SqlJoin.merge`) projects every column a predicate or order needs. A column whose
-        // owner is itself in the FROM clause is left alone, as is one the FROM clause doesn't
-        // reach at all, such as a correlated reference to an enclosing query.
+        // Columns inside a nested select that `SqlSelect.nest` could not flatten are out of scope
+        // here. Reference them through the joined subquery that projects them. Columns owned by
+        // the FROM clause, or outside it (correlated references), are left alone.
         def viaFrom(table0: TableExpr, joins0: List[SqlJoin])(col: SqlColumn): SqlColumn = {
           val inFrom =
             table0.isSameOwner(col.owner) || joins0.exists(_.child.isSameOwner(col.owner))
@@ -2878,7 +2872,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               .map(mapOrderColumn(_)(viaFrom(table0, joins0)))
           }
 
-        // The order columns as selected by a query over `table` with `joins0`
+        // Order columns as selected by a query over `table` with `joins0`
         def orderColsFor(joins0: List[SqlJoin]): Result[List[SqlColumn]] =
           oss.traverse { os =>
             columnForSqlTerm(context, os.term).map { col =>
@@ -2889,9 +2883,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             }
           }
 
-        // Every join a predicate or order can be resolved against in this select
+        // Merged here so predicates and orders see the union of columns that nested selects project
         val allJoins = SqlJoin.merge(filterJoins ++ orderJoins ++ joins)
-        // The joins of a predicate select over the keys alone
+        // Joins for a predicate select over the keys only
         val predJoins = SqlJoin.merge(filterJoins ++ orderJoins)
 
         val orderColsR = orderColsFor(allJoins)
@@ -3731,16 +3725,15 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       override def isSameOwner(other: ColumnOwner): Boolean = other eq this
 
       /**
-       * Does `other` attach the same nested select as this join, differing at most in the
-       * columns that select exposes?
+       * Does `other` join the same nested select, ignoring the columns it exposes?
        */
       def joinsSameSubquery(other: SqlJoin): Boolean =
         parent.isSameOwner(other.parent) && on == other.on && inner == other.inner &&
           SqlJoin.sameShape(child, other.child)
 
       /**
-       * This join with its nested select also exposing the columns of `other`'s, which must
-       * satisfy `joinsSameSubquery`
+       * This join, with its nested select also exposing the columns of `other`. `other` must
+       * satisfy `joinsSameSubquery`.
        */
       def mergeSubquery(other: SqlJoin): SqlJoin =
         copy(child = SqlJoin.mergeCols(child, other.child))
@@ -3833,10 +3826,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
       }
 
       /**
-       * Deduplicates `joins`, additionally collapsing joins to the same nested select which
-       * differ only in the columns that select exposes. A filter or order path and the data
-       * selection each nest the same field independently, and where `SqlSelect.nest` could not
-       * flatten the result they arrive as two subqueries under one synthetic alias.
+       * Deduplicates `joins`, also merging joins to the same nested select that differ only in
+       * exposed columns. Filter, order and data paths nest the same field independently, giving
+       * two subqueries under one alias when `SqlSelect.nest` cannot flatten them.
        */
       def merge(joins: List[SqlJoin]): List[SqlJoin] =
         joins.foldLeft(List.empty[SqlJoin]) { (acc, join) =>
@@ -3847,14 +3839,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         }
 
       /**
-       * Are `a` and `b` the same table expression, allowing the selects of nested subqueries to
-       * differ in the columns they expose? Everything but `cols` is compared: two selects which
-       * agree on their FROM, WHERE, ORDER BY, DISTINCT and limits yield the same rows, so one
-       * subquery projecting the union of their columns can stand in for both. This is
-       * deliberately not `equals`, which `distinct` and the `SqlSelect` assertions rely on to
-       * mean "the same query", columns included. A correlated `OUTER APPLY` wraps its select in
-       * another (see `Laterality.Apply.correlate`), so this recurses through the table of each
-       * level.
+       * Are `a` and `b` equal, ignoring the columns of nested selects? Selects that agree on
+       * everything but `cols` yield the same rows, so one subquery projecting both column sets
+       * can replace both. Not `equals`, which `distinct` and `SqlSelect` assertions need to
+       * include columns. Recurses because `Laterality.Apply.correlate` wraps selects in selects.
        */
       private def sameShape(a: TableExpr, b: TableExpr): Boolean =
         (a, b) match {
@@ -3874,8 +3862,8 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
         }
 
       /**
-       * `a` with its nested selects also exposing the columns of `b`'s, at every level; `a` and
-       * `b` must satisfy `sameShape`.
+       * `a`, with the columns of `b` added to its nested selects at every level. `a` and `b`
+       * must satisfy `sameShape`.
        */
       private def mergeCols(a: TableExpr, b: TableExpr): TableExpr =
         (a, b) match {

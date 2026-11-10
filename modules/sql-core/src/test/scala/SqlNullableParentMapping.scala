@@ -140,11 +140,9 @@ trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
       )
     )
 
-  // Filters and orders on paths whose first join is LEFT (`b` is nullable, `es` is a list) and
-  // whose next join is INNER (`c` and `f` are non-null). `SqlSelect.nest` does not flatten such
-  // a nested select, so the predicate or order must reach its columns through the subquery.
-  // Orders on the LEFT hop alone (`b.name`) exercise a path which *is* flattened alongside one
-  // which isn't.
+  // Paths with a LEFT join (`b`, `es`) followed by an INNER join (`c`, `f`). `SqlSelect.nest`
+  // cannot flatten these, so predicates and orders must go through the subquery. The `b.name`
+  // order is flattened, to cover both cases together.
   def mkFilter(child: Query, path: Path, name: Value): Result[Query] =
     name match {
       case AbsentValue | NullValue => child.success
