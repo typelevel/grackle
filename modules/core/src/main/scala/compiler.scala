@@ -453,10 +453,12 @@ class QueryCompiler(
       case (ops, frags) =>
         for {
           _ <- Result.fromProblems(validateVariablesAndFragments(ops, frags, reportUnused))
+          _ <- Result.fromProblems(validateVariableSizes(ops, untypedVars))
           compiledOps <- ops.traverse(op => compileVariables(op, untypedVars).tupleLeft(op))
-          _ <- Result.fromProblems(compiledOps.flatMap {
-            case (op, (_, vars)) => validateExpandedSelections(op, frags, vars)
-          })
+          _ <- Result.fromProblems(
+            validateExpandedSelections(
+              compiledOps.map { case (op, (_, vars)) => (op, vars) },
+              frags))
           _ <- Result.fromProblems(validateFieldMergeability(ops, frags))
           ops0 <- compiledOps.traverse {
             case (op, (varDefs, vars)) =>
@@ -499,10 +501,11 @@ class QueryCompiler(
     for {
       _ <- Result.fromProblems(
         validateVariablesAndFragments(List(op), frags, reportUnused = false))
+      _ <- Result.fromProblems(validateVariableSizes(List(op), untypedVars))
       res <- compileVariables(op, untypedVars).flatMap {
         case (varDefs, vars) =>
           for {
-            _ <- Result.fromProblems(validateExpandedSelections(op, frags, vars))
+            _ <- Result.fromProblems(validateExpandedSelections(List((op, vars)), frags))
             _ <- Result.fromProblems(validateFieldMergeability(List(op), frags))
             res <- compileCheckedOperation(op, varDefs, vars, frags, introspectionLevel, env)
           } yield res
@@ -889,16 +892,52 @@ class QueryCompiler(
   }
 
   /**
-   * Validates that the selection depth, fragment spread depth and size of `op`, with fragment
-   * spreads and variables expanded, are within the `maxSelectionDepth` and `maxSelectionSize`
-   * of this compiler's `config`.
+   * Validates that the sizes of the variable values supplied in `untypedVars`, counted once for
+   * each of `ops` which declares them, are together within the `maxSelectionSize` of this
+   * compiler's `config`.
+   *
+   * The variables of every operation are compiled, whichever operation is selected, and before
+   * `validateExpandedSelections` measures their selections. Without this bound the work of
+   * compiling them could grow with the number of operations as well as with the size of the
+   * values.
    *
    * Returns a list of problems encountered.
    */
+  private def validateVariableSizes(
+      ops: List[UntypedOperation],
+      untypedVars: Option[Json]): List[Problem] = {
+    val maxSize = config.maxSelectionSize
+
+    // Each supplied value is measured once, however many operations declare it
+    val varSizes: Map[String, Long] =
+      untypedVars
+        .flatMap(_.asObject)
+        .map(_.toMap.map { case (nme, value) => (nme, jsonSize(value)) })
+        .getOrElse(Map.empty)
+
+    val total = ops.foldMap(_.variables.foldMap(varDef => varSizes.getOrElse(varDef.name, 0L)))
+
+    if (total <= maxSize) Nil
+    else
+      List(Problem(
+        s"Variable values, counted for each operation which declares them, together exceed the maximum selection size of $maxSize"))
+  }
+
+  /**
+   * Validates that the selection depth, fragment spread depth and size of each of `ops`, with
+   * fragment spreads and the operation's variables expanded, are within the `maxSelectionDepth`
+   * and `maxSelectionSize` of this compiler's `config`, and that the sizes of all of `ops`
+   * together are within `maxSelectionSize`.
+   *
+   * The total is bounded as well as each operation, because the whole document is validated and
+   * elaborated whichever operation is selected, so otherwise the work done could grow with the
+   * number of operations as well as with the limit.
+   *
+   * Returns a list of problems encountered. Measurement stops at the first problem.
+   */
   private def validateExpandedSelections(
-      op: UntypedOperation,
-      frags: List[UntypedFragment],
-      vars: Vars): List[Problem] = {
+      ops: List[(UntypedOperation, Vars)],
+      frags: List[UntypedFragment]): List[Problem] = {
     val maxDepth = config.maxSelectionDepth
     val maxSize = config.maxSelectionSize
 
@@ -915,93 +954,119 @@ class QueryCompiler(
     type Measured = Either[String, (Extent, Memo)]
 
     val fragMap = frags.map(frag => (frag.name, frag)).toMap
-    val varSizes = vars.map { case (nme, (_, value)) => (nme, valueSize(value)) }
 
-    def checked(extent: Extent, memo: Memo): Measured =
-      if (extent.depth > maxDepth) Left(s"exceeds the maximum selection depth of $maxDepth")
-      else if (extent.spreadDepth > maxDepth)
-        Left(s"exceeds the maximum fragment spread depth of $maxDepth")
-      else if (extent.size > maxSize) Left(s"exceeds the maximum selection size of $maxSize")
-      else Right((extent, memo))
+    // The size of the expansion of `op`, or the reason it exceeds the limits
+    def measureOp(op: UntypedOperation, vars: Vars): Either[String, Long] = {
+      val varSizes = vars.map { case (nme, (_, value)) => (nme, valueSize(value)) }
 
-    // Measures `query`, which is in a selection set at absolute selection depth `depth` and
-    // fragment spread depth `spreadDepth`.
-    def measure(query: Query, depth: Int, spreadDepth: Int, memo: Memo): Measured =
-      checked(Extent(depth, spreadDepth, 0), memo).flatMap { _ =>
-        query match {
-          case UntypedSelect(_, _, args, dirs, Empty, _) =>
-            checked(
-              Extent(depth, spreadDepth, 1 + bindingsSize(args) + directivesSize(dirs)),
-              memo)
+      def checked(extent: Extent, memo: Memo): Measured =
+        if (extent.depth > maxDepth) Left(s"exceeds the maximum selection depth of $maxDepth")
+        else if (extent.spreadDepth > maxDepth)
+          Left(s"exceeds the maximum fragment spread depth of $maxDepth")
+        else if (extent.size > maxSize) Left(s"exceeds the maximum selection size of $maxSize")
+        else Right((extent, memo))
 
-          case UntypedSelect(_, _, args, dirs, child, _) =>
-            measure(child, depth + 1, spreadDepth, memo).flatMap {
-              case (extent, memo0) =>
-                checked(extent.grow(1 + bindingsSize(args) + directivesSize(dirs)), memo0)
-            }
+      // Measures `query`, which is in a selection set at absolute selection depth `depth` and
+      // fragment spread depth `spreadDepth`.
+      def measure(query: Query, depth: Int, spreadDepth: Int, memo: Memo): Measured =
+        checked(Extent(depth, spreadDepth, 0), memo).flatMap { _ =>
+          query match {
+            case UntypedSelect(_, _, args, dirs, Empty, _) =>
+              checked(
+                Extent(depth, spreadDepth, 1 + bindingsSize(args) + directivesSize(dirs)),
+                memo)
 
-          case UntypedInlineFragment(_, dirs, child) =>
-            measure(child, depth + 1, spreadDepth, memo).flatMap {
-              case (extent, memo0) => checked(extent.grow(1 + directivesSize(dirs)), memo0)
-            }
+            case UntypedSelect(_, _, args, dirs, child, _) =>
+              measure(child, depth + 1, spreadDepth, memo).flatMap {
+                case (extent, memo0) =>
+                  checked(extent.grow(1 + bindingsSize(args) + directivesSize(dirs)), memo0)
+              }
 
-          case UntypedFragmentSpread(nme, dirs) =>
-            (memo.get(nme), fragMap.get(nme)) match {
-              case (Some(rel), _) =>
-                checked(
-                  Extent(depth + rel.depth, spreadDepth + rel.spreadDepth, rel.size)
-                    .grow(1 + directivesSize(dirs)),
-                  memo)
-              case (None, Some(frag)) =>
-                measure(frag.child, depth, spreadDepth + 1, memo).flatMap {
-                  case (extent, memo0) =>
-                    val body = extent.grow(directivesSize(frag.directives))
-                    val rel =
-                      Extent(body.depth - depth, body.spreadDepth - spreadDepth, body.size)
-                    checked(body.grow(1 + directivesSize(dirs)), memo0.updated(nme, rel))
-                }
-              case _ =>
-                // An undefined fragment is reported by `validateVariablesAndFragments`
-                checked(Extent(depth, spreadDepth, 1 + directivesSize(dirs)), memo)
-            }
+            case UntypedInlineFragment(_, dirs, child) =>
+              measure(child, depth + 1, spreadDepth, memo).flatMap {
+                case (extent, memo0) => checked(extent.grow(1 + directivesSize(dirs)), memo0)
+              }
 
-          case Group(queries) =>
-            queries.foldLeft(checked(Extent(depth, spreadDepth, 0), memo)) {
-              case (acc, q) =>
-                acc.flatMap {
-                  case (extent, memo0) =>
-                    measure(q, depth, spreadDepth, memo0).flatMap {
-                      case (qextent, memo1) => checked(extent + qextent, memo1)
-                    }
-                }
-            }
+            case UntypedFragmentSpread(nme, dirs) =>
+              (memo.get(nme), fragMap.get(nme)) match {
+                case (Some(rel), _) =>
+                  checked(
+                    Extent(depth + rel.depth, spreadDepth + rel.spreadDepth, rel.size)
+                      .grow(1 + directivesSize(dirs)),
+                    memo)
+                case (None, Some(frag)) =>
+                  measure(frag.child, depth, spreadDepth + 1, memo).flatMap {
+                    case (extent, memo0) =>
+                      val body = extent.grow(directivesSize(frag.directives))
+                      val rel =
+                        Extent(body.depth - depth, body.spreadDepth - spreadDepth, body.size)
+                      checked(body.grow(1 + directivesSize(dirs)), memo0.updated(nme, rel))
+                  }
+                case _ =>
+                  // An undefined fragment is reported by `validateVariablesAndFragments`
+                  checked(Extent(depth, spreadDepth, 1 + directivesSize(dirs)), memo)
+              }
 
-          case _ =>
-            // Other query algebra nodes appear only after elaboration
-            checked(Extent(depth, spreadDepth, 0), memo)
+            case Group(queries) =>
+              queries.foldLeft(checked(Extent(depth, spreadDepth, 0), memo)) {
+                case (acc, q) =>
+                  acc.flatMap {
+                    case (extent, memo0) =>
+                      measure(q, depth, spreadDepth, memo0).flatMap {
+                        case (qextent, memo1) => checked(extent + qextent, memo1)
+                      }
+                  }
+              }
+
+            case _ =>
+              // Other query algebra nodes appear only after elaboration
+              checked(Extent(depth, spreadDepth, 0), memo)
+          }
         }
-      }
 
-    def directivesSize(dirs: List[Directive]): Long =
-      dirs.foldMap(dir => 1 + bindingsSize(dir.args))
+      def directivesSize(dirs: List[Directive]): Long =
+        dirs.foldMap(dir => 1 + bindingsSize(dir.args))
 
-    def bindingsSize(bindings: List[Binding]): Long =
-      bindings.foldMap(binding => argumentSize(binding.value))
+      def bindingsSize(bindings: List[Binding]): Long =
+        bindings.foldMap(binding => argumentSize(binding.value))
 
-    // As `valueSize`, with each variable reference counting as the size of its value. Recursion
-    // is bounded by the parser's maxInputValueDepth.
-    def argumentSize(value: Value): Long =
-      value match {
-        case VariableRef(nme) => varSizes.getOrElse(nme, 1L)
-        case ListValue(elems) => 1 + elems.foldMap(argumentSize)
-        case ObjectValue(fields) => 1 + fields.foldMap { case (_, v) => argumentSize(v) }
-        case _ => 1
-      }
+      // As `valueSize`, with each variable reference counting as the size of its value. Recursion
+      // is bounded by the parser's maxInputValueDepth.
+      def argumentSize(value: Value): Long =
+        value match {
+          case VariableRef(nme) => varSizes.getOrElse(nme, 1L)
+          case ListValue(elems) => 1 + elems.foldMap(argumentSize)
+          case ObjectValue(fields) => 1 + fields.foldMap { case (_, v) => argumentSize(v) }
+          case _ => 1
+        }
 
-    measure(op.query, 1, 0, Map.empty).left.toOption.toList.map { reason =>
-      val desc = op.name.fold("Anonymous operation")(nme => s"Operation '$nme'")
-      Problem(s"$desc, with fragment spreads expanded, $reason")
+      measure(op.query, 1, 0, Map.empty).map { case (extent, _) => extent.size }
     }
+
+    // Operations are measured in turn, each against the whole limit, stopping at the first
+    // problem. Measuring an operation takes time proportional to its size, so the total work is
+    // bounded by about twice the limit however many operations there are.
+    ops
+      .foldLeft(Right(0L): Either[Problem, Long]) {
+        case (acc, (op, vars)) =>
+          acc.flatMap { total =>
+            measureOp(op, vars)
+              .leftMap { reason =>
+                val desc = op.name.fold("Anonymous operation")(nme => s"Operation '$nme'")
+                Problem(s"$desc, with fragment spreads expanded, $reason")
+              }
+              .flatMap { size =>
+                val total0 = total + size
+                if (total0 > maxSize)
+                  Left(Problem(
+                    s"Operations, with fragment spreads expanded, together exceed the maximum selection size of $maxSize"))
+                else Right(total0)
+              }
+          }
+      }
+      .left
+      .toOption
+      .toList
   }
 
   /**
@@ -1105,6 +1170,25 @@ object QueryCompiler {
       }
 
     loop(List((json, 0)))
+  }
+
+  /**
+   * The number of nodes in `json`, counted as `valueSize` counts the nodes of a value.
+   *
+   * Stack safe, because `json` hasn't been bounded in depth.
+   */
+  def jsonSize(json: Json): Long = {
+    @tailrec
+    def loop(pending: List[Json], acc: Long): Long =
+      pending match {
+        case Nil => acc
+        case json :: rest =>
+          val children =
+            json.arrayOrObject[List[Json]](Nil, _.toList, _.values.toList)
+          loop(children ::: rest, acc + 1)
+      }
+
+    loop(List(json), 0)
   }
 
   /**

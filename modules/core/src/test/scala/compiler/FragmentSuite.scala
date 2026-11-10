@@ -1636,6 +1636,67 @@ final class FragmentSuite extends CatsEffectSuite {
     assertEquals(problems(compiler.compile(mkQuery("name @include(if: true)"))), expected)
   }
 
+  test("expanded selection size of all operations together") {
+    // Each operation has size 3: user, id: 1 and name
+    def mkQuery(n: Int): String =
+      (0 until n)
+        .map(i => s"query Q$i { user(id: 1) { ...G } }")
+        .mkString("", " ", " fragment G on User { name }")
+
+    val compiler = limitedCompiler(maxSelectionSize = 8)
+
+    assert(compiler.compile(mkQuery(2), Some("Q0")).hasValue)
+    // Every operation is validated and elaborated, whichever is selected
+    assertEquals(
+      problems(compiler.compile(mkQuery(3), Some("Q0"))),
+      List(
+        "Operations, with fragment spreads expanded, together exceed the maximum selection size of 8")
+    )
+
+    // An operation which exceeds the limit on its own is reported as such
+    assertEquals(
+      problems(
+        compiler.compile(
+          "query Q0 { user(id: 1) { name } } query Q1 { user(id: 1) { a: name b: name c: name d: name e: name f: name g: name } }",
+          Some("Q0"))),
+      List(
+        "Operation 'Q1', with fragment spreads expanded, exceeds the maximum selection size of 8")
+    )
+
+    // compileOperation measures only the operation it compiles
+    assert(
+      FragmentMapping
+        .queryParser
+        .parseText(mkQuery(3))
+        .flatMap { case (ops, frags) => compiler.compileOperation(ops.head, None, frags) }
+        .hasValue)
+  }
+
+  test("variable value sizes of all operations together") {
+    // `$x` has size 4, and each operation has expanded size 7: user, id: 1, hasFriendIn and `$x`
+    def mkQuery(n: Int): String =
+      (0 until n)
+        .map(i => s"query Q$i($$x: [ID!]!) { user(id: 1) { hasFriendIn(ids: $$x) } }")
+        .mkString(" ")
+    val vars = Some(Json.obj("x" -> Json.arr(List.fill(3)(Json.fromString("1")): _*)))
+
+    val compiler = limitedCompiler(maxSelectionSize = 8)
+
+    assert(compiler.compile(mkQuery(1), Some("Q0"), vars).hasValue)
+    // The variable values fit, but the expanded operations don't
+    assertEquals(
+      problems(compiler.compile(mkQuery(2), Some("Q0"), vars)),
+      List(
+        "Operations, with fragment spreads expanded, together exceed the maximum selection size of 8")
+    )
+    // The variable values are rejected before they're compiled for each operation
+    assertEquals(
+      problems(compiler.compile(mkQuery(3), Some("Q0"), vars)),
+      List(
+        "Variable values, counted for each operation which declares them, together exceed the maximum selection size of 8")
+    )
+  }
+
   test("expanded selection size includes argument values") {
     val query =
       s"query Q { user(id: 1) { hasFriendIn(ids: [${List.fill(10)("\"1\"").mkString(", ")}]) } }"
