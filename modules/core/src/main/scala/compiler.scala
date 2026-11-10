@@ -733,6 +733,8 @@ class QueryCompiler(
   def validateFieldMergeability(
       ops: List[UntypedOperation],
       frags: List[UntypedFragment]): List[Problem] = {
+    val fragsByName = frags.map(frag => (frag.name, frag)).toMap
+
     // Validates field mergeability for a single operation
     def validateOp(op: UntypedOperation): List[Problem] = {
       // Collects all top level selects of the supplied queries, ungrouping and inlining fragments where necessary
@@ -748,7 +750,7 @@ class QueryCompiler(
             } yield sels).getOrElse(Nil) // Undefined types will be reported later
           case (_, f: UntypedFragmentSpread) =>
             (for {
-              frag <- frags.find(_.name == f.name)
+              frag <- fragsByName.get(f.name)
               ntpe <- schema.definition(frag.tpnme)
               sels <- Some(collectSelects(List((ntpe, frag.child))))
             } yield sels).getOrElse(Nil) // Undefined types will be reported later

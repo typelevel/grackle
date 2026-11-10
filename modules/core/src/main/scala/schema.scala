@@ -1234,7 +1234,7 @@ object Value {
         val unknownFields = fs.map(_._1).filterNot(f => ivs.exists(_.name == f))
         if (unknownFields.nonEmpty)
           Result.failure(
-            s"Unknown field(s) ${unknownFields.map(s => s"'$s'").mkString("", ", ", "")} for input object value of type ${nme} in $location")
+            s"Unknown field(s) ${abbreviate(unknownFields.map(s => s"'$s'").mkString(", "))} for input object value of type ${nme} in $location")
         else {
           val isOneOf = i.isOneOf
           val presentValues = obj.filterNot { case (_, v) => v == AbsentValue }
@@ -1321,7 +1321,7 @@ object Value {
         val unknownFields = obj.keys.filterNot(f => ivs.exists(_.name == f))
         if (unknownFields.nonEmpty)
           Result.failure(
-            s"Unknown field(s) ${unknownFields.map(s => s"'$s'").mkString("", ", ", "")} in input object value of type ${nme} in $location")
+            s"Unknown field(s) ${abbreviate(unknownFields.map(s => s"'$s'").mkString(", "))} in input object value of type ${nme} in $location")
         else
           ivs
             .traverse(iv => checkVarValue(iv, obj(iv.name), location).map(v => (iv.name, v)))
@@ -1338,11 +1338,16 @@ object Value {
    * `json` printed compactly for an error message, truncated to `maxAbbreviatedLength`
    * characters, so that the size of the message is bounded however large `json` is.
    */
-  def abbreviateJson(json: Json): String = {
-    val printed = json.noSpaces
-    if (printed.length <= maxAbbreviatedLength) printed
-    else printed.take(maxAbbreviatedLength) + "..."
-  }
+  def abbreviateJson(json: Json): String =
+    abbreviate(json.noSpaces)
+
+  /**
+   * `text` truncated to `maxAbbreviatedLength` characters for an error message, so that the
+   * size of the message is bounded however large `text` is.
+   */
+  def abbreviate(text: String): String =
+    if (text.length <= maxAbbreviatedLength) text
+    else text.take(maxAbbreviatedLength) + "..."
 
   val maxAbbreviatedLength: Int = 100
 }

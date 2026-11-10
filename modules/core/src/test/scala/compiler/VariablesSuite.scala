@@ -890,6 +890,19 @@ final class VariablesSuite extends CatsEffectSuite {
       List(s"Expected Int found '$found...' for 'l' in variable values")
     )
   }
+
+  test("unknown input object fields in an error message are abbreviated") {
+    val query = "query ($pattern: Pattern!) { search(pattern: $pattern) { id } }"
+
+    val names = (1 to 1000).map(i => s"f$i")
+    val variables = Json.obj("pattern" -> Json.obj(names.map(_ -> Json.fromInt(1)): _*))
+    val unknown = names.map(n => s"'$n'").mkString(", ").take(100)
+    assertEquals(
+      problems(VariablesMapping.compiler.compile(query, untypedVars = Some(variables))),
+      List(
+        s"Unknown field(s) $unknown... in input object value of type Pattern in variable values")
+    )
+  }
 }
 
 object VariablesMapping extends TestMapping {
