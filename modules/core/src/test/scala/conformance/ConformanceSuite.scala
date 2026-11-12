@@ -21,6 +21,7 @@ import munit.{CatsEffectSuite, Location, TestOptions}
 
 import grackle._
 import grackle.QueryCompiler.SelectElaborator
+import grackle.test.GraphQLResponseTests
 
 /**
  * Base class for the GraphQL conformance suites.
@@ -144,7 +145,7 @@ abstract protected[conformance] class ConformanceSuite extends CatsEffectSuite {
       val keys =
         mapping
           .compileAndRun(gql(query), untypedVars = Some(vars))
-          .map(_.hcursor.downField("data").keys.map(_.toList))
+          .map(GraphQLResponseTests.dataKeys)
       assertIO(keys, Some(expected))
     }
 

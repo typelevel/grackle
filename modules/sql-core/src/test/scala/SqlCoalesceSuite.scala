@@ -30,6 +30,14 @@ trait SqlCoalesceSuite extends CatsEffectSuite {
   type Fragment
   def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO, Fragment])]
 
+  def runWithStats(query: String): IO[(Json, List[SqlStatsMonitor.SqlStats])] =
+    for {
+      mm <- mapping
+      (map, mon) = mm
+      res <- map.compileAndRun(query)
+      ss <- mon.take
+    } yield (res, ss)
+
   test("simple coalesced query") {
     val query = """
       query {
@@ -105,15 +113,7 @@ trait SqlCoalesceSuite extends CatsEffectSuite {
       }
     """
 
-    val prog: IO[(Json, List[SqlStatsMonitor.SqlStats])] =
-      for {
-        mm <- mapping
-        (map, mon) = mm
-        res <- map.compileAndRun(query)
-        ss <- mon.take
-      } yield (res, ss)
-
-    prog.map {
+    runWithStats(query).map {
       case (res, stats) =>
         assertWeaklyEqual(res, expected)
 
@@ -122,6 +122,64 @@ trait SqlCoalesceSuite extends CatsEffectSuite {
 
         assert(numQueries == 1)
         assert(numCells == 40)
+    }
+  }
+
+  test("typename query at the root runs no SQL query") {
+    val query = """
+      query {
+        __typename
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "__typename" : "Query"
+        }
+      }
+    """
+
+    runWithStats(query).map {
+      case (res, stats) =>
+        assertWeaklyEqual(res, expected)
+        assert(stats.isEmpty)
+    }
+  }
+
+  test("typename query at the root with an SQL root field") {
+    val query = """
+      query {
+        __typename
+        r {
+          id
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "__typename" : "Query",
+          "r" : [
+            {
+              "id" : "R1"
+            },
+            {
+              "id" : "R2"
+            },
+            {
+              "id" : "R3"
+            }
+          ]
+        }
+      }
+    """
+
+    runWithStats(query).map {
+      case (res, stats) =>
+        assertWeaklyEqual(res, expected)
+        assert(stats.length == 1)
     }
   }
 

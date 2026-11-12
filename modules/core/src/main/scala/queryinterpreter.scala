@@ -23,7 +23,7 @@ import cats.{Monad, Monoid}
 import cats.data.{Chain, NonEmptyChain}
 import cats.implicits._
 import fs2.Stream
-import io.circe.Json
+import io.circe.{Json, JsonObject}
 
 import grackle.Cursor.ListTransformCursor
 import grackle.Query._
@@ -125,6 +125,9 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
 
           val introResults: List[Result[ProtoJson]] =
             introQueries.flatMap {
+              // Like introspection, root `__typename` needs no root cursor, which may run a query
+              case i @ Introspect(_, query) if isTypename(query) =>
+                List(runValue(i, rootTpe, rootCursor))
               case Introspect(schema, query) =>
                 val interp = Introspection.interpreter(schema)
                 interp.runRootValue(query, Introspection.schema.queryType, rootCursor) match {
@@ -162,7 +165,13 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
         case Nil => Result(ProtoJson.fromJson(Json.Null))
         case List(r) => r
         case hd :: tl =>
+          // Root fields run in separate groups, so restore the field order of the query
+          val names = ungrouped.flatMap {
+            case Introspect(_, child) => resultName(child)
+            case other => resultName(other)
+          }
           tl.foldLeft(hd) { case (acc, elem) => acc |+| elem }
+            .map(ProtoJson.reorderFields(_, names))
       }
     }
   }
@@ -181,6 +190,7 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
     } yield value).value
 
   def cursorCompatible(tpe: Type, cursorTpe: Type): Boolean = {
+    @tailrec
     def strip(tpe: Type): Type =
       tpe.dealias match {
         case NullableType(tpe) => strip(tpe)
@@ -240,6 +250,10 @@ class QueryInterpreter[F[_]](mapping: Mapping[F]) {
 
         case Group(siblings) =>
           siblings.flatTraverse(query => runFields(query, tpe, cursor, path))
+
+        // Move wrappers from earlier phases outside `Introspect`
+        case Introspect(schema, child @ (_: Group | _: Environment)) =>
+          runFields(mapFields(child)(Introspect(schema, _)), tpe, cursor, path)
 
         case Introspect(schema, s @ Select("__typename", _, Empty, _)) if tpe.isNamed =>
           val fail =
@@ -773,6 +787,7 @@ object QueryInterpreter {
      *
      * Yields `true` if the argument contains any component or staged subtrees, false otherwise.
      */
+    @tailrec
     def isDeferred(p: ProtoJson): Boolean =
       p match {
         case _: DeferredJson => true
@@ -823,6 +838,27 @@ object QueryInterpreter {
           fromFields(fieldss)
         case _ => wrap(Json.Null)
       }
+
+    /**
+     * Reorder the fields of a possibly partial object to follow `names`. Fields which are not
+     * in `names` keep their relative order and come last.
+     */
+    private[grackle] def reorderFields(obj: ProtoJson, names: Seq[String]): ProtoJson = {
+      val index = names.distinct.zipWithIndex.toMap
+      val last = index.size
+      def reorder[T](fields: Seq[(String, T)]): Seq[(String, T)] =
+        fields.sortBy { case (k, _) => index.getOrElse(k, last) }
+
+      def loop(obj: ProtoJson): ProtoJson =
+        obj match {
+          case ProtoNonNull(elem) => nonNull(loop(elem))
+          case ProtoObject(fields) => wrap(ProtoObject(reorder(fields)))
+          case j: Json => wrap(j.mapObject(o => JsonObject.fromIterable(reorder(o.toList))))
+          case _ => obj
+        }
+
+      loop(obj)
+    }
 
     /**
      * Recursively merge a list of ProtoJson arrays.

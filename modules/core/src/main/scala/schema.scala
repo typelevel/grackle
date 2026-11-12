@@ -15,6 +15,7 @@
 
 package grackle
 
+import scala.annotation.tailrec
 import scala.collection.mutable.{Map => MMap}
 
 import cats.implicits._
@@ -646,6 +647,7 @@ sealed trait Type extends Product {
   }
 
   def withModifiersOf(tpe: Type): Type = {
+    @tailrec
     def loop(rtpe: Type, tpe: Type): Type = tpe match {
       case NullableType(tpe) => loop(NullableType(rtpe), tpe)
       case ListType(tpe) => loop(ListType(rtpe), tpe)
@@ -2053,6 +2055,7 @@ object SchemaValidator {
   }
 
   def validateReferences(schema: Schema, defns: List[TypeDefinition]): List[Problem] = {
+    @tailrec
     def underlyingName(tpe: Ast.Type): String =
       tpe match {
         case Ast.Type.List(tpe) => underlyingName(tpe)
@@ -2189,7 +2192,7 @@ object SchemaValidator {
       val ifRefs: Map[String, Set[String]] =
         ifs.map { i => (i.name, i.interfaces.map(_.name).toSet) }.toMap
 
-      @annotation.tailrec
+      @tailrec
       def checkCycle(pendingIfs: Set[String], seen: Set[String]): Option[Set[String]] = {
         if (pendingIfs.isEmpty) Some(seen)
         else {
@@ -2199,7 +2202,7 @@ object SchemaValidator {
         }
       }
 
-      @annotation.tailrec
+      @tailrec
       def loop(pendingIfs: Set[String]): Either[String, Set[String]] = {
         if (pendingIfs.isEmpty) Right(Set.empty[String])
         else {
@@ -2239,7 +2242,7 @@ object SchemaValidator {
       }
 
       def transitiveImplementsProblems = {
-        @annotation.tailrec
+        @tailrec
         def loop(pending: List[NamedType], acc: Set[String]): Set[String] =
           pending match {
             case Nil => acc
@@ -2528,6 +2531,7 @@ object SchemaRenderer {
     }
   }
 
+  @tailrec
   def renderTypeDefn(tpe: NamedType): String = {
     tpe match {
       case tr: TypeRef => renderTypeDefn(tr.dealias)

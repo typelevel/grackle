@@ -15,6 +15,7 @@
 
 package grackle
 
+import scala.annotation.tailrec
 import scala.collection.Factory
 import scala.collection.mutable.{Map => MMap}
 import scala.reflect.ClassTag
@@ -517,7 +518,7 @@ abstract class Mapping[F[_]] {
       }
 
       def unseenTypeMappings(seen: Set[TypeMapping]): Seq[TypeMapping] = {
-        @annotation.tailrec
+        @tailrec
         def loop(pending: Seq[TypeMapping], acc: Seq[TypeMapping]): Seq[TypeMapping] =
           pending match {
             case Seq(om: ObjectMapping, tail @ _*) =>

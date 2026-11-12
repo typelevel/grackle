@@ -19,17 +19,17 @@ import scala.annotation.tailrec
 import scala.reflect.ClassTag
 
 import cats.data.StateT
-import cats.implicits._
+import cats.implicits.*
 import io.circe.Json
 import org.tpolecat.typename.{typeName, TypeName}
 
-import grackle.Predicate._
-import grackle.Query._
-import grackle.QueryCompiler._
-import grackle.ScalarType._
-import grackle.UntypedOperation._
-import grackle.Value._
-import grackle.syntax._
+import grackle.Predicate.*
+import grackle.Query.*
+import grackle.QueryCompiler.*
+import grackle.ScalarType.*
+import grackle.UntypedOperation.*
+import grackle.Value.*
+import grackle.syntax.*
 
 /**
  * GraphQL query parser
@@ -1246,6 +1246,14 @@ object QueryCompiler {
    */
   private[grackle] def fragmentSpreads(query: Query): Set[String] = collectQueryRefs(query)._2
 
+  @tailrec
+  private def hasTransformCursor(query: Query): Boolean =
+    query match {
+      case TransformCursor(_, _) => true
+      case Environment(_, child) => hasTransformCursor(child)
+      case _ => false
+    }
+
   sealed trait IntrospectionLevel
   object IntrospectionLevel {
     case object Full extends IntrospectionLevel
@@ -1549,15 +1557,30 @@ object QueryCompiler {
             _ <- Elab.pop
           } yield i.copy(child = ec)
 
+        // `__typename` uses the enclosing type. `__schema` and `__type` use the query root
+        // of the introspection schema. `Introspect` with a skipped child is dropped.
         case i @ Introspect(_, child) =>
+          val typename = Query.isTypename(child)
           for {
             s <- Elab.schema
             c <- Elab.context
-            iTpe = if (c.tpe =:= s.queryType) Introspection.schema.queryType else TypenameType
-            _ <- Elab.push(Introspection.schema, c.asType(iTpe), child)
+            _ <-
+              if (typename || c.tpe =:= s.queryType) Elab.unit
+              else {
+                val fieldName = Query.rootName(child).fold(child.render)(_._1)
+                Elab.failure(s"No field '$fieldName' for type ${c.tpe.underlying}")
+              }
+            (iSchema, iTpe) =
+              if (typename) (s, TypenameType)
+              else (Introspection.schema, Introspection.schema.queryType)
+            _ <- Elab.push(iSchema, c.asType(iTpe), child)
             ec <- transform(child)
+            _ <-
+              if (typename && hasTransformCursor(ec))
+                Elab.failure("Cursor transforms cannot be applied to '__typename'")
+              else Elab.unit
             _ <- Elab.pop
-          } yield i.copy(child = ec)
+          } yield if (ec == Empty) Empty else i.copy(child = ec)
 
         case u @ Unique(child) =>
           for {
@@ -1876,6 +1899,8 @@ object QueryCompiler {
             _ <-
               if (s eq Introspection.schema)
                 elaborateIntrospection(Introspection.schema.uncheckedRef(obj), fieldName, eArgs)
+              // `__typename` isn't a field of the mapping, so it never reaches `select`
+              else if (obj eq TypenameType) Elab.unit
               else select(s.uncheckedRef(obj), fieldName, eArgs, dirs)
             elab <- Elab.transform
             env <- Elab.localEnv
