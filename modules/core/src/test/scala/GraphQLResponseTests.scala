@@ -41,6 +41,12 @@ object GraphQLResponseTests {
       _ <- x0(fieldName)
     } yield true).getOrElse(false)
 
+  /**
+   * The keys of the `data` object of `x`, in order.
+   */
+  def dataKeys(x: Json): Option[List[String]] =
+    x.hcursor.downField("data").keys.map(_.toList)
+
   def errorsOf(x: Json): Seq[Json] =
     (for {
       x0 <- x.asObject
