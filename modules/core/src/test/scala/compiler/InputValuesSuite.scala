@@ -440,6 +440,19 @@ final class InputValuesSuite extends CatsEffectSuite {
     assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
   }
 
+  test("unknown input object fields in an error message are abbreviated") {
+    val names = (1 to 100).map(i => s"wibble$i")
+    val fields = names.map(n => s"$n: 1").mkString(", ")
+    val query = s"query { objectField(arg: { $fields }) { subfield } }"
+
+    val unknown = names.map(n => s"'$n'").mkString(", ").take(100)
+    val expected = Problem(
+      s"Unknown field(s) $unknown... for input object value of type InObj in field 'objectField' of type 'Query'")
+
+    val compiled = InputValuesMapping.compiler.compile(query, None)
+    assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
+  }
+
   test("oneOf input object value") {
     val query = """
       query {

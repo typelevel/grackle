@@ -1186,6 +1186,7 @@ final class ParserSuite extends CatsEffectSuite {
   def mkParser(
       maxSelectionDepth: Int = GraphQLParser.defaultConfig.maxSelectionDepth,
       maxSelectionWidth: Int = GraphQLParser.defaultConfig.maxSelectionWidth,
+      maxSelectionSize: Int = GraphQLParser.defaultConfig.maxSelectionSize,
       maxInputValueDepth: Int = GraphQLParser.defaultConfig.maxInputValueDepth,
       maxListTypeDepth: Int = GraphQLParser.defaultConfig.maxListTypeDepth
   ): GraphQLParser =
@@ -1193,6 +1194,7 @@ final class ParserSuite extends CatsEffectSuite {
       GraphQLParser.Config(
         maxSelectionDepth = maxSelectionDepth,
         maxSelectionWidth = maxSelectionWidth,
+        maxSelectionSize = maxSelectionSize,
         maxInputValueDepth = maxInputValueDepth,
         maxListTypeDepth = maxListTypeDepth,
         terseError = false

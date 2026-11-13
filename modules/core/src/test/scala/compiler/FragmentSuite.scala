@@ -1410,6 +1410,350 @@ final class FragmentSuite extends CatsEffectSuite {
 
     assertIO(res, expected)
   }
+
+  test("deeply nested fragment expansion") {
+    val query =
+      "query Q { user(id: 1) { ...G1 } }\n" +
+        (1 until 10000)
+          .map(i => s"fragment G$i on User { friends { ...G${i + 1} } }\n")
+          .mkString +
+        "fragment G10000 on User { id }\n"
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Operation 'Q', with fragment spreads expanded, exceeds the maximum selection depth of 100"
+          }
+        ]
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("deeply nested fragment spreads") {
+    val query =
+      "query Q { ...G1 }\n" +
+        (1 until 10000).map(i => s"fragment G$i on Query { ...G${i + 1} }\n").mkString +
+        "fragment G10000 on Query { user(id: 1) { id } }\n"
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Operation 'Q', with fragment spreads expanded, exceeds the maximum fragment spread depth of 100"
+          }
+        ]
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("list argument field") {
+    val query =
+      """query { user(id: 1) { yes: hasFriendIn(ids: ["4", "3"]) no: hasFriendIn(ids: ["4"]) } }"""
+
+    val expected = json"""
+      {
+        "data" : {
+          "user" : {
+            "yes" : true,
+            "no" : false
+          }
+        }
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  test("fragment expansion with a large variable") {
+    // 2,048 expanded references to $x, each replaced by its 101-node value
+    val query =
+      "query Q($x: [ID!]!) { user(id: 1) { ...G1 } }\n" +
+        (1 until 12)
+          .map(i =>
+            s"fragment G$i on User { a: friends { ...G${i + 1} } b: friends { ...G${i + 1} } }\n")
+          .mkString +
+        "fragment G12 on User { hasFriendIn(ids: $x) }\n"
+
+    val vars =
+      Json.obj("x" -> Json.fromValues((1 to 100).map(i => Json.fromString(i.toString))))
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Operation 'Q', with fragment spreads expanded, exceeds the maximum selection size of 100000"
+          }
+        ]
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query, untypedVars = Some(vars))
+
+    assertIO(res, expected)
+  }
+
+  test("exponential fragment expansion") {
+    val query =
+      "query Q { user(id: 1) { ...G1 } }\n" +
+        (1 until 40)
+          .map(i =>
+            s"fragment G$i on User { a: friends { ...G${i + 1} } b: friends { ...G${i + 1} } }\n")
+          .mkString +
+        "fragment G40 on User { id }\n"
+
+    val expected = json"""
+      {
+        "errors" : [
+          {
+            "message" : "Operation 'Q', with fragment spreads expanded, exceeds the maximum selection size of 100000"
+          }
+        ]
+      }
+    """
+
+    val res = FragmentMapping.compileAndRun(query)
+
+    assertIO(res, expected)
+  }
+
+  def limitedCompiler(
+      maxSelectionDepth: Int = 100,
+      maxSelectionSize: Int = 100000): QueryCompiler = {
+    val config = GraphQLParser
+      .defaultConfig
+      .copy(maxSelectionDepth = maxSelectionDepth, maxSelectionSize = maxSelectionSize)
+
+    new QueryCompiler(
+      QueryParser(GraphQLParser(config)),
+      FragmentMapping.schema,
+      FragmentMapping.compilerPhases,
+      config)
+  }
+
+  def problems(res: Result[Operation]): List[String] =
+    res.toProblems.toList.map(_.message)
+
+  test("compileOperation validates its operation") {
+    // Compiles the first operation of `text`
+    def compileFirst(text: String): Result[Operation] =
+      FragmentMapping.queryParser.parseText(text).flatMap {
+        case (ops, frags) => FragmentMapping.compiler.compileOperation(ops.head, None, frags)
+      }
+
+    assertEquals(
+      problems(compileFirst("query Q { user(id: $x) { id } }")),
+      List("Variable 'x' is undefined"))
+    assertEquals(
+      problems(
+        compileFirst(
+          "query Q { user(id: 1) { ...F } } fragment F on User { friends { ...F } }")),
+      List("Fragment cycle starting from 'F'"))
+    assertEquals(
+      problems(compileFirst("query Q { user(id: 1) { a: name a: id } }")),
+      List("Cannot merge fields with alias 'a' and names 'name', 'id'"))
+    // A fragment which only another operation uses isn't reported as unused
+    assert(compileFirst(
+      "query Q { user(id: 1) { id } } query R { user(id: 1) { ...F } } fragment F on User { name }").hasValue)
+    // Nor are unused variables
+    assert(compileFirst("query Q($x: ID) { user(id: 1) { id } }").hasValue)
+  }
+
+  test("expanded selection depth") {
+    // The selections of a fragment are merged into the enclosing selection set, so the selection
+    // sets are the operation's, user's and friends': three levels
+    def mkQuery(fields: String): String =
+      s"query Q { user(id: 1) { ...F } } fragment F on User { friends { ...G } } fragment G on User { $fields }"
+
+    val compiler = limitedCompiler(maxSelectionDepth = 3)
+
+    assert(compiler.compile(mkQuery("name")).hasValue)
+    assertEquals(
+      problems(compiler.compile(mkQuery("friends { name }"))),
+      List(
+        "Operation 'Q', with fragment spreads expanded, exceeds the maximum selection depth of 3")
+    )
+  }
+
+  test("expanded fragment spread depth") {
+    def mkQuery(n: Int): String =
+      "query Q { ...F1 } " + (1 until n)
+        .map(i => s"fragment F$i on Query { ...F${i + 1} } ")
+        .mkString +
+        s"fragment F$n on Query { user(id: 1) { id } }"
+
+    val compiler = limitedCompiler(maxSelectionDepth = 3)
+
+    assert(compiler.compile(mkQuery(3)).hasValue)
+    assertEquals(
+      problems(compiler.compile(mkQuery(4))),
+      List(
+        "Operation 'Q', with fragment spreads expanded, exceeds the maximum fragment spread depth of 3"))
+  }
+
+  test("unused fragments are not measured") {
+    // Each fragment is within the parser's literal depth limit, but F exceeds the limit once
+    // expanded
+    val frags =
+      "fragment F on User { friends { ...G } } fragment G on User { friends { name } }"
+
+    val compiler = limitedCompiler(maxSelectionDepth = 3)
+
+    assert(
+      compiler
+        .compile(s"query Q { user(id: 1) { name } } $frags", reportUnused = false)
+        .hasValue)
+    assertEquals(
+      problems(compiler.compile(s"query Q { user(id: 1) { ...F } } $frags")),
+      List(
+        "Operation 'Q', with fragment spreads expanded, exceeds the maximum selection depth of 3")
+    )
+  }
+
+  test("expanded selection size") {
+    // user, id: 1, then friends, ...G, and G's selections for each of a and b
+    def mkQuery(fields: String): String =
+      s"query Q { user(id: 1) { a: friends { ...G } b: friends { ...G } } } fragment G on User { $fields }"
+
+    val compiler = limitedCompiler(maxSelectionSize = 8)
+    val expected =
+      List(
+        "Operation 'Q', with fragment spreads expanded, exceeds the maximum selection size of 8")
+
+    assert(compiler.compile(mkQuery("name")).hasValue)
+    assertEquals(problems(compiler.compile(mkQuery("name id"))), expected)
+    // A directive and its argument count, as well as the selection
+    assertEquals(problems(compiler.compile(mkQuery("name @include(if: true)"))), expected)
+  }
+
+  test("expanded selection size of all operations together") {
+    // Each operation has size 3: user, id: 1 and name
+    def mkQuery(n: Int): String =
+      (0 until n)
+        .map(i => s"query Q$i { user(id: 1) { ...G } }")
+        .mkString("", " ", " fragment G on User { name }")
+
+    val compiler = limitedCompiler(maxSelectionSize = 8)
+
+    assert(compiler.compile(mkQuery(2), Some("Q0")).hasValue)
+    // Every operation is validated and elaborated, whichever is selected
+    assertEquals(
+      problems(compiler.compile(mkQuery(3), Some("Q0"))),
+      List(
+        "Operations, with fragment spreads expanded, together exceed the maximum selection size of 8")
+    )
+
+    // An operation which exceeds the limit on its own is reported as such
+    assertEquals(
+      problems(
+        compiler.compile(
+          "query Q0 { user(id: 1) { name } } query Q1 { user(id: 1) { a: name b: name c: name d: name e: name f: name g: name } }",
+          Some("Q0"))),
+      List(
+        "Operation 'Q1', with fragment spreads expanded, exceeds the maximum selection size of 8")
+    )
+
+    // compileOperation measures only the operation it compiles
+    assert(
+      FragmentMapping
+        .queryParser
+        .parseText(mkQuery(3))
+        .flatMap { case (ops, frags) => compiler.compileOperation(ops.head, None, frags) }
+        .hasValue)
+  }
+
+  test("variable value sizes of all operations together") {
+    // `$x` has size 4, and each operation has expanded size 7: user, id: 1, hasFriendIn and `$x`
+    def mkQuery(n: Int): String =
+      (0 until n)
+        .map(i => s"query Q$i($$x: [ID!]!) { user(id: 1) { hasFriendIn(ids: $$x) } }")
+        .mkString(" ")
+    val vars = Some(Json.obj("x" -> Json.arr(List.fill(3)(Json.fromString("1")): _*)))
+
+    val compiler = limitedCompiler(maxSelectionSize = 8)
+
+    assert(compiler.compile(mkQuery(1), Some("Q0"), vars).hasValue)
+    // The variable values fit, but the expanded operations don't
+    assertEquals(
+      problems(compiler.compile(mkQuery(2), Some("Q0"), vars)),
+      List(
+        "Operations, with fragment spreads expanded, together exceed the maximum selection size of 8")
+    )
+    // The variable values are rejected before they're compiled for each operation
+    assertEquals(
+      problems(compiler.compile(mkQuery(3), Some("Q0"), vars)),
+      List(
+        "Variable values, counted for each operation which declares them, together exceed the maximum selection size of 8")
+    )
+  }
+
+  test("expanded selection size includes argument values") {
+    val query =
+      s"query Q { user(id: 1) { hasFriendIn(ids: [${List.fill(10)("\"1\"").mkString(", ")}]) } }"
+
+    assert(limitedCompiler(maxSelectionSize = 100).compile(query).hasValue)
+
+    assertEquals(
+      problems(limitedCompiler(maxSelectionSize = 8).compile(query)),
+      List(
+        "Operation 'Q', with fragment spreads expanded, exceeds the maximum selection size of 8")
+    )
+  }
+
+  test("selection size without fragments") {
+    val compiler = limitedCompiler(maxSelectionSize = 4)
+
+    assert(compiler.compile("query { user(id: 1) { id name } }").hasValue)
+    assertEquals(
+      problems(compiler.compile("query { user(id: 1) { id name profilePic } }")),
+      List(
+        "Anonymous operation, with fragment spreads expanded, exceeds the maximum selection size of 4")
+    )
+  }
+
+  test("fragment chain at the depth limit") {
+    // Each link in the chain contributes a selection set and a fragment spread. The limit is
+    // kept small because elaborating a long fragment chain can exhaust the smaller stack of
+    // Scala.js.
+    def mkQuery(n: Int): String =
+      "query Q { user(id: 1) { ...G1 } }\n" +
+        (1 until n).map(i => s"fragment G$i on User { friends { ...G${i + 1} } }\n").mkString +
+        s"fragment G$n on User { id }\n"
+
+    val compiler = limitedCompiler(maxSelectionDepth = 20)
+
+    assert(compiler.compile(mkQuery(19)).hasValue)
+    assertEquals(
+      problems(compiler.compile(mkQuery(20))),
+      List(
+        "Operation 'Q', with fragment spreads expanded, exceeds the maximum selection depth of 20")
+    )
+  }
+
+  test(
+    "long chains of unused or cyclic fragments are validated without overflowing the stack") {
+    def chain(n: Int, last: String): String =
+      (1 until n).map(i => s"fragment G$i on User { friends { ...G${i + 1} } }\n").mkString +
+        s"fragment G$n on User { $last }\n"
+
+    val unused = "query Q { user(id: 1) { id } }\n" + chain(10000, "id")
+    assert(FragmentMapping.compiler.compile(unused, reportUnused = false).hasValue)
+
+    val cyclic = "query Q { user(id: 1) { ...G1 } }\n" + chain(10000, "friends { ...G1 }")
+    val cyclicProblems = problems(FragmentMapping.compiler.compile(cyclic))
+    assertEquals(cyclicProblems.size, 1)
+    assert(cyclicProblems.head.startsWith("Fragment cycle starting from"), cyclicProblems.head)
+  }
 }
 
 object FragmentData {
@@ -1463,6 +1807,7 @@ object FragmentMapping extends ValueMapping[IO] {
         friends: [User!]!
         mutualFriends: [User!]!
         favourite: UserOrPage
+        hasFriendIn(ids: [ID!]!): Boolean!
       }
       type Page implements Profile {
         id: String!
@@ -1502,7 +1847,8 @@ object FragmentMapping extends ValueMapping[IO] {
           ValueField("profilePic", _.profilePic),
           ValueField("friends", _.friends),
           ValueField("mutualFriends", _.mutualFriends),
-          ValueField("favourite", _.favourite)
+          ValueField("favourite", _.favourite),
+          CursorField("hasFriendIn", hasFriendIn)
         )
       ),
       ValueObjectMapping[Page](
@@ -1518,5 +1864,13 @@ object FragmentMapping extends ValueMapping[IO] {
     case (QueryType, "user", List(Binding("id", IDValue(id)))) =>
       Elab.transformChild(child =>
         Unique(Filter(Eql(FragmentMapping.UserType / "id", Const(id)), child)))
+    case (UserType, "hasFriendIn", List(Binding("ids", ListValue(ids)))) =>
+      Elab.env("ids" -> ids.collect { case IDValue(id) => id })
   }
+
+  def hasFriendIn(c: Cursor): Result[Boolean] =
+    for {
+      user <- c.as[User]
+      ids <- c.envR[List[String]]("ids")
+    } yield ids.exists(user.friendIds.contains)
 }

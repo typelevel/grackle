@@ -154,7 +154,11 @@ abstract protected[conformance] class ConformanceSuite extends CatsEffectSuite {
    */
   private def compileDocument(schema: Schema, text0: String, vars: Json): Result[Operation] = {
     val text = gql(text0)
-    val compiler = new QueryCompiler(queryParser, schema, List(SelectElaborator.identity))
+    val compiler = new QueryCompiler(
+      queryParser,
+      schema,
+      List(SelectElaborator.identity),
+      graphQLParser.config)
     val name = queryParser.parseText(text).toOption.flatMap(_._1.flatMap(_.name).headOption)
     compiler.compile(text, name = name, untypedVars = Some(vars))
   }

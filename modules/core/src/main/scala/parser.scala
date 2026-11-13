@@ -24,6 +24,7 @@ import cats.parse.Parser.*
 import cats.parse.Rfc5234.{cr, crlf, digit, hexdig, lf}
 
 trait GraphQLParser {
+  def config: GraphQLParser.Config
   def parseText(text: String): Result[Ast.Document]
 }
 
@@ -31,6 +32,7 @@ object GraphQLParser {
   case class Config(
       maxSelectionDepth: Int,
       maxSelectionWidth: Int,
+      maxSelectionSize: Int,
       maxInputValueDepth: Int,
       maxListTypeDepth: Int,
       terseError: Boolean
@@ -40,6 +42,7 @@ object GraphQLParser {
     Config(
       maxSelectionDepth = 100,
       maxSelectionWidth = 1000,
+      maxSelectionSize = 100000,
       maxInputValueDepth = 5,
       maxListTypeDepth = 5,
       terseError = true
@@ -57,7 +60,7 @@ object GraphQLParser {
   import CommentedText._
   import Literals._
 
-  private final class Impl(config: Config) extends GraphQLParser {
+  private final class Impl(val config: Config) extends GraphQLParser {
     import config._
 
     def parseText(text: String): Result[Ast.Document] = {

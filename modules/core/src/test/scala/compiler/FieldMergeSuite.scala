@@ -533,7 +533,7 @@ final class FieldMergeSuite extends CatsEffectSuite {
       "Cannot merge fields named 'user' with different arguments"
 
     val compiled =
-      FieldMergeMapping.compiler.compile(query, untypedVars = Some(json"""{ "id1": "1" }"""))
+      FieldMergeMapping.compiler.compile(query, untypedVars = Some(json"""{ "id": "1" }"""))
 
     assertEquals(compiled, Result.failure(expected))
   }

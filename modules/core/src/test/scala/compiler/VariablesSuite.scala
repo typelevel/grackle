@@ -16,6 +16,7 @@
 package compiler
 
 import cats.data.NonEmptyChain
+import io.circe.Json
 import io.circe.literal._
 import munit.CatsEffectSuite
 
@@ -832,6 +833,76 @@ final class VariablesSuite extends CatsEffectSuite {
     assertEquals(compiled.map(_.query), Result.Failure(NonEmptyChain.one(expected)))
   }
 
+  def nestedNode(depth: Int): Json =
+    (1 until depth).foldLeft(Json.obj())((acc, _) => Json.obj("child" -> acc))
+
+  def problems(res: Result[Operation]): List[String] =
+    res.toProblems.toList.map(_.message)
+
+  test("variable value at the maximum input value depth") {
+    val query = "query ($n: Node) { tree(node: $n) }"
+    val limit = GraphQLParser.defaultConfig.maxInputValueDepth
+
+    assert(
+      VariablesMapping
+        .compiler
+        .compile(query, untypedVars = Some(Json.obj("n" -> nestedNode(limit))))
+        .hasValue)
+    assertEquals(
+      problems(
+        VariablesMapping
+          .compiler
+          .compile(query, untypedVars = Some(Json.obj("n" -> nestedNode(limit + 1))))),
+      List(s"Value of variable 'n' exceeds the maximum input value depth of $limit")
+    )
+  }
+
+  test("deeply nested variable value") {
+    val query = "query ($n: Node) { tree(node: $n) }"
+
+    assertEquals(
+      problems(
+        VariablesMapping
+          .compiler
+          .compile(query, untypedVars = Some(Json.obj("n" -> nestedNode(100000))))),
+      List("Value of variable 'n' exceeds the maximum input value depth of 5")
+    )
+  }
+
+  test("variable value in an error message is abbreviated") {
+    val query = "query ($l: [[Int]]) { nestedList(values: $l) }"
+
+    // A value deeper than its type is reported compactly
+    assertEquals(
+      problems(
+        VariablesMapping
+          .compiler
+          .compile(query, untypedVars = Some(json"""{ "l": [[[[1]]]] }"""))),
+      List("Expected Int found '[[1]]' for 'l' in variable values")
+    )
+
+    // A large value is truncated. The value found where an Int is expected is `[[1, ..., 10000]]`
+    val ints = Json.fromValues((1 to 10000).map(Json.fromInt))
+    val large = Json.obj("l" -> Json.arr(Json.arr(Json.arr(ints))))
+    val found = Json.arr(ints).noSpaces.take(100)
+    assertEquals(
+      problems(VariablesMapping.compiler.compile(query, untypedVars = Some(large))),
+      List(s"Expected Int found '$found...' for 'l' in variable values")
+    )
+  }
+
+  test("unknown input object fields in an error message are abbreviated") {
+    val query = "query ($pattern: Pattern!) { search(pattern: $pattern) { id } }"
+
+    val names = (1 to 1000).map(i => s"f$i")
+    val variables = Json.obj("pattern" -> Json.obj(names.map(_ -> Json.fromInt(1)): _*))
+    val unknown = names.map(n => s"'$n'").mkString(", ").take(100)
+    assertEquals(
+      problems(VariablesMapping.compiler.compile(query, untypedVars = Some(variables))),
+      List(
+        s"Unknown field(s) $unknown... in input object value of type Pattern in variable values")
+    )
+  }
 }
 
 object VariablesMapping extends TestMapping {
@@ -845,6 +916,8 @@ object VariablesMapping extends TestMapping {
         usersLoggedInByDate(date: Date!): [User!]!
         queryWithBigDecimal(input: BigDecimal!): [User!]!
         oneOfTest(input: OneOfInObj!): String!
+        tree(node: Node): String!
+        nestedList(values: [[Int]]): String!
       }
       type User {
         id: String!
@@ -857,6 +930,9 @@ object VariablesMapping extends TestMapping {
         id: ID
         userType: UserType
         date: Date
+      }
+      input Node {
+        child: Node
       }
       input OneOfInObj @oneOf {
         a: Int
