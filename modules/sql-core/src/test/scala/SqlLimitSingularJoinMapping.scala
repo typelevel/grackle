@@ -15,7 +15,6 @@
 
 package grackle.sql.test
 
-import grackle._
 import grackle.Query.{Binding, Limit, Unique}
 import grackle.QueryCompiler.{Elab, SelectElaborator}
 import grackle.Value.IntValue
