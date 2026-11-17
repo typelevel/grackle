@@ -67,6 +67,36 @@ final class ExtensionsSuite extends CatsEffectSuite {
     assertEquals(schema.schemaType.directives.map(_.name), List("Sch"))
   }
 
+  test("valid schema extension (implicit schema)") {
+    val schema = Schema(
+      """
+        type Query {
+          foo: Int
+        }
+
+        extend schema {
+          mutation: Bar
+          subscription: Baz
+        }
+
+        type Bar {
+          bar: Int
+        }
+
+        type Baz {
+          baz: Int
+        }
+      """
+    )
+
+    schema match {
+      case Result.Success(a) =>
+        assertEquals(a.mutationType.map(_.name), Some("Bar"))
+        assertEquals(a.subscriptionType.map(_.name), Some("Baz"))
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
   test("valid scalar extension") {
     val schema =
       schema"""
