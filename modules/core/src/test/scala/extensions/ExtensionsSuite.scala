@@ -534,6 +534,98 @@ final class ExtensionsSuite extends CatsEffectSuite {
     }
   }
 
+  test("invalid schema extension: undefined query root operation type") {
+    val schema = Schema(
+      """
+        type Query {
+          foo: Int
+        }
+
+        extend schema {
+          query: Undefined
+        }
+      """
+    )
+
+    val expected =
+      NonEmptyChain(
+        "Undefined type 'Undefined' specified as 'query' root operation type"
+      )
+
+    schema match {
+      case Result.Failure(a) =>
+        assertEquals(a.map(_.message), expected)
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
+  test("invalid schema extension: non-object query root operation type") {
+    val schema = Schema(
+      """
+        type Query {
+          foo: Int
+        }
+
+        extend schema {
+          query: Bar
+        }
+
+        scalar Bar
+      """
+    )
+
+    val expected =
+      NonEmptyChain(
+        "Type 'Bar' specified as 'query' root operation type is not an object type"
+      )
+
+    schema match {
+      case Result.Failure(a) =>
+        assertEquals(a.map(_.message), expected)
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
+  test("invalid schema extension: invalid mutation and subscription root operation types") {
+    val schema = Schema(
+      """
+        type Query {
+          foo: Int
+        }
+
+        type Mutation {
+          bar: Int
+        }
+
+        type Subscription {
+          baz: Int
+        }
+
+        extend schema {
+          mutation: Undefined
+        }
+
+        extend schema {
+          subscription: Baz
+        }
+
+        scalar Baz
+      """
+    )
+
+    val expected =
+      NonEmptyChain(
+        "Undefined type 'Undefined' specified as 'mutation' root operation type",
+        "Type 'Baz' specified as 'subscription' root operation type is not an object type"
+      )
+
+    schema match {
+      case Result.Failure(a) =>
+        assertEquals(a.map(_.message), expected)
+      case unexpected => fail(s"This was unexpected: $unexpected")
+    }
+  }
+
   test("invalid scalar extension") {
     val schema = Schema(
       """
