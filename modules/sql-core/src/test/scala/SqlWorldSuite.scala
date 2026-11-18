@@ -1947,4 +1947,104 @@ trait SqlWorldSuite extends CatsEffectSuite {
 
     assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "countries")))
   }
+
+  test("query with limit and subobjects") {
+    val query = """
+      query {
+        countries(limit: 2) {
+          name
+          cities {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "countries" : [
+            {
+              "name" : "Aruba",
+              "cities" : [
+                {
+                  "name" : "Oranjestad"
+                }
+              ]
+            },
+            {
+              "name" : "Afghanistan",
+              "cities" : [
+                {
+                  "name" : "Kabul"
+                },
+                {
+                  "name" : "Qandahar"
+                },
+                {
+                  "name" : "Herat"
+                },
+                {
+                  "name" : "Mazar-e-Sharif"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "countries")))
+  }
+
+  test("query with offset and subobjects") {
+    val query = """
+      query {
+        countries(offset: 238) {
+          name
+          cities {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "countries" : [
+            {
+              "name" : "Zimbabwe",
+              "cities" : [
+                {
+                  "name" : "Harare"
+                },
+                {
+                  "name" : "Bulawayo"
+                },
+                {
+                  "name" : "Chitungwiza"
+                },
+                {
+                  "name" : "Mount Darwin"
+                },
+                {
+                  "name" : "Mutare"
+                },
+                {
+                  "name" : "Gweru"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "countries")))
+  }
 }
