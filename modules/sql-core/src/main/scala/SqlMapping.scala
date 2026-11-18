@@ -3328,29 +3328,32 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               if (orderBy.isEmpty || initialKeyOrder) {
                 // Case 2) No order, or key columns at the start of the order
 
-                contextualiseWheres(baseRef, predJoins, pred0).flatMap { pred1 =>
-                  contextualiseOrders(baseRef, predJoins, oss).flatMap { oss0 =>
-                    val orders = oss0 ++ keyCols
-                      .diff(orderCols)
-                      .map(col => OrderSelection(col.derive(baseRef).toTerm, true, nullsHigh))
+                contextualiseWheres(baseRef, predJoins, pred0).map { pred1 =>
+                  val orders =
+                    (orderCols.take(keyCols.size) ++ keyCols.diff(orderCols)).map { col =>
+                      val ascending = orderCols
+                        .zip(oss)
+                        .collectFirst { case (c, os) if c == col => os.ascending }
+                        .getOrElse(true)
+                      OrderSelection(col.derive(baseRef).toTerm, ascending, nullsHigh)
+                    }
 
-                    val predQuery = SqlSelect(
-                      context = context,
-                      withs = Nil,
-                      table = baseRef,
-                      cols = predCols,
-                      joins = predJoins,
-                      wheres = (pred1 ++ nonNullKeys).distinct,
-                      orders = orders,
-                      offset = offset0,
-                      limit = limit0,
-                      distinct = predCols,
-                      oneToOne = true,
-                      predicate = true
-                    )
+                  val predQuery = SqlSelect(
+                    context = context,
+                    withs = Nil,
+                    table = baseRef,
+                    cols = predCols,
+                    joins = predJoins,
+                    wheres = (pred1 ++ nonNullKeys).distinct,
+                    orders = orders,
+                    offset = offset0,
+                    limit = limit0,
+                    distinct = predCols,
+                    oneToOne = true,
+                    predicate = true
+                  )
 
-                    mkPredSubquery(base0, predQuery).success
-                  }
+                  mkPredSubquery(base0, predQuery)
                 }
               } else {
                 // Case 3) There is an order orthogonal to the key
