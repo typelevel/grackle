@@ -275,3 +275,17 @@ final class WorldCompilerSuite extends DoobiePgDatabaseSuite with SqlWorldCompil
 
   def filterArg: String = "Linh%"
 }
+
+final class SelectedCollationSuite
+    extends DoobiePgDatabaseSuite
+    with SqlSelectedCollationSuite {
+  type Fragment = org.typelevel.doobie.Fragment
+
+  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO, Fragment])] =
+    DoobieMonitor
+      .statsMonitor[IO]
+      .map(mon =>
+        (
+          new DoobiePgTestMapping(transactor, mon) with SqlFilterOrderOffsetLimitMapping[IO],
+          mon))
+}
