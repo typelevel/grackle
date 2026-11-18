@@ -3487,8 +3487,8 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                 .map(fwiths =>
                   Fragments.const("WITH ") |+| fwiths.intercalate(Fragments.const(",")))
           table0 <- table.delateral.toDefFragment
-          cols0 <- cols.traverse(col =>
-            Aliased.liftR(selectedNeedsCollation(col)).flatMap(col.toDefFragment))
+          // Selected columns stay uncollated so joins on them can use the column's index
+          cols0 <- cols.traverse(_.toDefFragment(false))
           dcols <- distinct.traverse(col =>
             Aliased.liftR(selectedNeedsCollation(col)).flatMap(col.toRefFragment))
           dist = if (dcols.isEmpty) Fragments.empty else distinctOnToFragment(dcols)
