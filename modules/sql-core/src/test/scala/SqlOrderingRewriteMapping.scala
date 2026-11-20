@@ -99,7 +99,8 @@ trait SqlOrderingRewriteMapping[F[_]] extends SqlTestMapping[F] {
   def mkAfter(query: Query, after: Value): Result[Query] =
     after match {
       case AbsentValue | NullValue => query.success
-      case StringValue(code) => Filter(Gt(ItemType / "code", Const(code))(numeric), query).success
+      case StringValue(code) =>
+        Filter(Gt(ItemType / "code", Const(code))(numeric), query).success
       case other => Result.failure(s"Expected a code, found $other")
     }
 
