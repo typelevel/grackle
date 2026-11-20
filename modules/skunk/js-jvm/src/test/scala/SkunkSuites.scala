@@ -210,6 +210,10 @@ final class NullOrderingSuite extends SkunkDatabaseSuite with SqlNullOrderingSui
   lazy val mapping = new SkunkTestMapping(pool) with SqlNullOrderingMapping[IO]
 }
 
+final class OrderingRewriteSuite extends SkunkDatabaseSuite with SqlOrderingRewriteSuite {
+  lazy val mapping = new SkunkTestMapping(pool) with SqlOrderingRewriteMapping[IO]
+}
+
 final class Paging1Suite extends SkunkDatabaseSuite with SqlPaging1Suite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlPaging1Mapping[IO]
 }

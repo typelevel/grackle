@@ -121,6 +121,17 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
   def nullsHigh: Boolean
 
   /**
+   * An optional rewrite of references to the given column wherever its values are ordered:
+   * `ORDER BY`, `DISTINCT ON` and the `<`, `<=`, `>` and `>=` predicates, where it is applied
+   * to both operands.
+   *
+   * Lets a mapping order a column by an expression over it, eg. one whose textual encoding
+   * doesn't sort the way its Scala `Order` does. The rewrite must be injective and agree with
+   * the `Order` the column is sorted with in memory. A rewritten reference is not collated.
+   */
+  def orderingToFragment(col: SqlColumn): Option[Fragment => Fragment] = None
+
+  /**
    * The name of a SQL table, split into an optional schema qualifier and a local name.
    *
    * A table's raw SQL name plays two distinct roles depending on where it's used: a reference
@@ -2147,6 +2158,20 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           } yield Fragments.const("(") |+| fx |+| op |+| fy |+| Fragments.const(")")
         }
 
+        // An inequality compares both operands the way the column among them is ordered.
+        def orderingOp(x: Term[_], y: Term[_])(op: Fragment): Aliased[Fragment] = {
+          val e = encoder2(None, x, y)
+          val f: Fragment => Fragment =
+            List(x, y)
+              .collectFirst { case SqlColumnTerm(col) => orderingToFragment(col) }
+              .flatten
+              .getOrElse(identity)
+          for {
+            fx <- loop(x, e)
+            fy <- loop(y, e)
+          } yield Fragments.const("(") |+| f(fx) |+| op |+| f(fy) |+| Fragments.const(")")
+        }
+
         def binaryOp2(x: Term[_])(
             op: Fragment => Fragment,
             enc: Option[Encoder] = None): Aliased[Fragment] = {
@@ -2191,16 +2216,16 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
             binaryOp(x, y)(Fragments.const(" != "))
 
           case Lt(x, y) =>
-            binaryOp(x, y)(Fragments.const(" < "))
+            orderingOp(x, y)(Fragments.const(" < "))
 
           case LtEql(x, y) =>
-            binaryOp(x, y)(Fragments.const(" <= "))
+            orderingOp(x, y)(Fragments.const(" <= "))
 
           case Gt(x, y) =>
-            binaryOp(x, y)(Fragments.const(" > "))
+            orderingOp(x, y)(Fragments.const(" > "))
 
           case GtEql(x, y) =>
-            binaryOp(x, y)(Fragments.const(" >= "))
+            orderingOp(x, y)(Fragments.const(" >= "))
 
           case In(x, y) =>
             val e = encoder1(None, x)
@@ -2323,7 +2348,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               term match {
                 case SqlColumnTerm(col) =>
                   for {
-                    fc <- col.toRefFragment(Fragments.needsCollation(col.codec))
+                    fc <- orderingToFragment(col) match {
+                      case Some(f) => col.toRefFragment(false).map(f)
+                      case None => col.toRefFragment(Fragments.needsCollation(col.codec))
+                    }
                   } yield {
                     orderToFragment(fc, ascending, nullsLast)
                   }
@@ -2548,7 +2576,8 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
        * Does the given column need collation?
        */
       def selectedNeedsCollation(col: SqlColumn): Result[Boolean] = {
-        if (collateSelected && Fragments.needsCollation(col.codec))
+        if (collateSelected && Fragments.needsCollation(col.codec) &&
+          orderingToFragment(col).isEmpty)
           orderCols.map(_.contains(col))
         else false.success
       }
@@ -3489,8 +3518,15 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           table0 <- table.delateral.toDefFragment
           cols0 <- cols.traverse(col =>
             Aliased.liftR(selectedNeedsCollation(col)).flatMap(col.toDefFragment))
+          // `DISTINCT ON` expressions have to match the leading `ORDER BY` ones.
           dcols <- distinct.traverse(col =>
-            Aliased.liftR(selectedNeedsCollation(col)).flatMap(col.toRefFragment))
+            Aliased.liftR(orderCols.map(_.contains(col))).flatMap { ordered =>
+              orderingToFragment(col).filter(_ => ordered) match {
+                case Some(f) => col.toRefFragment(false).map(f)
+                case None =>
+                  Aliased.liftR(selectedNeedsCollation(col)).flatMap(col.toRefFragment)
+              }
+            })
           dist = if (dcols.isEmpty) Fragments.empty else distinctOnToFragment(dcols)
           joins0 <- joins.traverse(_.toFragment).map(_.combineAll)
           select = Fragments.const(s"SELECT ") |+| dist |+| cols0.intercalate(

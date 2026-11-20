@@ -211,6 +211,10 @@ final class NullOrderingSuite extends DoobieMySqlDatabaseSuite with SqlNullOrder
   lazy val mapping = new DoobieMySqlTestMapping(transactor) with SqlNullOrderingMapping[IO]
 }
 
+final class OrderingRewriteSuite extends DoobieMySqlDatabaseSuite with SqlOrderingRewriteSuite {
+  lazy val mapping = new DoobieMySqlTestMapping(transactor) with SqlOrderingRewriteMapping[IO]
+}
+
 final class NestedEffectsSuite extends DoobieMySqlDatabaseSuite with SqlNestedEffectsSuite {
   def mapping: IO[(CurrencyService[IO], Mapping[IO])] =
     for {

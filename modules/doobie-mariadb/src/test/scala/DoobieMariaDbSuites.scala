@@ -215,6 +215,12 @@ final class NullOrderingSuite extends DoobieMariaDbDatabaseSuite with SqlNullOrd
   lazy val mapping = new DoobieMariaDbTestMapping(transactor) with SqlNullOrderingMapping[IO]
 }
 
+final class OrderingRewriteSuite
+    extends DoobieMariaDbDatabaseSuite
+    with SqlOrderingRewriteSuite {
+  lazy val mapping = new DoobieMariaDbTestMapping(transactor) with SqlOrderingRewriteMapping[IO]
+}
+
 final class NestedEffectsSuite extends DoobieMariaDbDatabaseSuite with SqlNestedEffectsSuite {
   def mapping: IO[(CurrencyService[IO], Mapping[IO])] =
     for {
