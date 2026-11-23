@@ -199,6 +199,10 @@ final class NullOrderingSuite extends DoobieMSSqlDatabaseSuite with SqlNullOrder
   lazy val mapping = new DoobieMSSqlTestMapping(transactor) with SqlNullOrderingMapping[IO]
 }
 
+final class OrderingRewriteSuite extends DoobieMSSqlDatabaseSuite with SqlOrderingRewriteSuite {
+  lazy val mapping = new DoobieMSSqlTestMapping(transactor) with SqlOrderingRewriteMapping[IO]
+}
+
 final class Paging1Suite extends DoobieMSSqlDatabaseSuite with SqlPaging1Suite {
   lazy val mapping = new DoobieMSSqlTestMapping(transactor) with SqlPaging1Mapping[IO]
 }
