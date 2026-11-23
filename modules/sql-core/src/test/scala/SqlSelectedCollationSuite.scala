@@ -16,10 +16,13 @@
 package grackle.sql.test
 
 import cats.effect.IO
+import io.circe.Json
+import io.circe.literal._
 import munit.CatsEffectSuite
 
 import grackle._
 import grackle.sql.SqlStatsMonitor
+import grackle.test.GraphQLResponseTests.assertWeaklyEqual
 
 /**
  * Selected columns must not be collated: a collated key cannot be joined through the column's
@@ -54,21 +57,49 @@ trait SqlSelectedCollationSuite extends CatsEffectSuite {
         }
       """
 
-    val prog: IO[List[String]] =
+    val expected = json"""
+      {
+        "data" : {
+          "root" : [
+            {
+              "listA" : [
+                { "id" : "a0", "elemA" : "foo" },
+                { "id" : "a1", "elemA" : "bar" },
+                { "id" : "a2", "elemA" : "baz" },
+                { "id" : "a3", "elemA" : "quux" }
+              ],
+              "listB" : [
+                { "id" : "b0", "elemB" : 23 },
+                { "id" : "b1", "elemB" : 13 },
+                { "id" : "b2", "elemB" : 17 },
+                { "id" : "b3", "elemB" : 11 }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    val prog: IO[(Json, List[String])] =
       for {
         mm <- mapping
         (map, mon) = mm
-        _ <- map.compileAndRun(query)
+        res <- map.compileAndRun(query)
         ss <- mon.take
-      } yield ss.map(_.normalize.sql)
+      } yield (res, ss.map(_.normalize.sql))
 
-    prog.map { sqls =>
-      val sql = sqls.mkString(" ")
-      assert(distinctOn.findFirstIn(sql).isDefined, s"expected a collated DISTINCT ON in: $sql")
-      assert(orderBy.findFirstIn(sql).isDefined, s"expected a collated ORDER BY in: $sql")
+    prog.map {
+      case (res, sqls) =>
+        assertWeaklyEqual(res, expected)
 
-      val rest = orderBy.replaceAllIn(distinctOn.replaceAllIn(sql, ""), "")
-      assert(!rest.contains(collate), s"collated selected column in: $sql")
+        val sql = sqls.mkString(" ")
+        assert(
+          distinctOn.findFirstIn(sql).isDefined,
+          s"expected a collated DISTINCT ON in: $sql")
+        assert(orderBy.findFirstIn(sql).isDefined, s"expected a collated ORDER BY in: $sql")
+
+        val rest = orderBy.replaceAllIn(distinctOn.replaceAllIn(sql, ""), "")
+        assert(!rest.contains(collate), s"collated selected column in: $sql")
     }
   }
 }
