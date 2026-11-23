@@ -19,7 +19,7 @@ import cats.Order
 import cats.implicits._
 
 import grackle._
-import grackle.Predicate.{Const, Gt}
+import grackle.Predicate.{Const, Gt, Lt}
 import grackle.Query.{Binding, Filter, Limit, OrderBy, OrderSelection, OrderSelections}
 import grackle.QueryCompiler.{Elab, SelectElaborator}
 import grackle.Value.{AbsentValue, BooleanValue, IntValue, NullValue, StringValue}
@@ -36,6 +36,8 @@ trait SqlOrderingRewriteMapping[F[_]] extends SqlTestMapping[F] {
   object items extends TableDef("numbered_items") {
     val code = col("code", varchar)
     val groupId = col("group_id", nullable(int4))
+    // A number held as text too, but one that nothing rewrites.
+    val threshold = col("threshold", varchar)
   }
 
   override def orderingToFragment(col: SqlColumn): Option[Fragment => Fragment] =
@@ -48,7 +50,7 @@ trait SqlOrderingRewriteMapping[F[_]] extends SqlTestMapping[F] {
   val schema =
     schema"""
       type Query {
-        items(after: String, limit: Int, descending: Boolean): [Item!]!
+        items(after: String, limit: Int, descending: Boolean, aboveThreshold: Boolean): [Item!]!
         groups: [Group!]!
       }
       type Group {
@@ -84,7 +86,8 @@ trait SqlOrderingRewriteMapping[F[_]] extends SqlTestMapping[F] {
         tpe = ItemType,
         fieldMappings = List(
           SqlField("code", items.code, key = true),
-          SqlField("groupId", items.groupId, hidden = true)
+          SqlField("groupId", items.groupId, hidden = true),
+          SqlField("threshold", items.threshold, hidden = true)
         )
       )
     )
@@ -102,6 +105,15 @@ trait SqlOrderingRewriteMapping[F[_]] extends SqlTestMapping[F] {
       case StringValue(code) =>
         Filter(Gt(ItemType / "code", Const(code))(numeric), query).success
       case other => Result.failure(s"Expected a code, found $other")
+    }
+
+  // Only `code` is rewritten, and it is the second operand.
+  def mkAboveThreshold(query: Query, aboveThreshold: Value): Result[Query] =
+    aboveThreshold match {
+      case AbsentValue | NullValue | BooleanValue(false) => query.success
+      case BooleanValue(true) =>
+        Filter(Lt(ItemType / "threshold", ItemType / "code")(numeric), query).success
+      case other => Result.failure(s"Expected a boolean, found $other")
     }
 
   def mkAscending(descending: Value): Result[Boolean] =
@@ -124,12 +136,14 @@ trait SqlOrderingRewriteMapping[F[_]] extends SqlTestMapping[F] {
           List(
             Binding("after", after),
             Binding("limit", limit),
-            Binding("descending", descending))) =>
+            Binding("descending", descending),
+            Binding("aboveThreshold", aboveThreshold))) =>
       Elab.transformChild(child =>
         for {
           fc <- mkAfter(child, after)
+          tc <- mkAboveThreshold(fc, aboveThreshold)
           asc <- mkAscending(descending)
-          lc <- mkLimit(byCode(fc, asc), limit)
+          lc <- mkLimit(byCode(tc, asc), limit)
         } yield lc)
 
     case (QueryType, "groups", Nil) =>

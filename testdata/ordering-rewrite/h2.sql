@@ -4,5 +4,6 @@ CREATE TABLE numbered_groups (
 
 CREATE TABLE numbered_items (
   code VARCHAR PRIMARY KEY,
-  group_id INTEGER
+  group_id INTEGER,
+  threshold VARCHAR
 );

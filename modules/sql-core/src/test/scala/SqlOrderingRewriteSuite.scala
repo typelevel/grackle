@@ -35,7 +35,8 @@ import grackle.test.GraphQLResponseTests.assertWeaklyEqualIO
 trait SqlOrderingRewriteSuite extends CatsEffectSuite {
   def mapping: Mapping[IO]
 
-  // Fixture codes: 8, 9, 10, 11, 100, 1000 in group 1 and 7, 70, 700 in group 2.
+  // Fixture codes: 8, 9, 10, 11, 100, 1000 in group 1 and 7, 70, 700 in group 2. Each has a
+  // threshold, another number held as text.
   def codes(args: String): IO[List[String]] =
     mapping.compileAndRun(s"query { items$args { code } }").map { json =>
       json
@@ -63,6 +64,12 @@ trait SqlOrderingRewriteSuite extends CatsEffectSuite {
 
   test("an inequality against a value with more digits") {
     assertIO(codes("""(after: "100")"""), List("700", "1000"))
+  }
+
+  // The rewrite of `code` applies to the other operand too, a column that has none of its own.
+  // As text the items above their threshold would be 7, 8 and 11.
+  test("an inequality between two columns compares by number") {
+    assertIO(codes("(aboveThreshold: true)"), List("7", "10", "70", "100"))
   }
 
   // What a client paging by cursor does: the last code of a page is where the next one starts.

@@ -128,6 +128,8 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
    * Lets a mapping order a column by an expression over it, eg. one whose textual encoding
    * doesn't sort the way its Scala `Order` does. The rewrite must be injective and agree with
    * the `Order` the column is sorted with in memory. A rewritten reference is not collated.
+   *
+   * A predicate takes the rewrite of the first of its operands that has one.
    */
   def orderingToFragment(col: SqlColumn): Option[Fragment => Fragment] = None
 
@@ -2163,8 +2165,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
           val e = encoder2(None, x, y)
           val f: Fragment => Fragment =
             List(x, y)
-              .collectFirst { case SqlColumnTerm(col) => orderingToFragment(col) }
-              .flatten
+              .collectFirstSome {
+                case SqlColumnTerm(col) => orderingToFragment(col)
+                case _ => None
+              }
               .getOrElse(identity)
           for {
             fx <- loop(x, e)
