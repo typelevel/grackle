@@ -287,6 +287,16 @@ final class WorldCompilerSuite extends SkunkDatabaseSuite with SqlWorldCompilerS
   override def encodeArg(arg: String): Any = Encoded(arg)
 }
 
+final class SelectedCollationSuite extends SkunkDatabaseSuite with SqlSelectedCollationSuite {
+  type Fragment = skunk.AppliedFragment
+
+  def mapping: IO[(Mapping[IO], SqlStatsMonitor[IO, Fragment])] =
+    SkunkMonitor
+      .statsMonitor[IO]
+      .map(mon =>
+        (new SkunkTestMapping(pool, mon) with SqlFilterOrderOffsetLimitMapping[IO], mon))
+}
+
 // Needed to avoid an unused import warning in Scala 3.3.0+
 object Compat {
   type Dummy = TwiddleCompat
