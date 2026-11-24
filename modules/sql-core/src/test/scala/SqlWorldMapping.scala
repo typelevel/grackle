@@ -69,7 +69,7 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
         cities(namePattern: String = "%"): [City!]
         city(id: Int): City
         country(code: String): Country
-        countries(limit: Int = -1, offset: Int = 0, minPopulation: Int = 0, byPopulation: Boolean = false): [Country!]
+        countries(limit: Int = -1, offset: Int = 0, minPopulation: Int = 0, byPopulation: Boolean = false, order: [CountryOrder!]): [Country!]
         language(language: String): Language
         languages(languages: [String!]!): [Language!]!
         search(minPopulation: Int!, indepSince: Int!): [Country!]!
@@ -107,6 +107,11 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
         cities: [City!]!
         city(id: Int): City
         languages: [Language!]!
+      }
+      enum CountryOrder {
+        CODE
+        CODE_DESC
+        NAME
       }
     """
 
@@ -205,7 +210,9 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
             Binding("limit", IntValue(num)),
             Binding("offset", IntValue(off)),
             Binding("minPopulation", IntValue(min)),
-            Binding("byPopulation", BooleanValue(byPop)))) =>
+            Binding("byPopulation", BooleanValue(byPop)),
+            Binding("order", orderValue)
+          )) =>
       def limit(query: Query): Query =
         if (num < 1) query
         else Limit(num, query)
@@ -214,8 +221,22 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
         if (off < 1) query
         else Offset(off, query)
 
+      val explicitOrder: List[OrderSelection[_]] =
+        orderValue match {
+          case ListValue(elems) =>
+            elems.collect {
+              case EnumValue("CODE") => OrderSelection[String](CountryType / "code")
+              case EnumValue("CODE_DESC") =>
+                OrderSelection[String](CountryType / "code", ascending = false)
+              case EnumValue("NAME") => OrderSelection[String](CountryType / "name")
+            }
+          case _ => Nil
+        }
+
       def order(query: Query): Query = {
-        if (byPop)
+        if (explicitOrder.nonEmpty)
+          OrderBy(OrderSelections(explicitOrder), query)
+        else if (byPop)
           OrderBy(OrderSelections(List(OrderSelection[Int](CountryType / "population"))), query)
         else if (num > 0 || off > 0)
           OrderBy(OrderSelections(List(OrderSelection[String](CountryType / "code"))), query)

@@ -3335,7 +3335,10 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                         .zip(oss)
                         .collectFirst { case (c, os) if c == col => os.ascending }
                         .getOrElse(true)
-                      OrderSelection(col.derive(baseRef).toTerm, ascending, nullsHigh)
+                      OrderSelection(
+                        col.derive(baseRef).toTerm,
+                        ascending,
+                        ascending == nullsHigh)
                     }
 
                   val predQuery = SqlSelect(
