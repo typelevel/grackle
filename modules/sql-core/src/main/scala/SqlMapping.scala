@@ -2832,7 +2832,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
            else Nil) ++ pred
 
         val (oss, orderJoins) =
-          orderBy.map { case (oss, joins) => (oss, joins) }.getOrElse((Nil, Nil))
+          orderBy
+            .map { case (oss, joins) => (oss.distinctBy(_.term), joins) }
+            .getOrElse((Nil, Nil))
 
         // Columns inside a nested select that `SqlSelect.nest` could not flatten are out of scope
         // here. `viaSubquery` gives the column of the joined subquery that projects such a

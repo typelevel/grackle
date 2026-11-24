@@ -15,6 +15,9 @@
 
 package grackle.sql.test
 
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
 import grackle.syntax._
 
 trait SqlCompositeKeyMapping[F[_]] extends SqlTestMapping[F] {
@@ -33,7 +36,11 @@ trait SqlCompositeKeyMapping[F[_]] extends SqlTestMapping[F] {
   val schema =
     schema"""
       type Query {
-        parents: [Parent!]!
+        parents(limit: Int, order: [ParentOrder!]): [Parent!]!
+      }
+      enum ParentOrder {
+        KEY1
+        KEY2
       }
       type Parent {
         key1: Int!
@@ -81,4 +88,25 @@ trait SqlCompositeKeyMapping[F[_]] extends SqlTestMapping[F] {
         )
       )
     )
+
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "parents", List(Binding("limit", limit), Binding("order", order))) =>
+      val oss: List[OrderSelection[_]] =
+        order match {
+          case ListValue(elems) =>
+            elems.collect {
+              case EnumValue("KEY1") => OrderSelection[Int](ParentType / "key1")
+              case EnumValue("KEY2") => OrderSelection[String](ParentType / "key2")
+            }
+          case _ => Nil
+        }
+
+      Elab.transformChild { child =>
+        val ordered = if (oss.isEmpty) child else OrderBy(OrderSelections(oss), child)
+        limit match {
+          case IntValue(num) if num > 0 => Limit(num, ordered)
+          case _ => ordered
+        }
+      }
+  }
 }
