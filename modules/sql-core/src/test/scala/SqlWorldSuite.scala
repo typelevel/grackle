@@ -2137,4 +2137,45 @@ trait SqlWorldSuite extends CatsEffectSuite {
 
     assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "countries")))
   }
+
+  test("query with limit and subobjects ordered by a non-key column then the key") {
+    val query = """
+      query {
+        countries(limit: 2, order: [NAME, CODE]) {
+          name
+          cities {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "countries" : [
+            {
+              "name" : "Afghanistan",
+              "cities" : [
+                { "name" : "Kabul" },
+                { "name" : "Qandahar" },
+                { "name" : "Herat" },
+                { "name" : "Mazar-e-Sharif" }
+              ]
+            },
+            {
+              "name" : "Albania",
+              "cities" : [
+                { "name" : "Tirana" }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "countries")))
+  }
 }

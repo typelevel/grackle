@@ -3365,11 +3365,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                     oss0
                       .filterA(os => columnForSqlTerm(context, os.term).map(keyCols.contains))
                       .flatMap { nonKeyOrders =>
-                        val distOrders = keyCols.map(col =>
-                          OrderSelection(
-                            col.derive(baseRef).toTerm,
-                            true,
-                            nullsHigh)) ++ nonKeyOrders
+                        val keyOrders = keyCols.map(col =>
+                          OrderSelection(col.derive(baseRef).toTerm, true, nullsHigh))
+                        val distOrders = keyOrders ++ nonKeyOrders
                         val distOrderCols =
                           oss0
                             .map(_.term)
@@ -3385,7 +3383,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                           cols = predCols ++ distOrderCols.map(_._2),
                           joins = predJoins,
                           wheres = (pred1 ++ nonNullKeys).distinct,
-                          orders = distOrders,
+                          orders = keyOrders,
                           offset = None,
                           limit = None,
                           distinct = predCols,
