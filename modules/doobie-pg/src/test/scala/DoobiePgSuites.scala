@@ -205,6 +205,10 @@ final class NullOrderingSuite extends DoobiePgDatabaseSuite with SqlNullOrdering
   lazy val mapping = new DoobiePgTestMapping(transactor) with SqlNullOrderingMapping[IO]
 }
 
+final class OrderingRewriteSuite extends DoobiePgDatabaseSuite with SqlOrderingRewriteSuite {
+  lazy val mapping = new DoobiePgTestMapping(transactor) with SqlOrderingRewriteMapping[IO]
+}
+
 final class Paging1Suite extends DoobiePgDatabaseSuite with SqlPaging1Suite {
   lazy val mapping = new DoobiePgTestMapping(transactor) with SqlPaging1Mapping[IO]
 }
