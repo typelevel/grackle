@@ -6,7 +6,7 @@ addSbtPlugin("com.github.sbt" % "sbt-jmh" % "0.4.9")
 addSbtPlugin("nl.zolotko.sbt" % "sbt-jfr" % "0.0.1")
 addSbtPlugin("com.eed3si9n" % "sbt-buildinfo" % "0.14.0")
 addSbtPlugin("org.scala-js" % "sbt-scalajs" % "1.23.0")
-addSbtPlugin("org.scala-native" % "sbt-scala-native" % "0.5.12")
+addSbtPlugin("org.scala-native" % "sbt-scala-native" % "0.5.13")
 addSbtPlugin("org.scoverage" % "sbt-scoverage" % "2.4.4")
 addSbtPlugin("com.github.sbt" % "sbt-unidoc" % "0.6.1")
 
