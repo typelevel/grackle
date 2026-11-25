@@ -97,4 +97,49 @@ trait SqlCompositeKeySuite extends CatsEffectSuite {
 
     assertWeaklyEqualIO(res, expected)
   }
+
+  test("limited query with subobjects ordered by a repeated key column") {
+    val query = """
+      query {
+        parents(limit: 2, order: [KEY1, KEY1, KEY2]) {
+          key1
+          key2
+          children {
+            id
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "parents" : [
+            {
+              "key1" : 1,
+              "key2" : "bar",
+              "children" : [
+                {
+                  "id" : 2
+                }
+              ]
+            },
+            {
+              "key1" : 1,
+              "key2" : "foo",
+              "children" : [
+                {
+                  "id" : 1
+                }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "parents")))
+  }
 }

@@ -1947,4 +1947,235 @@ trait SqlWorldSuite extends CatsEffectSuite {
 
     assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "countries")))
   }
+
+  test("query with limit and subobjects") {
+    val query = """
+      query {
+        countries(limit: 2) {
+          name
+          cities {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "countries" : [
+            {
+              "name" : "Aruba",
+              "cities" : [
+                {
+                  "name" : "Oranjestad"
+                }
+              ]
+            },
+            {
+              "name" : "Afghanistan",
+              "cities" : [
+                {
+                  "name" : "Kabul"
+                },
+                {
+                  "name" : "Qandahar"
+                },
+                {
+                  "name" : "Herat"
+                },
+                {
+                  "name" : "Mazar-e-Sharif"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "countries")))
+  }
+
+  test("query with offset and subobjects") {
+    val query = """
+      query {
+        countries(offset: 238) {
+          name
+          cities {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "countries" : [
+            {
+              "name" : "Zimbabwe",
+              "cities" : [
+                {
+                  "name" : "Harare"
+                },
+                {
+                  "name" : "Bulawayo"
+                },
+                {
+                  "name" : "Chitungwiza"
+                },
+                {
+                  "name" : "Mount Darwin"
+                },
+                {
+                  "name" : "Mutare"
+                },
+                {
+                  "name" : "Gweru"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "countries")))
+  }
+
+  test("query with limit and subobjects under a descending key order") {
+    val query = """
+      query {
+        countries(limit: 2, order: [CODE_DESC]) {
+          name
+          cities {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "countries" : [
+            {
+              "name" : "Zimbabwe",
+              "cities" : [
+                { "name" : "Harare" },
+                { "name" : "Bulawayo" },
+                { "name" : "Chitungwiza" },
+                { "name" : "Mount Darwin" },
+                { "name" : "Mutare" },
+                { "name" : "Gweru" }
+              ]
+            },
+            {
+              "name" : "Zambia",
+              "cities" : [
+                { "name" : "Lusaka" },
+                { "name" : "Ndola" },
+                { "name" : "Kitwe" },
+                { "name" : "Kabwe" },
+                { "name" : "Chingola" },
+                { "name" : "Mufulira" },
+                { "name" : "Luanshya" }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "countries")))
+  }
+
+  test("query with offset and subobjects under a descending key order") {
+    val query = """
+      query {
+        countries(offset: 237, order: [CODE_DESC]) {
+          name
+          cities {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "countries" : [
+            {
+              "name" : "Afghanistan",
+              "cities" : [
+                { "name" : "Kabul" },
+                { "name" : "Qandahar" },
+                { "name" : "Herat" },
+                { "name" : "Mazar-e-Sharif" }
+              ]
+            },
+            {
+              "name" : "Aruba",
+              "cities" : [
+                { "name" : "Oranjestad" }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "countries")))
+  }
+
+  test("query with limit and subobjects ordered by a non-key column then the key") {
+    val query = """
+      query {
+        countries(limit: 2, order: [NAME, CODE]) {
+          name
+          cities {
+            name
+          }
+        }
+      }
+    """
+
+    val expected = json"""
+      {
+        "data" : {
+          "countries" : [
+            {
+              "name" : "Afghanistan",
+              "cities" : [
+                { "name" : "Kabul" },
+                { "name" : "Qandahar" },
+                { "name" : "Herat" },
+                { "name" : "Mazar-e-Sharif" }
+              ]
+            },
+            {
+              "name" : "Albania",
+              "cities" : [
+                { "name" : "Tirana" }
+              ]
+            }
+          ]
+        }
+      }
+    """
+
+    val res = mapping.compileAndRun(query)
+
+    assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "countries")))
+  }
 }

@@ -2865,7 +2865,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
            else Nil) ++ pred
 
         val (oss, orderJoins) =
-          orderBy.map { case (oss, joins) => (oss, joins) }.getOrElse((Nil, Nil))
+          orderBy
+            .map { case (oss, joins) => (oss.distinctBy(_.term), joins) }
+            .getOrElse((Nil, Nil))
 
         // Columns inside a nested select that `SqlSelect.nest` could not flatten are out of scope
         // here. `viaSubquery` gives the column of the joined subquery that projects such a
@@ -3361,29 +3363,35 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
               if (orderBy.isEmpty || initialKeyOrder) {
                 // Case 2) No order, or key columns at the start of the order
 
-                contextualiseWheres(baseRef, predJoins, pred0).flatMap { pred1 =>
-                  contextualiseOrders(baseRef, predJoins, oss).flatMap { oss0 =>
-                    val orders = oss0 ++ keyCols
-                      .diff(orderCols)
-                      .map(col => OrderSelection(col.derive(baseRef).toTerm, true, nullsHigh))
+                contextualiseWheres(baseRef, predJoins, pred0).map { pred1 =>
+                  val orders =
+                    (orderCols.take(keyCols.size) ++ keyCols.diff(orderCols)).map { col =>
+                      val ascending = orderCols
+                        .zip(oss)
+                        .collectFirst { case (c, os) if c == col => os.ascending }
+                        .getOrElse(true)
+                      OrderSelection(
+                        col.derive(baseRef).toTerm,
+                        ascending,
+                        ascending == nullsHigh)
+                    }
 
-                    val predQuery = SqlSelect(
-                      context = context,
-                      withs = Nil,
-                      table = baseRef,
-                      cols = predCols,
-                      joins = predJoins,
-                      wheres = (pred1 ++ nonNullKeys).distinct,
-                      orders = orders,
-                      offset = offset0,
-                      limit = limit0,
-                      distinct = predCols,
-                      oneToOne = true,
-                      predicate = true
-                    )
+                  val predQuery = SqlSelect(
+                    context = context,
+                    withs = Nil,
+                    table = baseRef,
+                    cols = predCols,
+                    joins = predJoins,
+                    wheres = (pred1 ++ nonNullKeys).distinct,
+                    orders = orders,
+                    offset = offset0,
+                    limit = limit0,
+                    distinct = predCols,
+                    oneToOne = true,
+                    predicate = true
+                  )
 
-                    mkPredSubquery(base0, predQuery).success
-                  }
+                  mkPredSubquery(base0, predQuery)
                 }
               } else {
                 // Case 3) There is an order orthogonal to the key
@@ -3392,11 +3400,9 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                     oss0
                       .filterA(os => columnForSqlTerm(context, os.term).map(keyCols.contains))
                       .flatMap { nonKeyOrders =>
-                        val distOrders = keyCols.map(col =>
-                          OrderSelection(
-                            col.derive(baseRef).toTerm,
-                            true,
-                            nullsHigh)) ++ nonKeyOrders
+                        val keyOrders = keyCols.map(col =>
+                          OrderSelection(col.derive(baseRef).toTerm, true, nullsHigh))
+                        val distOrders = keyOrders ++ nonKeyOrders
                         val distOrderCols =
                           oss0
                             .map(_.term)
@@ -3412,7 +3418,7 @@ trait SqlMappingLike[F[_]] extends CirceMappingLike[F] with SqlModule[F] { self 
                           cols = predCols ++ distOrderCols.map(_._2),
                           joins = predJoins,
                           wheres = (pred1 ++ nonNullKeys).distinct,
-                          orders = distOrders,
+                          orders = keyOrders,
                           offset = None,
                           limit = None,
                           distinct = predCols,
