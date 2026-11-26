@@ -26,6 +26,10 @@ in the `Elab` monad. `Elab` gives phases access to the schema, the current conte
 definitions, and allows compilation to be aborted with one or more GraphQL errors via `Elab.failure`. A phase which
 fails prevents the query from executing at all — the client receives an error response with no data.
 
+`transform` is not abstract: the inherited implementation walks the whole query algebra, maintaining the `Elab`
+context as it descends, so a phase overrides it for the node types it cares about and delegates the rest to
+`super.transform`.
+
 This makes phases a natural place to enforce global policies on incoming queries. Grackle provides one such policy
 phase out of the box: `QuerySizeValidator`.
 
@@ -45,7 +49,7 @@ _Depth_ is the number of nested selection levels in the query, and _width_ is th
 selected. Both are computed after fragment spreads have been resolved, so a query cannot evade the limits by
 factoring its selections into fragments.
 
-For example, with the Star Wars model from the previous chapter and the limits above, the query,
+For example, with the [Star Wars model](../tutorial/in-memory-model.md) and the limits above, the query,
 
 ```yaml
 query {
@@ -84,8 +88,11 @@ exceeding both limits at once is reported as `"Query is too complex"`.
 
 ## Limitations
 
-Depth and width are syntactic measures: they are computed from the query text alone and know nothing about the size
+Depth and width are structural measures: they are computed from the query's shape and know nothing about the size
 of the underlying data. In particular, width does not account for list sizes — a field yielding a thousand elements
 contributes to the width just once. `QuerySizeValidator` is therefore a coarse first line of defence rather than a
 complete cost model. Guarding against expensive list expansions requires taking field cardinalities and arguments
 into account, which can be implemented as a custom phase following the same pattern.
+
+Introspection is not measured at all: an `Introspect` node contributes nothing to either figure, so a deeply
+nested `__schema` query passes whichever limits are configured.
