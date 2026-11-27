@@ -23,12 +23,12 @@ import grackle.syntax._
  * Conformance test cases for section 5.2, Operations.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Validation.Operations
+ *   https://spec.graphql.org/September2026/#sec-Validation.Operations
  */
 final class ValidationOperationsSuite extends ValidationSuite {
 
   // 5.2.1.1 Operation Type Existence
-  // https://spec.graphql.org/September2025/#sec-Operation-Type-Existence
+  // https://spec.graphql.org/September2026/#sec-Operation-Type-Existence
 
   validSchema("a schema which defines a query root operation type only")("""
     type Query {
@@ -49,7 +49,7 @@ final class ValidationOperationsSuite extends ValidationSuite {
   """)
 
   // 5.2.2.1 Operation Name Uniqueness
-  // https://spec.graphql.org/September2025/#sec-Operation-Name-Uniqueness
+  // https://spec.graphql.org/September2026/#sec-Operation-Name-Uniqueness
 
   validQuery("two operations can have different names")("""
     query getDogName {
@@ -98,7 +98,7 @@ final class ValidationOperationsSuite extends ValidationSuite {
   """)
 
   // 5.2.3.1 Lone Anonymous Operation
-  // https://spec.graphql.org/September2025/#sec-Lone-Anonymous-Operation
+  // https://spec.graphql.org/September2026/#sec-Lone-Anonymous-Operation
 
   validQuery("a document can hold one anonymous operation")("""
     {
@@ -125,7 +125,7 @@ final class ValidationOperationsSuite extends ValidationSuite {
   """)
 
   // 5.2.4.1 Single Root Field
-  // https://spec.graphql.org/September2025/#sec-Single-Root-Field
+  // https://spec.graphql.org/September2026/#sec-Single-Root-Field
 
   validQuery("a subscription operation can select one root field")("""
     subscription sub {

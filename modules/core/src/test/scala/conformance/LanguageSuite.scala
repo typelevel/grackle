@@ -26,12 +26,12 @@ import io.circe.literal._
  * [[LanguageMappings.Site]] and asserts that response.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Language
+ *   https://spec.graphql.org/September2026/#sec-Language
  */
 final class LanguageSuite extends ConformanceSuite {
 
   // 1 Overview
-  // https://spec.graphql.org/September2025/#sec-Overview
+  // https://spec.graphql.org/September2026/#sec-Overview
 
   yields("a request selects a field of an object and a field of that object", Site)("""
     {
@@ -50,7 +50,7 @@ final class LanguageSuite extends ConformanceSuite {
   """)
 
   // 2.2 Descriptions
-  // https://spec.graphql.org/September2025/#sec-Descriptions
+  // https://spec.graphql.org/September2026/#sec-Descriptions
 
   parses("an operation, a variable and a fragment can carry a description")("""
     '''
@@ -83,7 +83,7 @@ final class LanguageSuite extends ConformanceSuite {
   """)
 
   // 2.4 Operations
-  // https://spec.graphql.org/September2025/#sec-Language.Operations
+  // https://spec.graphql.org/September2026/#sec-Language.Operations
 
   parses("a mutation operation can carry a description")("""
     '''
@@ -106,7 +106,7 @@ final class LanguageSuite extends ConformanceSuite {
   """)
 
   // 2.5 Selection Sets
-  // https://spec.graphql.org/September2025/#sec-Selection-Sets
+  // https://spec.graphql.org/September2026/#sec-Selection-Sets
 
   parses("a selection set requests a set of information")("""
     {
@@ -117,7 +117,7 @@ final class LanguageSuite extends ConformanceSuite {
   """)
 
   // 2.6 Fields
-  // https://spec.graphql.org/September2025/#sec-Language.Fields
+  // https://spec.graphql.org/September2026/#sec-Language.Fields
 
   parses("a field can select a nested selection set")("""
     {
@@ -156,7 +156,7 @@ final class LanguageSuite extends ConformanceSuite {
   """)
 
   // 2.7 Arguments
-  // https://spec.graphql.org/September2025/#sec-Language.Arguments
+  // https://spec.graphql.org/September2026/#sec-Language.Arguments
 
   parses("an argument names a value")("""
     {
@@ -191,7 +191,7 @@ final class LanguageSuite extends ConformanceSuite {
   """)
 
   // 2.8 Field Alias
-  // https://spec.graphql.org/September2025/#sec-Field-Alias
+  // https://spec.graphql.org/September2026/#sec-Field-Alias
 
   yields("an alias renames the response key of a field", Site)("""
     {
@@ -234,7 +234,7 @@ final class LanguageSuite extends ConformanceSuite {
   """)
 
   // 2.9 Fragments
-  // https://spec.graphql.org/September2025/#sec-Language.Fragments
+  // https://spec.graphql.org/September2026/#sec-Language.Fragments
 
   parses("a query which repeats a selection set")("""
     query noFragments {
@@ -253,20 +253,22 @@ final class LanguageSuite extends ConformanceSuite {
     }
   """)
 
-  parses("a fragment factors out a repeated selection set")("""
+  // The specification writes the operation and the fragment below as two example blocks. The
+  // operation spreads the fragment, so this test case keeps the two blocks in one document.
+  parses("a fragment declares the fields that one component needs")("""
     query withFragments {
       user(id: 4) {
         friends(first: 10) {
-          ...friendFields
+          ...friendProfile
         }
         mutualFriends(first: 10) {
-          ...friendFields
+          ...friendProfile
         }
       }
     }
 
-    "Common fields for a user's friends."
-    fragment friendFields on User {
+    "Fields required to render a friend's profile"
+    fragment friendProfile on User {
       id
       name
       profilePic(size: 50)
@@ -297,7 +299,7 @@ final class LanguageSuite extends ConformanceSuite {
   """)
 
   // 2.9.1 Type Conditions
-  // https://spec.graphql.org/September2025/#sec-Type-Conditions
+  // https://spec.graphql.org/September2026/#sec-Type-Conditions
 
   yields("a fragment declares the type it applies to", Site)("""
     query FragmentTyping {
@@ -337,7 +339,7 @@ final class LanguageSuite extends ConformanceSuite {
   """)
 
   // 2.9.2 Inline Fragments
-  // https://spec.graphql.org/September2025/#sec-Inline-Fragments
+  // https://spec.graphql.org/September2026/#sec-Inline-Fragments
 
   parses("an inline fragment applies a type condition without a fragment definition")("""
     query inlineFragmentTyping {
@@ -372,7 +374,7 @@ final class LanguageSuite extends ConformanceSuite {
   """)
 
   // 2.10.4 String Value
-  // https://spec.graphql.org/September2025/#sec-String-Value
+  // https://spec.graphql.org/September2026/#sec-String-Value
 
   parses("a block string spans lines and strips the common indentation")("""
     mutation {
@@ -393,7 +395,7 @@ final class LanguageSuite extends ConformanceSuite {
   """)
 
   // 2.10.5 Null Value
-  // https://spec.graphql.org/September2025/#sec-Null-Value
+  // https://spec.graphql.org/September2026/#sec-Null-Value
 
   parses("an explicit null argument differs from an absent argument")("""
     {
@@ -403,7 +405,7 @@ final class LanguageSuite extends ConformanceSuite {
   """)
 
   // 2.10.8 Input Object Values
-  // https://spec.graphql.org/September2025/#sec-Input-Object-Values
+  // https://spec.graphql.org/September2026/#sec-Input-Object-Values
 
   parses("input object fields in one order")("""
     {
@@ -418,7 +420,7 @@ final class LanguageSuite extends ConformanceSuite {
   """)
 
   // 2.11 Variables
-  // https://spec.graphql.org/September2025/#sec-Language.Variables
+  // https://spec.graphql.org/September2026/#sec-Language.Variables
 
   parses("a variable definition can carry a description")("""
     query getZuckProfile(
@@ -460,7 +462,7 @@ final class LanguageSuite extends ConformanceSuite {
   """)
 
   // 2.13 Directives
-  // https://spec.graphql.org/September2025/#sec-Language.Directives
+  // https://spec.graphql.org/September2026/#sec-Language.Directives
 
   parses("directives on a type definition in one order")("""
     type Person

@@ -24,12 +24,12 @@ import grackle.syntax._
  * not define. Each test case supplies a schema which does define it.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Validation.Directives
+ *   https://spec.graphql.org/September2026/#sec-Validation.Directives
  */
 final class ValidationDirectivesSuite extends ValidationSuite {
 
   // 5.7.2 Directives Are in Valid Locations
-  // https://spec.graphql.org/September2025/#sec-Directives-Are-in-Valid-Locations
+  // https://spec.graphql.org/September2026/#sec-Directives-Are-in-Valid-Locations
 
   invalidQuery("@skip must not appear on an operation definition", LeafFieldSchema)("""
     query @skip(if: $foo) {
@@ -38,7 +38,7 @@ final class ValidationDirectivesSuite extends ValidationSuite {
   """)
 
   // 5.7.3 Directives Are Unique per Location
-  // https://spec.graphql.org/September2025/#sec-Directives-Are-Unique-per-Location
+  // https://spec.graphql.org/September2026/#sec-Directives-Are-Unique-per-Location
 
   invalidQuery("one directive must not appear twice at one location", LeafFieldSchema)("""
     query ($foo: Boolean = true, $bar: Boolean = false) {

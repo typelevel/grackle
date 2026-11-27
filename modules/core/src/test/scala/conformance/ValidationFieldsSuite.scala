@@ -30,12 +30,12 @@ import io.circe.literal._
  * while one fragment fails.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Validation.Fields
+ *   https://spec.graphql.org/September2026/#sec-Validation.Fields
  */
 final class ValidationFieldsSuite extends ValidationSuite {
 
   // 5.3.1 Field Selections
-  // https://spec.graphql.org/September2025/#sec-Field-Selections
+  // https://spec.graphql.org/September2026/#sec-Field-Selections
 
   invalidQuery("a field which the type of the selection set does not define")("""
     query driver {
@@ -105,7 +105,7 @@ final class ValidationFieldsSuite extends ValidationSuite {
   """)
 
   // 5.3.2 Field Selection Merging
-  // https://spec.graphql.org/September2025/#sec-Field-Selection-Merging
+  // https://spec.graphql.org/September2026/#sec-Field-Selection-Merging
 
   validQuery("two identical fields merge")("""
     query driver {
@@ -246,7 +246,7 @@ final class ValidationFieldsSuite extends ValidationSuite {
   """)
 
   // 5.3.3 Leaf Field Selections
-  // https://spec.graphql.org/September2025/#sec-Leaf-Field-Selections
+  // https://spec.graphql.org/September2026/#sec-Leaf-Field-Selections
 
   validQuery("a field of a scalar type takes no selection set")("""
     query driver {
@@ -267,6 +267,16 @@ final class ValidationFieldsSuite extends ValidationSuite {
       barkVolume {
         sinceWhen
       }
+    }
+  """)
+
+  invalidQuery("a field of a scalar type must not take an empty selection set".fail)("""
+    query driver {
+      dog { ...scalarEmptySelectionsNotAllowedOnInt }
+    }
+
+    fragment scalarEmptySelectionsNotAllowedOnInt on Dog {
+      barkVolume {}
     }
   """)
 
@@ -296,6 +306,12 @@ final class ValidationFieldsSuite extends ValidationSuite {
       human {
         name
       }
+    }
+  """)
+
+  validQuery("a field of object type can take an empty selection set".fail)("""
+    query directQueryOnObjectWithEmptySelection {
+      human {}
     }
   """)
 }

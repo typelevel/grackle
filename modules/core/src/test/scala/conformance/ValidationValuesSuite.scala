@@ -26,12 +26,12 @@ import grackle.syntax._
  * adds a driver operation which spreads the fragments, as [[ValidationFieldsSuite]] describes.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Values
+ *   https://spec.graphql.org/September2026/#sec-Values
  */
 final class ValidationValuesSuite extends ValidationSuite {
 
   // 5.6.1 Values of Correct Type
-  // https://spec.graphql.org/September2025/#sec-Values-of-Correct-Type
+  // https://spec.graphql.org/September2026/#sec-Values-of-Correct-Type
 
   // The specification writes the example and the counter-example of this rule as one block each.
   // Each block holds several operations and fragments, and each one of those is a separate case.
@@ -125,7 +125,7 @@ final class ValidationValuesSuite extends ValidationSuite {
   """)
 
   // 5.6.2 Input Object Field Names
-  // https://spec.graphql.org/September2025/#sec-Input-Object-Field-Names
+  // https://spec.graphql.org/September2026/#sec-Input-Object-Field-Names
 
   validQuery("an input object field name must be defined on the input object type")("""
     {
@@ -144,7 +144,7 @@ final class ValidationValuesSuite extends ValidationSuite {
   """)
 
   // 5.6.3 Input Object Field Uniqueness
-  // https://spec.graphql.org/September2025/#sec-Input-Object-Field-Uniqueness
+  // https://spec.graphql.org/September2026/#sec-Input-Object-Field-Uniqueness
 
   invalidQuery("an input object must not name one field twice".fail, FieldArgSchema)("""
     {

@@ -24,7 +24,7 @@ import grackle.syntax._
  * Mappings for the examples of section 3, Type System.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Type-System
+ *   https://spec.graphql.org/September2026/#sec-Type-System
  */
 object TypeSystemMappings {
 

@@ -32,7 +32,7 @@ import grackle.syntax._
  * no data, so each mapping here chooses values which the response assertions then quote.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Execution
+ *   https://spec.graphql.org/September2026/#sec-Execution
  */
 object ExecutionMappings {
 

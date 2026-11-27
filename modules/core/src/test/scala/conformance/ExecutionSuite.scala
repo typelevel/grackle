@@ -26,12 +26,12 @@ import io.circe.literal._
  * specification states the outcome in prose, the assertion follows that prose.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Execution
+ *   https://spec.graphql.org/September2026/#sec-Execution
  */
 final class ExecutionSuite extends ConformanceSuite {
 
   // 6.2.3 Subscription
-  // https://spec.graphql.org/September2025/#sec-Subscription
+  // https://spec.graphql.org/September2026/#sec-Subscription
 
   test("a subscription publishes one response per event") {
     val responses =
@@ -64,7 +64,7 @@ final class ExecutionSuite extends ConformanceSuite {
   }
 
   // 6.3.2 Field Collection
-  // https://spec.graphql.org/September2025/#sec-Field-Collection
+  // https://spec.graphql.org/September2026/#sec-Field-Collection
 
   /**
    * The document of section 6.3.2, which the specification states twice to state two outcomes.
@@ -126,7 +126,7 @@ final class ExecutionSuite extends ConformanceSuite {
   }
 
   // 6.3.4 Normal and Serial Execution
-  // https://spec.graphql.org/September2025/#sec-Normal-and-Serial-Execution
+  // https://spec.graphql.org/September2026/#sec-Normal-and-Serial-Execution
 
   test("the root fields of a query run in any order, and the response holds both") {
     val prog =
