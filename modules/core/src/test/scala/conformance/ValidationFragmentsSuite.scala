@@ -23,12 +23,12 @@ package conformance
  * for the reason which [[ValidationFieldsSuite]] gives.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Validation.Fragments
+ *   https://spec.graphql.org/September2026/#sec-Validation.Fragments
  */
 final class ValidationFragmentsSuite extends ValidationSuite {
 
   // 5.5.1.1 Fragment Name Uniqueness
-  // https://spec.graphql.org/September2025/#sec-Fragment-Name-Uniqueness
+  // https://spec.graphql.org/September2026/#sec-Fragment-Name-Uniqueness
 
   validQuery("two fragments can have different names")("""
     {
@@ -68,7 +68,7 @@ final class ValidationFragmentsSuite extends ValidationSuite {
   """)
 
   // 5.5.1.2 Fragment Spread Type Existence
-  // https://spec.graphql.org/September2025/#sec-Fragment-Spread-Type-Existence
+  // https://spec.graphql.org/September2026/#sec-Fragment-Spread-Type-Existence
 
   validQuery("a fragment and an inline fragment can name a type of the schema")("""
     query driver {
@@ -117,7 +117,7 @@ final class ValidationFragmentsSuite extends ValidationSuite {
   """)
 
   // 5.5.1.3 Fragments on Object, Interface or Union Types
-  // https://spec.graphql.org/September2025/#sec-Fragments-on-Object-Interface-or-Union-Types
+  // https://spec.graphql.org/September2026/#sec-Fragments-on-Object-Interface-or-Union-Types
 
   validQuery("a fragment can be declared on an object, an interface or a union type")("""
     query driver {
@@ -164,7 +164,7 @@ final class ValidationFragmentsSuite extends ValidationSuite {
   """)
 
   // 5.5.1.4 Fragments Must Be Used
-  // https://spec.graphql.org/September2025/#sec-Fragments-Must-Be-Used
+  // https://spec.graphql.org/September2026/#sec-Fragments-Must-Be-Used
 
   invalidQuery("every fragment of a document must be spread at least once")("""
     fragment nameFragment on Dog { # unused
@@ -179,7 +179,7 @@ final class ValidationFragmentsSuite extends ValidationSuite {
   """)
 
   // 5.5.2.1 Fragment Spread Target Defined
-  // https://spec.graphql.org/September2025/#sec-Fragment-Spread-Target-Defined
+  // https://spec.graphql.org/September2026/#sec-Fragment-Spread-Target-Defined
 
   invalidQuery("a fragment spread must name a fragment of the document")("""
     {
@@ -190,7 +190,7 @@ final class ValidationFragmentsSuite extends ValidationSuite {
   """)
 
   // 5.5.2.2 Fragment Spreads Must Not Form Cycles
-  // https://spec.graphql.org/September2025/#sec-Fragment-Spreads-Must-Not-Form-Cycles
+  // https://spec.graphql.org/September2026/#sec-Fragment-Spreads-Must-Not-Form-Cycles
 
   invalidQuery("two fragments must not spread each other")("""
     {
@@ -233,7 +233,7 @@ final class ValidationFragmentsSuite extends ValidationSuite {
   """)
 
   // 5.5.2.3.1 Object Spreads in Object Scope
-  // https://spec.graphql.org/September2025/#sec-Object-Spreads-in-Object-Scope
+  // https://spec.graphql.org/September2026/#sec-Object-Spreads-in-Object-Scope
 
   validQuery("an object fragment can spread into the same object type")("""
     query driver {
@@ -260,7 +260,7 @@ final class ValidationFragmentsSuite extends ValidationSuite {
   """)
 
   // 5.5.2.3.2 Abstract Spreads in Object Scope
-  // https://spec.graphql.org/September2025/#sec-Abstract-Spreads-in-Object-Scope
+  // https://spec.graphql.org/September2026/#sec-Abstract-Spreads-in-Object-Scope
 
   validQuery("an interface fragment can spread into an object type which implements it")("""
     query driver {
@@ -293,7 +293,7 @@ final class ValidationFragmentsSuite extends ValidationSuite {
   """)
 
   // 5.5.2.3.3 Object Spreads in Abstract Scope
-  // https://spec.graphql.org/September2025/#sec-Object-Spreads-in-Abstract-Scope
+  // https://spec.graphql.org/September2026/#sec-Object-Spreads-in-Abstract-Scope
 
   validQuery("an object fragment can spread into an abstract type which the object belongs to")(
     """
@@ -341,7 +341,7 @@ final class ValidationFragmentsSuite extends ValidationSuite {
   """)
 
   // 5.5.2.3.4 Abstract Spreads in Abstract Scope
-  // https://spec.graphql.org/September2025/#sec-Abstract-Spreads-in-Abstract-Scope
+  // https://spec.graphql.org/September2026/#sec-Abstract-Spreads-in-Abstract-Scope
 
   validQuery("a union fragment can spread into an interface which they share a type with")("""
     query driver {

@@ -29,12 +29,12 @@ import grackle.Problem
  * comment marks the addition.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Response
+ *   https://spec.graphql.org/September2026/#sec-Response
  */
 final class ResponseSuite extends ConformanceSuite {
 
   // 7.1.4 Response Position
-  // https://spec.graphql.org/September2025/#sec-Response-Position
+  // https://spec.graphql.org/September2026/#sec-Response-Position
 
   // The specification names four response paths for this request: the hero's name at
   // ["hero", "name"], the list of friends at ["hero", "friends"], the first friend at
@@ -75,7 +75,7 @@ final class ResponseSuite extends ConformanceSuite {
   }
 
   // 7.1.6 Errors
-  // https://spec.graphql.org/September2025/#sec-Request-Error-Result
+  // https://spec.graphql.org/September2026/#sec-Request-Error-Result
 
   /**
    * The request of section 7.1.6, which the specification runs against two schemas.

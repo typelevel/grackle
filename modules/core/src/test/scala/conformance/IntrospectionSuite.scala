@@ -21,12 +21,12 @@ import io.circe.literal._
  * Conformance test cases for section 4, Introspection.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Introspection
+ *   https://spec.graphql.org/September2026/#sec-Introspection
  */
 final class IntrospectionSuite extends ConformanceSuite {
 
   // 4 Introspection
-  // https://spec.graphql.org/September2025/#sec-Introspection
+  // https://spec.graphql.org/September2026/#sec-Introspection
 
   validSchema("an object type which introspection can describe")("""
     type User {
@@ -77,7 +77,7 @@ final class IntrospectionSuite extends ConformanceSuite {
   """)
 
   // 4.2.2 The __Type Type
-  // https://spec.graphql.org/September2025/#sec-The-__Type-Type
+  // https://spec.graphql.org/September2026/#sec-The-__Type-Type
 
   validSchema("an input object type which introspection can describe")("""
     input Point {

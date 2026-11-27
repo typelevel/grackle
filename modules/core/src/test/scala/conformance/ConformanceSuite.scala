@@ -26,14 +26,14 @@ import grackle.test.GraphQLResponseTests
 /**
  * Base class for the GraphQL conformance suites.
  *
- * Each suite covers one subject of the September 2025 specification. Each test case corresponds
+ * Each suite covers one subject of the September 2026 specification. Each test case corresponds
  * to one example or one counter-example in the specification text.
  *
  * A Scala triple-quoted string cannot hold a GraphQL block string delimiter. Write `'''` in a
  * document instead. Every helper below replaces that marker with three double quotes.
  *
  * @see
- *   https://spec.graphql.org/September2025/
+ *   https://spec.graphql.org/September2026/
  */
 abstract protected[conformance] class ConformanceSuite extends CatsEffectSuite {
   import ConformanceSuite._

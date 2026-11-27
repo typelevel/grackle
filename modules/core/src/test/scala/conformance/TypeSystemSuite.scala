@@ -27,12 +27,12 @@ import grackle.syntax._
  * every addition.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Type-System
+ *   https://spec.graphql.org/September2026/#sec-Type-System
  */
 final class TypeSystemSuite extends ConformanceSuite {
 
   // 3.2 Type System Descriptions
-  // https://spec.graphql.org/September2025/#sec-Descriptions
+  // https://spec.graphql.org/September2026/#sec-Descriptions
 
   validSchema("every definition of a schema can carry a description")("""
     '''
@@ -77,7 +77,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.3.1 Root Operation Types
-  // https://spec.graphql.org/September2025/#sec-Root-Operation-Types
+  // https://spec.graphql.org/September2026/#sec-Root-Operation-Types
 
   validQuery("a query operation selects a field of the query root type", MyNameSchema)("""
     query {
@@ -160,7 +160,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.5 Scalars
-  // https://spec.graphql.org/September2025/#sec-Scalars
+  // https://spec.graphql.org/September2026/#sec-Scalars
 
   validSchema("a custom scalar can point at the specification which defines it")("""
     scalar UUID @specifiedBy(url: "https://tools.ietf.org/html/rfc4122")
@@ -173,7 +173,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.6 Objects
-  // https://spec.graphql.org/September2025/#sec-Objects
+  // https://spec.graphql.org/September2026/#sec-Objects
 
   validSchema("an object type defines a set of fields")("""
     type Person {
@@ -232,7 +232,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.6 Objects, Field Ordering
-  // https://spec.graphql.org/September2025/#sec-Objects.Field-Ordering
+  // https://spec.graphql.org/September2026/#sec-Objects.Field-Ordering
 
   // The specification states an ordered result for each example of this subject. It numbers the
   // values of that result by position, so two examples state a different value for one field.
@@ -283,7 +283,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)(List("bar", "foo"))
 
   // 3.6.1 Field Arguments
-  // https://spec.graphql.org/September2025/#sec-Field-Arguments
+  // https://spec.graphql.org/September2026/#sec-Field-Arguments
 
   validSchema("a field can declare arguments")("""
     type Person {
@@ -304,7 +304,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.6.2 Field Deprecation
-  // https://spec.graphql.org/September2025/#sec-Field-Deprecation
+  // https://spec.graphql.org/September2026/#sec-Field-Deprecation
 
   validSchema("a field can be deprecated")("""
     type ExampleType {
@@ -316,7 +316,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.6.3 Object Extensions
-  // https://spec.graphql.org/September2025/#sec-Object-Extensions
+  // https://spec.graphql.org/September2026/#sec-Object-Extensions
 
   validSchema("an object extension can add a field")("""
     extend type Story {
@@ -338,7 +338,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.7 Interfaces
-  // https://spec.graphql.org/September2025/#sec-Interfaces
+  // https://spec.graphql.org/September2026/#sec-Interfaces
 
   validSchema("an object type can implement more than one interface")("""
     interface NamedEntity {
@@ -459,7 +459,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.7.1 Interface Extensions
-  // https://spec.graphql.org/September2025/#sec-Interface-Extensions
+  // https://spec.graphql.org/September2026/#sec-Interface-Extensions
 
   validSchema("an interface extension adds a field to the interface and its implementations")(
     """
@@ -493,7 +493,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.8 Unions
-  // https://spec.graphql.org/September2025/#sec-Unions
+  // https://spec.graphql.org/September2026/#sec-Unions
 
   validSchema("a union type lists the object types which it can be")("""
     union SearchResult = Photo | Person
@@ -550,7 +550,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.9 Enums
-  // https://spec.graphql.org/September2025/#sec-Enums
+  // https://spec.graphql.org/September2026/#sec-Enums
 
   validSchema("an enum type lists its values")("""
     enum Direction {
@@ -565,7 +565,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.10 Input Objects
-  // https://spec.graphql.org/September2025/#sec-Input-Objects
+  // https://spec.graphql.org/September2026/#sec-Input-Objects
 
   validSchema("an input object type defines a set of input fields")("""
     input Point2D {
@@ -599,8 +599,8 @@ final class TypeSystemSuite extends ConformanceSuite {
 
   invalidSchema("an input object cannot refer to itself through a non-null field".fail)("""
     input Example {
-      value: String
       self: Example!
+      value: String
     }
 
     # Added to complete the example: a query root type.
@@ -622,6 +622,19 @@ final class TypeSystemSuite extends ConformanceSuite {
     type Query { example(arg: First): String }
   """)
 
+  invalidSchema("a oneOf input object and an input object cannot form a cycle".fail)("""
+    input First @oneOf {
+      second: Second
+    }
+
+    input Second {
+      first: First!
+    }
+
+    # Added to complete the example: a query root type.
+    type Query { example(arg: First): String }
+  """)
+
   validSchema("an input object field can be non-null")("""
     input ExampleInputObject {
       a: String
@@ -633,7 +646,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.10.1 OneOf Input Objects
-  // https://spec.graphql.org/September2025/#sec-OneOf-Input-Objects
+  // https://spec.graphql.org/September2026/#sec-OneOf-Input-Objects
 
   validSchema("a oneOf input object accepts exactly one of its fields")("""
     input ExampleOneOfInputObject @oneOf {
@@ -646,7 +659,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.12 Non-Null
-  // https://spec.graphql.org/September2025/#sec-Non-Null
+  // https://spec.graphql.org/September2026/#sec-Non-Null
 
   invalidQuery("a non-null argument cannot be omitted", NonNullArgSchema)("""
     {
@@ -670,7 +683,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.13 Directives
-  // https://spec.graphql.org/September2025/#sec-Type-System.Directives
+  // https://spec.graphql.org/September2026/#sec-Type-System.Directives
 
   // The specification puts a directive definition and a fragment definition in one document. A
   // request accepts executable definitions only, so this test case checks the grammar.
@@ -724,7 +737,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.13.1 @skip
-  // https://spec.graphql.org/September2025/#sec--skip
+  // https://spec.graphql.org/September2026/#sec--skip
 
   validQuery(
     "@skip excludes a field when its argument is true",
@@ -736,7 +749,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.13.2 @include
-  // https://spec.graphql.org/September2025/#sec--include
+  // https://spec.graphql.org/September2026/#sec--include
 
   validQuery(
     "@include keeps a field when its argument is true",
@@ -748,7 +761,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.13.3 @deprecated
-  // https://spec.graphql.org/September2025/#sec--deprecated
+  // https://spec.graphql.org/September2026/#sec--deprecated
 
   validSchema("@deprecated applies to a field definition and to an argument definition")("""
     type ExampleType {
@@ -778,7 +791,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.13.4 @specifiedBy
-  // https://spec.graphql.org/September2025/#sec--specifiedBy
+  // https://spec.graphql.org/September2026/#sec--specifiedBy
 
   validSchema("@specifiedBy applies to a custom scalar")("""
     scalar UUID @specifiedBy(url: "https://tools.ietf.org/html/rfc4122")
@@ -788,7 +801,7 @@ final class TypeSystemSuite extends ConformanceSuite {
   """)
 
   // 3.13.5 @oneOf
-  // https://spec.graphql.org/September2025/#sec--oneOf
+  // https://spec.graphql.org/September2026/#sec--oneOf
 
   validSchema("@oneOf applies to an input object")("""
     input UserUniqueCondition @oneOf {

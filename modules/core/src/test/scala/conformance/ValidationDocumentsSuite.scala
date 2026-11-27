@@ -19,18 +19,18 @@ package conformance
  * Conformance test cases for the introduction to section 5, and for section 5.1, Documents.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Documents
+ *   https://spec.graphql.org/September2026/#sec-Documents
  */
 final class ValidationDocumentsSuite extends ValidationSuite {
 
   // 5 Validation
-  // https://spec.graphql.org/September2025/#sec-Validation
+  // https://spec.graphql.org/September2026/#sec-Validation
 
   validSchema("the example schema which the rules of section 5 run against")(
     ValidationSchema.base)
 
   // 5.1.1 Executable Definitions
-  // https://spec.graphql.org/September2025/#sec-Executable-Definitions
+  // https://spec.graphql.org/September2026/#sec-Executable-Definitions
 
   // Grackle drops a type system definition from a request instead of rejecting the document, so
   // the extension does not apply and the field `color` stays undefined. The document is rejected

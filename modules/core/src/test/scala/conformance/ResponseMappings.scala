@@ -31,7 +31,7 @@ import grackle.Value.EnumValue
  * resolves.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Response
+ *   https://spec.graphql.org/September2026/#sec-Response
  */
 object ResponseMappings {
 

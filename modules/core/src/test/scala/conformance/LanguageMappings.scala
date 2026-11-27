@@ -32,7 +32,7 @@ import grackle.syntax._
  * states in its response examples.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Language
+ *   https://spec.graphql.org/September2026/#sec-Language
  */
 object LanguageMappings {
 

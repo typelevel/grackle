@@ -21,12 +21,12 @@ import io.circe.literal._
  * Conformance test cases for section 5.8, Variables.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Validation.Variables
+ *   https://spec.graphql.org/September2026/#sec-Validation.Variables
  */
 final class ValidationVariablesSuite extends ValidationSuite {
 
   // 5.8.1 Variable Uniqueness
-  // https://spec.graphql.org/September2025/#sec-Variable-Uniqueness
+  // https://spec.graphql.org/September2026/#sec-Variable-Uniqueness
 
   invalidQuery("one operation must not declare a variable name twice".fail)("""
     query houseTrainedQuery($atOtherHomes: Boolean, $atOtherHomes: Boolean) {
@@ -53,7 +53,7 @@ final class ValidationVariablesSuite extends ValidationSuite {
   """)
 
   // 5.8.2 Variables Are Input Types
-  // https://spec.graphql.org/September2025/#sec-Variables-Are-Input-Types
+  // https://spec.graphql.org/September2026/#sec-Variables-Are-Input-Types
 
   validSchema("the query root type gains a field with a list argument")(
     ValidationSchema.base + ValidationSchema.variables)
@@ -118,7 +118,7 @@ final class ValidationVariablesSuite extends ValidationSuite {
   """)
 
   // 5.8.3 All Variable Uses Defined
-  // https://spec.graphql.org/September2025/#sec-All-Variable-Uses-Defined
+  // https://spec.graphql.org/September2026/#sec-All-Variable-Uses-Defined
 
   validQuery("a variable use inside the operation which declares it")("""
     query variableIsDefined($atOtherHomes: Boolean) {
@@ -214,7 +214,7 @@ final class ValidationVariablesSuite extends ValidationSuite {
   """)
 
   // 5.8.4 All Variables Used
-  // https://spec.graphql.org/September2025/#sec-All-Variables-Used
+  // https://spec.graphql.org/September2026/#sec-All-Variables-Used
 
   invalidQuery("a declared variable which the operation never uses")("""
     query variableUnused($atOtherHomes: Boolean) {
@@ -267,7 +267,7 @@ final class ValidationVariablesSuite extends ValidationSuite {
   """)
 
   // 5.8.5 All Variable Usages Are Allowed
-  // https://spec.graphql.org/September2025/#sec-All-Variable-Usages-Are-Allowed
+  // https://spec.graphql.org/September2026/#sec-All-Variable-Usages-Are-Allowed
 
   // Rule 5.8.5 rejects a document for the declared type of a variable, whatever value the
   // request supplies for it. Grackle has no check for the rule. It reports a value which does

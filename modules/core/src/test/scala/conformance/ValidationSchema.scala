@@ -24,7 +24,7 @@ import grackle.Schema
  * which the later examples introduce, and the definitions which complete those examples.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Validation
+ *   https://spec.graphql.org/September2026/#sec-Validation
  */
 object ValidationSchema {
 

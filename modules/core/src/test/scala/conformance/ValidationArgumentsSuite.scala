@@ -21,12 +21,12 @@ package conformance
  * Each test case adds a driver operation, as [[ValidationFieldsSuite]] describes.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Validation.Arguments
+ *   https://spec.graphql.org/September2026/#sec-Validation.Arguments
  */
 final class ValidationArgumentsSuite extends ValidationSuite {
 
   // 5.4.1 Argument Names
-  // https://spec.graphql.org/September2025/#sec-Argument-Names
+  // https://spec.graphql.org/September2026/#sec-Argument-Names
 
   validQuery("an argument name must be defined on the field or on the directive")("""
     query driver {
@@ -82,7 +82,7 @@ final class ValidationArgumentsSuite extends ValidationSuite {
   """)
 
   // 5.4.3 Required Arguments
-  // https://spec.graphql.org/September2025/#sec-Required-Arguments
+  // https://spec.graphql.org/September2026/#sec-Required-Arguments
 
   validQuery("a required argument which the selection supplies")("""
     query driver {

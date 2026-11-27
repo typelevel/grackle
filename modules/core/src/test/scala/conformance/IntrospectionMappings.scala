@@ -27,7 +27,7 @@ import grackle.syntax._
  * The mapping holds no data, because an introspection request reads the schema only.
  *
  * @see
- *   https://spec.graphql.org/September2025/#sec-Introspection
+ *   https://spec.graphql.org/September2026/#sec-Introspection
  */
 object IntrospectionMappings {
 
