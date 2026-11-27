@@ -119,6 +119,10 @@ final class LikeSuite extends SkunkDatabaseSuite with SqlLikeSuite {
   lazy val mapping = new SkunkTestMapping(pool) with SqlLikeMapping[IO]
 }
 
+final class LimitSingularJoinSuite extends SkunkDatabaseSuite with SqlLimitSingularJoinSuite {
+  lazy val mapping = new SkunkTestMapping(pool) with SqlLimitSingularJoinMapping[IO]
+}
+
 final class MappingValidatorValidSuite
     extends SkunkDatabaseSuite
     with SqlMappingValidatorValidSuite {

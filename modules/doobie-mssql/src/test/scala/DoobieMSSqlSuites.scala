@@ -115,6 +115,12 @@ final class LikeSuite extends DoobieMSSqlDatabaseSuite with SqlLikeSuite {
   lazy val mapping = new DoobieMSSqlTestMapping(transactor) with SqlLikeMapping[IO]
 }
 
+final class LimitSingularJoinSuite
+    extends DoobieMSSqlDatabaseSuite
+    with SqlLimitSingularJoinSuite {
+  lazy val mapping = new DoobieMSSqlTestMapping(transactor) with SqlLimitSingularJoinMapping[IO]
+}
+
 final class MappingValidatorValidSuite
     extends DoobieMSSqlDatabaseSuite
     with SqlMappingValidatorValidSuite {

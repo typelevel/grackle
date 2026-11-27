@@ -118,6 +118,12 @@ final class LikeSuite extends DoobiePgDatabaseSuite with SqlLikeSuite {
   lazy val mapping = new DoobiePgTestMapping(transactor) with SqlLikeMapping[IO]
 }
 
+final class LimitSingularJoinSuite
+    extends DoobiePgDatabaseSuite
+    with SqlLimitSingularJoinSuite {
+  lazy val mapping = new DoobiePgTestMapping(transactor) with SqlLimitSingularJoinMapping[IO]
+}
+
 final class MappingValidatorValidSuite
     extends DoobiePgDatabaseSuite
     with SqlMappingValidatorValidSuite {
